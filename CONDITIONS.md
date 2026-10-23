@@ -14,7 +14,7 @@ Valid:
 let ready Bool be true;
 
 if ready {
-    print "Ready";
+    output("Ready");
 }
 ```
 
@@ -22,7 +22,7 @@ Valid comparisons naturally produce `Bool`:
 
 ```eri
 if age >= 18 {
-    print "Adult";
+    output("Adult");
 }
 
 while count < 10 {
@@ -122,7 +122,7 @@ Use an explicit absence check:
 
 ```eri
 if user != none {
-    print user.name;
+    output(user.name);
 }
 ```
 
