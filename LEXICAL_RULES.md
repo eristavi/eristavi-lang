@@ -895,3 +895,147 @@ The exact semantic definition of `Float`—including representation, precision, 
 ### Governing rule
 
 > Pre-0.1 floating-point literals are decimal, require either a decimal point with digits on both sides or an `e`/`E` exponent, allow `_` only between digits, use the ordinary unary minus operator for negative values, and define no suffixes or alternate-base float forms. Lowercase `e` is the canonical formatter spelling.
+
+## 7. Whitespace — locked
+
+Whitespace is syntactically insignificant except where separation is required to prevent adjacent source characters from forming a different token.
+
+These forms are therefore equivalent:
+
+```eri
+let price be 50;
+```
+
+```eri
+let    price    be    50;
+```
+
+```eri
+let price
+    be
+    50;
+```
+
+### No indentation-based syntax
+
+Indentation has no grammatical meaning.
+
+This is syntactically valid:
+
+```eri
+if ready {
+print "Ready";
+}
+```
+
+A formatter may produce a conventional layout, but indentation depth never changes program structure.
+
+### Newlines never terminate statements
+
+Eristavi does not use automatic semicolon insertion or any equivalent newline-based statement termination.
+
+Simple statements are terminated explicitly by `;`; structural blocks are delimited by `{` and `}`.
+
+For example:
+
+```eri
+let total be
+    price
+    + tax
+    + delivery;
+```
+
+is one statement regardless of its physical line breaks.
+
+A newline is ordinary whitespace outside contexts where another lexical rule explicitly says otherwise, such as the prohibition on physical newlines inside ordinary `Text` literals.
+
+### Recognized whitespace characters
+
+Pre-0.1 recognizes exactly these source whitespace characters:
+
+```text
+U+0020  SPACE
+U+0009  CHARACTER TABULATION (horizontal tab)
+U+000A  LINE FEED
+U+000D  CARRIAGE RETURN
+```
+
+No other Unicode character is silently treated as source whitespace.
+
+In particular, characters such as these are not ordinary Eristavi whitespace:
+
+```text
+U+00A0  NO-BREAK SPACE
+U+2003  EM SPACE
+U+200B  ZERO WIDTH SPACE
+```
+
+When such invisible or unusual characters occur where whitespace appears to have been intended, the compiler should issue a clear diagnostic identifying the character and recommending an ordinary space or supported line break.
+
+### Line ending equivalence
+
+The following line-ending forms have the same language meaning:
+
+```text
+LF      \n
+CRLF    \r\n
+CR      \r
+```
+
+A compiler may normalize them internally for source-location tracking, but that normalization must not change program meaning.
+
+### Tabs
+
+A horizontal tab is ordinary whitespace. Its visual width is not part of Eristavi semantics.
+
+Editors and formatters may choose a project style, but parsing must not depend on whether a tab is rendered as two, four, eight, or another number of columns.
+
+### Comments act as token separators
+
+Outside literals, comments behave like whitespace for token separation.
+
+For example:
+
+```eri
+let price /* explanation */ be 50;
+```
+
+has the same token structure as:
+
+```eri
+let price be 50;
+```
+
+Removing a comment conceptually must not merge adjacent lexical material into a different token; the lexer treats the comment boundary as a separator where token separation is required.
+
+### Whitespace is required only to separate tokens when necessary
+
+Adjacent word-like characters may form one token rather than two.
+
+For example:
+
+```text
+letprice
+```
+
+is one identifier, not the two tokens `let` and `price`.
+
+Punctuation normally provides its own token boundary, so surrounding whitespace is not required:
+
+```eri
+add(a,b);
+a+b;
+user.name;
+```
+
+Formatting style belongs to the formatter and linter rather than the parser.
+
+### UTF-8 BOM
+
+A leading `U+FEFF` byte-order mark is permitted only as the very first code point of a source file and is ignored there.
+
+`U+FEFF` appearing anywhere else in source is not whitespace and is a lexical error.
+
+### Governing rule
+
+> Eristavi source is formatting-insensitive: space, tab, LF, and CR separate tokens without carrying structure; indentation and newlines have no grammatical meaning; statements are never terminated implicitly by line breaks; comments act as separators; and unusual invisible Unicode whitespace is rejected rather than silently accepted.
