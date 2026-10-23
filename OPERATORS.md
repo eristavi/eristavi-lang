@@ -1,0 +1,339 @@
+# Eristavi Punctuation and Operators
+
+> **Status: Symbol vocabulary locked for pre-0.1; precedence and associativity are defined separately.**
+
+This document defines the symbolic punctuation and operator tokens available in Eristavi pre-0.1. The language deliberately keeps this vocabulary small and does not add shorthand merely because it exists in other languages.
+
+## 1. Complete symbolic token set — locked
+
+Pre-0.1 defines exactly 21 symbolic punctuation/operator tokens.
+
+### Structural punctuation
+
+```text
+;  ,  .  (  )  {  }  [  ]
+```
+
+There are nine structural punctuation tokens.
+
+### Assignment
+
+```text
+=
+```
+
+### Arithmetic operators
+
+```text
++  -  *  /  %
+```
+
+### Comparison operators
+
+```text
+==  !=  <  <=  >  >=
+```
+
+Boolean operators remain the already-locked word operators:
+
+```text
+and  or  not
+```
+
+They are reserved keywords rather than symbolic tokens.
+
+## 2. Structural punctuation
+
+### Semicolon `;`
+
+A semicolon terminates simple statements and declaration/initializer entries where the grammar requires one.
+
+```eri
+let price be 50;
+price = 60;
+return price;
+```
+
+Fields and named construction initializers also use `;`:
+
+```eri
+type User {
+    id Int;
+    name Text;
+}
+
+let user be User {
+    id = 1;
+    name = "Anna";
+};
+```
+
+Structural blocks themselves end with `}` rather than an additional semicolon unless the surrounding construct is itself part of a simple statement.
+
+### Comma `,`
+
+A comma separates items in grammatical lists such as function parameters, function arguments, collection elements, and checked-error contracts.
+
+```eri
+function add(a Int, b Int) returns Int {
+    return a + b;
+}
+
+let names be ["Anna", "Maria", "John"];
+```
+
+### Dot `.`
+
+A dot is used for qualified/member access and dotted module paths.
+
+```eri
+user.name
+customer.address.city
+text.characters.count
+import models.user;
+```
+
+Because pre-0.1 rejects shorthand floating-point forms such as `.5` and `5.`, the dot remains lexically unambiguous with numeric literals.
+
+### Parentheses `( )`
+
+Parentheses are used for grouping, function calls, and function parameter lists.
+
+```eri
+let result be (a + b) * c;
+let value be calculate(first, second);
+
+function add(a Int, b Int) returns Int {
+    return a + b;
+}
+```
+
+### Braces `{ }`
+
+Braces delimit structural blocks and named-field construction bodies.
+
+```eri
+if ready {
+    print "Ready";
+}
+
+let user be User {
+    id = 1;
+    name = "Anna";
+};
+```
+
+The parser distinguishes these uses by grammar context; the lexer exposes the same brace tokens.
+
+### Brackets `[ ]`
+
+Square brackets are used for collection literals and indexing syntax.
+
+```eri
+let names be ["Anna", "Maria"];
+let first be names[0];
+```
+
+Whether a value semantically supports indexing is a type-system question rather than a lexical one. For example, the existing `Text` model still rejects direct `text[0]` indexing and requires an explicit view such as `text.characters[0]`.
+
+## 3. Assignment `=`
+
+Pre-0.1 defines one assignment symbol:
+
+```text
+=
+```
+
+Examples:
+
+```eri
+price = 50;
+user.name = "Maria";
+```
+
+Named construction uses the same token in its grammar-defined initializer context:
+
+```eri
+let user be User {
+    id = 1;
+    name = "Anna";
+};
+```
+
+No compound-assignment operators are defined in pre-0.1.
+
+## 4. Arithmetic operators
+
+Pre-0.1 defines:
+
+```text
++  -  *  /  %
+```
+
+Examples:
+
+```eri
+let total be price + tax;
+let difference be a - b;
+let area be width * height;
+let quotient be total / count;
+let remainder be value % 10;
+```
+
+The `-` token is also used by unary negation:
+
+```eri
+let temperature be -5;
+let result be -(a + b);
+```
+
+Negative numeric literals are therefore not separate signed literal tokens.
+
+Pre-0.1 does not define `++`, `--`, or a symbolic exponentiation operator such as `**`.
+
+## 5. Comparison operators
+
+Pre-0.1 defines exactly six symbolic comparison operators:
+
+```text
+==  !=  <  <=  >  >=
+```
+
+Examples:
+
+```eri
+if age >= 18 {
+    ...
+}
+
+if user == none {
+    ...
+}
+
+if first != second {
+    ...
+}
+```
+
+The semantic meaning of equality depends on the operand type. In particular, the already-locked identity rule remains in force: for `identity T`, `==` compares logical identity rather than object contents or physical addresses.
+
+The standalone symbol `!` is not an Eristavi operator. Boolean negation uses the word operator:
+
+```eri
+if not connected {
+    ...
+}
+```
+
+`!=` remains one complete comparison token.
+
+## 6. Boolean operators remain words
+
+Eristavi uses:
+
+```text
+and
+or
+not
+```
+
+Examples:
+
+```eri
+if active and verified {
+    ...
+}
+
+if admin or owner {
+    ...
+}
+
+if not connected {
+    ...
+}
+```
+
+The symbolic aliases `&&`, `||`, and standalone `!` are not part of pre-0.1.
+
+## 7. Longest-token recognition
+
+When multiple valid symbolic tokens share a prefix, the lexer recognizes the longest valid token.
+
+For example:
+
+```eri
+a >= b
+```
+
+contains the single `>=` token rather than separate `>` and `=` tokens.
+
+The same rule applies to:
+
+```text
+==
+!=
+<=
+>=
+```
+
+This rule concerns tokenization only; it does not define operator precedence or associativity.
+
+## 8. Slash and comments
+
+The `/` symbol is an arithmetic division token unless it begins one of the already-defined comment forms.
+
+When the lexer encounters `/`:
+
+```text
+//  begins a line comment
+/*  begins a block comment
+/   otherwise denotes division
+```
+
+Examples:
+
+```eri
+let ratio be a / b;
+
+// line comment
+
+/* block comment */
+```
+
+Comment recognition therefore takes lexical priority over emitting a standalone `/` token when the required second character is present.
+
+## 9. Deliberately absent symbolic vocabulary
+
+Pre-0.1 does not define these operator or punctuation forms:
+
+```text
++=  -=  *=  /=  %=
+++  --
+**
+&&  ||  !
+&  |  ^  ~  <<  >>
+?  :
+->  =>
+::
+@
+#
+`
+```
+
+Their absence is intentional. A future version should add a symbol only when a real language capability requires it and the addition improves Eristavi more than it expands the programmer's vocabulary.
+
+## 10. Precedence is separate
+
+This document locks which symbolic operators exist, but does not yet lock their precedence or associativity.
+
+Parentheses may always express explicit grouping:
+
+```eri
+let result be (a + b) * c;
+```
+
+The full pre-0.1 precedence table is a separate language-design decision and must be defined explicitly rather than inferred from another language.
+
+## Governing rule
+
+> Use symbols where their meaning is compact and universally clear, use words where symbols reduce readability, and do not add shorthand until it demonstrates a real benefit. Pre-0.1 exposes only the punctuation and operators required by the language already being designed.
