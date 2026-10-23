@@ -17,11 +17,11 @@ let price be 50;
 
 if ready {
     let tax be 10;
-    print price;
-    print tax;
+    output(price);
+    output(tax);
 }
 
-print price;
+output(price);
 ```
 
 A name declared inside the block does not escape that block:
@@ -31,7 +31,7 @@ if ready {
     let tax be 10;
 }
 
-print tax;  // error: tax is out of scope
+output(tax);  // error: tax is out of scope
 ```
 
 The same rule applies to blocks introduced by functions, conditionals, loops, resources, error handlers, and other block-bearing constructs.
@@ -176,11 +176,11 @@ A `for` binding belongs to the loop body's lexical scope and follows the same no
 ```eri
 for user in users {
     let name be user.name;
-    print name;
+    output(name);
 }
 
-print user;  // error
-print name;  // error
+output(user);  // error
+output(name);  // error
 ```
 
 A loop variable may not reuse an already-visible local or parameter name.
@@ -237,7 +237,7 @@ function main() {
 }
 
 function greet() {
-    print "Hello";
+    output("Hello");
 }
 ```
 
