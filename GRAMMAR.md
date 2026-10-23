@@ -40,6 +40,12 @@ let user maybe User be none;
 let fixed taxRate Float be 0.19;
 ```
 
+Identity handles use the same annotation position when written explicitly:
+
+```eri
+let counter identity Counter be identity Counter(...);
+```
+
 Grammar:
 
 ```text
@@ -48,6 +54,8 @@ variable-declaration :=
 ```
 
 Explicit annotations use the same name-first form used by parameters and fields: `name Type`. Colon-based annotation syntax is not part of this grammar.
+
+A `fixed` binding whose inferred or explicit type is `identity ...` is invalid in the initial language because `fixed` promises deep immutability rather than merely preventing handle rebinding.
 
 ## 2. Literals
 
@@ -262,7 +270,15 @@ function findUser(id Int) returns maybe User fails DatabaseError {
 }
 ```
 
-The function grammar remains provisional beyond the already locked name-first annotation form, `maybe`, and `fails` directions.
+A function that intentionally accepts shared identity state makes that visible in the parameter type:
+
+```eri
+function increment(counter identity Counter) {
+    counter.value = counter.value + 1;
+}
+```
+
+The function grammar remains provisional beyond the already locked name-first annotation form, `maybe`, `identity`, and `fails` directions.
 
 ```text
 function-declaration :=
@@ -274,9 +290,11 @@ parameters := parameter { "," parameter }
 parameter  := identifier [ type-expression ]
 ```
 
-When a parameter type is written, it follows the parameter name directly, for example `id Int` or `user maybe User`.
+When a parameter type is written, it follows the parameter name directly, for example `id Int`, `user maybe User`, or `counter identity Counter`.
 
-Ordinary parameter passing follows value semantics. Syntax for explicit in-place mutation of caller-owned values is not defined yet.
+Ordinary value parameters follow value semantics. An `identity T` parameter preserves shared identity and may therefore observe or mutate the same logical identity as the caller.
+
+Syntax for explicit in-place mutation of an ordinary caller-owned value remains undefined and separate from identity semantics.
 
 ## 8. Return
 
@@ -378,6 +396,8 @@ with file be try files.open("data.txt") {
 
 A resource owned by a `with` block also cannot silently escape the scope by being returned, stored elsewhere, or captured in a way that outlives the block.
 
+A deterministic resource type cannot be wrapped in `identity` to bypass these ownership rules.
+
 Multiple resources use ordinary nesting in the initial grammar:
 
 ```eri
@@ -392,7 +412,69 @@ The inner resource is cleaned up before the outer resource.
 
 The initial grammar deliberately does not introduce borrow/lifetime syntax or a multi-resource `with` header. Advanced ownership transfer and cleanup-failure composition remain semantic design questions for later work.
 
-## 11. Modules and imports
+## 11. Identity handles
+
+Ordinary user-defined values remain value types. Shared identity is introduced explicitly with `identity`.
+
+Example value type:
+
+```eri
+type Counter {
+    value Int;
+}
+```
+
+An identity is created from a value expression with the prefix form:
+
+```eri
+let first be identity Counter(...);
+let second be first;
+
+second.value = 10;
+print first.value;       // 10
+```
+
+Conceptual grammar:
+
+```text
+identity-expression := "identity" expression
+```
+
+`identity expression` must produce an eligible non-resource value. It creates a managed identity handle whose inferred type is `identity T`, where `T` is the value type of the expression.
+
+There is no implicit conversion from `T` to `identity T` or from `identity T` back to `T`.
+
+Identity may be written explicitly in fields and parameters:
+
+```eri
+type ViewModel {
+    counter identity Counter;
+}
+
+function increment(counter identity Counter) {
+    counter.value = counter.value + 1;
+}
+```
+
+The initial language does not allow `fixed` bindings of identity types:
+
+```eri
+let fixed counter be identity Counter(...);  // compile-time error
+```
+
+This preserves the locked deep-immutability meaning of `fixed`.
+
+`identity` does not mean raw pointer, manual allocation, thread safety, atomicity, or deterministic resource ownership. Identity storage is automatically memory-managed.
+
+Optional identity handles use the single canonical modifier order:
+
+```eri
+maybe identity Counter
+```
+
+`identity maybe Counter` is not an alternative spelling.
+
+## 12. Modules and imports
 
 Each `.eri` file is one module. The module path is derived from the file path under the project source root.
 
@@ -494,7 +576,7 @@ public function find(id Int) returns maybe User {
 
 `public` applies to the declaration it prefixes. Eristavi does not use a separate ordinary export list.
 
-## 12. Calls and member access
+## 13. Calls and member access
 
 Function call:
 
@@ -559,7 +641,7 @@ text.bytes.count
 
 A bare `text.length` is not defined by the core Text semantics.
 
-## 13. User-defined types
+## 14. User-defined types
 
 Ordinary user-defined `type` declarations have value semantics by default.
 
@@ -588,7 +670,15 @@ Field declarations use the same name-first type annotation form:
 field-declaration := [ "fixed" ] identifier type-expression ";"
 ```
 
-Assignment of a user-defined value creates an independent logical value:
+An identity field is explicit in the same position:
+
+```eri
+type ViewModel {
+    counter identity Counter;
+}
+```
+
+Assignment of an ordinary user-defined value creates an independent logical value:
 
 ```eri
 let a be user;
@@ -599,18 +689,18 @@ b.name = "Maria";
 
 Changing `b` must not change `a`.
 
-A `fixed` binding is deeply immutable from the programmer's point of view, including nested fields that are part of the value.
+If a value contains an explicitly declared `identity T` field, copying the outer value preserves that identity handle by design. This is not hidden aliasing because the field type explicitly states `identity`.
 
-Explicit shared/reference semantics are not part of ordinary `type` syntax. A future explicit identity/reference mechanism may be added separately when needed.
+A `fixed` binding of an ordinary value is deeply immutable from the programmer's point of view, including nested ordinary fields that are part of the value.
 
 The exact constructor/initialization syntax remains provisional.
 
-## 14. Type expressions and optional values
+## 15. Type expressions and optional values
 
-The initial optional type modifier is locked as `maybe`:
+The initial type modifiers have a single canonical order:
 
 ```text
-type-expression := [ "maybe" ] type-name
+type-expression := [ "maybe" ] [ "identity" ] type-name
 ```
 
 Examples:
@@ -620,10 +710,11 @@ Text
 User
 maybe Text
 maybe User
-maybe Int
+identity Counter
+maybe identity Counter
 ```
 
-Where a type annotates a name, the form is consistently:
+Where a type annotates a name, the form remains consistently:
 
 ```text
 identifier type-expression
@@ -635,15 +726,21 @@ Examples:
 age Int
 name Text
 user maybe User
+counter identity Counter
+selected maybe identity Counter
 ```
 
-`none` is the absence literal for a `maybe` value.
+`identity` is currently defined for eligible user-defined non-resource value types. It is not an alias for a raw pointer or resource handle.
+
+The canonical optional-identity form is `maybe identity T`; alternative modifier orders such as `identity maybe T` are not part of the grammar.
+
+`none` is the absence literal for a `maybe` value, including `maybe identity T`.
 
 Ordinary non-`maybe` types cannot contain `none`.
 
 The language does not define `null` as an ordinary value or as an alias for `none`.
 
-## 15. Output
+## 16. Output
 
 Early examples use:
 
@@ -653,7 +750,7 @@ print "Hello";
 
 Whether `print` is a language keyword, compiler intrinsic, or standard-library function is not yet locked. The preference is to keep capabilities in the standard library when practical.
 
-## 16. Generic syntax
+## 17. Generic syntax
 
 Eristavi currently defines **no explicit generic type syntax**.
 
@@ -668,11 +765,11 @@ List:Text
 
 Collection and generic relationships should be inferred by the compiler where possible. A future explicit abstraction syntax should only be added when real use cases show that inference is insufficient.
 
-## 17. Semicolon status
+## 18. Semicolon status
 
 Current examples use semicolons to terminate simple statements. This is the working parser assumption for the bootstrap compiler, not yet a permanent language commitment.
 
-## 18. Bootstrap subset
+## 19. Bootstrap subset
 
 The first parser should grow toward accepting multi-file and scoped-resource programs such as:
 
@@ -683,6 +780,16 @@ with file be try files.open("data.txt") {
     let text be try file.readText();
     print text;
 }
+```
+
+Identity syntax is specified but does not need to be part of the earliest executable bootstrap milestone. A later frontend milestone can add programs such as:
+
+```eri
+type Counter {
+    value Int;
+}
+
+let counter be identity Counter(...);
 ```
 
 while keeping the single-file bootstrap case valid:
