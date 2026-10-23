@@ -20,9 +20,16 @@ class Expr:
 
 
 @dataclass(frozen=True)
+class Block:
+    statements: list[Stmt]
+    location: SourceLocation
+
+
+@dataclass(frozen=True)
 class LetStmt(Stmt):
     name: str
     fixed: bool
+    type_annotation: str | None
     initializer: Expr
     location: SourceLocation
 
@@ -37,6 +44,21 @@ class AssignStmt(Stmt):
 @dataclass(frozen=True)
 class ExprStmt(Stmt):
     expression: Expr
+    location: SourceLocation
+
+
+@dataclass(frozen=True)
+class IfStmt(Stmt):
+    condition: Expr
+    then_branch: Block
+    else_branch: Block | None
+    location: SourceLocation
+
+
+@dataclass(frozen=True)
+class WhileStmt(Stmt):
+    condition: Expr
+    body: Block
     location: SourceLocation
 
 
