@@ -202,6 +202,8 @@ parameters := parameter { "," parameter }
 parameter  := identifier [ type-name ]
 ```
 
+Ordinary parameter passing follows value semantics. Syntax for explicit in-place mutation of caller-owned values is not defined yet.
+
 ## 8. Return
 
 ```eri
@@ -247,7 +249,7 @@ arguments          := expression { "," expression }
 
 ## 10. User-defined types
 
-Field immutability is now locked to use the same `fixed` modifier as bindings:
+Ordinary user-defined `type` declarations have value semantics by default.
 
 ```eri
 type User {
@@ -258,13 +260,28 @@ type User {
 
 A field without `fixed` is mutable. A `fixed` field is initialized once and cannot be reassigned afterward.
 
-The field declaration shape is therefore:
+The field declaration shape is:
 
 ```text
 field-declaration := [ "fixed" ] identifier type-name ";"
 ```
 
-The broader type declaration syntax remains provisional until value/reference semantics and initialization rules are finalized.
+Assignment of a user-defined value creates an independent logical value:
+
+```eri
+let a be user;
+let b be a;
+
+b.name = "Maria";
+```
+
+Changing `b` must not change `a`.
+
+A `fixed` binding is deeply immutable from the programmer's point of view, including nested fields that are part of the value.
+
+Explicit shared/reference semantics are not part of ordinary `type` syntax. A future explicit identity/reference mechanism may be added separately when needed.
+
+The exact constructor/initialization syntax remains provisional.
 
 ## 11. Output
 
