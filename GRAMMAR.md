@@ -336,7 +336,63 @@ try-expression := "try" expression
 
 The exact syntax for declaring custom error types and composing multiple possible checked error types remains open.
 
-## 10. Modules and imports
+## 10. Resource management
+
+The locked scoped-resource form is:
+
+```eri
+with file be try files.open("data.txt") {
+    let text be try file.readText();
+    print text;
+}
+```
+
+A resource binding may use the ordinary name-first explicit type form when needed:
+
+```eri
+with file File be try files.open("data.txt") {
+    ...
+}
+```
+
+Grammar:
+
+```text
+with-statement :=
+    "with" identifier [ type-expression ] "be" expression block
+```
+
+The expression must produce a resource value recognized by the type system as requiring deterministic cleanup.
+
+The resource identifier is scoped to the `with` block and is released when control leaves that block.
+
+Cleanup applies to normal fallthrough, `return`, checked-error propagation, and any future language-level control flow that exits the block.
+
+Resource handles are single-owner values while managed by `with`. Implicit copying is invalid:
+
+```eri
+with file be try files.open("data.txt") {
+    let another be file;   // compile-time error: implicit resource copy
+}
+```
+
+A resource owned by a `with` block also cannot silently escape the scope by being returned, stored elsewhere, or captured in a way that outlives the block.
+
+Multiple resources use ordinary nesting in the initial grammar:
+
+```eri
+with connection be try database.connect() {
+    with transaction be try connection.transaction() {
+        ...
+    }
+}
+```
+
+The inner resource is cleaned up before the outer resource.
+
+The initial grammar deliberately does not introduce borrow/lifetime syntax or a multi-resource `with` header. Advanced ownership transfer and cleanup-failure composition remain semantic design questions for later work.
+
+## 11. Modules and imports
 
 Each `.eri` file is one module. The module path is derived from the file path under the project source root.
 
@@ -438,7 +494,7 @@ public function find(id Int) returns maybe User {
 
 `public` applies to the declaration it prefixes. Eristavi does not use a separate ordinary export list.
 
-## 11. Calls and member access
+## 12. Calls and member access
 
 Function call:
 
@@ -503,7 +559,7 @@ text.bytes.count
 
 A bare `text.length` is not defined by the core Text semantics.
 
-## 12. User-defined types
+## 13. User-defined types
 
 Ordinary user-defined `type` declarations have value semantics by default.
 
@@ -549,7 +605,7 @@ Explicit shared/reference semantics are not part of ordinary `type` syntax. A fu
 
 The exact constructor/initialization syntax remains provisional.
 
-## 13. Type expressions and optional values
+## 14. Type expressions and optional values
 
 The initial optional type modifier is locked as `maybe`:
 
@@ -587,7 +643,7 @@ Ordinary non-`maybe` types cannot contain `none`.
 
 The language does not define `null` as an ordinary value or as an alias for `none`.
 
-## 14. Output
+## 15. Output
 
 Early examples use:
 
@@ -597,7 +653,7 @@ print "Hello";
 
 Whether `print` is a language keyword, compiler intrinsic, or standard-library function is not yet locked. The preference is to keep capabilities in the standard library when practical.
 
-## 15. Generic syntax
+## 16. Generic syntax
 
 Eristavi currently defines **no explicit generic type syntax**.
 
@@ -612,19 +668,21 @@ List:Text
 
 Collection and generic relationships should be inferred by the compiler where possible. A future explicit abstraction syntax should only be added when real use cases show that inference is insufficient.
 
-## 16. Semicolon status
+## 17. Semicolon status
 
 Current examples use semicolons to terminate simple statements. This is the working parser assumption for the bootstrap compiler, not yet a permanent language commitment.
 
-## 17. Bootstrap subset
+## 18. Bootstrap subset
 
-The first parser should grow toward accepting multi-file programs such as:
+The first parser should grow toward accepting multi-file and scoped-resource programs such as:
 
 ```eri
-import models.user;
+import std.files;
 
-let account be user.User(...);
-print account.name;
+with file be try files.open("data.txt") {
+    let text be try file.readText();
+    print text;
+}
 ```
 
 while keeping the single-file bootstrap case valid:
