@@ -81,16 +81,35 @@ Previous experiments using angle brackets, square brackets, dots, and colons are
 
 The design goal is to avoid exposing generic syntax where reliable inference makes it unnecessary.
 
-## 5. Variables and mutability — partly unresolved
+## 5. Variables and immutability — locked for bindings
 
-The current direction is that ordinary application code should make mutation easy to see and immutability easy to request.
+Ordinary `let` bindings are mutable by default:
 
-The exact immutable-marker syntax is **not yet locked**. `fixed` has appeared in examples, but remains provisional until explicitly approved.
+```eri
+let price be 50;
+price = 60;
+```
 
-What is semantically required is a clear distinction between:
+A binding that must not be reassigned after initialization is declared with `fixed`:
 
-- values that may be reassigned or mutated;
-- values/fields that the compiler guarantees cannot change after initialization.
+```eri
+let fixed price be 50;
+```
+
+Attempting to reassign a fixed binding is a compile-time error:
+
+```eri
+let fixed price be 50;
+price = 60;
+```
+
+The compiler should report that `price` is fixed and cannot be changed.
+
+The semantic rule is:
+
+> `let` introduces a binding. `fixed` adds an explicit immutability guarantee to that binding.
+
+The use of `fixed` for individual fields inside user-defined types remains a separate decision and is not yet locked by this rule.
 
 ## 6. Fundamental types — working set
 
@@ -196,7 +215,7 @@ The first compiler milestone does not require generics, async/await, macros, ref
 
 The following must be decided deliberately before being treated as stable:
 
-- final mutability / immutability syntax;
+- immutability rules for fields inside user-defined types;
 - explicit type-annotation syntax in all positions;
 - optional / absent-value model;
 - value vs identity/reference type semantics;
