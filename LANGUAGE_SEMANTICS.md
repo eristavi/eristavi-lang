@@ -106,9 +106,53 @@ type User {
 
 A `fixed` field is initialized once and cannot be reassigned afterward.
 
-A `fixed` binding whose value itself has an `identity` type is invalid in pre-0.1 because `fixed` means deep immutability rather than shallow handle immutability.
+### Deep-fixable types — locked
 
-The separate edge case of an ordinary deeply fixed value containing an identity-typed field remains to be resolved before the full pre-0.1 freeze.
+A `fixed` guarantee is transitive across the complete ordinary stored-value structure. A binding or field may be `fixed` only when its static type is **deep-fixable**: no reachable stored type position may contain `identity`.
+
+This is valid because `Address` contains only ordinary value state:
+
+```eri
+type Address {
+    city Text;
+}
+
+let fixed address be Address {
+    city = "Paphos";
+};
+```
+
+A type containing shared identity remains valid as an ordinary mutable value type:
+
+```eri
+type ViewModel {
+    counter identity Counter;
+}
+```
+
+but it cannot receive a deep `fixed` guarantee:
+
+```eri
+let fixed model be ViewModel {
+    counter = sharedCounter;
+}; // compile-time error
+```
+
+The rule is recursive. If `Account` contains `Session`, and `Session` contains `identity Counter`, then `Account` is also not deep-fixable. The same rule applies through optional and collection value positions; for example `maybe identity Counter` is not deep-fixable even when a particular runtime value is currently `none`.
+
+A `fixed` field follows the same rule, so forms such as this are invalid:
+
+```eri
+type Model {
+    fixed counter identity Counter; // compile-time error
+}
+```
+
+Eristavi does not weaken `fixed` into shallow handle immutability, does not implicitly freeze other identity aliases, and does not silently snapshot or copy identity state. The compiler rejects the combination instead.
+
+Deep-fixable is an internal compiler property, not additional source syntax.
+
+See `FIXED_IMMUTABILITY.md` for the locked detailed model.
 
 ## 5. Fundamental values — locked where specified
 
@@ -724,7 +768,6 @@ The project deliberately postpones advanced concurrency, async/await, reflection
 The following are still deliberately unresolved and should not block the first frontend bootstrap unless implementation requires them:
 
 - general equality rules for ordinary user-defined value types;
-- interaction of deep `fixed` ordinary values with contained mutable `identity` fields;
 - explicit extraction of an independent `T` snapshot from `identity T`, if needed;
 - third-party package root naming and dependency resolution;
 - cleanup-failure composition when another checked failure is already active;
