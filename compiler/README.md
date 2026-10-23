@@ -1,134 +1,90 @@
 # Eristavi Compiler
 
-This directory contains the Python bootstrap implementation of the `erist` compiler/toolchain.
+This directory contains the Python bootstrap implementation of the `erist` toolchain.
 
-The pre-0.1 frontend semantics are frozen in `PRE_0_1_FREEZE.md`; compiler work should implement those rules incrementally rather than inventing alternate syntax during bootstrap development.
+The source-language contract is frozen in `PRE_0_1_FREEZE.md`. The bootstrap implements that contract vertically so each supported feature can be parsed, type-checked, executed, tested, and eventually lowered to Eristavi IR without inventing alternate syntax.
 
-## Bootstrap language
-
-The first compiler prototype is written in Python so the language grammar, semantics, diagnostics, and IR can evolve quickly while remaining easy to inspect and test.
-
-The intended long-term goal remains self-hosting: once Eristavi is capable enough, a later compiler may be implemented in Eristavi itself.
-
-## Current frontend pipeline
+## Current pipeline
 
 ```text
 .eri source
     ↓
 lexer
     ↓
-parser
+parser / AST
     ↓
-AST
-    ↓
-semantic analysis / type inference
-    ↓
-bootstrap execution backend
+name resolution + semantic analysis + type inference
+    ↓                         ↘
+bootstrap execution runtime    typed Eristavi IR
+                                   ↓
+                                C backend
+                                   ↓
+                              system C compiler
+                                   ↓
+                              native executable
 ```
 
-The execution backend is intentionally temporary. It gives the project a complete working vertical slice before the Eristavi IR and native/backend layers are implemented.
+The AST execution runtime is still the broadest implementation path. The typed IR and C/native path intentionally cover a smaller scalar/control subset while the IR stabilizes.
 
-## Implemented bootstrap subset
+## Implemented frontend/runtime surface
 
-The bootstrap currently supports:
+The bootstrap now implements the main frozen pre-0.1 vertical slices:
 
-- the complete 28-keyword lexer vocabulary;
-- SPACE/TAB/LF/CR source whitespace rules;
-- line comments and nested block comments;
-- Unicode/NFC identifier handling;
-- decimal, binary, and hexadecimal Int literals;
-- decimal Float literals;
-- Text literals with the locked escape set;
-- `let` and `let fixed` bindings with inferred basic types;
-- explicit basic annotations such as `let count Int be 3;`;
-- `Int`, `Float`, `Bool`, and `Text` annotation checking with no implicit conversion;
-- mutable reassignment to visible non-fixed bindings;
-- lexical block scopes created by control-flow blocks;
-- declaration-before-use and no local shadowing across visible scopes;
-- branch-local bindings that do not leak after their block;
-- `if` / `else` with statically required `Bool` conditions;
-- `while` with statically required `Bool` conditions;
-- mutation of visible outer bindings from nested blocks;
-- module-level function declarations before entry execution;
-- order-independent function resolution across the module declaration region;
-- typed function parameters for the currently implemented basic types;
-- mutable local parameter values that do not mutate caller-owned bindings;
-- ordinary named function calls with static arity and argument-type checking;
-- explicit `returns T` contracts for the implemented basic types;
-- inferred result types when return expressions establish one non-circular type;
-- no-value functions with normal fallthrough and bare `return;`;
-- rejection of no-value calls in value contexts;
-- return-path completion checking for value-producing functions;
-- rejection of mixed bare/value return completion;
-- direct and mutual circular result-inference detection;
-- recursive value-producing functions when an explicit result contract breaks the inference cycle;
-- recursive no-value functions without a result contract;
-- `Int`, `Float`, `Bool`, and `Text` literals;
-- unary `-` and `not`;
-- arithmetic, comparison, `and`, and `or` precedence;
-- non-associative comparisons;
-- no implicit `Int` / `Float` mixing;
-- signed 64-bit checked Int arithmetic;
-- truncation-toward-zero Int division and Int-only `%`;
-- IEEE-style Float division-by-zero special values;
-- the predeclared `output(value)` call for the initial scalar types;
-- source-location diagnostics;
-- `run` and `check` CLI commands.
+- exact 28-keyword lexical vocabulary, Unicode/NFC identifiers, nested comments, numeric/Text literals and locked whitespace rules;
+- `let`, transitive `fixed`, name-first annotations, assignment and lexical no-shadowing;
+- checked signed-64-bit `Int`, deterministic binary64-oriented `Float`, `Bool`, and `Text` scalar behavior;
+- operator precedence, Bool-only conditions, `if` / `else`, `while`, and ordered stable `for` iteration;
+- module-level functions, typed and inferred result contracts, no-value functions, recursion, completion analysis, and ordinary value parameters;
+- compiler-inferred generic parameter relationships with per-call specialization and body constraints for the implemented type operations;
+- ordered growable `List` values with homogeneous inference, deferred empty-list inference, zero-based checked indexing, `.count`, `.add`, indexed mutation, equality, `fixed` interaction, value semantics, and stable iteration;
+- user-defined ordinary value types, fixed fields, named-field construction, nested mutation, structural equality, and value copying;
+- `maybe T` / `none`, presence checks and basic flow-sensitive narrowing;
+- explicit managed `identity T`, identity equality, aliasing, field mutation, and deep-`fixed` rejection of identity-bearing values;
+- checked error declarations, `fails`, `fail`, typed/catch-all `else error`, exhaustiveness, and `try` propagation;
+- deterministic `with` ownership for the bootstrap `std.files` resource API, including checked cleanup-failure analysis and runtime primary/secondary failure preservation;
+- user modules/imports, aliases, public/private declarations, declaration-only imported modules, circular-import diagnostics, and source-root project loading;
+- `run` and `check` commands for the broad bootstrap runtime.
 
-The parser and analyzer deliberately reject frozen features that are not implemented yet rather than guessing provisional behavior.
+The implementation deliberately rejects unsupported frozen features instead of assigning them provisional behavior.
 
-One deliberate bootstrap limitation remains in this function slice: parameters currently require explicit basic types. The frozen language permits omitted parameter types when compiler-inferred generic relationships are statically provable, but that generic inference machinery is not implemented yet.
+## Typed IR and compilation backend
 
-## Running the bootstrap
+`ir.py` defines the first machine-independent typed Eristavi IR. It currently lowers a concrete scalar/control subset:
 
-From the repository root:
+- `Int`, `Float`, `Bool`, and literal `Text` values;
+- local bindings and direct-name assignment;
+- scalar expressions and comparisons;
+- `if` / `else` and `while`;
+- concrete non-generic functions, calls, returns, and recursion;
+- `output(value)` for scalar values.
+
+`c_backend.py` consumes that IR and emits C11 plus small runtime helpers for checked `Int` operations, binary64-oriented Float operations, Text equality, and output. `erist build` then invokes the configured system C compiler. This is the first native compilation path, but it is **not** yet a direct CPU backend and does not yet have full frontend feature parity.
+
+Commands:
 
 ```text
 python -m compiler.erist run examples/hello.eri
-```
-
-Expected output:
-
-```text
-42
-```
-
-Frontend-only checking:
-
-```text
 python -m compiler.erist check examples/hello.eri
+python -m compiler.erist build-c examples/hello.eri -o hello.c
+python -m compiler.erist build examples/hello.eri -o hello
 ```
 
-The repository also defines an installable command through `pyproject.toml`:
+When installed through `pyproject.toml`, the same commands are available through `erist`.
 
-```text
-erist run examples/hello.eri
-```
-
-once the package is installed in the active Python environment.
+For multi-file programs, pass `--source-root` when the entry file's parent is not the intended project source root.
 
 ## Tests
 
-Run the current bootstrap tests from the repository root:
+Run:
 
 ```text
 python -m unittest discover -s tests -v
 ```
 
-The current suite contains 37 tests. In addition to the arithmetic, annotation, scope, and control-flow coverage, it now exercises explicit and inferred function results, no-value functions, bare returns, full successful-path return checking, forward function resolution, argument checking, mutable local parameters, explicit recursive functions, recursive no-value functions, and rejection of circular inferred result contracts.
+The current suite contains **80 tests** spanning the frontend/runtime, module loader, and first compiled backend. It includes interpreter and compiled execution checks, checked arithmetic faults, recursion, collections, values, maybe/identity/error/resource behavior, generic relationships, module boundaries, Unicode identifiers in generated C, and Text escaping/equality in the native path.
 
-## Next implementation slices
+## Known implementation boundary
 
-The compiler should continue vertically through already-frozen behavior. The next sensible order is:
+The broad bootstrap frontend/runtime is substantially ahead of the typed IR backend. Full pre-0.1 compiled-backend parity still requires lowering/runtime support for Lists, user values, maybe, checked errors, identities, resources, modules, and generic specializations. Explicit Unicode Text views (`characters`, `scalars`, `bytes`) also remain a frontend/runtime gap and are recorded in `IMPLEMENTATION_AUDIT.md`.
 
-1. `List` literals, indexing, `.count`, `.add`, and indexed assignment;
-2. user-defined value types and named-field construction;
-3. `maybe` / `none` flow narrowing;
-4. checked errors;
-5. identity;
-6. `with` resources and cleanup semantics;
-7. modules/imports;
-8. compiler-inferred generic parameter relationships beyond the current typed-parameter bootstrap;
-9. typed Eristavi IR and the first real compilation backend.
-
-Implementation should follow the root specifications rather than inventing semantics for convenience.
+Implementation should continue to follow the frozen specifications rather than changing language semantics for backend convenience.
