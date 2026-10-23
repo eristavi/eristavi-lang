@@ -2,9 +2,11 @@
 
 > **Initial audit date: 2026-10-23**
 >
-> **Status: Semantic freeze candidates resolved; final cross-document verification in progress**
+> **Final freeze verification: 2026-10-23**
+>
+> **Status: Pre-0.1 frontend semantics frozen; implementation may proceed**
 
-This document records the consolidation audit performed before implementation of the Eristavi compiler frontend and tracks the resolution of the freeze items identified by that audit.
+This document records the consolidation audit performed before implementation of the Eristavi compiler frontend and the resolution of the freeze items identified by that audit.
 
 The audit did not redesign already-locked language behavior. Its purpose was to identify stale documentation, contradictions, and genuinely unresolved areas that matter before the pre-0.1 specification is frozen.
 
@@ -41,6 +43,7 @@ Dedicated specifications added or finalized during follow-up resolution include:
 - `COLLECTIONS.md`
 - `INTEGER_REMAINDER.md`
 - `RESOURCE_CLEANUP.md`
+- `PRE_0_1_FREEZE.md`
 
 ## 2. Documentation drift corrected by the audit
 
@@ -235,18 +238,18 @@ Third-party package root naming, dependency resolution, versioning, registry beh
 
 ## 5. Architectural decisions that do not block the frontend
 
-The following should remain open until the frontend and typed representation are sufficiently real to inform them:
+The following remain open until the frontend and typed representation are sufficiently real to inform them:
 
 - exact Eristavi IR instruction set and representation;
 - first native CPU backend;
 - exact backend implementation order;
 - stable portable bytecode/runtime format, if one is eventually needed in addition to native, C, JavaScript, and WebAssembly.
 
-These should not delay lexer/parser/type-checker work.
+These do not delay lexer/parser/type-checker work.
 
 ## 6. Features deliberately postponed
 
-There is still no reason to pull the following into pre-0.1 implementation work:
+There is no reason to pull the following into pre-0.1 implementation work:
 
 - explicit generic syntax;
 - traits/interfaces for generic constraints;
@@ -262,9 +265,28 @@ There is still no reason to pull the following into pre-0.1 implementation work:
 - multiple native CPU backends;
 - self-hosting.
 
-## 7. Current audit conclusion
+## 7. Final freeze verification
 
-All semantic decisions identified as necessary for the pre-0.1 frontend are now resolved. The language has explicit rules for:
+The final cross-document verification confirmed that the current source-language/front-end contract is coherent enough to implement.
+
+In particular:
+
+- the master semantics no longer lists `%`, cleanup dual failure, identity snapshots, resource transfer, or package roots as accidental unresolved blockers;
+- `%` is consistently Int-only while Float arithmetic excludes `%`;
+- `output(...)` remains an ordinary standard function and the exact keyword count remains 28;
+- the `List` collection surface matches the grammar's indexing and assignment-target model;
+- deep `fixed`, ordinary value equality, and identity equality compose without contradictory aliasing rules;
+- checked cleanup failures compose with the checked-error system without new source syntax;
+- entry execution remains selected by file rather than magic `main` syntax;
+- parser factoring for `else error` and primary/postfix parsing is implementation-internal and does not reopen source syntax.
+
+`PRE_0_1_FREEZE.md` records the implementation handoff boundary.
+
+## 8. Audit conclusion
+
+The pre-0.1 semantic/frontend specification is frozen for implementation.
+
+The language now has explicit rules for:
 
 - lexical structure;
 - symbolic vocabulary;
@@ -278,11 +300,11 @@ All semantic decisions identified as necessary for the pre-0.1 frontend are now 
 - transitive deep `fixed` eligibility;
 - structural ordinary value equality;
 - ordered growable `List` collections with inferred element relationships and checked zero-based indexing;
-- truncation-toward-zero signed `Int` division and `Int`-only `%` remainder;
+- truncation-toward-zero signed `Int` division and Int-only `%` remainder;
 - deterministic resource cleanup and dual checked-failure composition.
 
-The only remaining step before declaring the pre-0.1 semantic/frontend specification frozen is a final cross-document consistency verification. After that verification, implementation should begin rather than expanding the language surface.
+Frontend/compiler implementation should now proceed from the frozen subset. New language features should require evidence from implementation or real Eristavi programs rather than speculative expansion before the compiler exists.
 
-The audit continues to support the governing design order:
+The governing design order remains:
 
 > **Philosophy → Semantics → Architecture → Implementation**
