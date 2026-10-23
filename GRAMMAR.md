@@ -266,7 +266,7 @@ The function grammar remains provisional beyond the already locked name-first an
 
 ```text
 function-declaration :=
-    "function" identifier "(" [ parameters ] ")"
+    [ "public" ] "function" identifier "(" [ parameters ] ")"
     [ "returns" type-expression ]
     [ "fails" type-expression ] block
 
@@ -336,7 +336,109 @@ try-expression := "try" expression
 
 The exact syntax for declaring custom error types and composing multiple possible checked error types remains open.
 
-## 10. Calls and member access
+## 10. Modules and imports
+
+Each `.eri` file is one module. The module path is derived from the file path under the project source root.
+
+Example source tree:
+
+```text
+src/
+    main.eri
+    models/
+        user.eri
+    services/
+        auth.eri
+```
+
+produces:
+
+```text
+main
+models.user
+services.auth
+```
+
+Source files do not repeat this path with a separate `module` declaration.
+
+### Imports
+
+The locked import form is:
+
+```eri
+import models.user;
+import services.auth;
+```
+
+An optional alias may rename the local module namespace:
+
+```eri
+import models.user as customer;
+```
+
+Grammar:
+
+```text
+import-declaration := "import" module-path [ "as" identifier ] ";"
+module-path        := identifier { "." identifier }
+```
+
+Imports are file-scope declarations and should appear before ordinary declarations and executable statements.
+
+Without an alias, the imported namespace is the final identifier in the module path:
+
+```eri
+import services.auth;
+
+auth.login(user);
+```
+
+An import does not place the imported module's declarations directly into local scope.
+
+Wildcard imports and selective unqualified imports are not part of the initial grammar:
+
+```text
+import *
+from x import y
+```
+
+Quoted filesystem paths and relative traversal strings are also not project-module syntax:
+
+```text
+import "../models/user.eri"
+```
+
+Project module paths are logical dotted names resolved from the configured source root.
+
+The top-level namespace `std` is reserved for standard-library modules:
+
+```eri
+import std.files;
+import std.json;
+```
+
+Circular module dependencies are compile-time errors in the initial language.
+
+### Public declarations
+
+Top-level declarations are module-private by default. `public` exposes a declaration through the module namespace.
+
+Examples:
+
+```eri
+public type User {
+    fixed id Int;
+    name Text;
+}
+
+public function find(id Int) returns maybe User {
+    ...
+}
+```
+
+`public` applies to the declaration it prefixes. Eristavi does not use a separate ordinary export list.
+
+## 11. Calls and member access
 
 Function call:
 
@@ -355,6 +457,14 @@ Method call:
 
 ```eri
 customers.add(customer)
+```
+
+Imported module access uses the same member syntax:
+
+```eri
+user.User
+user.find(10)
+auth.login(account)
 ```
 
 Draft grammar:
@@ -393,7 +503,7 @@ text.bytes.count
 
 A bare `text.length` is not defined by the core Text semantics.
 
-## 11. User-defined types
+## 12. User-defined types
 
 Ordinary user-defined `type` declarations have value semantics by default.
 
@@ -402,6 +512,15 @@ type User {
     fixed id Int;
     name Text;
     middleName maybe Text;
+}
+```
+
+Public types use the same declaration with the `public` visibility modifier:
+
+```eri
+public type User {
+    fixed id Int;
+    name Text;
 }
 ```
 
@@ -430,7 +549,7 @@ Explicit shared/reference semantics are not part of ordinary `type` syntax. A fu
 
 The exact constructor/initialization syntax remains provisional.
 
-## 12. Type expressions and optional values
+## 13. Type expressions and optional values
 
 The initial optional type modifier is locked as `maybe`:
 
@@ -468,7 +587,7 @@ Ordinary non-`maybe` types cannot contain `none`.
 
 The language does not define `null` as an ordinary value or as an alias for `none`.
 
-## 13. Output
+## 14. Output
 
 Early examples use:
 
@@ -478,7 +597,7 @@ print "Hello";
 
 Whether `print` is a language keyword, compiler intrinsic, or standard-library function is not yet locked. The preference is to keep capabilities in the standard library when practical.
 
-## 14. Generic syntax
+## 15. Generic syntax
 
 Eristavi currently defines **no explicit generic type syntax**.
 
@@ -493,13 +612,22 @@ List:Text
 
 Collection and generic relationships should be inferred by the compiler where possible. A future explicit abstraction syntax should only be added when real use cases show that inference is insufficient.
 
-## 15. Semicolon status
+## 16. Semicolon status
 
 Current examples use semicolons to terminate simple statements. This is the working parser assumption for the bootstrap compiler, not yet a permanent language commitment.
 
-## 16. Bootstrap subset
+## 17. Bootstrap subset
 
-The first parser only needs enough grammar to accept programs such as:
+The first parser should grow toward accepting multi-file programs such as:
+
+```eri
+import models.user;
+
+let account be user.User(...);
+print account.name;
+```
+
+while keeping the single-file bootstrap case valid:
 
 ```eri
 let x be 40;
