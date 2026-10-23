@@ -42,6 +42,57 @@ The compiler should infer the corresponding internal types.
 
 Explicit type annotations remain valuable where inference is impossible or where an API contract should deliberately constrain a value.
 
+### Explicit type annotations — locked
+
+When an explicit type is written for a named value, Eristavi uses the readable form:
+
+```text
+name Type
+```
+
+No colon separates the name from its type.
+
+Variable declarations may therefore rely on inference:
+
+```eri
+let age be 44;
+let name be "Anna";
+```
+
+or state the type explicitly:
+
+```eri
+let age Int be 44;
+let name Text be "Anna";
+let user maybe User be none;
+```
+
+The same order is used consistently for parameters and fields:
+
+```eri
+function greet(name Text) {
+    ...
+}
+
+type User {
+    fixed id Int;
+    name Text;
+    middleName maybe Text;
+}
+```
+
+`fixed` remains a modifier on the binding or field, not part of the type itself:
+
+```eri
+let fixed taxRate Float be 0.19;
+```
+
+The design rule is:
+
+> A name comes first; its explicit type follows it.
+
+Type inference remains the default for local values, so explicit annotations should be used where they clarify intent, establish a contract, or are required for inference.
+
 ## 4. Collections — direction accepted
 
 Collection element types should be inferred whenever possible.
@@ -469,7 +520,6 @@ The first compiler milestone does not require generics, async/await, macros, ref
 
 The following must be decided deliberately before being treated as stable:
 
-- explicit type-annotation syntax in all positions;
 - explicit reference/identity syntax;
 - explicit in-place parameter mutation syntax, if needed;
 - custom error-type declaration syntax;
