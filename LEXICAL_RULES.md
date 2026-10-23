@@ -540,3 +540,168 @@ This intentionally differs from identifier comparison, where NFC normalization i
 ### Governing rule
 
 > Pre-0.1 `Text` literals are double-quoted UTF-8 text with a small explicit escape set and `\u{...}` scalar escapes. Unknown escapes, physical newlines, invalid Unicode scalars, and unterminated literals are lexical errors; interpolation, raw strings, multiline strings, and byte escapes are postponed.
+
+## 5. Integer literals — locked
+
+Pre-0.1 supports decimal, binary, and hexadecimal integer literals.
+
+Examples:
+
+```eri
+let decimal be 1_000_000;
+let flags be 0b1010_0011;
+let mask be 0xFF_00;
+```
+
+### Decimal literals
+
+A decimal integer literal is either `0` or a nonzero decimal digit followed by zero or more decimal digits, with optional underscore separators between digits.
+
+Examples:
+
+```eri
+0
+1
+42
+1_000_000
+9_223_372_036_854_775_807
+```
+
+Leading zeroes are rejected except for the literal `0` itself.
+
+```text
+0      valid
+7      valid
+007    invalid
+```
+
+Eristavi therefore never interprets a leading zero as octal notation.
+
+### Binary literals
+
+A binary integer literal begins with the lowercase prefix `0b` followed by one or more binary digits.
+
+```eri
+0b0
+0b1010
+0b1010_0110
+```
+
+Only `0` and `1` are valid binary digits.
+
+### Hexadecimal literals
+
+A hexadecimal integer literal begins with the lowercase prefix `0x` followed by one or more hexadecimal digits.
+
+```eri
+0x0
+0xFF
+0xff
+0xDeAdBeEf
+0xFF_A0
+```
+
+The prefix is lowercase, while hexadecimal digits `A` through `F` may be written in either case.
+
+### Underscore separators
+
+Underscores are allowed only between digits of the same literal.
+
+Valid:
+
+```eri
+1_000
+0b1010_0110
+0xFF_A0
+```
+
+Invalid:
+
+```text
+_100
+100_
+1__000
+0x_FF
+0b_1010
+```
+
+Underscores affect readability only and do not change the numeric value.
+
+### Negative integers use unary minus
+
+The minus sign is not part of an integer-literal token.
+
+```eri
+-50
+```
+
+is parsed conceptually as unary `-` applied to the positive integer literal `50`.
+
+The same unary operator therefore works consistently with names and grouped expressions:
+
+```eri
+let a be -count;
+let b be -(x + y);
+```
+
+### `Int` range checking
+
+`Int` remains the locked signed 64-bit integer type.
+
+The ordinary positive `Int` maximum is:
+
+```text
+9223372036854775807
+```
+
+The minimum is:
+
+```text
+-9223372036854775808
+```
+
+Because the minus sign is a unary operator rather than part of the literal token, constant evaluation must allow the magnitude `9223372036854775808` when it is immediately negated to form the valid minimum `Int` value.
+
+A literal or constant expression that cannot be represented by its required integer type is rejected at compile time.
+
+### No octal literals in pre-0.1
+
+Pre-0.1 does not define an octal literal prefix such as:
+
+```text
+0o755
+```
+
+Octal notation may be considered later only if real systems-programming use cases justify it.
+
+### No integer suffixes
+
+Pre-0.1 does not define literal suffixes such as:
+
+```text
+42i64
+42u32
+42L
+```
+
+The ordinary integer type is already `Int`. Future narrower, wider, or unsigned integer types should not force suffix syntax into the initial language unless a demonstrated need emerges.
+
+### Conceptual lexical forms
+
+```text
+decimal-integer :=
+    "0"
+    | nonzero-decimal-digit { [ "_" ] decimal-digit }
+
+binary-integer :=
+    "0b" binary-digit { [ "_" ] binary-digit }
+
+hex-integer :=
+    "0x" hex-digit { [ "_" ] hex-digit }
+```
+
+The implementation must additionally enforce that `_` occurs only between digits, never consecutively or at either edge of the digit sequence.
+
+### Governing rule
+
+> Pre-0.1 integer literals use decimal, `0b` binary, or `0x` hexadecimal notation. `_` is a readability separator only between digits, leading-zero decimal forms and octal notation are rejected, and negative values are expressed through the ordinary unary minus operator rather than a signed literal token.
