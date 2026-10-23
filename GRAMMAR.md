@@ -327,9 +327,9 @@ while-statement :=
 
 A `while` condition must have static type `Bool`, under the same rule as `if`.
 
-## 9. Functions
+## 9. Functions and result inference — locked
 
-Examples:
+Examples with an explicit result contract:
 
 ```eri
 function add(a Int, b Int) returns Int {
@@ -337,12 +337,21 @@ function add(a Int, b Int) returns Int {
 }
 ```
 
+A result may instead be inferred when it is statically clear:
+
 ```eri
-function loadUser(id Int)
-    returns User
-    fails DatabaseError, DecodeError
-{
-    ...
+function add(a Int, b Int) {
+    return a + b;
+}
+```
+
+The second function is inferred to produce `Int`.
+
+A function with no explicit `returns T` and no `return expression;` statements is a no-value function:
+
+```eri
+function logMessage(message Text) {
+    print message;
 }
 ```
 
@@ -373,22 +382,52 @@ Parameters without written types may participate in compiler-inferred static gen
 
 Ordinary parameters use value semantics. Pre-0.1 defines no separate `ref`, `mut`, `inout`, or equivalent parameter syntax.
 
-## 10. Return — locked
+Pre-0.1 defines no programmer-visible `Void`, `void`, `Unit`, or equivalent result type merely to represent a no-value function.
 
-```eri
-return value;
-return none;
-return;
-```
+When a value-producing function's result inference depends directly or indirectly on its own result type, `returns T` is required explicitly. This includes recursive or mutually recursive result inference that would otherwise be circular.
 
-Grammar:
+See `FUNCTION_RETURNS.md` for the locked result/completion model.
+
+## 10. Return and function completion — locked
+
+Surface grammar remains:
 
 ```text
 return-statement :=
     "return" [ expression ] ";"
 ```
 
-Semantic validation determines whether a returned value is compatible with the function contract.
+The two forms have different semantic roles.
+
+A value return:
+
+```eri
+return value;
+```
+
+produces the function's successful result. If `returns T` is omitted, compatible `return expression;` sites may establish the inferred result type.
+
+A bare return:
+
+```eri
+return;
+```
+
+is valid only in a no-value function and performs an early exit.
+
+A function cannot mix `return expression;` and bare `return;` completion.
+
+For a value-producing function, every reachable path that can complete successfully must return a compatible value. Reaching the closing `}` on such a path is a compile-time error rather than an implicit missing value.
+
+Checked `fail` terminates its path and therefore does not require a `return` on that path.
+
+`return none;` returns an actual absent `maybe T` value. It is not equivalent to `return;` and `none` is never used as Eristavi's substitute for a void result.
+
+Multiple inferred return expressions must establish one compatible static result type; pre-0.1 does not create a dynamic or union result type to reconcile incompatible returns.
+
+A no-value function call cannot be used where a value is required.
+
+See `FUNCTION_RETURNS.md`.
 
 ## 11. User-defined types — locked core form
 
@@ -772,6 +811,6 @@ The remaining grammar-level work is intentionally narrow:
 - classify bootstrap `print` if the first compiler requires that distinction;
 - finalize any primary-expression factoring needed by the implementation without changing the locked surface syntax.
 
-Lexical rules, symbolic vocabulary, expression precedence, associativity, assignment placement, and Bool-only condition typing are now locked.
+Lexical rules, symbolic vocabulary, expression precedence, associativity, assignment placement, Bool-only condition typing, and function result/completion semantics are now locked.
 
 These remaining items are parser/specification details, not reasons to reopen already-locked language semantics.
