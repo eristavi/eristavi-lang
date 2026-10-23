@@ -168,7 +168,9 @@ false
 
 Boolean operators are `and`, `or`, and `not`.
 
-Condition typing and truthiness rules are being finalized separately as part of the frontend freeze; no implementation should invent implicit truthiness before that decision is locked.
+`if` and `while` conditions must have static type `Bool`. Pre-0.1 defines no implicit truthiness for numbers, text, collections, optional values, identities, or other types.
+
+See `CONDITIONS.md` for the locked condition-typing model.
 
 ### Text and Unicode — locked
 
@@ -522,6 +524,26 @@ Comparisons are non-associative, so chained forms such as `10 < age < 65` are in
 
 Assignment `=` is not an expression operator. Assignment is statement-level syntax and does not produce a value, so forms such as `a = b = c` or `let value be (a = b);` are invalid.
 
+### Condition typing — locked
+
+`if` and `while` require conditions of static type `Bool`.
+
+Eristavi does not define general truthiness. `Int`, `Float`, `Text`, collections, `maybe T`, `identity T`, and arbitrary user-defined values do not implicitly become Boolean conditions.
+
+The programmer asks the intended Boolean question explicitly:
+
+```eri
+if count != 0 {
+    ...
+}
+
+if user != none {
+    ...
+}
+```
+
+See `CONDITIONS.md` for the locked detailed model.
+
 ### Scope and declaration resolution — locked
 
 Every `{ ... }` block creates a lexical scope. Local bindings are visible only after their declaration has completed and are not visible inside their own initializer.
@@ -629,7 +651,6 @@ The following are still deliberately unresolved and should not block the first f
 - third-party package root naming and dependency resolution;
 - cleanup-failure composition when another checked failure is already active;
 - advanced resource ownership transfer / borrowing, if real programs require it;
-- final condition typing / truthiness rule;
 - function completion and bare-return rules;
 - top-level execution and entrypoint model;
 - classification of bootstrap `print` as intrinsic or standard-library function;
