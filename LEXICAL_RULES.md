@@ -178,17 +178,6 @@ This normalization applies to identifier identity, not to ordinary `Text` values
 
 A reserved Eristavi keyword cannot be used as an identifier.
 
-For example:
-
-```text
-function
-let
-if
-return
-```
-
-cannot be ordinary variable, function, field, type, error, or module-segment names where the lexer recognizes them as keywords.
-
 Pre-0.1 does not define escaped identifiers such as:
 
 ```text
@@ -198,7 +187,7 @@ Pre-0.1 does not define escaped identifiers such as:
 
 If a word is reserved, the programmer chooses another name.
 
-The exact pre-0.1 keyword set is defined separately in the keyword section of this lexical specification.
+The exact pre-0.1 keyword set is defined in the next section.
 
 ### Same rule across named declarations
 
@@ -249,3 +238,170 @@ Language semantics come from explicit Eristavi constructs.
 ### Governing rule
 
 > Eristavi identifiers use Unicode XID rules, normalize to NFC for identifier identity, remain case-sensitive, allow `_`, reserve keywords, and assign no hidden semantics to naming style.
+
+## 3. Reserved keywords — locked
+
+Pre-0.1 reserves exactly the words required by the currently defined grammar.
+
+The reserved keyword set is:
+
+```text
+let
+fixed
+be
+function
+returns
+return
+if
+else
+for
+in
+while
+type
+identity
+maybe
+error
+fails
+fail
+try
+with
+import
+as
+public
+and
+or
+not
+true
+false
+none
+```
+
+There are 28 reserved keywords in pre-0.1.
+
+### Keyword groups
+
+For readability, the set may be understood by role:
+
+```text
+Bindings:
+let fixed be
+
+Functions:
+function returns return
+
+Control flow:
+if else for in while
+
+Types and value semantics:
+type identity maybe
+
+Checked errors:
+error fails fail try
+
+Resources:
+with
+
+Modules and visibility:
+import as public
+
+Boolean operators:
+and or not
+
+Literal words:
+true false none
+```
+
+### Exact lowercase spelling
+
+Keyword recognition is case-sensitive and uses the exact lowercase spelling.
+
+For example:
+
+```eri
+let value be 10;
+```
+
+uses the keyword `let`, while `Let` is lexically an identifier:
+
+```eri
+let Let be 10;
+```
+
+Whether a particular identifier is then valid in semantic context is checked normally by later compiler stages.
+
+### Keywords cannot be identifiers
+
+Reserved keywords cannot be used as ordinary programmer-defined names.
+
+These are invalid:
+
+```text
+let function be 10;
+let return be 20;
+let type be "Customer";
+```
+
+Pre-0.1 has no escaped-keyword mechanism such as backticks or `@` prefixes.
+
+### Built-in types are not lexical keywords
+
+Names such as:
+
+```text
+Int
+Float
+Bool
+Text
+```
+
+are predeclared type names, not reserved lexical keywords.
+
+A lexer may therefore tokenize `Int` as an identifier-like name, while semantic analysis resolves it to the built-in `Int` type.
+
+This keeps grammar vocabulary separate from the set of predeclared library or type-system names.
+
+### Reserved module namespace is not a keyword
+
+`std` is reserved for the Eristavi standard-library module namespace, but it is not a lexical keyword.
+
+Its special status is enforced by module/name resolution rather than by the lexer.
+
+### `print` is not reserved
+
+`print` is not part of the pre-0.1 reserved keyword set.
+
+The bootstrap compiler may temporarily provide it as an intrinsic or library-visible operation, but its final classification remains separate from lexical keyword design.
+
+### Future vocabulary is not pre-reserved
+
+Words are not reserved merely because they might become useful in a future version.
+
+For example, pre-0.1 does not reserve:
+
+```text
+async
+await
+match
+trait
+interface
+class
+enum
+break
+continue
+switch
+case
+throw
+catch
+new
+static
+const
+ref
+mut
+self
+```
+
+A future language version may only reserve a new word through an explicit language-design decision.
+
+### Governing rule
+
+> Reserve only vocabulary that already has defined grammatical meaning. Do not consume future words speculatively.
