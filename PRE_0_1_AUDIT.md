@@ -1,16 +1,16 @@
 # Eristavi pre-0.1 Specification Audit
 
-> **Audit date: 2026-10-23**
+> **Initial audit date: 2026-10-23**
 >
-> **Status: Core semantic audit complete; narrow freeze items remain**
+> **Status: Original frontend P0 decisions resolved; semantic freeze edge cases remain**
 
-This document records the first consolidation audit performed before implementation of the Eristavi compiler frontend.
+This document records the consolidation audit performed before implementation of the Eristavi compiler frontend and tracks the resolution of the freeze items identified by that audit.
 
 The audit did not redesign already-locked language behavior. Its purpose was to identify stale documentation, contradictions, and genuinely unresolved areas that matter before the pre-0.1 specification is frozen.
 
 ## 1. Files audited
 
-The audit covered:
+The original audit covered:
 
 - `DESIGN_PHILOSOPHY.md`
 - `LANGUAGE_SEMANTICS.md`
@@ -26,7 +26,18 @@ The audit covered:
 - `examples/hello.eri`
 - `tests/README.md`
 
-## 2. Documentation drift corrected
+Dedicated specifications added or finalized during follow-up resolution include:
+
+- `LEXICAL_RULES.md`
+- `PRECEDENCE.md`
+- `SCOPE.md`
+- `CONDITIONS.md`
+- `FUNCTION_RETURNS.md`
+- `ENTRYPOINT.md`
+- `OUTPUT.md`
+- `FLOAT.md`
+
+## 2. Documentation drift corrected by the audit
 
 The audit found several places where older master documentation had not caught up with later locked decisions.
 
@@ -63,25 +74,19 @@ with file be try files.open("data.txt") {
 
 ### Value parameter mutation
 
-`LANGUAGE_SEMANTICS.md` still described explicit in-place mutation of ordinary caller-owned values as an open syntax question.
-
-The locked pre-0.1 rule is now reflected in the master semantics:
+The locked pre-0.1 rule is:
 
 > Ordinary parameters are values. Functions return changes rather than mutating caller-owned ordinary values.
 
 ### Identity equality
 
-The master open-decision list still described identity equality as unresolved.
-
-The locked rule is now reflected:
+The locked rule is:
 
 > `identity T == identity T` means the same logical identity, not equal current field state and not equal memory address.
 
 ### Checked errors
 
-`GRAMMAR.md` and the master semantics still described custom error declarations and multiple checked error types as unresolved.
-
-The consolidated grammar now includes:
+The consolidated grammar includes:
 
 - `error` declarations;
 - `fail` statements;
@@ -92,15 +97,13 @@ The consolidated grammar now includes:
 
 ### Generic abstraction
 
-Older master text treated the generic abstraction model as still open.
-
-The locked pre-0.1 model is now reflected:
+The locked pre-0.1 model is:
 
 > Generic relationships may be inferred statically by the compiler, but pre-0.1 exposes no user-written generic type-variable or constraint syntax.
 
 ### Target strategy
 
-The public README now matches the selected target direction:
+The selected target direction is:
 
 - native machine code;
 - C;
@@ -109,93 +112,55 @@ The public README now matches the selected target direction:
 
 Rust, Go, and PHP are not planned targets.
 
-## 3. Documents found consistent
+## 3. Frontend P0 resolution status
 
-The following dedicated specifications were internally consistent with the decisions they record and required no semantic correction during this audit:
+Every P0 item identified by the initial audit has now received an explicit pre-0.1 decision.
 
-- `CONSTRUCTION.md`
-- `IDENTITY_EQUALITY.md`
-- `VALUE_PARAMETER_MUTATION.md`
-- `ERRORS.md`
-- `GENERICS.md`
-- `TARGETS.md`
+### Lexical rules — resolved
 
-The bootstrap files are also consistent with the current minimal language direction:
+`LEXICAL_RULES.md` now defines comments, Unicode identifiers, the exact 28-keyword set, text escapes, integer and floating-point literal forms, and source whitespace behavior.
 
-- `compiler/README.md`
-- `examples/hello.eri`
-- `tests/README.md`
+### Expression precedence and associativity — resolved
 
-## 4. Genuine remaining freeze items
+`PRECEDENCE.md`, `OPERATORS.md`, and `GRAMMAR.md` define the complete precedence model. Comparisons are non-associative, Boolean ordering is explicit, and assignment is statement-level rather than an expression.
 
-The remaining work should be separated into frontend blockers, semantic edge cases, and later architectural decisions.
+### Scope, declaration, and shadowing — resolved
 
-### P0 — resolve before freezing the first frontend grammar/type checker
+`SCOPE.md` defines lexical block scope, declaration-before-use, no self-reference during local initialization, no same-scope redeclaration, no local shadowing, unique parameters, and order-independent unique module declarations.
 
-#### Lexical rules
+### Condition typing — resolved
 
-The lexer still needs a precise definition for:
+`CONDITIONS.md` requires static `Bool` conditions for `if` and `while`. Pre-0.1 has no implicit truthiness.
 
-- line and/or block comments;
-- valid identifier characters;
-- keyword recognition;
-- string literal escape rules;
-- exact integer and float literal token forms;
-- whitespace handling beyond the already-locked rule that newlines do not terminate statements.
+### Function completion and no-value functions — resolved
 
-These are not major language-philosophy questions, but the lexer cannot be frozen without them.
+`FUNCTION_RETURNS.md` defines inferred versus explicit result contracts, no-value functions, bare `return;`, required successful-path returns, checked-failure termination, and the explicit-return-type requirement for circular result inference.
 
-#### Expression precedence and associativity
+### Top-level execution and entrypoint — resolved
 
-The language has operators, but the complete precedence and associativity table is not yet formalized.
+`ENTRYPOINT.md` defines an explicitly selected entry source file, top-level execution in that entry file, declaration-only imported modules, and no magic `main` function or filename.
 
-The relationship among assignment, arithmetic, comparison, `not`, `and`, and `or` must be deterministic before the parser is frozen.
+### Standard textual output — resolved
 
-#### Scope, declaration, and shadowing rules
+The early provisional `print` spelling has been replaced by the locked standard function:
 
-The frontend needs explicit answers for:
+```eri
+output("Hello");
+```
 
-- lexical block scope;
-- whether a local name may shadow an outer name;
-- whether redeclaration in the same scope is invalid;
-- whether use-before-declaration is allowed;
-- duplicate top-level declaration behavior.
+`OUTPUT.md` defines `output(value)` as an ordinary predeclared standard-library/prelude function. It is not a keyword or special statement, requires no explicit import, and uses ordinary call syntax.
 
-These rules directly affect name resolution and diagnostics.
+Pre-0.1 defines no built-in `print`, `echo`, `say`, or `out` alias.
 
-#### Condition typing
+### Float semantics — resolved
 
-The specification should explicitly state whether `if` and `while` conditions must be `Bool` rather than relying on truthiness or implicit conversion.
+`FLOAT.md` now defines `Float` as deterministic IEEE 754 binary64, including rounding, special values, signed zero, gradual underflow, and cross-target behavior. There is no implicit `Int`/`Float` conversion in either direction.
 
-The current philosophy strongly favors explicit predictable typing, but this should be formally locked rather than assumed by the implementation.
-
-#### Function completion and no-value functions
-
-The type checker needs precise rules for:
-
-- functions with no `returns` clause;
-- validity of bare `return;`;
-- ensuring all reachable paths return a value when a value-returning function requires one.
-
-#### Top-level execution / entrypoint
-
-The bootstrap example uses executable statements at file scope. Before executable compilation, the project should define the initial entry model, for example whether `main.eri` is the conventional program entry module and how top-level executable statements are treated.
-
-#### Bootstrap `print`
-
-The first compiler examples use `print`, but its initial classification remains open:
-
-- language keyword;
-- compiler intrinsic;
-- standard-library function.
-
-This does not require a large design subsystem, but the bootstrap compiler needs one concrete choice.
-
-## 5. Semantic edge cases to resolve before full pre-0.1 freeze
+## 4. Semantic edge cases still to resolve before full pre-0.1 freeze
 
 ### Deep `fixed` values containing identity fields
 
-This is the main semantic edge case discovered by the audit.
+This remains the main semantic edge case identified by the audit.
 
 Consider:
 
@@ -219,13 +184,9 @@ let fixed counter be identity Counter {
 };
 ```
 
-but they do not yet explicitly define whether a deeply fixed ordinary value may contain a mutable identity field.
+but do not yet explicitly define whether a deeply fixed ordinary value may contain a mutable identity field.
 
 This must be resolved without weakening the established deep-`fixed` rule.
-
-### Float semantics
-
-`Float` is in the working fundamental set, but its exact representation, arithmetic behavior, special values, and cross-target guarantees are not frozen.
 
 ### Ordinary value equality
 
@@ -247,7 +208,15 @@ Ownership transfer or borrowing beyond the basic `with` scope remains deliberate
 
 Module semantics are locked, but third-party package naming and dependency resolution are not yet defined.
 
-## 6. Architectural decisions that do not block the frontend
+### Collection details
+
+The general collection direction and inferred homogeneous element relationships are established, but the exact first concrete collection model, including Array/List naming and formally locked indexing details, still needs a deliberate decision before that API is considered frozen.
+
+### Float remainder
+
+The `%` token is part of the locked arithmetic vocabulary, but whether `%` applies only to `Int` in pre-0.1 or also receives explicitly defined `Float` remainder semantics remains to be settled.
+
+## 5. Architectural decisions that do not block the frontend
 
 The following should remain open until the frontend and typed representation are sufficiently real to inform them:
 
@@ -258,9 +227,9 @@ The following should remain open until the frontend and typed representation are
 
 These should not delay lexer/parser/type-checker work.
 
-## 7. Features deliberately postponed
+## 6. Features deliberately postponed
 
-The audit found no reason to pull the following into pre-0.1 implementation work:
+There is still no reason to pull the following into pre-0.1 implementation work:
 
 - explicit generic syntax;
 - traits/interfaces for generic constraints;
@@ -274,33 +243,29 @@ The audit found no reason to pull the following into pre-0.1 implementation work
 - multiple native CPU backends;
 - self-hosting.
 
-## 8. Audit conclusion
+## 7. Current audit conclusion
 
-The core language model is coherent enough to move toward implementation.
+The original frontend P0 questions are now resolved. The language has explicit rules for:
 
-The audit did **not** uncover a need to reopen the major locked decisions around:
+- lexical structure;
+- symbolic vocabulary;
+- precedence and assignment;
+- lexical scope and name resolution;
+- Bool-only conditions;
+- function results and completion;
+- entry execution;
+- standard textual output;
+- deterministic `Float` semantics.
 
-- `let` / `fixed`;
-- value semantics;
-- explicit identity;
-- `maybe` / `none`;
-- checked errors;
-- named-field construction;
-- semicolon termination;
-- resource scope;
-- inferred generic abstraction;
-- module qualification;
-- the selected compilation-target strategy.
+The next recommended semantic sequence is:
 
-Before calling the pre-0.1 frontend specification frozen, the project should resolve the P0 items in Section 4, then revisit the deep-`fixed` / identity-field edge case in Section 5.
+1. resolve deep `fixed` + contained identity semantics;
+2. define ordinary value equality;
+3. settle the first concrete collection details and `%` applicability;
+4. review the remaining resource/package edge cases that actually block pre-0.1;
+5. perform a final cross-document frontend freeze audit;
+6. begin lexer/parser/type-checker implementation from the locked subset.
 
-The recommended next design sequence is:
+The audit continues to support the governing design order:
 
-1. lexical rules;
-2. scope and shadowing;
-3. complete operator precedence / assignment rules;
-4. condition and function-completion typing;
-5. bootstrap entrypoint and `print`;
-6. deep `fixed` + contained identity semantics;
-7. freeze the frontend specification;
-8. begin lexer/parser implementation.
+> **Philosophy → Semantics → Architecture → Implementation**
