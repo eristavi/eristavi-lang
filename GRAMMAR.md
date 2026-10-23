@@ -89,7 +89,34 @@ Initial comparison operators:
 ==  !=  <  <=  >  >=
 ```
 
-Boolean operator spelling remains to be finalized; examples may use readable words such as `and`, `or`, and `not`, but these are not yet locked.
+Boolean operators are locked as readable words:
+
+```text
+and
+or
+not
+```
+
+Examples:
+
+```eri
+ready and connected
+failed or expired
+not connected
+```
+
+The symbolic forms `&&`, `||`, and `!` are not Boolean operators in Eristavi.
+
+A working precedence direction is:
+
+```text
+not
+comparison
+and
+or
+```
+
+Exact precedence for all operators will be formalized before the parser is considered stable.
 
 ## 4. Blocks
 
