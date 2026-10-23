@@ -2,8 +2,6 @@
 
 Eristavi is an experimental general-purpose programming language focused on **readability, strong typing, native performance, universal portability, and controlled simplicity**.
 
-The guiding principle is simple:
-
 > **Complexity belongs in the compiler and runtime, not in the programmer's code.**
 
 ## Project identity
@@ -17,9 +15,15 @@ The guiding principle is simple:
 
 ## Status
 
-The **pre-0.1 frontend semantics are frozen for implementation**. The Python bootstrap compiler is now under active development in `compiler/` and already runs the canonical hello program through a lexer, parser, AST, semantic analyzer, and temporary execution backend.
+The **pre-0.1 source-language/frontend contract is frozen for implementation**. The Python bootstrap now implements the principal frozen language slices through collections, user-defined values, maybe/identity, checked errors, deterministic resources, modules/imports, and compiler-inferred generic relationships.
 
-See [`PRE_0_1_FREEZE.md`](PRE_0_1_FREEZE.md) for the freeze boundary and deliberately postponed features.
+The project also has its first typed Eristavi IR and working compiled path:
+
+```text
+Eristavi source → frontend → typed Eristavi IR → C → system C compiler → native executable
+```
+
+The AST bootstrap runtime currently has broader feature coverage than the typed IR/C backend. See [`IMPLEMENTATION_AUDIT.md`](IMPLEMENTATION_AUDIT.md) for the exact implementation boundary and remaining gaps.
 
 ## Design direction
 
@@ -37,100 +41,114 @@ Eristavi aims for:
 - clear compiler diagnostics that explain how to fix problems;
 - performance transparency without forcing low-level complexity into ordinary code.
 
-See [`DESIGN_PHILOSOPHY.md`](DESIGN_PHILOSOPHY.md) for the governing design charter.
+See [`DESIGN_PHILOSOPHY.md`](DESIGN_PHILOSOPHY.md).
 
-## Early syntax example
+## Syntax examples
 
 ```eri
 let x be 40;
 let y be 2;
-
 output(x + y);
 ```
 
-The intended result is:
+Functions may infer non-circular result contracts:
 
-```text
-42
+```eri
+function double(value Int) {
+    return value * 2;
+}
+
+output(double(21));
 ```
 
-`output(...)` is Eristavi's ordinary standard textual-output function. It is part of the standard environment rather than a language keyword.
-
-User-defined values use named-field construction:
+User-defined values use named fields:
 
 ```eri
 type Customer {
+    fixed id Int;
     name Text;
 }
 
-let anna be Customer {
+let customer be Customer {
+    id = 1;
     name = "Anna";
 };
 ```
 
-Collection element types and generic relationships are inferred when the compiler has enough static information:
+Collections are ordinary values with inferred element relationships:
 
 ```eri
 let customers be [];
-
-customers.add(Customer {
-    name = "Anna";
-});
-
-customers.add(Customer {
-    name = "John";
-});
+customers.add(customer);
+output(customers.count);
 ```
 
-The compiler infers the element relationship rather than requiring explicit generic type syntax in ordinary pre-0.1 code.
+Generic relationships are inferred rather than written with generic syntax:
 
-## Documentation
+```eri
+function identity(value) {
+    return value;
+}
 
-- [`PRE_0_1_FREEZE.md`](PRE_0_1_FREEZE.md) — frozen frontend boundary and implementation handoff
-- [`DESIGN_PHILOSOPHY.md`](DESIGN_PHILOSOPHY.md) — governing design charter
-- [`LANGUAGE_SEMANTICS.md`](LANGUAGE_SEMANTICS.md) — consolidated pre-0.1 semantics
-- [`GRAMMAR.md`](GRAMMAR.md) — consolidated pre-0.1 surface grammar
-- [`LEXICAL_RULES.md`](LEXICAL_RULES.md) — lexical structure and literal rules
-- [`PRECEDENCE.md`](PRECEDENCE.md) — expression precedence and associativity
-- [`OUTPUT.md`](OUTPUT.md) — standard textual output
-- [`FLOAT.md`](FLOAT.md) — deterministic Float semantics
-- [`INTEGER_REMAINDER.md`](INTEGER_REMAINDER.md) — signed Int division and Int-only `%`
-- [`COLLECTIONS.md`](COLLECTIONS.md) — pre-0.1 `List` model
-- [`CONSTRUCTION.md`](CONSTRUCTION.md) — named-field construction and initialization
-- [`FIXED_IMMUTABILITY.md`](FIXED_IMMUTABILITY.md) — transitive `fixed` eligibility
-- [`IDENTITY_EQUALITY.md`](IDENTITY_EQUALITY.md) — explicit identity equality semantics
-- [`VALUE_EQUALITY.md`](VALUE_EQUALITY.md) — structural ordinary value equality
-- [`VALUE_PARAMETER_MUTATION.md`](VALUE_PARAMETER_MUTATION.md) — ordinary value-parameter behavior
-- [`ERRORS.md`](ERRORS.md) — typed checked errors and propagation
-- [`RESOURCE_CLEANUP.md`](RESOURCE_CLEANUP.md) — deterministic cleanup and dual-failure composition
-- [`GENERICS.md`](GENERICS.md) — compiler-inferred generic abstraction
-- [`TARGETS.md`](TARGETS.md) — native, C, JavaScript, and WebAssembly target strategy
+output(identity(10));
+output(identity("Hello"));
+```
 
-## Compiler bootstrap
+Checked failures remain explicit:
 
-The active bootstrap implementation lives under [`compiler/`](compiler/).
+```eri
+error LoadError {
+    message Text;
+}
+```
 
-From the repository root, the current vertical slice can run:
+and deterministic resources use `with` rather than manual lifetime management.
+
+## Toolchain
+
+Interpreter/runtime path:
 
 ```text
 python -m compiler.erist run examples/hello.eri
+python -m compiler.erist check examples/hello.eri
 ```
 
-Expected output:
+First compiled backend path:
 
 ```text
-42
+python -m compiler.erist build-c examples/hello.eri -o hello.c
+python -m compiler.erist build examples/hello.eri -o hello
 ```
 
-The package also defines the `erist` console command through `pyproject.toml` when installed in a Python environment.
+When installed via `pyproject.toml`, use the `erist` command directly.
 
-Current tests can be run with:
+## Tests
 
 ```text
 python -m unittest discover -s tests -v
 ```
 
-The compiler will grow incrementally from the frozen subset rather than trying to implement every language feature at once.
+At the current audit point the suite contains **80 passing tests** covering frontend/runtime behavior, project modules, and the first C/native backend.
+
+## Documentation
+
+- [`PRE_0_1_FREEZE.md`](PRE_0_1_FREEZE.md) — frozen source-language/frontend boundary
+- [`IMPLEMENTATION_AUDIT.md`](IMPLEMENTATION_AUDIT.md) — current implementation coverage, backend status, and audited gaps
+- [`DESIGN_PHILOSOPHY.md`](DESIGN_PHILOSOPHY.md) — governing design charter
+- [`LANGUAGE_SEMANTICS.md`](LANGUAGE_SEMANTICS.md) — consolidated semantics
+- [`GRAMMAR.md`](GRAMMAR.md) — consolidated surface grammar
+- [`LEXICAL_RULES.md`](LEXICAL_RULES.md) — lexical rules
+- [`PRECEDENCE.md`](PRECEDENCE.md) — expression ordering
+- [`FUNCTION_RETURNS.md`](FUNCTION_RETURNS.md) — function completion/result semantics
+- [`COLLECTIONS.md`](COLLECTIONS.md) — `List`
+- [`CONSTRUCTION.md`](CONSTRUCTION.md) — named-field construction
+- [`FIXED_IMMUTABILITY.md`](FIXED_IMMUTABILITY.md) — transitive `fixed`
+- [`VALUE_EQUALITY.md`](VALUE_EQUALITY.md) — ordinary structural equality
+- [`IDENTITY_EQUALITY.md`](IDENTITY_EQUALITY.md) — identity equality
+- [`ERRORS.md`](ERRORS.md) — checked failures
+- [`RESOURCE_CLEANUP.md`](RESOURCE_CLEANUP.md) — deterministic cleanup and dual-failure composition
+- [`GENERICS.md`](GENERICS.md) — inferred generic relationships
+- [`TARGETS.md`](TARGETS.md) — target strategy
 
 ## License
 
