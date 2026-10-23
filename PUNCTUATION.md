@@ -86,7 +86,7 @@ let total be add(a, b);
 
 ```eri
 if ready {
-    print "Ready";
+    output("Ready");
 }
 
 let user be User {
