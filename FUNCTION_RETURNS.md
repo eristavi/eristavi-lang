@@ -36,7 +36,7 @@ A function with no explicit `returns T` contract and no `return expression;` sta
 
 ```eri
 function logMessage(message Text) {
-    print message;
+    output(message);
 }
 ```
 
