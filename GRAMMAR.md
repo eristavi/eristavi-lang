@@ -2,7 +2,7 @@
 
 > **Status: Consolidated draft for pre-0.1**
 >
-> This file records the current surface grammar after the pre-0.1 specification audit. Productions marked by already-locked language decisions are authoritative for pre-0.1. Expression precedence, assignment placement, condition typing, function completion, the entry-module model, standard textual output, and deep `fixed` eligibility are now locked; only a small number of parser/semantic details remain before parser freeze.
+> This file records the current surface grammar after the pre-0.1 specification audit. Productions marked by already-locked language decisions are authoritative for pre-0.1. Expression precedence, assignment placement, condition typing, function completion, the entry-module model, standard textual output, deep `fixed` eligibility, and ordinary value equality are now locked; only a small number of parser/semantic details remain before parser freeze.
 
 ## Goals
 
@@ -256,9 +256,9 @@ age > 10 and age < 65
 a == b and b == c
 ```
 
-For `identity T`, `==` and `!=` use logical identity semantics as defined in `IDENTITY_EQUALITY.md`.
+Equality is a semantic type-checker rule layered onto this already-locked comparison syntax. Ordinary user-defined values use structural, recursive, type-preserving equality when every stored component is equality-comparable. Component types retain their own semantics: in particular, `identity T` fields compare by logical identity and `Float` retains IEEE equality behavior. No equality-specific grammar or overload syntax is introduced.
 
-See `PRECEDENCE.md` and `OPERATORS.md` for the locked detailed model.
+See `VALUE_EQUALITY.md` and `IDENTITY_EQUALITY.md` for equality semantics, and `PRECEDENCE.md` / `OPERATORS.md` for the locked ordering model.
 
 ## 6. Blocks
 
@@ -873,6 +873,6 @@ The remaining grammar-level work is intentionally narrow:
 - settle any parser factoring required for `else error` without changing its surface syntax;
 - finalize any primary-expression factoring needed by the implementation without changing the locked surface syntax.
 
-Lexical rules, symbolic vocabulary, expression precedence, associativity, assignment placement, Bool-only condition typing, function result/completion semantics, the entry-module/top-level execution model, standard textual output classification, and transitive deep-`fixed` eligibility are now locked.
+Lexical rules, symbolic vocabulary, expression precedence, associativity, assignment placement, Bool-only condition typing, function result/completion semantics, the entry-module/top-level execution model, standard textual output classification, transitive deep-`fixed` eligibility, and ordinary structural equality semantics are now locked.
 
 These remaining items are parser/specification details, not reasons to reopen already-locked language semantics.
