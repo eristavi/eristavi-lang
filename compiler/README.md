@@ -30,7 +30,7 @@ The execution backend is intentionally temporary. It gives the project a complet
 
 ## Implemented bootstrap subset
 
-The first slice currently supports enough frozen semantics to execute `examples/hello.eri`:
+The bootstrap currently supports:
 
 - the complete 28-keyword lexer vocabulary;
 - SPACE/TAB/LF/CR source whitespace rules;
@@ -40,7 +40,15 @@ The first slice currently supports enough frozen semantics to execute `examples/
 - decimal Float literals;
 - Text literals with the locked escape set;
 - `let` and `let fixed` bindings with inferred basic types;
-- simple mutable reassignment;
+- explicit basic annotations such as `let count Int be 3;`;
+- `Int`, `Float`, `Bool`, and `Text` annotation checking with no implicit conversion;
+- mutable reassignment to visible non-fixed bindings;
+- lexical block scopes created by control-flow blocks;
+- declaration-before-use and no local shadowing across visible scopes;
+- branch-local bindings that do not leak after their block;
+- `if` / `else` with statically required `Bool` conditions;
+- `while` with statically required `Bool` conditions;
+- mutation of visible outer bindings from nested blocks;
 - `Int`, `Float`, `Bool`, and `Text` literals;
 - unary `-` and `not`;
 - arithmetic, comparison, `and`, and `or` precedence;
@@ -91,23 +99,20 @@ Run the current bootstrap tests from the repository root:
 python -m unittest discover -s tests -v
 ```
 
-The initial suite covers the hello program, `fixed` reassignment rejection, Int/Float type separation, Float `%` rejection, signed Int remainder, nested block comments, and Boolean precedence.
+The current suite contains 16 tests covering the original arithmetic/output bootstrap plus basic annotations, type mismatch rejection, Bool-only control-flow conditions, lexical block scope, no-shadowing, outer-binding mutation, sibling-block name reuse, and `while` execution.
 
 ## Next implementation slices
 
-The compiler should continue vertically through already-frozen behavior. A sensible near-term order is:
+The compiler should continue vertically through already-frozen behavior. The next sensible order is:
 
-1. explicit basic type annotations;
-2. blocks and lexical scopes;
-3. `if` / `else` and `while`;
-4. functions and return analysis;
-5. `List` literals, indexing, `.count`, `.add`, and indexed assignment;
-6. user-defined value types and named-field construction;
-7. `maybe` / `none` flow narrowing;
-8. checked errors;
-9. identity;
-10. `with` resources and cleanup semantics;
-11. modules/imports;
-12. typed Eristavi IR and the first real compilation backend.
+1. functions, parameters, calls, and return/completion analysis;
+2. `List` literals, indexing, `.count`, `.add`, and indexed assignment;
+3. user-defined value types and named-field construction;
+4. `maybe` / `none` flow narrowing;
+5. checked errors;
+6. identity;
+7. `with` resources and cleanup semantics;
+8. modules/imports;
+9. typed Eristavi IR and the first real compilation backend.
 
 Implementation should follow the root specifications rather than inventing semantics for convenience.
