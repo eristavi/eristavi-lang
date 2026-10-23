@@ -306,7 +306,7 @@ Assignment of an identity handle preserves the same logical identity:
 let first be counter;
 let second be first;
 second.value = 10;
-print first.value;  // 10
+output(first.value);  // 10
 ```
 
 Identity is automatically memory-managed. It is not a raw pointer, does not expose an address, and does not imply thread safety, atomicity, or resource ownership.
@@ -348,7 +348,7 @@ if user == none {
     return;
 }
 
-print user.name;
+output(user.name);
 ```
 
 No unsafe unwrap operator is required for normal control flow.
@@ -396,7 +396,7 @@ Catch-all handling:
 
 ```eri
 let user be loadUser(1) else error {
-    print error.message;
+    output(error.message);
     return;
 };
 ```
@@ -418,7 +418,7 @@ Propagation uses `try` and is checked against the surrounding function's own `fa
 ```eri
 function showUser(id Int) fails DatabaseError, DecodeError {
     let user be try loadUser(id);
-    print user.name;
+    output(user.name);
 }
 ```
 
@@ -492,6 +492,22 @@ Normal fallthrough from the final reachable entry statement means normal program
 Reusable declaration-only modules may be parsed, type-checked, or compiled without selecting an entry source file. An entry is required only for a toolchain operation that needs executable program start.
 
 See `ENTRYPOINT.md` and `GRAMMAR.md` for the locked detailed model.
+
+### Standard textual output — locked
+
+Simple program output uses the ordinary call:
+
+```eri
+output("Hello");
+```
+
+`output` is a predeclared standard-library/prelude function available without an explicit import. It is not a keyword and introduces no output-specific grammar.
+
+Pre-0.1 defines `output` as the single canonical simple textual-output name; `print`, `echo`, `say`, and `out` are not aliases.
+
+The canonical pre-0.1 form takes one value, writes its human-readable textual representation to standard textual output, and terminates the output with a line break. The bootstrap must support the core value types needed by early programs.
+
+See `OUTPUT.md` for the locked detailed model.
 
 ## 12. Function behavior — locked for pre-0.1
 
@@ -629,7 +645,7 @@ Deterministic resources use `with`:
 ```eri
 with file be try files.open("data.txt") {
     let text be try file.readText();
-    print text;
+    output(text);
 }
 ```
 
@@ -690,7 +706,7 @@ See `TARGETS.md`.
 
 The first compiler does not need to implement every already-defined semantic feature immediately.
 
-The bootstrap should begin with a small executable subset containing basic literals, bindings, arithmetic, names, functions, returns, and diagnostics, then grow toward the frozen pre-0.1 surface.
+The bootstrap should begin with a small executable subset containing basic literals, bindings, arithmetic, names, functions, returns, output, and diagnostics, then grow toward the frozen pre-0.1 surface.
 
 A minimal early program is an entry source file such as:
 
@@ -698,7 +714,7 @@ A minimal early program is an entry source file such as:
 let x be 40;
 let y be 2;
 
-print x + y;
+output(x + y);
 ```
 
 The project deliberately postpones advanced concurrency, async/await, reflection, macros, pattern matching, explicit generic syntax, advanced GC, package registry work, self-hosting, and multiple native CPU backends until the core compiler is proven.
@@ -713,7 +729,6 @@ The following are still deliberately unresolved and should not block the first f
 - third-party package root naming and dependency resolution;
 - cleanup-failure composition when another checked failure is already active;
 - advanced resource ownership transfer / borrowing, if real programs require it;
-- classification of bootstrap `print` as intrinsic or standard-library function;
 - first native CPU backend;
 - exact Eristavi IR instruction set and representation;
 - stable portable bytecode/runtime format, if one is later needed in addition to the defined target set.
