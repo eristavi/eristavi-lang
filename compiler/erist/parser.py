@@ -2,7 +2,21 @@ from __future__ import annotations
 
 from .diagnostics import ParseError
 from .lexer import Token, TokenKind
-from .syntax import AssignStmt, BinaryExpr, CallExpr, Expr, ExprStmt, LetStmt, LiteralExpr, NameExpr, Program, UnaryExpr
+from .syntax import (
+    AssignStmt,
+    BinaryExpr,
+    Block,
+    CallExpr,
+    Expr,
+    ExprStmt,
+    IfStmt,
+    LetStmt,
+    LiteralExpr,
+    NameExpr,
+    Program,
+    UnaryExpr,
+    WhileStmt,
+)
 
 
 class Parser:
@@ -19,12 +33,17 @@ class Parser:
     def _statement(self):
         if self._match(TokenKind.LET):
             return self._let_statement(self._previous())
+        if self._match(TokenKind.IF):
+            return self._if_statement(self._previous())
+        if self._match(TokenKind.WHILE):
+            return self._while_statement(self._previous())
         if self._check(TokenKind.IDENTIFIER) and self._peek(1).kind is TokenKind.EQUAL:
             name = self._advance()
             self._advance()
             value = self._expression()
             self._consume(TokenKind.SEMICOLON, "expected ';' after assignment")
             return AssignStmt(str(name.value), value, name.location)
+
         expr = self._expression()
         self._consume(TokenKind.SEMICOLON, "expected ';' after expression")
         return ExprStmt(expr, expr.location)
@@ -32,11 +51,47 @@ class Parser:
     def _let_statement(self, let_token: Token):
         fixed = self._match(TokenKind.FIXED)
         name = self._consume(TokenKind.IDENTIFIER, "expected binding name after 'let'")
-        if not self._match(TokenKind.BE):
-            raise ParseError("bootstrap parser does not yet implement explicit type annotations", self._current().location)
+
+        type_annotation = None
+        if self._check(TokenKind.IDENTIFIER):
+            type_annotation = str(self._advance().value)
+        elif self._check(TokenKind.MAYBE) or self._check(TokenKind.IDENTITY):
+            raise ParseError(
+                "bootstrap parser does not yet implement composite type annotations",
+                self._current().location,
+            )
+
+        self._consume(TokenKind.BE, "expected 'be' after binding declaration")
         initializer = self._expression()
         self._consume(TokenKind.SEMICOLON, "expected ';' after binding declaration")
-        return LetStmt(str(name.value), fixed, initializer, let_token.location)
+        return LetStmt(str(name.value), fixed, type_annotation, initializer, let_token.location)
+
+    def _if_statement(self, if_token: Token):
+        condition = self._expression()
+        open_brace = self._consume(TokenKind.LBRACE, "expected '{' after if condition")
+        then_branch = self._block(open_brace)
+
+        else_branch = None
+        if self._match(TokenKind.ELSE):
+            open_brace = self._consume(TokenKind.LBRACE, "expected '{' after else")
+            else_branch = self._block(open_brace)
+
+        return IfStmt(condition, then_branch, else_branch, if_token.location)
+
+    def _while_statement(self, while_token: Token):
+        condition = self._expression()
+        open_brace = self._consume(TokenKind.LBRACE, "expected '{' after while condition")
+        body = self._block(open_brace)
+        return WhileStmt(condition, body, while_token.location)
+
+    def _block(self, open_brace: Token) -> Block:
+        statements = []
+        while not self._check(TokenKind.RBRACE):
+            if self._check(TokenKind.EOF):
+                raise ParseError("unterminated block; expected '}'", open_brace.location)
+            statements.append(self._statement())
+        self._advance()
+        return Block(statements, open_brace.location)
 
     def _expression(self) -> Expr:
         return self._or()
@@ -78,7 +133,10 @@ class Parser:
             right = self._additive()
             expr = BinaryExpr(expr, kinds[op.kind], right, op.location)
             if self._current().kind in kinds:
-                raise ParseError("comparison chaining is not part of pre-0.1; use 'and' explicitly", self._current().location)
+                raise ParseError(
+                    "comparison chaining is not part of pre-0.1; use 'and' explicitly",
+                    self._current().location,
+                )
         return expr
 
     def _additive(self):
@@ -120,28 +178,31 @@ class Parser:
 
     def _primary(self):
         if self._match(TokenKind.INTEGER):
-            t = self._previous()
-            return LiteralExpr(t.value, "Int", t.location)
+            token = self._previous()
+            return LiteralExpr(token.value, "Int", token.location)
         if self._match(TokenKind.FLOAT):
-            t = self._previous()
-            return LiteralExpr(t.value, "Float", t.location)
+            token = self._previous()
+            return LiteralExpr(token.value, "Float", token.location)
         if self._match(TokenKind.TEXT):
-            t = self._previous()
-            return LiteralExpr(t.value, "Text", t.location)
+            token = self._previous()
+            return LiteralExpr(token.value, "Text", token.location)
         if self._match(TokenKind.TRUE):
-            t = self._previous()
-            return LiteralExpr(True, "Bool", t.location)
+            token = self._previous()
+            return LiteralExpr(True, "Bool", token.location)
         if self._match(TokenKind.FALSE):
-            t = self._previous()
-            return LiteralExpr(False, "Bool", t.location)
+            token = self._previous()
+            return LiteralExpr(False, "Bool", token.location)
         if self._match(TokenKind.IDENTIFIER):
-            t = self._previous()
-            return NameExpr(str(t.value), t.location)
+            token = self._previous()
+            return NameExpr(str(token.value), token.location)
         if self._match(TokenKind.LPAREN):
             expr = self._expression()
             self._consume(TokenKind.RPAREN, "expected ')' after grouped expression")
             return expr
-        raise ParseError(f"expected expression, found {self._current().lexeme!r}", self._current().location)
+        raise ParseError(
+            f"expected expression, found {self._current().lexeme!r}",
+            self._current().location,
+        )
 
     def _current(self) -> Token:
         return self.tokens[self.i]
