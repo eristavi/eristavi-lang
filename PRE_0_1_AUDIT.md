@@ -38,6 +38,7 @@ Dedicated specifications added or finalized during follow-up resolution include:
 - `FLOAT.md`
 - `FIXED_IMMUTABILITY.md`
 - `VALUE_EQUALITY.md`
+- `COLLECTIONS.md`
 
 ## 2. Documentation drift corrected by the audit
 
@@ -178,6 +179,20 @@ This preserves existing component rules rather than replacing them: `identity T`
 
 Equality availability is derived statically from the complete value structure. Pre-0.1 introduces no equality-overloading syntax, `Equatable` protocol, or implicit cross-type coercion.
 
+### Collections — resolved
+
+`COLLECTIONS.md` now defines the first concrete pre-0.1 collection family as `List`.
+
+A List is ordered, growable, homogeneous in its statically inferred element relationship, and an ordinary value by default. List literals use `[...]`; indexing is zero-based and requires `Int`; bounds are checked; `.count` is the single element-count property; `.add(value)` is the canonical append operation; and mutable Lists support indexed assignment.
+
+Empty List literals require enough static context to infer one element type. Mixed incompatible elements, unresolved empty Lists, and implicit `Int`/`Float` mixing are compile-time errors rather than dynamic fallback.
+
+List assignment and parameter passing preserve ordinary value semantics. `fixed` Lists are deeply immutable and must satisfy the existing deep-fixable rule. Ordered structural equality uses the already-locked value-equality model.
+
+Pre-0.1 does not expose user-written `List<Text>` generic syntax. `List` is a predeclared type-family name rather than a keyword, while the element relation remains compiler-inferred.
+
+Advanced collection families, slicing, negative indexing, maps, sets, and similar facilities remain postponed until real programs justify them.
+
 ## 4. Semantic edge cases still to resolve before full pre-0.1 freeze
 
 ### Identity-to-value snapshot
@@ -195,10 +210,6 @@ Ownership transfer or borrowing beyond the basic `with` scope remains deliberate
 ### Third-party package roots
 
 Module semantics are locked, but third-party package naming and dependency resolution are not yet defined.
-
-### Collection details
-
-The general collection direction, inferred homogeneous element relationships, and ordered structural equality are established, but the exact first concrete collection model, including Array/List naming and formally locked indexing details, still needs a deliberate decision before that API is considered frozen.
 
 ### Float remainder
 
@@ -233,7 +244,7 @@ There is still no reason to pull the following into pre-0.1 implementation work:
 
 ## 7. Current audit conclusion
 
-The original frontend P0 questions and the major semantic edge cases around deep immutability and ordinary value equality are now resolved. The language has explicit rules for:
+The original frontend P0 questions and the major semantic edge cases around deep immutability, ordinary value equality, and the first concrete collection model are now resolved. The language has explicit rules for:
 
 - lexical structure;
 - symbolic vocabulary;
@@ -245,11 +256,12 @@ The original frontend P0 questions and the major semantic edge cases around deep
 - standard textual output;
 - deterministic `Float` semantics;
 - transitive deep `fixed` eligibility;
-- structural ordinary value equality.
+- structural ordinary value equality;
+- ordered growable `List` collections with inferred element relationships and checked zero-based indexing.
 
 The next recommended semantic sequence is:
 
-1. settle the first concrete collection details and `%` applicability;
+1. settle `%` applicability for `Float` versus `Int`;
 2. review identity snapshot only if a real use case requires it;
 3. review the remaining resource/package edge cases that actually block pre-0.1;
 4. perform a final cross-document frontend freeze audit;
