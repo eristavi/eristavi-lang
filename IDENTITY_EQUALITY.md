@@ -19,7 +19,7 @@ let first be identity Counter {
 
 let second be first;
 
-print first == second;   // true
+output(first == second);   // true
 ```
 
 Copying an identity handle preserves the same logical identity, so the copied handle compares equal to the original.
@@ -41,7 +41,7 @@ let second be identity Counter {
     value = 0;
 };
 
-print first == second;   // false
+output(first == second);   // false
 ```
 
 Changing their state so that the fields become equal does not merge the identities and does not make them equal.
@@ -59,7 +59,7 @@ let first be identity Counter {
 
 let second be first;
 
-print first != second;   // false
+output(first != second);   // false
 ```
 
 No additional identity-comparison operator such as `is`, `same`, or pointer-address comparison is introduced.
@@ -79,7 +79,7 @@ let shared be identity Counter {
     value = 0;
 };
 
-print value == shared;   // compile-time error
+output(value == shared);   // compile-time error
 ```
 
 The programmer must make the intended semantic relationship explicit rather than relying on hidden conversion.
@@ -104,9 +104,9 @@ let counter be identity Counter {
     value = 0;
 };
 
-print selected == none;      // true
+output(selected == none);      // true
 selected = counter;
-print selected == counter;   // true after presence is established by the operation
+output(selected == counter);   // true after presence is established by the operation
 ```
 
 This does not introduce null references; `none` remains the only ordinary absence value.
