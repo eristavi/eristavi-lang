@@ -12,14 +12,17 @@ from .syntax import (
     CallExpr,
     Expr,
     ExprStmt,
+    FunctionDecl,
     IfStmt,
     LetStmt,
     LiteralExpr,
     NameExpr,
     Program,
+    ReturnStmt,
     UnaryExpr,
     WhileStmt,
 )
+
 
 INT_MIN = -(2**63)
 INT_MAX = 2**63 - 1
@@ -31,18 +34,41 @@ class Cell:
     fixed: bool
 
 
+class ReturnSignal(Exception):
+    def __init__(self, value: object):
+        self.value = value
+
+
 class Interpreter:
     def __init__(self, output: Callable[[str], None] = print):
         self.scopes: list[dict[str, Cell]] = [{}]
+        self.functions: dict[str, FunctionDecl] = {}
         self.output_sink = output
 
     def run(self, program: Program) -> None:
+        self.functions = {
+            stmt.name: stmt
+            for stmt in program.statements
+            if isinstance(stmt, FunctionDecl)
+        }
+
         for stmt in program.statements:
-            self._statement(stmt)
+            if not isinstance(stmt, FunctionDecl):
+                self._statement(stmt)
 
     def _statement(self, stmt) -> None:
+        if isinstance(stmt, FunctionDecl):
+            return
+
+        if isinstance(stmt, ReturnStmt):
+            value = None if stmt.value is None else self._expr(stmt.value)
+            raise ReturnSignal(value)
+
         if isinstance(stmt, LetStmt):
-            self.scopes[-1][stmt.name] = Cell(self._expr(stmt.initializer), stmt.fixed)
+            self.scopes[-1][stmt.name] = Cell(
+                self._expr(stmt.initializer),
+                stmt.fixed,
+            )
             return
 
         if isinstance(stmt, AssignStmt):
@@ -50,7 +76,10 @@ class Interpreter:
             if cell is None:
                 raise RuntimeFault(f"unknown name {stmt.name!r}", stmt.location)
             if cell.fixed:
-                raise RuntimeFault(f"cannot assign to fixed binding {stmt.name!r}", stmt.location)
+                raise RuntimeFault(
+                    f"cannot assign to fixed binding {stmt.name!r}",
+                    stmt.location,
+                )
             cell.value = self._expr(stmt.value)
             return
 
@@ -87,6 +116,24 @@ class Interpreter:
                 return cell
         return None
 
+    def _call_function(self, function: FunctionDecl, arguments: list[object]):
+        caller_scopes = self.scopes
+        self.scopes = [
+            {
+                parameter.name: Cell(value, False)
+                for parameter, value in zip(function.parameters, arguments)
+            }
+        ]
+
+        try:
+            try:
+                self._block(function.body)
+            except ReturnSignal as signal:
+                return signal.value
+            return None
+        finally:
+            self.scopes = caller_scopes
+
     def _expr(self, expr: Expr):
         if isinstance(expr, LiteralExpr):
             return expr.value
@@ -113,6 +160,7 @@ class Interpreter:
             if expr.operator == "and":
                 left = self._expr(expr.left)
                 return bool(left) and bool(self._expr(expr.right))
+
             if expr.operator == "or":
                 left = self._expr(expr.left)
                 return bool(left) or bool(self._expr(expr.right))
@@ -122,14 +170,11 @@ class Interpreter:
             op = expr.operator
 
             if op == "+":
-                result = left + right
-                return self._checked_numeric(result, left, expr)
+                return self._checked_numeric(left + right, left, expr)
             if op == "-":
-                result = left - right
-                return self._checked_numeric(result, left, expr)
+                return self._checked_numeric(left - right, left, expr)
             if op == "*":
-                result = left * right
-                return self._checked_numeric(result, left, expr)
+                return self._checked_numeric(left * right, left, expr)
             if op == "/":
                 if isinstance(left, int) and not isinstance(left, bool):
                     return self._int_div(left, right, expr)
@@ -155,6 +200,13 @@ class Interpreter:
                 self.output_sink(self._format(value))
                 return None
 
+            if isinstance(expr.callee, NameExpr) and expr.callee.name in self.functions:
+                arguments = [self._expr(argument) for argument in expr.arguments]
+                return self._call_function(
+                    self.functions[expr.callee.name],
+                    arguments,
+                )
+
         raise RuntimeFault(
             "expression is not implemented by the bootstrap runtime",
             getattr(expr, "location", None),
@@ -175,6 +227,7 @@ class Interpreter:
             raise RuntimeFault("Int division by zero", expr.location)
         if a == INT_MIN and b == -1:
             raise RuntimeFault("signed 64-bit Int overflow", expr.location)
+
         quotient = abs(a) // abs(b)
         if (a < 0) != (b < 0):
             quotient = -quotient
@@ -185,6 +238,7 @@ class Interpreter:
             raise RuntimeFault("Int remainder by zero", expr.location)
         if a == INT_MIN and b == -1:
             raise RuntimeFault("signed 64-bit Int overflow", expr.location)
+
         quotient = self._int_div(a, b, expr)
         return a - quotient * b
 
@@ -192,10 +246,9 @@ class Interpreter:
     def _float_div(a: float, b: float) -> float:
         if b != 0.0:
             return a / b
-        if math.isnan(a):
+        if math.isnan(a) or a == 0.0:
             return math.nan
-        if a == 0.0:
-            return math.nan
+
         sign = math.copysign(1.0, a) * math.copysign(1.0, b)
         return math.copysign(math.inf, sign)
 
