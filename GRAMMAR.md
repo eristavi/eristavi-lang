@@ -2,7 +2,7 @@
 
 > **Status: Consolidated draft for pre-0.1**
 >
-> This file records the current surface grammar after the pre-0.1 specification audit. Productions marked by already-locked language decisions are authoritative for pre-0.1. Expression precedence and assignment placement are now locked; only a small number of parser/semantic details remain before parser freeze.
+> This file records the current surface grammar after the pre-0.1 specification audit. Productions marked by already-locked language decisions are authoritative for pre-0.1. Expression precedence, assignment placement, condition typing, function completion, and the entry-module model are now locked; only a small number of parser/semantic details remain before parser freeze.
 
 ## Goals
 
@@ -665,7 +665,7 @@ module-path :=
     identifier { "." identifier }
 ```
 
-Imports are file-scope declarations and are normally placed before ordinary declarations and executable statements.
+In pre-0.1, imports must appear before module declarations or top-level entry executable statements. Imports are static module-graph declarations rather than runtime execution points.
 
 Wildcard imports, selective unqualified imports, quoted project paths, and relative traversal strings are not part of pre-0.1.
 
@@ -778,7 +778,60 @@ let value be (a = b);
 
 Semantic analysis determines whether the assignment target is mutable and whether the right-hand value is type-compatible.
 
-## 23. Output bootstrap status
+## 23. Top-level execution and entry module — locked
+
+A run/build operation that needs an executable program start selects exactly one source file as the entry module. The language does not reserve a `main` function name and does not require a `main.eri` filename.
+
+Pre-0.1 distinguishes an importable declaration-only module from a selected entry module:
+
+```text
+module-declaration :=
+      function-declaration
+    | type-declaration
+    | error-declaration
+
+importable-module :=
+    { import-declaration }
+    { module-declaration }
+
+entry-module :=
+    { import-declaration }
+    { module-declaration }
+    { entry-statement }
+
+entry-statement :=
+      variable-declaration
+    | assignment-statement
+    | expression-statement
+    | if-statement
+    | for-statement
+    | while-statement
+    | with-statement
+```
+
+The ordering is intentional:
+
+```text
+imports
+module declarations
+entry executable statements
+```
+
+Once the first entry executable statement appears, a later module declaration is invalid.
+
+Entry executable statements form an implicit no-value execution body and run in source order. Their `let` / `fixed` bindings are entry-local rather than module declarations: they cannot be imported and are not implicitly visible inside module-level functions, types, or errors.
+
+Module declarations remain order-independent within the declaration region, while entry-local executable bindings follow the ordinary declaration-before-use and no-shadowing rules.
+
+Imported modules must match `importable-module`; they cannot contain top-level executable statements. Imports therefore do not trigger arbitrary hidden initialization code.
+
+`return` is invalid at file scope because return semantics belong to functions. A top-level checked `fail` is also invalid because the entry body has no `fails` contract, and `try` cannot propagate a checked failure beyond the entry boundary. Checked failures reaching the entry boundary must instead be handled exhaustively.
+
+Normal fallthrough from the final reachable entry statement completes the program normally.
+
+See `ENTRYPOINT.md` for the locked detailed model.
+
+## 24. Output bootstrap status
 
 Early programs use:
 
@@ -788,11 +841,11 @@ print "Hello";
 
 The behavior is part of the bootstrap examples, but whether `print` ultimately lives as a keyword, compiler intrinsic, or standard-library function is not yet frozen.
 
-## 24. Bootstrap subset
+## 25. Bootstrap subset
 
 The first compiler milestone may implement only a subset of the already-defined pre-0.1 grammar.
 
-The smallest example remains:
+The smallest example remains a valid entry module:
 
 ```eri
 let x be 40;
@@ -803,7 +856,7 @@ print x + y;
 
 Implementation should add already-defined features incrementally rather than inventing new syntax during compiler construction.
 
-## 25. Remaining grammar work before parser freeze
+## 26. Remaining grammar work before parser freeze
 
 The remaining grammar-level work is intentionally narrow:
 
@@ -811,6 +864,6 @@ The remaining grammar-level work is intentionally narrow:
 - classify bootstrap `print` if the first compiler requires that distinction;
 - finalize any primary-expression factoring needed by the implementation without changing the locked surface syntax.
 
-Lexical rules, symbolic vocabulary, expression precedence, associativity, assignment placement, Bool-only condition typing, and function result/completion semantics are now locked.
+Lexical rules, symbolic vocabulary, expression precedence, associativity, assignment placement, Bool-only condition typing, function result/completion semantics, and the entry-module/top-level execution model are now locked.
 
 These remaining items are parser/specification details, not reasons to reopen already-locked language semantics.
