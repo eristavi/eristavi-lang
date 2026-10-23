@@ -84,6 +84,24 @@ list-literal := "[" [ expression { "," expression } ] "]"
 
 `none` represents absence only in an expected `maybe` context. It does not make ordinary types nullable.
 
+### Integer literal semantics
+
+`Int` is a signed 64-bit integer on every supported target:
+
+```text
+-9223372036854775808 .. 9223372036854775807
+```
+
+An integer literal is inferred as `Int` when it fits that range and no other explicit numeric type is required by context.
+
+A compile-time constant expression whose `Int` result is outside that range is rejected:
+
+```eri
+let x Int be 9223372036854775807 + 1;  // compile-time error
+```
+
+Normal runtime integer arithmetic is checked and does not silently wrap. Runtime overflow and division by zero produce defined arithmetic faults. Explicit wrapping or saturating arithmetic, if added, will be opt-in rather than the behavior of ordinary operators.
+
 ## 3. Operators
 
 Initial arithmetic operators:
