@@ -339,7 +339,7 @@ Optional values use `maybe T`; absence uses `none`:
 let user maybe User be none;
 ```
 
-`none` is valid only in a `maybe` context or where inference establishes such a context.
+`none` is valid only where the expected or inferred type is `maybe ...`.
 
 A `maybe` value must be proven present before member access. Ordinary checks participate in flow-sensitive narrowing:
 
@@ -428,7 +428,7 @@ Eristavi pre-0.1 has no exception inheritance, `throw`, or `catch` model for ord
 
 See `ERRORS.md`.
 
-## 11. Modules and visibility — locked
+## 11. Modules, visibility, and entry execution — locked
 
 One `.eri` file is one module. Its logical path is derived from its path under the configured source root.
 
@@ -462,6 +462,36 @@ The top-level namespace `std` is reserved for the standard library.
 Circular module dependencies are compile-time errors in the initial language.
 
 Third-party package root naming and dependency resolution remain open.
+
+### Entrypoint and top-level execution — locked
+
+An executable run/build operation selects exactly one `.eri` source file explicitly as the entry module. Eristavi does not require a magic `main` function, a reserved `main` identifier, or a required `main.eri` filename.
+
+The selected entry module has the conceptual order:
+
+```text
+imports
+module declarations
+entry executable statements
+```
+
+Imports must come first. Module declarations such as functions, types, and errors come before entry executable statements. Once top-level execution begins, a later module declaration is invalid.
+
+The entry executable statements form an implicit no-value execution body and execute in source order. Top-level executable `let` / `fixed` bindings are local to that entry execution body: they are not module members, cannot be imported, and are not implicitly visible inside module-level functions or types.
+
+Imported modules are declaration-only. A module used through `import` may contain imports and module declarations but may not contain top-level executable statements. Importing a module therefore does not run arbitrary initialization code or create hidden runtime side effects.
+
+A file that contains top-level executable statements may serve as an explicitly selected entry file, but it cannot simultaneously be imported as a reusable module in that program.
+
+Module declarations remain order-independent within their declaration region. Entry-local executable bindings use ordinary declaration-before-use, lexical-scope, redeclaration, and no-shadowing rules.
+
+`return` is invalid at file scope. The implicit entry body has no `fails` contract, so a top-level checked `fail` is invalid and `try` cannot propagate a checked failure beyond the entry boundary. Checked failures at that boundary must be handled exhaustively.
+
+Normal fallthrough from the final reachable entry statement means normal program completion. Host-specific process exit status mapping is a backend/runtime concern rather than entrypoint syntax.
+
+Reusable declaration-only modules may be parsed, type-checked, or compiled without selecting an entry source file. An entry is required only for a toolchain operation that needs executable program start.
+
+See `ENTRYPOINT.md` and `GRAMMAR.md` for the locked detailed model.
 
 ## 12. Function behavior — locked for pre-0.1
 
@@ -582,7 +612,9 @@ Same-scope redeclaration is a compile-time error. Pre-0.1 also forbids local sha
 
 Function parameters belong to the function's local namespace and must be unique. Separate functions may freely reuse local and parameter names because they have independent scopes.
 
-Module-level functions, types, errors, and other ordinary declarations must have unique names in their module; duplicate names are compile-time errors rather than overloads. Module-level declarations are resolved across the complete module and are therefore order-independent, unlike local bindings.
+Module-level functions, types, errors, and other ordinary declarations must have unique names in their module; duplicate names are compile-time errors rather than overloads. Module-level declarations are resolved across the complete declaration region and are therefore order-independent, unlike local bindings.
+
+Entry-local executable bindings are not module declarations and do not become hidden globals merely because they appear at file scope in the selected entry file.
 
 See `SCOPE.md` for the locked detailed model.
 
@@ -660,7 +692,7 @@ The first compiler does not need to implement every already-defined semantic fea
 
 The bootstrap should begin with a small executable subset containing basic literals, bindings, arithmetic, names, functions, returns, and diagnostics, then grow toward the frozen pre-0.1 surface.
 
-A minimal early program remains:
+A minimal early program is an entry source file such as:
 
 ```eri
 let x be 40;
@@ -681,7 +713,6 @@ The following are still deliberately unresolved and should not block the first f
 - third-party package root naming and dependency resolution;
 - cleanup-failure composition when another checked failure is already active;
 - advanced resource ownership transfer / borrowing, if real programs require it;
-- top-level execution and entrypoint model;
 - classification of bootstrap `print` as intrinsic or standard-library function;
 - first native CPU backend;
 - exact Eristavi IR instruction set and representation;
