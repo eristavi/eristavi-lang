@@ -17,11 +17,14 @@ The first grammar should be:
 
 ## 1. Variable declaration
 
-Current draft:
+Locked binding forms:
 
 ```eri
 let name be expression;
+let fixed name be expression;
 ```
+
+`let` introduces a mutable binding by default. `fixed` makes that binding immutable after initialization.
 
 Examples:
 
@@ -29,12 +32,14 @@ Examples:
 let age be 44;
 let name be "Anna";
 let values be [10, 20, 30];
+
+let fixed taxRate be 0.19;
 ```
 
-Draft grammar:
+Grammar:
 
 ```text
-variable-declaration := "let" identifier "be" expression ";"
+variable-declaration := "let" [ "fixed" ] identifier "be" expression ";"
 ```
 
 Explicit type annotation is intentionally left out of this first grammar until its final form is decided.
@@ -224,7 +229,7 @@ type Task {
 }
 ```
 
-This syntax is **provisional** until value/reference semantics and mutability rules are finalized.
+This syntax is **provisional** until value/reference semantics and field mutability rules are finalized.
 
 ## 11. Output
 
@@ -261,7 +266,7 @@ The first parser only needs enough grammar to accept programs such as:
 
 ```eri
 let x be 40;
-let y be 2;
+let fixed y be 2;
 
 print x + y;
 ```
