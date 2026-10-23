@@ -463,7 +463,7 @@ Circular module dependencies are compile-time errors in the initial language.
 
 Third-party package root naming and dependency resolution remain open.
 
-## 12. Function parameter behavior — locked for pre-0.1
+## 12. Function behavior — locked for pre-0.1
 
 Ordinary parameters use value semantics. They cannot directly mutate caller-owned ordinary values.
 
@@ -486,7 +486,37 @@ Shared observable mutation remains explicit through `identity T` parameters.
 
 The compiler may optimize physical copying away when value semantics remain observationally intact.
 
-See `VALUE_PARAMETER_MUTATION.md`.
+### Function result and completion — locked
+
+`returns T` is optional when the compiler can infer a single static result type from the function body.
+
+```eri
+function double(value Int) {
+    return value * 2;
+}
+```
+
+is inferred to produce `Int`.
+
+A function with no explicit `returns T` and no `return expression;` statements is a no-value function. Pre-0.1 defines no programmer-visible `Void`, `void`, `Unit`, or equivalent type merely for this case.
+
+A no-value function may reach its closing `}` normally or exit early with `return;`. A bare `return;` is invalid in a value-producing function.
+
+A function cannot mix bare `return;` and `return expression;` completion.
+
+Every reachable path that can complete successfully in a value-producing function must return a compatible value. Eristavi does not invent an implicit missing/undefined result when such a path reaches the closing `}`.
+
+Multiple inferred return expressions must establish one compatible static result type. The compiler does not silently create a dynamic or union result type to reconcile incompatible returns.
+
+A checked `fail` terminates its path and therefore does not require a successful return on that path.
+
+`return none;` returns the actual absence value of a `maybe T` result and is not equivalent to bare `return;`.
+
+When value-result inference is directly or indirectly circular, including recursive or mutually recursive result inference, an explicit `returns T` contract is required. Recursion itself remains fully allowed.
+
+A no-value function call cannot be used in a value context.
+
+See `FUNCTION_RETURNS.md` for the locked detailed result/completion model and `VALUE_PARAMETER_MUTATION.md` for ordinary parameter behavior.
 
 ## 13. Control flow and expression ordering — locked core
 
@@ -651,7 +681,6 @@ The following are still deliberately unresolved and should not block the first f
 - third-party package root naming and dependency resolution;
 - cleanup-failure composition when another checked failure is already active;
 - advanced resource ownership transfer / borrowing, if real programs require it;
-- function completion and bare-return rules;
 - top-level execution and entrypoint model;
 - classification of bootstrap `print` as intrinsic or standard-library function;
 - first native CPU backend;
