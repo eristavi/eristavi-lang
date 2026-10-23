@@ -1,6 +1,6 @@
 # Eristavi Punctuation and Operators
 
-> **Status: Symbol vocabulary, precedence, and associativity locked for pre-0.1.**
+> **Status: Symbol vocabulary, precedence, associativity, and `%` applicability locked for pre-0.1.**
 
 This document defines the symbolic punctuation and operator tokens available in Eristavi pre-0.1. The language deliberately keeps this vocabulary small and does not add shorthand merely because it exists in other languages.
 
@@ -176,7 +176,7 @@ No compound-assignment operators are defined in pre-0.1.
 
 ## 4. Arithmetic operators
 
-Pre-0.1 defines:
+Pre-0.1 defines the symbolic arithmetic vocabulary:
 
 ```text
 +  -  *  /  %
@@ -191,6 +191,23 @@ let area be width * height;
 let quotient be total / count;
 let remainder be value % 10;
 ```
+
+The `%` operator is defined only for `Int` in pre-0.1. Both operands and the result are `Int`.
+
+Signed `Int` division truncates toward zero. `%` is the associated signed remainder:
+
+```text
+ 10 % 3   =  1
+-10 % 3   = -1
+ 10 % -3  =  1
+-10 % -3  = -1
+```
+
+Division or remainder by zero is a checked integer arithmetic fault. The signed-minimum / `-1` exceptional pair is likewise an overflow fault under the locked integer arithmetic model.
+
+`Float` does not support `%` in pre-0.1. Floating-point remainder or modulo, if later required, belongs to explicitly named numeric library operations rather than receiving an ambiguous `%` meaning.
+
+See `INTEGER_REMAINDER.md` for the full locked rule.
 
 The `-` token is also used by unary negation:
 
@@ -395,4 +412,4 @@ See `PRECEDENCE.md` for the full locked rationale and examples.
 
 ## Governing rule
 
-> Use symbols where their meaning is compact and universally clear, use words where symbols reduce readability, and do not add shorthand until it demonstrates a real benefit. Postfix access binds strongest, prefix operations follow, multiplication precedes addition, comparisons are non-associative, `not` applies after comparisons, `and` precedes `or`, and assignment is not a value-producing expression.
+> Use symbols where their meaning is compact and universally clear, use words where symbols reduce readability, and do not add shorthand until it demonstrates a real benefit. `%` has one precise pre-0.1 meaning as signed `Int` remainder; Float remainder/modulo remains an explicitly named library concern. Postfix access binds strongest, prefix operations follow, multiplication precedes addition, comparisons are non-associative, `not` applies after comparisons, `and` precedes `or`, and assignment is not a value-producing expression.
