@@ -189,7 +189,7 @@ user = anotherUser;             // compile-time error
 
 This avoids a distinction where the binding is fixed but the value behind it can still be mutated.
 
-## 6. Value semantics — locked
+## 6. Value and identity semantics — locked
 
 Ordinary Eristavi user-defined types use value semantics by default.
 
@@ -202,23 +202,132 @@ b.name = "Maria";
 
 Changing `b` must not change `a`.
 
-Assignment, ordinary parameter passing, and ordinary collection extraction should therefore behave as logical value copies rather than hidden aliases.
+Assignment, ordinary parameter passing, and ordinary collection extraction therefore behave as logical value copies rather than hidden aliases.
 
 The language semantics do **not** require eager physical copying. The compiler/runtime may use copy elision, shared storage, copy-on-write, escape analysis, stack allocation, or other optimizations as long as observable behavior remains value-based.
 
-### Identity and sharing
+### Explicit identity handles
 
-Some values genuinely require shared identity, such as connections, actors, graph nodes, or explicitly shared application state.
+When shared identity is genuinely required, Eristavi makes it explicit with the type form:
 
-Eristavi should support such behavior only through an explicit future reference/identity mechanism. Ordinary `type` declarations must not silently become reference types.
+```eri
+identity Counter
+```
 
-The syntax for explicit shared/reference semantics is not yet locked.
+The underlying user-defined type remains an ordinary value type:
+
+```eri
+type Counter {
+    value Int;
+}
+```
+
+An identity value is created explicitly from an ordinary value expression:
+
+```eri
+let counter be identity Counter(...);
+```
+
+The exact constructor syntax for `Counter(...)` remains provisional, but the semantic role of `identity` is locked: it creates a managed identity whose state can be observed through more than one handle.
+
+Assignment of an identity handle preserves that identity rather than cloning the underlying state:
+
+```eri
+let first be identity Counter(...);
+let second be first;
+
+second.value = 10;
+print first.value;       // 10
+```
+
+This behavior is intentionally different from assignment of an ordinary `Counter` value.
+
+### Identity stays visible in contracts
+
+Functions that accept shared identity state declare that fact in the parameter type:
+
+```eri
+function increment(counter identity Counter) {
+    counter.value = counter.value + 1;
+}
+```
+
+Passing an `identity Counter` may therefore mutate the same logical object observed by the caller. This does not weaken the rule that ordinary value parameters cannot silently mutate caller-owned values: identity is an explicit, different semantic type.
+
+Fields may likewise declare identity explicitly:
+
+```eri
+type ViewModel {
+    counter identity Counter;
+}
+```
+
+Copying `ViewModel` still copies the ordinary outer value, while the explicitly declared `identity Counter` field continues to refer to the same Counter identity. The sharing is therefore visible in the field's type rather than hidden in the implementation.
+
+### No implicit conversion
+
+Eristavi does not silently convert between `T` and `identity T`.
+
+Creating identity requires an explicit `identity` expression. Turning an identity back into an independent value copy, if later supported, must likewise be explicit.
+
+This prevents APIs from acquiring shared aliasing merely because the compiler happened to allocate something on the heap.
+
+### Identity and `fixed`
+
+The initial language does not allow a `fixed` binding whose value has an `identity` type.
+
+```eri
+let fixed counter be identity Counter(...);  // compile-time error
+```
+
+This restriction preserves the already locked meaning of `fixed`: deep immutability of the complete bound value. Allowing `fixed` to mean only "the handle cannot be rebound" while aliases could still mutate the shared object would reintroduce the same shallow-const behavior Eristavi deliberately rejected.
+
+`fixed` fields inside the underlying value type remain valid and immutable through every identity handle:
+
+```eri
+type UserState {
+    fixed id Int;
+    name Text;
+}
+```
+
+If a future immutable-identity use case requires a dedicated read-only identity capability, it should be designed explicitly rather than weakening `fixed`.
+
+### Identity lifetime and memory
+
+Identity storage is automatically memory-managed. Ordinary code does not manually allocate, retain, release, or free identity objects.
+
+The compiler/runtime may implement identity handles through managed heap objects, handles, indirection tables, or another representation, but programs observe only the semantic guarantee that copies of the handle refer to the same logical identity.
+
+`identity` is not a raw pointer facility and does not expose memory addresses.
+
+Identity types do not imply thread safety, atomicity, synchronization, or concurrent access permission. Concurrency semantics are a separate future concern.
+
+### Identity and optional values
+
+Optional identity handles use the existing `maybe` model:
+
+```eri
+maybe identity Counter
+```
+
+`none` therefore remains the only ordinary representation of absence. Identity does not introduce null references.
+
+### Identity and resources
+
+Deterministically managed resource handles are separate from identity handles. A resource type managed by `with` cannot be wrapped in `identity` merely to bypass single-owner resource rules.
+
+Files, locks, transactions, sockets, and similar resources continue to follow the scoped ownership model defined below.
+
+The design rule is:
+
+> Values are independent by default. Shared identity exists only where `identity` is explicitly written.
 
 ### Function mutation
 
-Ordinary function parameters should not silently mutate caller state through hidden aliasing.
+Ordinary function parameters must not silently mutate caller state through hidden aliasing.
 
-If Eristavi later supports in-place mutation of a caller-owned value, that intent should be explicit in the function declaration or call semantics. The syntax for this feature remains open.
+If Eristavi later supports intentional in-place mutation of an ordinary caller-owned value, that intent must be explicit in the function declaration or call semantics. The syntax for this separate feature remains open.
 
 ## 7. Optional values — locked
 
@@ -839,16 +948,17 @@ print x + y;
 
 The first compiler milestone does not require generics, async/await, macros, reflection, multiple native backends, a package registry, or an advanced garbage collector.
 
-Resource semantics may be implemented after the smallest expression/function subset works, but their language-level behavior is already defined by the `with` model above.
+Identity and resource semantics may be implemented after the smallest expression/function subset works, but their language-level behavior is already defined by the models above.
 
 ## 18. Open decisions
 
 The following must be decided deliberately before being treated as stable:
 
-- explicit reference/identity syntax;
-- explicit in-place parameter mutation syntax, if needed;
+- explicit in-place parameter mutation syntax for ordinary value types, if needed;
 - custom error-type declaration syntax;
 - composition of multiple possible checked error types;
+- identity comparison/equality semantics;
+- explicit extraction of an independent value copy from an identity handle, if needed;
 - generic abstraction model when inference alone is insufficient;
 - third-party package root naming and dependency resolution;
 - advanced resource ownership transfer / borrowing semantics, if needed;
