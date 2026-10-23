@@ -673,9 +673,124 @@ The compiler/runtime should be free to use:
 
 The first collector should favor correctness and implementation clarity over advanced optimization.
 
-External resources such as files and sockets should eventually use deterministic scoped cleanup rather than waiting for garbage collection.
+Memory management and external-resource management are deliberately separate concerns. Garbage collection may manage memory, but files, sockets, database connections, locks, transactions, and similar resources require deterministic release.
 
-## 14. Standard library boundary
+## 14. Resource management — locked
+
+Eristavi uses deterministic scoped cleanup for resources whose lifetime must not depend on garbage collection.
+
+The primary construct is `with`:
+
+```eri
+with file be try files.open("users.txt") {
+    let text be try file.readText();
+    print text;
+}
+```
+
+The expression after `be` must produce a resource value. The binding introduced by `with` exists only inside the block.
+
+The semantic rule is:
+
+> A resource acquired by `with` is owned by that block and is released exactly once when the block is left.
+
+### Cleanup on every ordinary exit path
+
+Cleanup must run when control leaves the block normally and when it leaves through language-level control flow such as `return` or checked-error propagation.
+
+```eri
+with file be try files.open("users.txt") {
+    if file.empty {
+        return;
+    }
+
+    process(file);
+}
+```
+
+The resource is released before the `return` completes.
+
+Likewise:
+
+```eri
+function load() returns Text fails FileError {
+    with file be try files.open("data.txt") {
+        return try file.readText();
+    }
+}
+```
+
+The resource is released before the value or propagated checked error leaves the scope.
+
+If future control-flow constructs such as `break` or `continue` leave a resource scope, the same deterministic cleanup rule applies.
+
+A process-level abort, operating-system termination, power loss, or other event that prevents language-level cleanup from executing is outside this guarantee.
+
+### Resource ownership
+
+Resource handles are not ordinary freely copyable values.
+
+A resource acquired by `with` has one compiler-tracked owner for the duration of that scope. Eristavi must prevent accidental duplication that could create multiple independent owners of the same underlying resource.
+
+For example, this must not silently create a second owner:
+
+```eri
+with file be try files.open("data.txt") {
+    let another be file;   // invalid as an implicit resource copy
+}
+```
+
+The compiler should diagnose an attempted implicit resource copy rather than allow double cleanup or unclear ownership.
+
+Resource ownership is a semantic property distinct from ordinary value semantics. Ordinary user-defined values remain value-based; only values whose type represents a deterministically managed resource receive this single-owner behavior.
+
+### No lifetime annotations in ordinary code
+
+The compiler is responsible for tracking the scoped lifetime created by `with`. Ordinary programmers should not need borrow annotations, explicit lifetime parameters, manual reference counts, or `free` operations to use files, sockets, database connections, locks, or similar resources safely.
+
+Advanced ownership transfer or borrowing may be added later if real programs require it, but it must be explicit and must not complicate the basic `with` model.
+
+### Nested resources
+
+Multiple resources may be represented by nested `with` blocks:
+
+```eri
+with connection be try database.connect() {
+    with transaction be try connection.transaction() {
+        ...
+    }
+}
+```
+
+Resources are released in reverse nesting order: the inner resource is released before the outer resource.
+
+The initial language does not need separate syntax for acquiring several resources in one `with` statement.
+
+### Resource escape
+
+A resource owned by a `with` block cannot silently escape that block through assignment, return, collection storage, or capture if doing so would outlive the owning scope.
+
+The compiler must reject such escapes unless a future explicit ownership-transfer mechanism makes the new owner unambiguous.
+
+This keeps basic resource safety enforceable without exposing lifetime syntax.
+
+### Cleanup failures
+
+Cleanup is part of the resource contract and must not be silently ignored. The exact surface semantics for composing a cleanup failure with an already-active checked failure remain open so the initial language does not prematurely add a complex dual-error model.
+
+Whatever representation is chosen later must preserve deterministic cleanup and must never silently discard a recoverable cleanup failure.
+
+### Garbage collection is not resource cleanup
+
+Garbage collection may reclaim memory associated with a resource object, but it is not the semantic mechanism for releasing the external resource itself.
+
+A program must not depend on an eventual garbage-collection cycle to close a file, release a lock, end a transaction, or close a network connection.
+
+The design rule is:
+
+> Memory is managed automatically. External resources are managed deterministically by scope.
+
+## 15. Standard library boundary
 
 Capabilities such as text operations, sorting, JSON, networking, files, dates, and databases should normally be libraries rather than language keywords.
 
@@ -689,7 +804,9 @@ items.sort
 
 should be type/library behavior, not special grammar.
 
-## 15. Compilation architecture — locked principle, implementation pending
+Resource-producing library APIs should integrate with the `with` model rather than requiring ad-hoc manual cleanup patterns.
+
+## 16. Compilation architecture — locked principle, implementation pending
 
 The language should compile through an Eristavi-owned machine-neutral intermediate representation.
 
@@ -709,7 +826,7 @@ The source language must not be designed around a specific CPU architecture.
 
 The long-term architecture may support both native target backends and a stable portable execution format.
 
-## 16. Initial implementation scope
+## 17. Initial implementation scope
 
 The first implementation should prove the language with a deliberately small feature set:
 
@@ -722,7 +839,9 @@ print x + y;
 
 The first compiler milestone does not require generics, async/await, macros, reflection, multiple native backends, a package registry, or an advanced garbage collector.
 
-## 17. Open decisions
+Resource semantics may be implemented after the smallest expression/function subset works, but their language-level behavior is already defined by the `with` model above.
+
+## 18. Open decisions
 
 The following must be decided deliberately before being treated as stable:
 
@@ -732,7 +851,8 @@ The following must be decided deliberately before being treated as stable:
 - composition of multiple possible checked error types;
 - generic abstraction model when inference alone is insufficient;
 - third-party package root naming and dependency resolution;
-- resource-management syntax;
+- advanced resource ownership transfer / borrowing semantics, if needed;
+- cleanup-failure composition when another checked failure is already active;
 - first native target backend;
 - exact IR specification.
 
