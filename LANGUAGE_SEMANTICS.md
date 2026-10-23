@@ -486,7 +486,7 @@ The compiler may optimize physical copying away when value semantics remain obse
 
 See `VALUE_PARAMETER_MUTATION.md`.
 
-## 13. Control flow — initial set
+## 13. Control flow and expression ordering — locked core
 
 The initial language uses:
 
@@ -495,7 +495,7 @@ The initial language uses:
 - `while`
 - `return`
 
-Boolean operators are locked as:
+Boolean operators are:
 
 ```text
 and
@@ -504,6 +504,25 @@ not
 ```
 
 The symbolic Boolean aliases `&&`, `||`, and `!` are not part of Eristavi.
+
+Expression precedence is locked from highest to lowest as:
+
+```text
+call / index / member access
+unary - / try / identity
+* / / / %
++ / -
+comparisons
+not
+and
+or
+```
+
+Comparisons are non-associative, so chained forms such as `10 < age < 65` are invalid. `not a == b` means `not (a == b)`. `and` binds more strongly than `or`.
+
+Assignment `=` is not an expression operator. Assignment is statement-level syntax and does not produce a value, so forms such as `a = b = c` or `let value be (a = b);` are invalid.
+
+See `PRECEDENCE.md`, `OPERATORS.md`, and `GRAMMAR.md`.
 
 ## 14. Resource management — locked
 
@@ -592,7 +611,6 @@ The project deliberately postpones advanced concurrency, async/await, reflection
 
 The following are still deliberately unresolved and should not block the first frontend bootstrap unless implementation requires them:
 
-- full operator precedence table beyond already-established relationships;
 - general equality rules for ordinary user-defined value types;
 - interaction of deep `fixed` ordinary values with contained mutable `identity` fields;
 - explicit extraction of an independent `T` snapshot from `identity T`, if needed;
