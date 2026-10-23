@@ -84,6 +84,8 @@ list-literal := "[" [ expression { "," expression } ] "]"
 
 `none` represents absence only in an expected `maybe` context. It does not make ordinary types nullable.
 
+Text literals are Unicode text and source files use UTF-8. Invalid UTF-8 is not valid source text.
+
 ### Integer literal semantics
 
 `Int` is a signed 64-bit integer on every supported target:
@@ -366,6 +368,30 @@ arguments          := expression { "," expression }
 ```
 
 A `maybe` value cannot use member access until control-flow analysis has established that it is not `none`.
+
+Although index access is a general postfix form, direct integer indexing is not defined for `Text` because it would be ambiguous:
+
+```eri
+text[0]                 // compile-time error
+```
+
+Text must first select an explicit Unicode view:
+
+```eri
+text.characters[0]      // Unicode extended grapheme cluster
+text.scalars[0]         // Unicode scalar value
+text.bytes[0]           // UTF-8 byte
+```
+
+The corresponding counts are likewise explicit:
+
+```eri
+text.characters.count
+text.scalars.count
+text.bytes.count
+```
+
+A bare `text.length` is not defined by the core Text semantics.
 
 ## 11. User-defined types
 
