@@ -1,6 +1,6 @@
 # Eristavi Punctuation and Operators
 
-> **Status: Symbol vocabulary locked for pre-0.1; precedence and associativity are defined separately.**
+> **Status: Symbol vocabulary, precedence, and associativity locked for pre-0.1.**
 
 This document defines the symbolic punctuation and operator tokens available in Eristavi pre-0.1. The language deliberately keeps this vocabulary small and does not add shorthand merely because it exists in other languages.
 
@@ -160,6 +160,18 @@ let user be User {
 };
 ```
 
+`=` is not a general expression operator. Assignment does not produce a value and has no precedence level.
+
+These forms are therefore invalid:
+
+```text
+a = b = c;
+if x = 10 {
+    ...
+}
+let value be (x = 20);
+```
+
 No compound-assignment operators are defined in pre-0.1.
 
 ## 4. Arithmetic operators
@@ -189,7 +201,7 @@ let result be -(a + b);
 
 Negative numeric literals are therefore not separate signed literal tokens.
 
-Pre-0.1 does not define `++`, `--`, or a symbolic exponentiation operator such as `**`.
+Pre-0.1 does not define unary `+`, `++`, `--`, or a symbolic exponentiation operator such as `**`.
 
 ## 5. Comparison operators
 
@@ -226,6 +238,8 @@ if not connected {
 ```
 
 `!=` remains one complete comparison token.
+
+Comparison operators are non-associative in pre-0.1. Chained forms such as `10 < age < 65` and `a == b == c` are invalid; the intended relationship must be written explicitly with Boolean operators.
 
 ## 6. Boolean operators remain words
 
@@ -276,7 +290,7 @@ The same rule applies to:
 >=
 ```
 
-This rule concerns tokenization only; it does not define operator precedence or associativity.
+This rule concerns tokenization only.
 
 ## 8. Slash and comments
 
@@ -322,18 +336,63 @@ Pre-0.1 does not define these operator or punctuation forms:
 
 Their absence is intentional. A future version should add a symbol only when a real language capability requires it and the addition improves Eristavi more than it expands the programmer's vocabulary.
 
-## 10. Precedence is separate
+## 10. Expression precedence — locked
 
-This document locks which symbolic operators exist, but does not yet lock their precedence or associativity.
+From highest to lowest, pre-0.1 uses:
 
-Parentheses may always express explicit grouping:
+| Level | Forms / operators | Associativity |
+|---|---|---|
+| 1 | call `()`, index `[]`, member access `.` | left / postfix |
+| 2 | unary `-`, `try`, `identity` | prefix |
+| 3 | `*`, `/`, `%` | left |
+| 4 | `+`, `-` | left |
+| 5 | `==`, `!=`, `<`, `<=`, `>`, `>=` | non-associative |
+| 6 | `not` | prefix |
+| 7 | `and` | left |
+| 8 | `or` | left |
+
+Assignment `=` is not part of this hierarchy because assignment is not an expression.
+
+Examples:
 
 ```eri
-let result be (a + b) * c;
+a + b * c
 ```
 
-The full pre-0.1 precedence table is a separate language-design decision and must be defined explicitly rather than inferred from another language.
+means:
+
+```eri
+a + (b * c)
+```
+
+and:
+
+```eri
+not a == b
+```
+
+means:
+
+```eri
+not (a == b)
+```
+
+while:
+
+```eri
+a or b and c
+```
+
+means:
+
+```eri
+a or (b and c)
+```
+
+Parentheses may always express explicit grouping.
+
+See `PRECEDENCE.md` for the full locked rationale and examples.
 
 ## Governing rule
 
-> Use symbols where their meaning is compact and universally clear, use words where symbols reduce readability, and do not add shorthand until it demonstrates a real benefit. Pre-0.1 exposes only the punctuation and operators required by the language already being designed.
+> Use symbols where their meaning is compact and universally clear, use words where symbols reduce readability, and do not add shorthand until it demonstrates a real benefit. Postfix access binds strongest, prefix operations follow, multiplication precedes addition, comparisons are non-associative, `not` applies after comparisons, `and` precedes `or`, and assignment is not a value-producing expression.
