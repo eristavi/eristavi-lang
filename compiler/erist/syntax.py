@@ -26,6 +26,29 @@ class Block:
 
 
 @dataclass(frozen=True)
+class Parameter:
+    name: str
+    type_annotation: str | None
+    location: SourceLocation
+
+
+@dataclass(frozen=True)
+class FunctionDecl(Stmt):
+    name: str
+    parameters: list[Parameter]
+    return_type: str | None
+    body: Block
+    location: SourceLocation
+    public: bool = False
+
+
+@dataclass(frozen=True)
+class ReturnStmt(Stmt):
+    value: Expr | None
+    location: SourceLocation
+
+
+@dataclass(frozen=True)
 class LetStmt(Stmt):
     name: str
     fixed: bool
