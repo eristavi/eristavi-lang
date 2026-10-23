@@ -81,7 +81,7 @@ Previous experiments using angle brackets, square brackets, dots, and colons are
 
 The design goal is to avoid exposing generic syntax where reliable inference makes it unnecessary.
 
-## 5. Variables and immutability — locked for bindings
+## 5. Variables and immutability — locked
 
 Ordinary `let` bindings are mutable by default:
 
@@ -105,11 +105,24 @@ price = 60;
 
 The compiler should report that `price` is fixed and cannot be changed.
 
+The same `fixed` rule applies to fields inside user-defined types:
+
+```eri
+type User {
+    fixed id Int;
+    name Text;
+}
+```
+
+A `fixed` field is assigned as part of initialization and cannot be reassigned afterward. A field without `fixed` remains mutable according to the surrounding value/reference semantics.
+
+The exact constructor or initialization syntax is not locked yet; this rule defines the immutability guarantee independently of that syntax.
+
 The semantic rule is:
 
-> `let` introduces a binding. `fixed` adds an explicit immutability guarantee to that binding.
+> `fixed` means initialized once, then immutable.
 
-The use of `fixed` for individual fields inside user-defined types remains a separate decision and is not yet locked by this rule.
+Eristavi should not introduce a second immutability keyword for fields. The same concept uses the same word everywhere.
 
 ## 6. Fundamental types — working set
 
@@ -243,7 +256,6 @@ The first compiler milestone does not require generics, async/await, macros, ref
 
 The following must be decided deliberately before being treated as stable:
 
-- immutability rules for fields inside user-defined types;
 - explicit type-annotation syntax in all positions;
 - optional / absent-value model;
 - value vs identity/reference type semantics;
