@@ -1,15 +1,21 @@
 # Compiler Tests
 
-Compiler tests will live here as the bootstrap implementation begins.
+The bootstrap test suite now lives in `tests/test_bootstrap.py`.
 
-The first tests should cover only settled bootstrap behavior:
+Run it from the repository root with:
 
-- tokenization of `let`, `be`, literals, identifiers, operators, and semicolons;
-- parsing variable declarations;
-- arithmetic precedence;
-- name resolution;
-- type inference for basic literals;
-- clear diagnostics for unknown names and incompatible operations;
-- successful processing of `examples/hello.eri`.
+```text
+python -m unittest discover -s tests -v
+```
 
-Tests should grow with semantics, not ahead of them.
+The first suite intentionally covers only frozen behavior already implemented by the vertical bootstrap slice:
+
+- execution of the canonical hello program;
+- rejection of reassignment to `fixed` bindings;
+- no implicit `Int` / `Float` mixing;
+- rejection of `%` for Float;
+- truncation-compatible signed Int remainder;
+- nested block comments;
+- locked Boolean/comparison precedence.
+
+Tests should continue to grow with implemented frozen semantics, not speculative future features.
