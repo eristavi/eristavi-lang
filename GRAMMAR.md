@@ -2,7 +2,7 @@
 
 > **Status: Consolidated draft for pre-0.1**
 >
-> This file records the current surface grammar after the pre-0.1 specification audit. Productions marked by already-locked language decisions are authoritative for pre-0.1. Expression precedence, assignment placement, condition typing, function completion, the entry-module model, standard textual output, deep `fixed` eligibility, and ordinary value equality are now locked; only a small number of parser/semantic details remain before parser freeze.
+> This file records the current surface grammar after the pre-0.1 specification audit. Productions marked by already-locked language decisions are authoritative for pre-0.1. Expression precedence, assignment placement, condition typing, function completion, the entry-module model, standard textual output, deep `fixed` eligibility, ordinary value equality, and the first `List` collection model are now locked; only a small number of parser/semantic details remain before parser freeze.
 
 ## Goals
 
@@ -128,6 +128,10 @@ none
 ```
 
 `none` is valid only where the expected or inferred type is `maybe ...`.
+
+A list literal constructs the locked pre-0.1 ordered growable `List` collection family. Its element relationship is statically inferred; mixed incompatible element types are rejected rather than widened to a dynamic type. An empty `[]` literal is valid only when static context establishes one element type. Pre-0.1 exposes no user-written `List<Text>` generic syntax.
+
+See `COLLECTIONS.md` for the locked `List` semantics.
 
 ## 5. Operators and expression precedence — locked
 
@@ -313,6 +317,8 @@ for item in items {
 for-statement :=
     "for" identifier "in" expression block
 ```
+
+For a `List`, iteration proceeds from index `0` upward in stored order and observes the logical List value present when iteration begins. The stable-iteration rule is semantic rather than additional loop syntax.
 
 While:
 
@@ -708,13 +714,17 @@ auth.login(account)
 users[0].name
 ```
 
-Direct integer indexing of `Text` is invalid. An explicit Unicode view must be selected first:
+For the pre-0.1 `List` model, indexing is zero-based, the index must have static type `Int`, and valid indexes satisfy `0 <= index < list.count`. Bounds are checked: a statically provable out-of-range access is a compile-time error; otherwise an invalid index produces a defined runtime bounds fault. Negative indexes are out of range rather than from-end shorthand.
+
+Direct integer indexing of `Text` remains invalid. An explicit Unicode view must be selected first:
 
 ```eri
 text.characters[0]
 text.scalars[0]
 text.bytes[0]
 ```
+
+See `COLLECTIONS.md` for the locked List indexing model.
 
 ## 21. Generic source syntax — locked absent in pre-0.1
 
@@ -731,7 +741,9 @@ function first<T>(items)
 where T: Comparable
 ```
 
-Generic relationships may still exist internally through static inference as defined in `GENERICS.md`.
+`List` is nevertheless the canonical predeclared collection type-family name. A bare `List` is not a complete explicit value-type annotation because its element relationship must remain statically known; pre-0.1 obtains that relationship through inference rather than user-written generic arguments.
+
+Generic relationships may still exist internally through static inference as defined in `GENERICS.md` and `COLLECTIONS.md`.
 
 ## 22. Statement categories and assignment — locked
 
@@ -760,7 +772,11 @@ assignment-statement :=
     assignment-target "=" value-expression ";"
 
 assignment-target :=
-    identifier { "." identifier }
+    identifier { assignment-path-segment }
+
+assignment-path-segment :=
+    "." identifier
+    | "[" expression "]"
 
 expression-statement :=
     value-expression ";"
@@ -768,11 +784,13 @@ expression-statement :=
 
 Assignment is statement-level syntax. It is not part of `expression` or `value-expression`, does not produce a value, and cannot be chained.
 
-Valid:
+Valid examples include ordinary bindings, member paths, List elements, and nested writable paths:
 
 ```eri
 price = 50;
 user.name = "Maria";
+numbers[1] = 25;
+users[0].name = "Maria";
 ```
 
 Invalid:
@@ -782,7 +800,7 @@ a = b = c;
 let value be (a = b);
 ```
 
-Semantic analysis determines whether the assignment target is mutable and whether the right-hand value is type-compatible.
+Semantic analysis determines whether each path segment is writable, whether the root value is mutable, whether indexing is supported by the relevant type, and whether the right-hand value is type-compatible. In particular, indexed List assignment is invalid through a `fixed` List and retains the normal checked-bounds behavior.
 
 ## 23. Top-level execution and entry module — locked
 
@@ -873,6 +891,6 @@ The remaining grammar-level work is intentionally narrow:
 - settle any parser factoring required for `else error` without changing its surface syntax;
 - finalize any primary-expression factoring needed by the implementation without changing the locked surface syntax.
 
-Lexical rules, symbolic vocabulary, expression precedence, associativity, assignment placement, Bool-only condition typing, function result/completion semantics, the entry-module/top-level execution model, standard textual output classification, transitive deep-`fixed` eligibility, and ordinary structural equality semantics are now locked.
+Lexical rules, symbolic vocabulary, expression precedence, associativity, assignment placement, Bool-only condition typing, function result/completion semantics, the entry-module/top-level execution model, standard textual output classification, transitive deep-`fixed` eligibility, ordinary structural equality semantics, and the pre-0.1 `List` collection surface are now locked.
 
 These remaining items are parser/specification details, not reasons to reopen already-locked language semantics.
