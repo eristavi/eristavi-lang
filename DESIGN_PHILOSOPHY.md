@@ -63,7 +63,7 @@ The language should read naturally without trying to imitate unrestricted Englis
 let total be price * quantity;
 
 if total > 100 {
-    print total;
+    output(total);
 }
 ```
 
@@ -116,6 +116,8 @@ The standard library should provide a coherent foundation so routine work does n
 
 Likely domains include Text, Collections, Math, Time, Files, JSON, Networking, Processes, Concurrency, Randomness, Encoding, and System interaction.
 
+Simple textual output is also an example of this principle: Eristavi uses the ordinary predeclared standard function `output(...)` rather than adding a dedicated output keyword or statement form.
+
 ### Rule
 
 > **Grow capability through libraries before growing grammar.**
@@ -145,7 +147,7 @@ The locked Eristavi model uses `with`:
 ```eri
 with file be try files.open("data.txt") {
     let contents be try file.readText();
-    print contents;
+    output(contents);
 }
 ```
 
@@ -238,8 +240,8 @@ Diagnostics should identify the actual problem, show relevant source, explain wh
 ```text
 Unknown name "costumer".
 
-7 | print costumer;
-          ^^^^^^^^
+7 | output(costumer);
+           ^^^^^^^^
 
 Did you mean "customer"?
 ```
