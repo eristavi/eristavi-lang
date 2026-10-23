@@ -37,6 +37,7 @@ Dedicated specifications added or finalized during follow-up resolution include:
 - `OUTPUT.md`
 - `FLOAT.md`
 - `FIXED_IMMUTABILITY.md`
+- `VALUE_EQUALITY.md`
 
 ## 2. Documentation drift corrected by the audit
 
@@ -167,11 +168,17 @@ Eristavi rejects the combination rather than weakening `fixed` into shallow hand
 
 Deep-fixable is a compiler property rather than new source syntax.
 
+### Ordinary value equality — resolved
+
+`VALUE_EQUALITY.md` now defines ordinary user-defined value equality as structural, recursive, type-preserving, and compositional.
+
+Two ordinary values of the same compatible static type compare equal when every corresponding stored component compares equal under that component type's own equality semantics.
+
+This preserves existing component rules rather than replacing them: `identity T` fields compare by logical identity, `Float` retains IEEE behavior including NaN, `maybe T` composes contained equality, and ordered collections compare by length and corresponding elements when their element type is equality-comparable.
+
+Equality availability is derived statically from the complete value structure. Pre-0.1 introduces no equality-overloading syntax, `Equatable` protocol, or implicit cross-type coercion.
+
 ## 4. Semantic edge cases still to resolve before full pre-0.1 freeze
-
-### Ordinary value equality
-
-Identity equality is defined, but the general `==` rules for arbitrary ordinary user-defined value types are not yet frozen.
 
 ### Identity-to-value snapshot
 
@@ -191,7 +198,7 @@ Module semantics are locked, but third-party package naming and dependency resol
 
 ### Collection details
 
-The general collection direction and inferred homogeneous element relationships are established, but the exact first concrete collection model, including Array/List naming and formally locked indexing details, still needs a deliberate decision before that API is considered frozen.
+The general collection direction, inferred homogeneous element relationships, and ordered structural equality are established, but the exact first concrete collection model, including Array/List naming and formally locked indexing details, still needs a deliberate decision before that API is considered frozen.
 
 ### Float remainder
 
@@ -226,7 +233,7 @@ There is still no reason to pull the following into pre-0.1 implementation work:
 
 ## 7. Current audit conclusion
 
-The original frontend P0 questions and the major deep-immutability/identity edge case are now resolved. The language has explicit rules for:
+The original frontend P0 questions and the major semantic edge cases around deep immutability and ordinary value equality are now resolved. The language has explicit rules for:
 
 - lexical structure;
 - symbolic vocabulary;
@@ -237,16 +244,16 @@ The original frontend P0 questions and the major deep-immutability/identity edge
 - entry execution;
 - standard textual output;
 - deterministic `Float` semantics;
-- transitive deep `fixed` eligibility.
+- transitive deep `fixed` eligibility;
+- structural ordinary value equality.
 
 The next recommended semantic sequence is:
 
-1. define ordinary value equality;
-2. settle the first concrete collection details and `%` applicability;
-3. review identity snapshot only if a real use case requires it;
-4. review the remaining resource/package edge cases that actually block pre-0.1;
-5. perform a final cross-document frontend freeze audit;
-6. begin lexer/parser/type-checker implementation from the locked subset.
+1. settle the first concrete collection details and `%` applicability;
+2. review identity snapshot only if a real use case requires it;
+3. review the remaining resource/package edge cases that actually block pre-0.1;
+4. perform a final cross-document frontend freeze audit;
+5. begin lexer/parser/type-checker implementation from the locked subset.
 
 The audit continues to support the governing design order:
 
