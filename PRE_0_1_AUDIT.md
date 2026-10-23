@@ -36,6 +36,7 @@ Dedicated specifications added or finalized during follow-up resolution include:
 - `ENTRYPOINT.md`
 - `OUTPUT.md`
 - `FLOAT.md`
+- `FIXED_IMMUTABILITY.md`
 
 ## 2. Documentation drift corrected by the audit
 
@@ -156,37 +157,17 @@ Pre-0.1 defines no built-in `print`, `echo`, `say`, or `out` alias.
 
 `FLOAT.md` now defines `Float` as deterministic IEEE 754 binary64, including rounding, special values, signed zero, gradual underflow, and cross-target behavior. There is no implicit `Int`/`Float` conversion in either direction.
 
+### Deep `fixed` with contained identity — resolved
+
+`FIXED_IMMUTABILITY.md` now defines a transitive deep-fixable rule.
+
+A `fixed` binding or `fixed` field is valid only when its static type contains no `identity` at any reachable stored type position. The rule is recursive through nested ordinary values and applies through optional and collection positions.
+
+Eristavi rejects the combination rather than weakening `fixed` into shallow handle immutability, implicitly freezing other aliases, or silently snapshotting identity state.
+
+Deep-fixable is a compiler property rather than new source syntax.
+
 ## 4. Semantic edge cases still to resolve before full pre-0.1 freeze
-
-### Deep `fixed` values containing identity fields
-
-This remains the main semantic edge case identified by the audit.
-
-Consider:
-
-```eri
-type ViewModel {
-    counter identity Counter;
-}
-
-let fixed model be ViewModel {
-    counter = sharedCounter;
-};
-```
-
-The outer value is `fixed`, whose locked meaning is deep immutability from the programmer's point of view. However, the contained `identity Counter` may also be held elsewhere and mutated through another identity handle.
-
-The current specifications clearly forbid:
-
-```eri
-let fixed counter be identity Counter {
-    value = 0;
-};
-```
-
-but do not yet explicitly define whether a deeply fixed ordinary value may contain a mutable identity field.
-
-This must be resolved without weakening the established deep-`fixed` rule.
 
 ### Ordinary value equality
 
@@ -245,7 +226,7 @@ There is still no reason to pull the following into pre-0.1 implementation work:
 
 ## 7. Current audit conclusion
 
-The original frontend P0 questions are now resolved. The language has explicit rules for:
+The original frontend P0 questions and the major deep-immutability/identity edge case are now resolved. The language has explicit rules for:
 
 - lexical structure;
 - symbolic vocabulary;
@@ -255,13 +236,14 @@ The original frontend P0 questions are now resolved. The language has explicit r
 - function results and completion;
 - entry execution;
 - standard textual output;
-- deterministic `Float` semantics.
+- deterministic `Float` semantics;
+- transitive deep `fixed` eligibility.
 
 The next recommended semantic sequence is:
 
-1. resolve deep `fixed` + contained identity semantics;
-2. define ordinary value equality;
-3. settle the first concrete collection details and `%` applicability;
+1. define ordinary value equality;
+2. settle the first concrete collection details and `%` applicability;
+3. review identity snapshot only if a real use case requires it;
 4. review the remaining resource/package edge cases that actually block pre-0.1;
 5. perform a final cross-document frontend freeze audit;
 6. begin lexer/parser/type-checker implementation from the locked subset.
