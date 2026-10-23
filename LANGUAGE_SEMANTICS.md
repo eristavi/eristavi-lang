@@ -1,65 +1,49 @@
 # Eristavi Language Semantics
 
-> **Status: Draft / pre-0.1**
+> **Status: Consolidated pre-0.1 semantics**
 >
-> This document records current semantic decisions and deliberately separates them from unresolved syntax. Nothing here should be treated as stable language specification until explicitly marked as locked.
+> This document is the master semantic summary for Eristavi pre-0.1. Dedicated locked documents may provide additional detail, but they must not contradict this file.
 
 ## 1. Project identity — locked
 
-- Language name: **Eristavi**
+- Language: **Eristavi**
 - Primary source extension: **`.eri`**
 - Reserved extension: **`.erist`**
-- Toolchain / CLI command: **`erist`**
+- CLI / toolchain command: **`erist`**
 - Official website: **eristavi.org**
 - Repository: **eristavi/eristavi-lang**
 
-## 2. Core philosophy — locked
+## 2. Governing philosophy — locked
 
-Eristavi is intended to be:
+Eristavi is a general-purpose language centered on:
 
-- general-purpose;
-- readable without becoming pseudo-English;
-- strongly and statically typed;
-- aggressively type-inferred;
-- native-capable;
-- portable across architectures;
-- automatically memory-managed for ordinary code;
-- small in language vocabulary and rich in libraries.
+- readability without pseudo-English verbosity;
+- one obvious form for fundamental concepts;
+- strong static typing with aggressive inference;
+- native performance and machine-independent semantics;
+- automatic memory management for ordinary values;
+- deterministic scoped cleanup for external resources;
+- a small language vocabulary with capability pushed into libraries;
+- excellent diagnostics and inspectable compiler behavior.
 
-The compiler and runtime should absorb mechanical complexity wherever they can do so reliably.
+The governing principle is:
 
-## 3. Type inference — direction accepted
+> **Small language. Rich libraries. Powerful compiler. Predictable runtime. Universal architecture.**
 
-Ordinary values should not require redundant type annotations.
+Design order remains:
 
-```eri
-let age be 44;
-let name be "Anna";
-let numbers be [10, 20, 30];
-```
+> **Philosophy → Semantics → Architecture → Implementation**
 
-The compiler should infer the corresponding internal types.
+## 3. Type inference and annotations — locked
 
-Explicit type annotations remain valuable where inference is impossible or where an API contract should deliberately constrain a value.
-
-### Explicit type annotations — locked
-
-When an explicit type is written for a named value, Eristavi uses the readable form:
-
-```text
-name Type
-```
-
-No colon separates the name from its type.
-
-Variable declarations may therefore rely on inference:
+Eristavi infers types where the relationship is statically clear:
 
 ```eri
 let age be 44;
 let name be "Anna";
 ```
 
-or state the type explicitly:
+Explicit named annotations use name-first order with no colon:
 
 ```eri
 let age Int be 44;
@@ -67,7 +51,7 @@ let name Text be "Anna";
 let user maybe User be none;
 ```
 
-The same order is used consistently for parameters and fields:
+The same order is used by parameters and fields:
 
 ```eri
 function greet(name Text) {
@@ -77,495 +61,97 @@ function greet(name Text) {
 type User {
     fixed id Int;
     name Text;
-    middleName maybe Text;
 }
-```
-
-`fixed` remains a modifier on the binding or field, not part of the type itself:
-
-```eri
-let fixed taxRate Float be 0.19;
 ```
 
 The design rule is:
 
 > A name comes first; its explicit type follows it.
 
-Type inference remains the default for local values, so explicit annotations should be used where they clarify intent, establish a contract, or are required for inference.
+## 4. Variables and immutability — locked
 
-## 4. Collections — direction accepted
-
-Collection element types should be inferred whenever possible.
-
-```eri
-let names be ["Anna", "Maria", "John"];
-```
-
-The compiler can infer a list whose elements are `Text`.
-
-An initially empty collection may acquire its element type from later uses within the relevant inference context:
-
-```eri
-let customers be [];
-
-customers.add(Customer("Anna"));
-customers.add(Customer("John"));
-```
-
-The compiler should infer that `customers` contains `Customer` values.
-
-If incompatible values are added, compilation should fail with a useful diagnostic rather than silently degrading to an untyped collection.
-
-```eri
-let values be [];
-values.add(10);
-values.add("hello");
-```
-
-This should produce a type-conflict error unless the programmer has explicitly chosen a type model that permits both values.
-
-### Explicit generic syntax
-
-No user-facing generic/container type notation is currently locked.
-
-Previous experiments using angle brackets, square brackets, dots, and colons are **not part of the language specification**.
-
-The design goal is to avoid exposing generic syntax where reliable inference makes it unnecessary.
-
-## 5. Variables and immutability — locked
-
-Ordinary `let` bindings are mutable by default:
+`let` introduces a mutable binding:
 
 ```eri
 let price be 50;
 price = 60;
 ```
 
-A binding that must not be reassigned after initialization is declared with `fixed`:
+`fixed` makes the complete bound ordinary value immutable after initialization:
 
 ```eri
-let fixed price be 50;
+let fixed taxRate Float be 0.19;
 ```
 
-Attempting to reassign a fixed binding is a compile-time error:
+For ordinary values, `fixed` is deep from the programmer's point of view:
 
 ```eri
-let fixed price be 50;
-price = 60;
+let fixed user be User {
+    id = 1;
+    name = "Anna";
+};
+
+user.name = "Maria";  // compile-time error
+user = anotherUser;    // compile-time error
 ```
 
-The compiler should report that `price` is fixed and cannot be changed.
-
-The same `fixed` rule applies to fields inside user-defined types:
-
-```eri
-type User {
-    fixed id Int;
-    name Text;
-}
-```
-
-A `fixed` field is assigned as part of initialization and cannot be reassigned afterward.
-
-The exact constructor or initialization syntax is not locked yet; this rule defines the immutability guarantee independently of that syntax.
-
-The semantic rule is:
-
-> `fixed` means initialized once, then immutable.
-
-Eristavi should not introduce a second immutability keyword for fields. The same concept uses the same word everywhere.
-
-### Deep immutability — locked
-
-A `fixed` binding makes the complete bound value immutable from the programmer's point of view, including nested mutable fields that are part of that value.
-
-```eri
-let fixed user be User(...);
-
-user.name = "Maria";           // compile-time error
-user.address.city = "Paphos";  // compile-time error
-user = anotherUser;             // compile-time error
-```
-
-This avoids a distinction where the binding is fixed but the value behind it can still be mutated.
-
-## 6. Value and identity semantics — locked
-
-Ordinary Eristavi user-defined types use value semantics by default.
-
-```eri
-let a be user;
-let b be a;
-
-b.name = "Maria";
-```
-
-Changing `b` must not change `a`.
-
-Assignment, ordinary parameter passing, and ordinary collection extraction therefore behave as logical value copies rather than hidden aliases.
-
-The language semantics do **not** require eager physical copying. The compiler/runtime may use copy elision, shared storage, copy-on-write, escape analysis, stack allocation, or other optimizations as long as observable behavior remains value-based.
-
-### Explicit identity handles
-
-When shared identity is genuinely required, Eristavi makes it explicit with the type form:
-
-```eri
-identity Counter
-```
-
-The underlying user-defined type remains an ordinary value type:
-
-```eri
-type Counter {
-    value Int;
-}
-```
-
-An identity value is created explicitly from an ordinary value expression:
-
-```eri
-let counter be identity Counter(...);
-```
-
-The exact constructor syntax for `Counter(...)` remains provisional, but the semantic role of `identity` is locked: it creates a managed identity whose state can be observed through more than one handle.
-
-Assignment of an identity handle preserves that identity rather than cloning the underlying state:
-
-```eri
-let first be identity Counter(...);
-let second be first;
-
-second.value = 10;
-print first.value;       // 10
-```
-
-This behavior is intentionally different from assignment of an ordinary `Counter` value.
-
-### Identity stays visible in contracts
-
-Functions that accept shared identity state declare that fact in the parameter type:
-
-```eri
-function increment(counter identity Counter) {
-    counter.value = counter.value + 1;
-}
-```
-
-Passing an `identity Counter` may therefore mutate the same logical object observed by the caller. This does not weaken the rule that ordinary value parameters cannot silently mutate caller-owned values: identity is an explicit, different semantic type.
-
-Fields may likewise declare identity explicitly:
-
-```eri
-type ViewModel {
-    counter identity Counter;
-}
-```
-
-Copying `ViewModel` still copies the ordinary outer value, while the explicitly declared `identity Counter` field continues to refer to the same Counter identity. The sharing is therefore visible in the field's type rather than hidden in the implementation.
-
-### No implicit conversion
-
-Eristavi does not silently convert between `T` and `identity T`.
-
-Creating identity requires an explicit `identity` expression. Turning an identity back into an independent value copy, if later supported, must likewise be explicit.
-
-This prevents APIs from acquiring shared aliasing merely because the compiler happened to allocate something on the heap.
-
-### Identity and `fixed`
-
-The initial language does not allow a `fixed` binding whose value has an `identity` type.
-
-```eri
-let fixed counter be identity Counter(...);  // compile-time error
-```
-
-This restriction preserves the already locked meaning of `fixed`: deep immutability of the complete bound value. Allowing `fixed` to mean only "the handle cannot be rebound" while aliases could still mutate the shared object would reintroduce the same shallow-const behavior Eristavi deliberately rejected.
-
-`fixed` fields inside the underlying value type remain valid and immutable through every identity handle:
-
-```eri
-type UserState {
-    fixed id Int;
-    name Text;
-}
-```
-
-If a future immutable-identity use case requires a dedicated read-only identity capability, it should be designed explicitly rather than weakening `fixed`.
-
-### Identity lifetime and memory
-
-Identity storage is automatically memory-managed. Ordinary code does not manually allocate, retain, release, or free identity objects.
-
-The compiler/runtime may implement identity handles through managed heap objects, handles, indirection tables, or another representation, but programs observe only the semantic guarantee that copies of the handle refer to the same logical identity.
-
-`identity` is not a raw pointer facility and does not expose memory addresses.
-
-Identity types do not imply thread safety, atomicity, synchronization, or concurrent access permission. Concurrency semantics are a separate future concern.
-
-### Identity and optional values
-
-Optional identity handles use the existing `maybe` model:
-
-```eri
-maybe identity Counter
-```
-
-`none` therefore remains the only ordinary representation of absence. Identity does not introduce null references.
-
-### Identity and resources
-
-Deterministically managed resource handles are separate from identity handles. A resource type managed by `with` cannot be wrapped in `identity` merely to bypass single-owner resource rules.
-
-Files, locks, transactions, sockets, and similar resources continue to follow the scoped ownership model defined below.
-
-The design rule is:
-
-> Values are independent by default. Shared identity exists only where `identity` is explicitly written.
-
-### Function mutation
-
-Ordinary function parameters must not silently mutate caller state through hidden aliasing.
-
-If Eristavi later supports intentional in-place mutation of an ordinary caller-owned value, that intent must be explicit in the function declaration or call semantics. The syntax for this separate feature remains open.
-
-## 7. Optional values — locked
-
-Eristavi does not use ordinary `null` values.
-
-Absence is represented explicitly with `none`, and a type that is allowed to be absent is written with `maybe`:
-
-```eri
-maybe User
-maybe Text
-maybe Int
-```
-
-For example:
+Fields use the same modifier:
 
 ```eri
 type User {
     fixed id Int;
     name Text;
-    middleName maybe Text;
 }
 ```
 
-A function may explicitly return an optional value:
+A `fixed` field is initialized once and cannot be reassigned afterward.
 
-```eri
-function findUser(id Int) returns maybe User {
-    if id == 1 {
-        return User(...);
-    }
+A `fixed` binding whose value has an `identity` type is invalid in pre-0.1 because `fixed` means deep immutability rather than shallow handle immutability.
 
-    return none;
-}
-```
+## 5. Fundamental values — locked where specified
 
-A normal `User`, `Text`, `Int`, or other non-`maybe` type cannot contain `none`.
-
-```eri
-let name be "Anna";
-name = none;            // compile-time error
-```
-
-`none` does not implicitly make arbitrary values nullable. It is valid only where the expected type is optional or where type inference can establish a `maybe` type from surrounding context.
-
-### Presence checks and narrowing
-
-A `maybe` value cannot be used as though it definitely contains its underlying value.
-
-```eri
-let user be findUser(1);
-print user.name;         // compile-time error
-```
-
-The programmer must establish that the value is present:
-
-```eri
-let user be findUser(1);
-
-if user == none {
-    return;
-}
-
-print user.name;
-```
-
-After the `none` branch exits, the compiler narrows `user` from `maybe User` to `User` in the remaining control-flow path.
-
-The opposite form also narrows inside the branch:
-
-```eri
-if user != none {
-    print user.name;
-}
-```
-
-The compiler should perform this narrowing through ordinary control-flow analysis rather than requiring an unsafe unwrap operator.
-
-### No ordinary null
-
-`null` is not a normal Eristavi value and is not an alias for `none`.
-
-The goal is that absence is always visible in the type system and must be handled before the contained value is used.
-
-## 8. Error model — locked
-
-Recoverable failures are typed and checked by the compiler.
-
-A function that can fail declares the error type with `fails`:
-
-```eri
-function loadUser(id Int) returns User fails DatabaseError {
-    ...
-}
-```
-
-A caller must either handle the failure locally or propagate a compatible declared failure.
-
-Unchecked exceptions are not the normal mechanism for application control flow in Eristavi.
-
-### Absence and failure are different
-
-`maybe` represents legitimate absence. `fails` represents an operation that did not complete successfully.
-
-```eri
-function findUser(id Int) returns maybe User
-```
-
-means the operation succeeds but a matching user may not exist.
-
-```eri
-function loadUser(id Int) returns User fails DatabaseError
-```
-
-means the operation is expected to produce a `User`, but the operation itself may fail.
-
-Both may appear together:
-
-```eri
-function findUser(id Int) returns maybe User fails DatabaseError {
-    ...
-}
-```
-
-This means the operation may fail, and if it succeeds, the requested value may still be absent.
-
-### Local handling — locked direction
-
-The readable local handling form is:
-
-```eri
-let user be loadUser(1) else error {
-    print error.message;
-    return;
-}
-```
-
-Inside the `else error` block, `error` is the typed failure value from the operation.
-
-If the error block completes normally instead of exiting or producing a replacement value, the compiler must reject uses that would assume `user` was successfully initialized.
-
-### Propagation — locked direction
-
-`try` propagates a compatible checked error from the current function:
-
-```eri
-function showUser(id Int) fails DatabaseError {
-    let user be try loadUser(id);
-    print user.name;
-}
-```
-
-A function may use `try` only when its own declared failure contract can represent the propagated error.
-
-The compiler must verify propagation statically.
-
-### Runtime defects
-
-Programmer defects, violated compiler/runtime invariants, or unrecoverable runtime failures are separate from ordinary checked errors and are not required to appear in a function's `fails` contract.
-
-The exact representation and reporting of fatal runtime defects remains an implementation decision.
-
-### Error declarations
-
-The exact syntax for defining custom error types and composing multiple error types is not yet locked. The checked-error semantics above do not depend on that surface syntax.
-
-## 9. Fundamental types — working set
-
-The early language should remain small. The working fundamental type set is:
+The early working set includes:
 
 - `Int`
 - `Float`
 - `Bool`
 - `Text`
 
-Additional numeric widths, `Byte`, decimal arithmetic, maps, sets, and other types should be added only when the implementation or real programs require them.
+`Float` exists in the working set, but its exact numeric semantics are not yet frozen.
 
-`maybe` is a type modifier for explicit absence, not a separate fundamental payload type.
+### Int — locked
 
-### Integer semantics — locked
-
-`Int` is a signed 64-bit integer on every supported target. Its semantic range is:
+`Int` is a signed 64-bit integer on every target:
 
 ```text
 -9223372036854775808 .. 9223372036854775807
 ```
 
-The width of `Int` is therefore independent of CPU architecture and operating system. Eristavi code must not observe `Int` becoming 32-bit on one target and 64-bit on another.
+Normal integer arithmetic is checked. Compile-time-known overflow is a compile-time error; runtime-dependent overflow and division by zero produce defined arithmetic faults. Ordinary `Int` arithmetic never silently wraps.
 
-An integer literal is inferred as `Int` when its value is within the `Int` range and no other explicit numeric type is required by context.
+Arithmetic faults are runtime defects, not ordinary checked `fails` values.
 
-Normal integer arithmetic is checked. Operations such as addition, subtraction, multiplication, negation, and division must not silently wrap when the mathematical result is outside the `Int` range.
+### Text and Unicode — locked
 
-For expressions whose result is known at compile time, overflow is a compile-time error:
+`Text` is valid Unicode with UTF-8 as its canonical byte representation.
 
-```eri
-let x Int be 9223372036854775807 + 1;  // compile-time error
-```
-
-For overflow that depends on runtime values, normal arithmetic produces a defined runtime arithmetic fault rather than wrapping or producing architecture-dependent behavior.
-
-Division by zero is likewise rejected at compile time when provable, and otherwise produces a defined runtime arithmetic fault.
-
-The signed division overflow case `-9223372036854775808 / -1` follows the same checked-overflow rule.
-
-Arithmetic faults are runtime defects rather than ordinary recoverable `fails` values, because making every basic arithmetic operator participate in checked-error propagation would make ordinary numerical code unnecessarily noisy.
-
-Programs that intentionally need wrapping, saturating, or explicitly checked arithmetic may use dedicated opt-in operations in the standard library or a future numeric API. The exact names and surface syntax for those operations are not yet locked.
-
-Additional fixed-width signed or unsigned integer types may be added later when real systems-programming, binary-format, FFI, or performance use cases require them. They do not change the portable semantics of `Int`.
-
-### Text and Unicode semantics — locked
-
-`Text` represents valid Unicode text. Eristavi source files and the canonical byte representation of `Text` use UTF-8.
-
-A `Text` value is not treated as an array of bytes. Human-visible characters, Unicode scalar values, and UTF-8 bytes are distinct views and must be requested explicitly.
-
-Eristavi therefore does **not** allow ambiguous direct integer indexing of `Text`:
+Direct integer indexing is intentionally undefined:
 
 ```eri
-let text be "Hello";
-let first be text[0];       // compile-time error
+text[0]  // compile-time error
 ```
 
-Instead, the programmer chooses the intended view:
+The programmer selects the intended view explicitly:
 
 ```eri
-let firstCharacter be text.characters[0];
-let firstScalar be text.scalars[0];
-let firstByte be text.bytes[0];
+text.characters[0]
+text.scalars[0]
+text.bytes[0]
 ```
 
-`text.characters` is segmented into Unicode extended grapheme clusters and is the default human-facing character view. This means an emoji sequence or a letter plus combining marks can behave as one visible character where Unicode defines it as one grapheme cluster.
+`characters` means Unicode extended grapheme clusters, `scalars` means Unicode scalar values, and `bytes` means UTF-8 bytes.
 
-`text.scalars` exposes Unicode scalar values for code-point-level processing.
-
-`text.bytes` exposes the UTF-8 encoded bytes for binary protocols, hashing, FFI, storage formats, and other byte-oriented work.
-
-Counts are equally explicit:
+Counts are likewise explicit:
 
 ```eri
 text.characters.count
@@ -573,351 +159,351 @@ text.scalars.count
 text.bytes.count
 ```
 
-Eristavi should not define a bare `text.length` whose meaning could be mistaken for any of these three counts.
+There is no ambiguous bare `text.length` in the core Text model.
 
-Character-oriented standard-library operations should operate on grapheme clusters unless their API explicitly says otherwise. Byte-oriented and scalar-oriented operations must remain explicit.
+Text equality compares the actual Unicode scalar sequence. Eristavi does not silently normalize text. Invalid UTF-8 must not silently become `Text`.
 
-Text equality compares the actual Unicode scalar sequence. Eristavi does not silently normalize Unicode during assignment, comparison, hashing, or storage. Canonically equivalent spellings therefore remain distinct unless the programmer explicitly normalizes them through the standard library.
+## 6. Collections and inferred generic abstraction — locked for pre-0.1
 
-Invalid UTF-8 received from files, networks, FFI, or other byte sources must not silently become `Text`. Decoding invalid bytes must fail through the checked error model unless the programmer deliberately chooses an explicit replacement/lossy decoding operation.
+Collection element types are inferred where possible:
 
-The compiler/runtime should pin a Unicode data version for each Eristavi toolchain release so grapheme segmentation and Unicode properties are deterministic for that release.
-
-The implementation may cache boundaries or use other optimizations, but the language does not promise constant-time random indexing into grapheme clusters or Unicode scalars. Performance-sensitive code should be able to iterate these views without accidental repeated rescanning.
-
-The design rule is:
-
-> Text is Unicode. Characters, scalars, and bytes are different things, and Eristavi makes that difference visible.
-
-## 10. Modules and imports — locked
-
-Eristavi uses a file-and-folder based module system.
-
-Each `.eri` source file is one module. Its logical module path is derived from its path under the project's source root, so source files do not repeat their own module name with a separate declaration.
-
-For example:
-
-```text
-src/
-    main.eri
-    models/
-        user.eri
-    services/
-        auth.eri
+```eri
+let names be ["Anna", "Maria", "John"];
 ```
 
-corresponds to the module paths:
+An initially empty collection may acquire its element relationship from statically analyzable use. Conflicting uses are compile-time errors rather than a fallback to dynamic typing.
 
-```text
-main
-models.user
-services.auth
+Pre-0.1 has no user-written generic parameter syntax such as `<T>`, `[T]`, `where`, trait bounds, or explicit generic arguments.
+
+Functions may be implicitly generic when the compiler can infer consistent static relationships:
+
+```eri
+function identity(value) {
+    return value;
+}
 ```
 
-### Import form
+The compiler may internally understand this as a same-type input/output relationship, but the internal type variable is not Eristavi source syntax.
 
-Modules are imported explicitly with `import`:
+If safe inference is impossible, compilation fails. Pre-0.1 requires a concrete implementation rather than an explicit generic escape hatch.
+
+See `GENERICS.md` for the locked model.
+
+## 7. User-defined value types and construction — locked
+
+Ordinary user-defined `type` values have value semantics by default:
+
+```eri
+type User {
+    fixed id Int;
+    name Text;
+}
+```
+
+Assignment creates an independent logical value:
+
+```eri
+let a be user;
+let b be a;
+b.name = "Maria";
+```
+
+Changing `b` must not change `a`.
+
+The implementation may use copy elision, shared backing storage, copy-on-write, escape analysis, or destructive optimization as long as observable behavior remains value-based.
+
+### Direct construction — locked
+
+Eristavi uses one named-field construction form:
+
+```eri
+let user be User {
+    id = 1;
+    name = "Anna";
+};
+```
+
+For direct construction in pre-0.1:
+
+- every declared field is required;
+- every field is initialized exactly once;
+- unknown fields are compile-time errors;
+- duplicate fields are compile-time errors;
+- declaration order does not become a positional call contract;
+- positional construction and colon-based construction are not supported;
+- default field values and automatic omission are not part of pre-0.1.
+
+When construction needs validation, calculation, or checked failure, an ordinary function returns the value.
+
+See `CONSTRUCTION.md`.
+
+## 8. Explicit identity — locked
+
+Shared logical identity is explicit in the type:
+
+```eri
+identity Counter
+```
+
+An identity is created explicitly from an eligible ordinary non-resource value:
+
+```eri
+type Counter {
+    value Int;
+}
+
+let counter be identity Counter {
+    value = 0;
+};
+```
+
+There is no implicit conversion between `T` and `identity T`.
+
+Assignment of an identity handle preserves the same logical identity:
+
+```eri
+let first be counter;
+let second be first;
+second.value = 10;
+print first.value;  // 10
+```
+
+Identity is automatically memory-managed. It is not a raw pointer, does not expose an address, and does not imply thread safety, atomicity, or resource ownership.
+
+Optional identity uses the single canonical order:
+
+```eri
+maybe identity Counter
+```
+
+`identity maybe Counter` is not an alternate spelling.
+
+### Identity equality — locked
+
+For `identity T`, `==` means the same logical identity and `!=` means a different logical identity.
+
+Two independently created identities remain unequal even when all fields currently contain equal data.
+
+Identity equality is not physical-address equality, and `T` does not implicitly compare with `identity T`.
+
+See `IDENTITY_EQUALITY.md`.
+
+## 9. Optional values — locked
+
+Eristavi has no ordinary `null` value.
+
+Optional values use `maybe T`; absence uses `none`:
+
+```eri
+let user maybe User be none;
+```
+
+`none` is valid only in a `maybe` context or where inference establishes such a context.
+
+A `maybe` value must be proven present before member access. Ordinary checks participate in flow-sensitive narrowing:
+
+```eri
+if user == none {
+    return;
+}
+
+print user.name;
+```
+
+No unsafe unwrap operator is required for normal control flow.
+
+`maybe` means legitimate absence, not failure.
+
+## 10. Checked errors — locked
+
+Recoverable failures are typed and checked.
+
+Custom checked errors are data declarations:
+
+```eri
+error DatabaseError {
+    message Text;
+    code Int;
+}
+```
+
+Every checked error type in pre-0.1 must declare exactly one `message Text` field. Additional typed fields are allowed.
+
+An error is produced with `fail`:
+
+```eri
+fail DatabaseError {
+    message = "Database unavailable";
+    code = 503;
+};
+```
+
+Functions declare checked failures with `fails`. Multiple error types use a comma-separated contract:
+
+```eri
+function loadUser(id Int)
+    returns User
+    fails DatabaseError, DecodeError
+{
+    ...
+}
+```
+
+A caller must handle or propagate all possible checked failures.
+
+Catch-all handling:
+
+```eri
+let user be loadUser(1) else error {
+    print error.message;
+    return;
+};
+```
+
+Typed exhaustive handling:
+
+```eri
+let user be loadUser(1)
+else error DatabaseError {
+    return;
+}
+else error DecodeError {
+    return;
+};
+```
+
+Propagation uses `try` and is checked against the surrounding function's own `fails` contract:
+
+```eri
+function showUser(id Int) fails DatabaseError, DecodeError {
+    let user be try loadUser(id);
+    print user.name;
+}
+```
+
+`maybe` and `fails` remain distinct: absence is not failure.
+
+Eristavi pre-0.1 has no exception inheritance, `throw`, or `catch` model for ordinary recoverable failures.
+
+See `ERRORS.md`.
+
+## 11. Modules and visibility — locked
+
+One `.eri` file is one module. Its logical path is derived from its path under the configured source root.
+
+There is no separate module declaration.
+
+Imports use dotted logical paths:
 
 ```eri
 import models.user;
 import services.auth;
 ```
 
-An import creates a module namespace using the final segment of the module path:
-
-```eri
-let account be user.User(...);
-let session be auth.login(account);
-```
-
-Imported declarations are therefore qualified by default. Importing a module does not inject all of its names into the current module's local scope.
-
-This keeps dependencies visible at the use site and avoids accidental name collisions.
-
-### Aliases
-
-When the default namespace would collide or be unclear, an import may use an explicit alias:
+The imported namespace is the final path segment unless explicitly aliased:
 
 ```eri
 import models.user as customer;
-
-let account be customer.User(...);
 ```
 
-An alias changes only the local namespace name. It does not rename the module itself.
+Imported names stay qualified by default. Wildcard imports, selective unqualified imports, quoted project paths, and `../` traversal imports are not part of pre-0.1.
 
-### Visibility
-
-Top-level declarations are private to their defining module by default.
-
-A declaration intended to be part of the module's external API is marked `public`:
+Top-level declarations are private by default. `public` exposes a declaration through the module namespace:
 
 ```eri
 public type User {
-    fixed id Int;
-    name Text;
-}
-
-public function find(id Int) returns maybe User {
-    ...
+    id Int;
 }
 ```
 
-Only public declarations are accessible through an imported module namespace.
-
-Eristavi does not use a separate `export` list for the ordinary module model. Visibility is attached directly to the declaration it describes.
-
-### One obvious import model
-
-The initial language deliberately does not provide wildcard imports or selective unqualified imports such as `import *`, `from x import y`, or equivalent forms.
-
-The normal model is:
-
-```eri
-import services.auth;
-
-auth.login(user);
-```
-
-This preserves one clear relationship between an import and the names it introduces.
-
-### Module paths
-
-Module paths use identifiers separated by dots. They are logical source paths, not quoted filesystem paths.
-
-Eristavi source therefore does not import project modules using strings such as `"../models/user.eri"`.
-
-The compiler resolves project modules relative to the configured project source root. This keeps source imports portable across operating systems and directory separators.
-
-The `std` top-level namespace is reserved for Eristavi standard-library modules, for example:
-
-```eri
-import std.files;
-import std.json;
-```
-
-Fundamental language types and syntax do not require an import merely to exist. Additional library capabilities should normally live behind explicit standard-library modules.
-
-### Cycles
+The top-level namespace `std` is reserved for the standard library.
 
 Circular module dependencies are compile-time errors in the initial language.
 
-This keeps initialization and dependency ordering deterministic while the module system remains small. A future need for more advanced cyclic type relationships should be solved deliberately rather than by allowing arbitrary import cycles.
+Third-party package root naming and dependency resolution remain open.
 
-### Dependency packages
+## 12. Function parameter behavior — locked for pre-0.1
 
-The module semantics above are independent of a future package manager. The exact naming and resolution rules for third-party package roots are not yet locked.
-
-The design rule is:
-
-> One file is one module. Imports are explicit. Imported names stay qualified. Public API is explicit.
-
-## 11. Functions — working direction
-
-Functions should have a single primary declaration form.
-
-Current draft examples use:
+Ordinary parameters use value semantics. They cannot directly mutate caller-owned ordinary values.
 
 ```eri
-function add(a Int, b Int) returns Int {
-    return a + b;
+function rename(user User, name Text) returns User {
+    user.name = name;
+    return user;
 }
 ```
 
-Functions that can recoverably fail declare that contract with `fails`.
+Caller-visible changes are returned explicitly:
 
-Parameter and return types may eventually be inferred where doing so remains clear and safe, but public API contracts may reasonably stay explicit.
+```eri
+user = rename(user, "Maria");
+```
 
-## 12. Control flow — working set
+Pre-0.1 has no `ref`, `mut`, `inout`, `&`, or equivalent in-place ordinary value parameter feature.
 
-The initial language should focus on a minimal set:
+Shared observable mutation remains explicit through `identity T` parameters.
+
+The compiler may optimize physical copying away when value semantics remain observationally intact.
+
+See `VALUE_PARAMETER_MUTATION.md`.
+
+## 13. Control flow — initial set
+
+The initial language uses:
 
 - `if` / `else`
 - `for` / `in`
 - `while`
 - `return`
 
-The project should not add overlapping control-flow constructs until real use cases justify them.
+Boolean operators are locked as:
 
-### Boolean operators — locked
-
-Eristavi uses readable word operators for Boolean logic:
-
-```eri
+```text
 and
 or
 not
 ```
 
-Examples:
-
-```eri
-if ready and connected {
-    start();
-}
-
-if failed or expired {
-    stop();
-}
-
-if not connected {
-    reconnect();
-}
-```
-
-The symbolic aliases `&&`, `||`, and `!` are not part of Eristavi Boolean syntax. This keeps one obvious form for logical operations and preserves symbolic operators for other purposes where needed.
-
-## 13. Memory management — architectural direction
-
-Ordinary Eristavi code should not manually allocate and free general-purpose memory.
-
-The compiler/runtime should be free to use:
-
-- registers;
-- stack allocation;
-- escape analysis;
-- object elimination;
-- managed heap allocation;
-- garbage collection.
-
-The first collector should favor correctness and implementation clarity over advanced optimization.
-
-Memory management and external-resource management are deliberately separate concerns. Garbage collection may manage memory, but files, sockets, database connections, locks, transactions, and similar resources require deterministic release.
+The symbolic Boolean aliases `&&`, `||`, and `!` are not part of Eristavi.
 
 ## 14. Resource management — locked
 
-Eristavi uses deterministic scoped cleanup for resources whose lifetime must not depend on garbage collection.
+Memory management and external-resource lifetime are separate concerns.
 
-The primary construct is `with`:
+Deterministic resources use `with`:
 
 ```eri
-with file be try files.open("users.txt") {
+with file be try files.open("data.txt") {
     let text be try file.readText();
     print text;
 }
 ```
 
-The expression after `be` must produce a resource value. The binding introduced by `with` exists only inside the block.
+A resource owned by a `with` block is released exactly once when that block is left through ordinary language-level control flow, including normal fallthrough, `return`, and checked-error propagation.
 
-The semantic rule is:
+Resource handles are single-owner while governed by `with`. They cannot be implicitly copied or silently escape their owning scope.
 
-> A resource acquired by `with` is owned by that block and is released exactly once when the block is left.
+Nested resources clean up in reverse nesting order.
 
-### Cleanup on every ordinary exit path
+A deterministic resource cannot be wrapped in `identity` to bypass resource ownership rules.
 
-Cleanup must run when control leaves the block normally and when it leaves through language-level control flow such as `return` or checked-error propagation.
+Pre-0.1 does not expose lifetime annotations, manual reference counting, manual `free`, general borrowing syntax, or a multi-resource `with` header.
 
-```eri
-with file be try files.open("users.txt") {
-    if file.empty {
-        return;
-    }
+Cleanup-failure composition when another checked failure is already active remains open.
 
-    process(file);
-}
-```
+## 15. Memory management — architectural direction
 
-The resource is released before the `return` completes.
+Ordinary Eristavi code does not manually allocate and free general-purpose memory.
 
-Likewise:
+The compiler/runtime may use registers, stack allocation, escape analysis, object elimination, managed heap allocation, and garbage collection as appropriate.
 
-```eri
-function load() returns Text fails FileError {
-    with file be try files.open("data.txt") {
-        return try file.readText();
-    }
-}
-```
+The first collector should favor correctness and implementation clarity over advanced optimization.
 
-The resource is released before the value or propagated checked error leaves the scope.
+GC is not the semantic mechanism for releasing external resources.
 
-If future control-flow constructs such as `break` or `continue` leave a resource scope, the same deterministic cleanup rule applies.
+## 16. Compilation architecture and targets — locked direction
 
-A process-level abort, operating-system termination, power loss, or other event that prevents language-level cleanup from executing is outside this guarantee.
-
-### Resource ownership
-
-Resource handles are not ordinary freely copyable values.
-
-A resource acquired by `with` has one compiler-tracked owner for the duration of that scope. Eristavi must prevent accidental duplication that could create multiple independent owners of the same underlying resource.
-
-For example, this must not silently create a second owner:
-
-```eri
-with file be try files.open("data.txt") {
-    let another be file;   // invalid as an implicit resource copy
-}
-```
-
-The compiler should diagnose an attempted implicit resource copy rather than allow double cleanup or unclear ownership.
-
-Resource ownership is a semantic property distinct from ordinary value semantics. Ordinary user-defined values remain value-based; only values whose type represents a deterministically managed resource receive this single-owner behavior.
-
-### No lifetime annotations in ordinary code
-
-The compiler is responsible for tracking the scoped lifetime created by `with`. Ordinary programmers should not need borrow annotations, explicit lifetime parameters, manual reference counts, or `free` operations to use files, sockets, database connections, locks, or similar resources safely.
-
-Advanced ownership transfer or borrowing may be added later if real programs require it, but it must be explicit and must not complicate the basic `with` model.
-
-### Nested resources
-
-Multiple resources may be represented by nested `with` blocks:
-
-```eri
-with connection be try database.connect() {
-    with transaction be try connection.transaction() {
-        ...
-    }
-}
-```
-
-Resources are released in reverse nesting order: the inner resource is released before the outer resource.
-
-The initial language does not need separate syntax for acquiring several resources in one `with` statement.
-
-### Resource escape
-
-A resource owned by a `with` block cannot silently escape that block through assignment, return, collection storage, or capture if doing so would outlive the owning scope.
-
-The compiler must reject such escapes unless a future explicit ownership-transfer mechanism makes the new owner unambiguous.
-
-This keeps basic resource safety enforceable without exposing lifetime syntax.
-
-### Cleanup failures
-
-Cleanup is part of the resource contract and must not be silently ignored. The exact surface semantics for composing a cleanup failure with an already-active checked failure remain open so the initial language does not prematurely add a complex dual-error model.
-
-Whatever representation is chosen later must preserve deterministic cleanup and must never silently discard a recoverable cleanup failure.
-
-### Garbage collection is not resource cleanup
-
-Garbage collection may reclaim memory associated with a resource object, but it is not the semantic mechanism for releasing the external resource itself.
-
-A program must not depend on an eventual garbage-collection cycle to close a file, release a lock, end a transaction, or close a network connection.
-
-The design rule is:
-
-> Memory is managed automatically. External resources are managed deterministically by scope.
-
-## 15. Standard library boundary
-
-Capabilities such as text operations, sorting, JSON, networking, files, dates, and databases should normally be libraries rather than language keywords.
-
-For example, operations such as:
-
-```eri
-text.words.count
-text.reverse
-items.sort
-```
-
-should be type/library behavior, not special grammar.
-
-Resource-producing library APIs should integrate with the `with` model rather than requiring ad-hoc manual cleanup patterns.
-
-## 16. Compilation architecture — locked principle, implementation pending
-
-The language should compile through an Eristavi-owned machine-neutral intermediate representation.
+Compilation centers on an Eristavi-owned machine-independent IR:
 
 ```text
 Eristavi source
@@ -931,13 +517,28 @@ Eristavi IR
 target backend
 ```
 
-The source language must not be designed around a specific CPU architecture.
+The long-term target set is deliberately narrow:
 
-The long-term architecture may support both native target backends and a stable portable execution format.
+- native machine code;
+- C source;
+- JavaScript;
+- WebAssembly.
 
-## 17. Initial implementation scope
+The governing target rule is:
 
-The first implementation should prove the language with a deliberately small feature set:
+> Target platforms implement Eristavi semantics; they do not redefine them.
+
+Rust, Go, and PHP source-generation backends are not planned targets.
+
+See `TARGETS.md`.
+
+## 17. Pre-0.1 implementation scope
+
+The first compiler does not need to implement every already-defined semantic feature immediately.
+
+The bootstrap should begin with a small executable subset containing basic literals, bindings, arithmetic, names, functions, returns, and diagnostics, then grow toward the frozen pre-0.1 surface.
+
+A minimal early program remains:
 
 ```eri
 let x be 40;
@@ -946,24 +547,22 @@ let y be 2;
 print x + y;
 ```
 
-The first compiler milestone does not require generics, async/await, macros, reflection, multiple native backends, a package registry, or an advanced garbage collector.
+The project deliberately postpones advanced concurrency, async/await, reflection, macros, pattern matching, explicit generic syntax, advanced GC, package registry work, self-hosting, and multiple native CPU backends until the core compiler is proven.
 
-Identity and resource semantics may be implemented after the smallest expression/function subset works, but their language-level behavior is already defined by the models above.
+## 18. Remaining open decisions
 
-## 18. Open decisions
+The following are still deliberately unresolved and should not block the first frontend bootstrap unless implementation requires them:
 
-The following must be decided deliberately before being treated as stable:
-
-- explicit in-place parameter mutation syntax for ordinary value types, if needed;
-- custom error-type declaration syntax;
-- composition of multiple possible checked error types;
-- identity comparison/equality semantics;
-- explicit extraction of an independent value copy from an identity handle, if needed;
-- generic abstraction model when inference alone is insufficient;
+- exact `Float` semantics;
+- full operator precedence table beyond already-established relationships;
+- general equality rules for ordinary user-defined value types;
+- explicit extraction of an independent `T` snapshot from `identity T`, if needed;
 - third-party package root naming and dependency resolution;
-- advanced resource ownership transfer / borrowing semantics, if needed;
 - cleanup-failure composition when another checked failure is already active;
-- first native target backend;
-- exact IR specification.
+- advanced resource ownership transfer / borrowing, if real programs require it;
+- classification of bootstrap `print` as keyword, intrinsic, or standard-library function;
+- first native CPU backend;
+- exact Eristavi IR instruction set and representation;
+- stable portable bytecode/runtime format, if one is later needed in addition to the defined target set.
 
-These open questions should be resolved from the design philosophy rather than by copying another language's syntax.
+These questions must be resolved from Eristavi's design philosophy rather than copied automatically from another language.
