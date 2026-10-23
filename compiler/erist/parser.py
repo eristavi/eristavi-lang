@@ -9,11 +9,14 @@ from .syntax import (
     CallExpr,
     Expr,
     ExprStmt,
+    FunctionDecl,
     IfStmt,
     LetStmt,
     LiteralExpr,
     NameExpr,
+    Parameter,
     Program,
+    ReturnStmt,
     UnaryExpr,
     WhileStmt,
 )
@@ -31,12 +34,29 @@ class Parser:
         return Program(statements)
 
     def _statement(self):
+        if self._match(TokenKind.PUBLIC):
+            public_token = self._previous()
+            self._consume(
+                TokenKind.FUNCTION,
+                "'public' is implemented only for function declarations in the bootstrap",
+            )
+            return self._function_declaration(True, public_token.location)
+
+        if self._match(TokenKind.FUNCTION):
+            return self._function_declaration(False, self._previous().location)
+
+        if self._match(TokenKind.RETURN):
+            return self._return_statement(self._previous())
+
         if self._match(TokenKind.LET):
             return self._let_statement(self._previous())
+
         if self._match(TokenKind.IF):
             return self._if_statement(self._previous())
+
         if self._match(TokenKind.WHILE):
             return self._while_statement(self._previous())
+
         if self._check(TokenKind.IDENTIFIER) and self._peek(1).kind is TokenKind.EQUAL:
             name = self._advance()
             self._advance()
@@ -47,6 +67,64 @@ class Parser:
         expr = self._expression()
         self._consume(TokenKind.SEMICOLON, "expected ';' after expression")
         return ExprStmt(expr, expr.location)
+
+    def _function_declaration(self, public: bool, location):
+        name = self._consume(TokenKind.IDENTIFIER, "expected function name after 'function'")
+        self._consume(TokenKind.LPAREN, "expected '(' after function name")
+
+        parameters = []
+        if not self._check(TokenKind.RPAREN):
+            while True:
+                parameter = self._consume(TokenKind.IDENTIFIER, "expected parameter name")
+                type_annotation = None
+
+                if self._check(TokenKind.IDENTIFIER):
+                    type_annotation = str(self._advance().value)
+                elif self._check(TokenKind.MAYBE) or self._check(TokenKind.IDENTITY):
+                    raise ParseError(
+                        "bootstrap parser does not yet implement composite parameter types",
+                        self._current().location,
+                    )
+
+                parameters.append(
+                    Parameter(str(parameter.value), type_annotation, parameter.location)
+                )
+
+                if not self._match(TokenKind.COMMA):
+                    break
+
+        self._consume(TokenKind.RPAREN, "expected ')' after parameters")
+
+        return_type = None
+        if self._match(TokenKind.RETURNS):
+            if self._check(TokenKind.MAYBE) or self._check(TokenKind.IDENTITY):
+                raise ParseError(
+                    "bootstrap parser does not yet implement composite return types",
+                    self._current().location,
+                )
+            result_type = self._consume(
+                TokenKind.IDENTIFIER,
+                "expected result type after 'returns'",
+            )
+            return_type = str(result_type.value)
+
+        open_brace = self._consume(TokenKind.LBRACE, "expected '{' before function body")
+        return FunctionDecl(
+            str(name.value),
+            parameters,
+            return_type,
+            self._block(open_brace),
+            location,
+            public,
+        )
+
+    def _return_statement(self, return_token: Token):
+        if self._match(TokenKind.SEMICOLON):
+            return ReturnStmt(None, return_token.location)
+
+        value = self._expression()
+        self._consume(TokenKind.SEMICOLON, "expected ';' after return value")
+        return ReturnStmt(value, return_token.location)
 
     def _let_statement(self, let_token: Token):
         fixed = self._match(TokenKind.FIXED)
@@ -64,7 +142,13 @@ class Parser:
         self._consume(TokenKind.BE, "expected 'be' after binding declaration")
         initializer = self._expression()
         self._consume(TokenKind.SEMICOLON, "expected ';' after binding declaration")
-        return LetStmt(str(name.value), fixed, type_annotation, initializer, let_token.location)
+        return LetStmt(
+            str(name.value),
+            fixed,
+            type_annotation,
+            initializer,
+            let_token.location,
+        )
 
     def _if_statement(self, if_token: Token):
         condition = self._expression()
@@ -81,8 +165,7 @@ class Parser:
     def _while_statement(self, while_token: Token):
         condition = self._expression()
         open_brace = self._consume(TokenKind.LBRACE, "expected '{' after while condition")
-        body = self._block(open_brace)
-        return WhileStmt(condition, body, while_token.location)
+        return WhileStmt(condition, self._block(open_brace), while_token.location)
 
     def _block(self, open_brace: Token) -> Block:
         statements = []
@@ -100,16 +183,14 @@ class Parser:
         expr = self._and()
         while self._match(TokenKind.OR):
             op = self._previous()
-            right = self._and()
-            expr = BinaryExpr(expr, "or", right, op.location)
+            expr = BinaryExpr(expr, "or", self._and(), op.location)
         return expr
 
     def _and(self):
         expr = self._not()
         while self._match(TokenKind.AND):
             op = self._previous()
-            right = self._not()
-            expr = BinaryExpr(expr, "and", right, op.location)
+            expr = BinaryExpr(expr, "and", self._not(), op.location)
         return expr
 
     def _not(self):
@@ -128,10 +209,10 @@ class Parser:
             TokenKind.GREATER: ">",
             TokenKind.GREATER_EQUAL: ">=",
         }
+
         if self._current().kind in kinds:
             op = self._advance()
-            right = self._additive()
-            expr = BinaryExpr(expr, kinds[op.kind], right, op.location)
+            expr = BinaryExpr(expr, kinds[op.kind], self._additive(), op.location)
             if self._current().kind in kinds:
                 raise ParseError(
                     "comparison chaining is not part of pre-0.1; use 'and' explicitly",
@@ -143,17 +224,24 @@ class Parser:
         expr = self._multiplicative()
         while self._current().kind in (TokenKind.PLUS, TokenKind.MINUS):
             op = self._advance()
-            right = self._multiplicative()
-            expr = BinaryExpr(expr, "+" if op.kind is TokenKind.PLUS else "-", right, op.location)
+            expr = BinaryExpr(
+                expr,
+                "+" if op.kind is TokenKind.PLUS else "-",
+                self._multiplicative(),
+                op.location,
+            )
         return expr
 
     def _multiplicative(self):
         expr = self._prefix()
-        symbols = {TokenKind.STAR: "*", TokenKind.SLASH: "/", TokenKind.PERCENT: "%"}
+        symbols = {
+            TokenKind.STAR: "*",
+            TokenKind.SLASH: "/",
+            TokenKind.PERCENT: "%",
+        }
         while self._current().kind in symbols:
             op = self._advance()
-            right = self._prefix()
-            expr = BinaryExpr(expr, symbols[op.kind], right, op.location)
+            expr = BinaryExpr(expr, symbols[op.kind], self._prefix(), op.location)
         return expr
 
     def _prefix(self):
@@ -199,6 +287,7 @@ class Parser:
             expr = self._expression()
             self._consume(TokenKind.RPAREN, "expected ')' after grouped expression")
             return expr
+
         raise ParseError(
             f"expected expression, found {self._current().lexeme!r}",
             self._current().location,
@@ -208,8 +297,7 @@ class Parser:
         return self.tokens[self.i]
 
     def _peek(self, offset: int) -> Token:
-        idx = min(self.i + offset, len(self.tokens) - 1)
-        return self.tokens[idx]
+        return self.tokens[min(self.i + offset, len(self.tokens) - 1)]
 
     def _previous(self) -> Token:
         return self.tokens[self.i - 1]
