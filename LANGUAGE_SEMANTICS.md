@@ -114,7 +114,7 @@ type User {
 }
 ```
 
-A `fixed` field is assigned as part of initialization and cannot be reassigned afterward. A field without `fixed` remains mutable according to the surrounding value/reference semantics.
+A `fixed` field is assigned as part of initialization and cannot be reassigned afterward.
 
 The exact constructor or initialization syntax is not locked yet; this rule defines the immutability guarantee independently of that syntax.
 
@@ -124,7 +124,52 @@ The semantic rule is:
 
 Eristavi should not introduce a second immutability keyword for fields. The same concept uses the same word everywhere.
 
-## 6. Fundamental types — working set
+### Deep immutability — locked
+
+A `fixed` binding makes the complete bound value immutable from the programmer's point of view, including nested mutable fields that are part of that value.
+
+```eri
+let fixed user be User(...);
+
+user.name = "Maria";           // compile-time error
+user.address.city = "Paphos";  // compile-time error
+user = anotherUser;             // compile-time error
+```
+
+This avoids a distinction where the binding is fixed but the value behind it can still be mutated.
+
+## 6. Value semantics — locked
+
+Ordinary Eristavi user-defined types use value semantics by default.
+
+```eri
+let a be user;
+let b be a;
+
+b.name = "Maria";
+```
+
+Changing `b` must not change `a`.
+
+Assignment, ordinary parameter passing, and ordinary collection extraction should therefore behave as logical value copies rather than hidden aliases.
+
+The language semantics do **not** require eager physical copying. The compiler/runtime may use copy elision, shared storage, copy-on-write, escape analysis, stack allocation, or other optimizations as long as observable behavior remains value-based.
+
+### Identity and sharing
+
+Some values genuinely require shared identity, such as connections, actors, graph nodes, or explicitly shared application state.
+
+Eristavi should support such behavior only through an explicit future reference/identity mechanism. Ordinary `type` declarations must not silently become reference types.
+
+The syntax for explicit shared/reference semantics is not yet locked.
+
+### Function mutation
+
+Ordinary function parameters should not silently mutate caller state through hidden aliasing.
+
+If Eristavi later supports in-place mutation of a caller-owned value, that intent should be explicit in the function declaration or call semantics. The syntax for this feature remains open.
+
+## 7. Fundamental types — working set
 
 The early language should remain small. The working fundamental type set is:
 
@@ -135,7 +180,7 @@ The early language should remain small. The working fundamental type set is:
 
 Additional numeric widths, `Byte`, decimal arithmetic, optionals, maps, sets, and other types should be added only when the implementation or real programs require them.
 
-## 7. Functions — working direction
+## 8. Functions — working direction
 
 Functions should have a single primary declaration form.
 
@@ -149,7 +194,7 @@ function add(a Int, b Int) returns Int {
 
 Parameter and return types may eventually be inferred where doing so remains clear and safe, but public API contracts may reasonably stay explicit.
 
-## 8. Control flow — working set
+## 9. Control flow — working set
 
 The initial language should focus on a minimal set:
 
@@ -188,7 +233,7 @@ if not connected {
 
 The symbolic aliases `&&`, `||`, and `!` are not part of Eristavi Boolean syntax. This keeps one obvious form for logical operations and preserves symbolic operators for other purposes where needed.
 
-## 9. Memory management — architectural direction
+## 10. Memory management — architectural direction
 
 Ordinary Eristavi code should not manually allocate and free general-purpose memory.
 
@@ -205,7 +250,7 @@ The first collector should favor correctness and implementation clarity over adv
 
 External resources such as files and sockets should eventually use deterministic scoped cleanup rather than waiting for garbage collection.
 
-## 10. Standard library boundary
+## 11. Standard library boundary
 
 Capabilities such as text operations, sorting, JSON, networking, files, dates, and databases should normally be libraries rather than language keywords.
 
@@ -219,7 +264,7 @@ items.sort
 
 should be type/library behavior, not special grammar.
 
-## 11. Compilation architecture — locked principle, implementation pending
+## 12. Compilation architecture — locked principle, implementation pending
 
 The language should compile through an Eristavi-owned machine-neutral intermediate representation.
 
@@ -239,7 +284,7 @@ The source language must not be designed around a specific CPU architecture.
 
 The long-term architecture may support both native target backends and a stable portable execution format.
 
-## 12. Initial implementation scope
+## 13. Initial implementation scope
 
 The first implementation should prove the language with a deliberately small feature set:
 
@@ -252,13 +297,14 @@ print x + y;
 
 The first compiler milestone does not require generics, async/await, macros, reflection, multiple native backends, a package registry, or an advanced garbage collector.
 
-## 13. Open decisions
+## 14. Open decisions
 
 The following must be decided deliberately before being treated as stable:
 
 - explicit type-annotation syntax in all positions;
 - optional / absent-value model;
-- value vs identity/reference type semantics;
+- explicit reference/identity syntax;
+- explicit in-place parameter mutation syntax, if needed;
 - error model;
 - exact integer and overflow semantics;
 - Unicode indexing semantics;
