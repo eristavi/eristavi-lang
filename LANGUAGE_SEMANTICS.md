@@ -397,6 +397,38 @@ Additional numeric widths, `Byte`, decimal arithmetic, maps, sets, and other typ
 
 `maybe` is a type modifier for explicit absence, not a separate fundamental payload type.
 
+### Integer semantics — locked
+
+`Int` is a signed 64-bit integer on every supported target. Its semantic range is:
+
+```text
+-9223372036854775808 .. 9223372036854775807
+```
+
+The width of `Int` is therefore independent of CPU architecture and operating system. Eristavi code must not observe `Int` becoming 32-bit on one target and 64-bit on another.
+
+An integer literal is inferred as `Int` when its value is within the `Int` range and no other explicit numeric type is required by context.
+
+Normal integer arithmetic is checked. Operations such as addition, subtraction, multiplication, negation, and division must not silently wrap when the mathematical result is outside the `Int` range.
+
+For expressions whose result is known at compile time, overflow is a compile-time error:
+
+```eri
+let x Int be 9223372036854775807 + 1;  // compile-time error
+```
+
+For overflow that depends on runtime values, normal arithmetic produces a defined runtime arithmetic fault rather than wrapping or producing architecture-dependent behavior.
+
+Division by zero is likewise rejected at compile time when provable, and otherwise produces a defined runtime arithmetic fault.
+
+The signed division overflow case `-9223372036854775808 / -1` follows the same checked-overflow rule.
+
+Arithmetic faults are runtime defects rather than ordinary recoverable `fails` values, because making every basic arithmetic operator participate in checked-error propagation would make ordinary numerical code unnecessarily noisy.
+
+Programs that intentionally need wrapping, saturating, or explicitly checked arithmetic may use dedicated opt-in operations in the standard library or a future numeric API. The exact names and surface syntax for those operations are not yet locked.
+
+Additional fixed-width signed or unsigned integer types may be added later when real systems-programming, binary-format, FFI, or performance use cases require them. They do not change the portable semantics of `Int`.
+
 ## 10. Functions — working direction
 
 Functions should have a single primary declaration form.
@@ -524,7 +556,6 @@ The following must be decided deliberately before being treated as stable:
 - explicit in-place parameter mutation syntax, if needed;
 - custom error-type declaration syntax;
 - composition of multiple possible checked error types;
-- exact integer and overflow semantics;
 - Unicode indexing semantics;
 - generic abstraction model when inference alone is insufficient;
 - module/import syntax;
