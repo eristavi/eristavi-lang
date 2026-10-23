@@ -480,7 +480,130 @@ The design rule is:
 
 > Text is Unicode. Characters, scalars, and bytes are different things, and Eristavi makes that difference visible.
 
-## 10. Functions — working direction
+## 10. Modules and imports — locked
+
+Eristavi uses a file-and-folder based module system.
+
+Each `.eri` source file is one module. Its logical module path is derived from its path under the project's source root, so source files do not repeat their own module name with a separate declaration.
+
+For example:
+
+```text
+src/
+    main.eri
+    models/
+        user.eri
+    services/
+        auth.eri
+```
+
+corresponds to the module paths:
+
+```text
+main
+models.user
+services.auth
+```
+
+### Import form
+
+Modules are imported explicitly with `import`:
+
+```eri
+import models.user;
+import services.auth;
+```
+
+An import creates a module namespace using the final segment of the module path:
+
+```eri
+let account be user.User(...);
+let session be auth.login(account);
+```
+
+Imported declarations are therefore qualified by default. Importing a module does not inject all of its names into the current module's local scope.
+
+This keeps dependencies visible at the use site and avoids accidental name collisions.
+
+### Aliases
+
+When the default namespace would collide or be unclear, an import may use an explicit alias:
+
+```eri
+import models.user as customer;
+
+let account be customer.User(...);
+```
+
+An alias changes only the local namespace name. It does not rename the module itself.
+
+### Visibility
+
+Top-level declarations are private to their defining module by default.
+
+A declaration intended to be part of the module's external API is marked `public`:
+
+```eri
+public type User {
+    fixed id Int;
+    name Text;
+}
+
+public function find(id Int) returns maybe User {
+    ...
+}
+```
+
+Only public declarations are accessible through an imported module namespace.
+
+Eristavi does not use a separate `export` list for the ordinary module model. Visibility is attached directly to the declaration it describes.
+
+### One obvious import model
+
+The initial language deliberately does not provide wildcard imports or selective unqualified imports such as `import *`, `from x import y`, or equivalent forms.
+
+The normal model is:
+
+```eri
+import services.auth;
+
+auth.login(user);
+```
+
+This preserves one clear relationship between an import and the names it introduces.
+
+### Module paths
+
+Module paths use identifiers separated by dots. They are logical source paths, not quoted filesystem paths.
+
+Eristavi source therefore does not import project modules using strings such as `"../models/user.eri"`.
+
+The compiler resolves project modules relative to the configured project source root. This keeps source imports portable across operating systems and directory separators.
+
+The `std` top-level namespace is reserved for Eristavi standard-library modules, for example:
+
+```eri
+import std.files;
+import std.json;
+```
+
+Fundamental language types and syntax do not require an import merely to exist. Additional library capabilities should normally live behind explicit standard-library modules.
+
+### Cycles
+
+Circular module dependencies are compile-time errors in the initial language.
+
+This keeps initialization and dependency ordering deterministic while the module system remains small. A future need for more advanced cyclic type relationships should be solved deliberately rather than by allowing arbitrary import cycles.
+
+### Dependency packages
+
+The module semantics above are independent of a future package manager. The exact naming and resolution rules for third-party package roots are not yet locked.
+
+The design rule is:
+
+> One file is one module. Imports are explicit. Imported names stay qualified. Public API is explicit.
+
+## 11. Functions — working direction
 
 Functions should have a single primary declaration form.
 
@@ -496,7 +619,7 @@ Functions that can recoverably fail declare that contract with `fails`.
 
 Parameter and return types may eventually be inferred where doing so remains clear and safe, but public API contracts may reasonably stay explicit.
 
-## 11. Control flow — working set
+## 12. Control flow — working set
 
 The initial language should focus on a minimal set:
 
@@ -535,7 +658,7 @@ if not connected {
 
 The symbolic aliases `&&`, `||`, and `!` are not part of Eristavi Boolean syntax. This keeps one obvious form for logical operations and preserves symbolic operators for other purposes where needed.
 
-## 12. Memory management — architectural direction
+## 13. Memory management — architectural direction
 
 Ordinary Eristavi code should not manually allocate and free general-purpose memory.
 
@@ -552,7 +675,7 @@ The first collector should favor correctness and implementation clarity over adv
 
 External resources such as files and sockets should eventually use deterministic scoped cleanup rather than waiting for garbage collection.
 
-## 13. Standard library boundary
+## 14. Standard library boundary
 
 Capabilities such as text operations, sorting, JSON, networking, files, dates, and databases should normally be libraries rather than language keywords.
 
@@ -566,7 +689,7 @@ items.sort
 
 should be type/library behavior, not special grammar.
 
-## 14. Compilation architecture — locked principle, implementation pending
+## 15. Compilation architecture — locked principle, implementation pending
 
 The language should compile through an Eristavi-owned machine-neutral intermediate representation.
 
@@ -586,7 +709,7 @@ The source language must not be designed around a specific CPU architecture.
 
 The long-term architecture may support both native target backends and a stable portable execution format.
 
-## 15. Initial implementation scope
+## 16. Initial implementation scope
 
 The first implementation should prove the language with a deliberately small feature set:
 
@@ -599,7 +722,7 @@ print x + y;
 
 The first compiler milestone does not require generics, async/await, macros, reflection, multiple native backends, a package registry, or an advanced garbage collector.
 
-## 16. Open decisions
+## 17. Open decisions
 
 The following must be decided deliberately before being treated as stable:
 
@@ -608,7 +731,7 @@ The following must be decided deliberately before being treated as stable:
 - custom error-type declaration syntax;
 - composition of multiple possible checked error types;
 - generic abstraction model when inference alone is insufficient;
-- module/import syntax;
+- third-party package root naming and dependency resolution;
 - resource-management syntax;
 - first native target backend;
 - exact IR specification.
