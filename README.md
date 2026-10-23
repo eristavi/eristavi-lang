@@ -43,7 +43,7 @@ See [`DESIGN_PHILOSOPHY.md`](DESIGN_PHILOSOPHY.md) for the governing design char
 let x be 40;
 let y be 2;
 
-print x + y;
+output(x + y);
 ```
 
 The intended result is:
@@ -51,6 +51,8 @@ The intended result is:
 ```text
 42
 ```
+
+`output(...)` is Eristavi's ordinary standard textual-output function. It is part of the standard environment rather than a language keyword.
 
 User-defined values use named-field construction:
 
@@ -85,6 +87,7 @@ The compiler infers the element relationship rather than requiring explicit gene
 - [`DESIGN_PHILOSOPHY.md`](DESIGN_PHILOSOPHY.md) — governing design charter
 - [`LANGUAGE_SEMANTICS.md`](LANGUAGE_SEMANTICS.md) — consolidated pre-0.1 semantics
 - [`GRAMMAR.md`](GRAMMAR.md) — consolidated pre-0.1 surface grammar
+- [`OUTPUT.md`](OUTPUT.md) — standard textual output
 - [`CONSTRUCTION.md`](CONSTRUCTION.md) — named-field construction and initialization
 - [`IDENTITY_EQUALITY.md`](IDENTITY_EQUALITY.md) — explicit identity equality semantics
 - [`VALUE_PARAMETER_MUTATION.md`](VALUE_PARAMETER_MUTATION.md) — ordinary value-parameter behavior
