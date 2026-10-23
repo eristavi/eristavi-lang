@@ -522,7 +522,19 @@ Comparisons are non-associative, so chained forms such as `10 < age < 65` are in
 
 Assignment `=` is not an expression operator. Assignment is statement-level syntax and does not produce a value, so forms such as `a = b = c` or `let value be (a = b);` are invalid.
 
-See `PRECEDENCE.md`, `OPERATORS.md`, and `GRAMMAR.md`.
+### Scope and declaration resolution — locked
+
+Every `{ ... }` block creates a lexical scope. Local bindings are visible only after their declaration has completed and are not visible inside their own initializer.
+
+Same-scope redeclaration is a compile-time error. Pre-0.1 also forbids local shadowing: an inner local, loop binding, resource binding, or handler binding may not reuse an already-visible local or parameter name.
+
+Function parameters belong to the function's local namespace and must be unique. Separate functions may freely reuse local and parameter names because they have independent scopes.
+
+Module-level functions, types, errors, and other ordinary declarations must have unique names in their module; duplicate names are compile-time errors rather than overloads. Module-level declarations are resolved across the complete module and are therefore order-independent, unlike local bindings.
+
+See `SCOPE.md` for the locked detailed model.
+
+See `PRECEDENCE.md`, `OPERATORS.md`, and `GRAMMAR.md` for expression ordering and assignment.
 
 ## 14. Resource management — locked
 
@@ -617,7 +629,6 @@ The following are still deliberately unresolved and should not block the first f
 - third-party package root naming and dependency resolution;
 - cleanup-failure composition when another checked failure is already active;
 - advanced resource ownership transfer / borrowing, if real programs require it;
-- lexical block scope, shadowing, redeclaration, and use-before-declaration rules;
 - final condition typing / truthiness rule;
 - function completion and bare-return rules;
 - top-level execution and entrypoint model;
