@@ -2,7 +2,7 @@
 
 > **Status: Consolidated draft for pre-0.1**
 >
-> This file records the current surface grammar after the pre-0.1 specification audit. Productions marked by already-locked language decisions are authoritative for pre-0.1. Expression precedence, assignment placement, condition typing, function completion, and the entry-module model are now locked; only a small number of parser/semantic details remain before parser freeze.
+> This file records the current surface grammar after the pre-0.1 specification audit. Productions marked by already-locked language decisions are authoritative for pre-0.1. Expression precedence, assignment placement, condition typing, function completion, the entry-module model, and standard textual output are now locked; only a small number of parser/semantic details remain before parser freeze.
 
 ## Goals
 
@@ -22,7 +22,7 @@ Simple statements end with `;`.
 ```eri
 let price be 50;
 price = 60;
-print price;
+output(price);
 return price;
 ```
 
@@ -270,7 +270,7 @@ Example:
 ```eri
 {
     let x be 10;
-    print x;
+    output(x);
 }
 ```
 
@@ -303,7 +303,7 @@ For/in:
 
 ```eri
 for item in items {
-    print item;
+    output(item);
 }
 ```
 
@@ -351,7 +351,7 @@ A function with no explicit `returns T` and no `return expression;` statements i
 
 ```eri
 function logMessage(message Text) {
-    print message;
+    output(message);
 }
 ```
 
@@ -564,7 +564,7 @@ Catch-all:
 
 ```eri
 let user be loadUser(1) else error {
-    print error.message;
+    output(error.message);
     return;
 };
 ```
@@ -622,7 +622,7 @@ For precedence purposes `try` is a prefix form. Semantic analysis verifies compa
 ```eri
 with file be try files.open("data.txt") {
     let text be try file.readText();
-    print text;
+    output(text);
 }
 ```
 
@@ -831,15 +831,19 @@ Normal fallthrough from the final reachable entry statement completes the progra
 
 See `ENTRYPOINT.md` for the locked detailed model.
 
-## 24. Output bootstrap status
+## 24. Standard textual output — locked
 
-Early programs use:
+Simple textual output uses the ordinary function call:
 
 ```eri
-print "Hello";
+output("Hello");
 ```
 
-The behavior is part of the bootstrap examples, but whether `print` ultimately lives as a keyword, compiler intrinsic, or standard-library function is not yet frozen.
+`output` is a predeclared standard-library/prelude function, not a keyword and not a special statement form. It therefore uses the existing call and expression-statement grammar; the parser needs no output-specific production.
+
+Pre-0.1 defines one canonical simple-output name: `output`. It does not define `print`, `echo`, `say`, or `out` as aliases.
+
+See `OUTPUT.md` for the locked behavior.
 
 ## 25. Bootstrap subset
 
@@ -851,7 +855,7 @@ The smallest example remains a valid entry module:
 let x be 40;
 let fixed y Int be 2;
 
-print x + y;
+output(x + y);
 ```
 
 Implementation should add already-defined features incrementally rather than inventing new syntax during compiler construction.
@@ -861,9 +865,8 @@ Implementation should add already-defined features incrementally rather than inv
 The remaining grammar-level work is intentionally narrow:
 
 - settle any parser factoring required for `else error` without changing its surface syntax;
-- classify bootstrap `print` if the first compiler requires that distinction;
 - finalize any primary-expression factoring needed by the implementation without changing the locked surface syntax.
 
-Lexical rules, symbolic vocabulary, expression precedence, associativity, assignment placement, Bool-only condition typing, function result/completion semantics, and the entry-module/top-level execution model are now locked.
+Lexical rules, symbolic vocabulary, expression precedence, associativity, assignment placement, Bool-only condition typing, function result/completion semantics, the entry-module/top-level execution model, and standard textual output classification are now locked.
 
 These remaining items are parser/specification details, not reasons to reopen already-locked language semantics.
