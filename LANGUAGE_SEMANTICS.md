@@ -169,7 +169,89 @@ Ordinary function parameters should not silently mutate caller state through hid
 
 If Eristavi later supports in-place mutation of a caller-owned value, that intent should be explicit in the function declaration or call semantics. The syntax for this feature remains open.
 
-## 7. Fundamental types — working set
+## 7. Optional values — locked
+
+Eristavi does not use ordinary `null` values.
+
+Absence is represented explicitly with `none`, and a type that is allowed to be absent is written with `maybe`:
+
+```eri
+maybe User
+maybe Text
+maybe Int
+```
+
+For example:
+
+```eri
+type User {
+    fixed id Int;
+    name Text;
+    middleName maybe Text;
+}
+```
+
+A function may explicitly return an optional value:
+
+```eri
+function findUser(id Int) returns maybe User {
+    if id == 1 {
+        return User(...);
+    }
+
+    return none;
+}
+```
+
+A normal `User`, `Text`, `Int`, or other non-`maybe` type cannot contain `none`.
+
+```eri
+let name be "Anna";
+name = none;            // compile-time error
+```
+
+`none` does not implicitly make arbitrary values nullable. It is valid only where the expected type is optional or where type inference can establish a `maybe` type from surrounding context.
+
+### Presence checks and narrowing
+
+A `maybe` value cannot be used as though it definitely contains its underlying value.
+
+```eri
+let user be findUser(1);
+print user.name;         // compile-time error
+```
+
+The programmer must establish that the value is present:
+
+```eri
+let user be findUser(1);
+
+if user == none {
+    return;
+}
+
+print user.name;
+```
+
+After the `none` branch exits, the compiler narrows `user` from `maybe User` to `User` in the remaining control-flow path.
+
+The opposite form also narrows inside the branch:
+
+```eri
+if user != none {
+    print user.name;
+}
+```
+
+The compiler should perform this narrowing through ordinary control-flow analysis rather than requiring an unsafe unwrap operator.
+
+### No ordinary null
+
+`null` is not a normal Eristavi value and is not an alias for `none`.
+
+The goal is that absence is always visible in the type system and must be handled before the contained value is used.
+
+## 8. Fundamental types — working set
 
 The early language should remain small. The working fundamental type set is:
 
@@ -178,9 +260,11 @@ The early language should remain small. The working fundamental type set is:
 - `Bool`
 - `Text`
 
-Additional numeric widths, `Byte`, decimal arithmetic, optionals, maps, sets, and other types should be added only when the implementation or real programs require them.
+Additional numeric widths, `Byte`, decimal arithmetic, maps, sets, and other types should be added only when the implementation or real programs require them.
 
-## 8. Functions — working direction
+`maybe` is a type modifier for explicit absence, not a separate fundamental payload type.
+
+## 9. Functions — working direction
 
 Functions should have a single primary declaration form.
 
@@ -194,7 +278,7 @@ function add(a Int, b Int) returns Int {
 
 Parameter and return types may eventually be inferred where doing so remains clear and safe, but public API contracts may reasonably stay explicit.
 
-## 9. Control flow — working set
+## 10. Control flow — working set
 
 The initial language should focus on a minimal set:
 
@@ -233,7 +317,7 @@ if not connected {
 
 The symbolic aliases `&&`, `||`, and `!` are not part of Eristavi Boolean syntax. This keeps one obvious form for logical operations and preserves symbolic operators for other purposes where needed.
 
-## 10. Memory management — architectural direction
+## 11. Memory management — architectural direction
 
 Ordinary Eristavi code should not manually allocate and free general-purpose memory.
 
@@ -250,7 +334,7 @@ The first collector should favor correctness and implementation clarity over adv
 
 External resources such as files and sockets should eventually use deterministic scoped cleanup rather than waiting for garbage collection.
 
-## 11. Standard library boundary
+## 12. Standard library boundary
 
 Capabilities such as text operations, sorting, JSON, networking, files, dates, and databases should normally be libraries rather than language keywords.
 
@@ -264,7 +348,7 @@ items.sort
 
 should be type/library behavior, not special grammar.
 
-## 12. Compilation architecture — locked principle, implementation pending
+## 13. Compilation architecture — locked principle, implementation pending
 
 The language should compile through an Eristavi-owned machine-neutral intermediate representation.
 
@@ -284,7 +368,7 @@ The source language must not be designed around a specific CPU architecture.
 
 The long-term architecture may support both native target backends and a stable portable execution format.
 
-## 13. Initial implementation scope
+## 14. Initial implementation scope
 
 The first implementation should prove the language with a deliberately small feature set:
 
@@ -297,12 +381,11 @@ print x + y;
 
 The first compiler milestone does not require generics, async/await, macros, reflection, multiple native backends, a package registry, or an advanced garbage collector.
 
-## 14. Open decisions
+## 15. Open decisions
 
 The following must be decided deliberately before being treated as stable:
 
 - explicit type-annotation syntax in all positions;
-- optional / absent-value model;
 - explicit reference/identity syntax;
 - explicit in-place parameter mutation syntax, if needed;
 - error model;
