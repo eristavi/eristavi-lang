@@ -127,7 +127,7 @@ If a program needs to compare the current state of two identities, it should do 
 
 Eristavi does not add a second equality operator merely to compare identity state.
 
-The exact general equality rules for all future user-defined value types may be refined separately; those rules do not change the meaning of `==` for `identity T`.
+Ordinary user-defined value equality is now separately locked as structural and compositional in `VALUE_EQUALITY.md`. When an ordinary value contains an `identity T` field, that field contributes its existing logical-identity equality semantics to the enclosing structural comparison. The enclosing value does not reinterpret identity as state equality.
 
 ## 8. Resources remain separate
 
