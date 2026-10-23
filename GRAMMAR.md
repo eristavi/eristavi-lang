@@ -54,6 +54,7 @@ float
 text
 true
 false
+none
 list literal
 ```
 
@@ -65,6 +66,7 @@ Examples:
 "Hello"
 true
 false
+none
 [1, 2, 3]
 []
 ```
@@ -74,6 +76,8 @@ Draft grammar:
 ```text
 list-literal := "[" [ expression { "," expression } ] "]"
 ```
+
+`none` represents absence only in an expected `maybe` context. It does not make ordinary types nullable.
 
 ## 3. Operators
 
@@ -151,6 +155,24 @@ Draft grammar:
 if-statement := "if" expression block [ "else" block ]
 ```
 
+Comparisons with `none` participate in type narrowing for `maybe` values:
+
+```eri
+if user == none {
+    return;
+}
+
+print user.name;
+```
+
+and:
+
+```eri
+if user != none {
+    print user.name;
+}
+```
+
 ## 6. Loops
 
 ### For/in
@@ -191,15 +213,23 @@ function add(a Int, b Int) returns Int {
 }
 ```
 
-The semantic model for inference of parameter/return types is still under discussion, so the grammar below is provisional.
+Optional return values use `maybe`:
+
+```eri
+function findUser(id Int) returns maybe User {
+    ...
+}
+```
+
+The semantic model for inference of parameter/return types is still under discussion, so the grammar below remains provisional.
 
 ```text
 function-declaration :=
     "function" identifier "(" [ parameters ] ")"
-    [ "returns" type-name ] block
+    [ "returns" type-expression ] block
 
 parameters := parameter { "," parameter }
-parameter  := identifier [ type-name ]
+parameter  := identifier [ type-expression ]
 ```
 
 Ordinary parameter passing follows value semantics. Syntax for explicit in-place mutation of caller-owned values is not defined yet.
@@ -208,6 +238,7 @@ Ordinary parameter passing follows value semantics. Syntax for explicit in-place
 
 ```eri
 return value;
+return none;
 ```
 
 Draft grammar:
@@ -215,6 +246,8 @@ Draft grammar:
 ```text
 return-statement := "return" [ expression ] ";"
 ```
+
+Returning `none` is valid only when the function's result type is `maybe ...` or when surrounding inference establishes an optional result type.
 
 ## 9. Calls and member access
 
@@ -247,6 +280,8 @@ index-access       := "[" expression "]"
 arguments          := expression { "," expression }
 ```
 
+A `maybe` value cannot use member access until control-flow analysis has established that it is not `none`.
+
 ## 10. User-defined types
 
 Ordinary user-defined `type` declarations have value semantics by default.
@@ -255,15 +290,16 @@ Ordinary user-defined `type` declarations have value semantics by default.
 type User {
     fixed id Int;
     name Text;
+    middleName maybe Text;
 }
 ```
 
 A field without `fixed` is mutable. A `fixed` field is initialized once and cannot be reassigned afterward.
 
-The field declaration shape is:
+Field declarations use a type expression:
 
 ```text
-field-declaration := [ "fixed" ] identifier type-name ";"
+field-declaration := [ "fixed" ] identifier type-expression ";"
 ```
 
 Assignment of a user-defined value creates an independent logical value:
@@ -283,7 +319,29 @@ Explicit shared/reference semantics are not part of ordinary `type` syntax. A fu
 
 The exact constructor/initialization syntax remains provisional.
 
-## 11. Output
+## 11. Type expressions and optional values
+
+The initial optional type modifier is locked as `maybe`:
+
+```text
+type-expression := [ "maybe" ] type-name
+```
+
+Examples:
+
+```eri
+maybe Text
+maybe User
+maybe Int
+```
+
+`none` is the absence literal for a `maybe` value.
+
+Ordinary non-`maybe` types cannot contain `none`.
+
+The language does not define `null` as an ordinary value or as an alias for `none`.
+
+## 12. Output
 
 Early examples use:
 
@@ -293,7 +351,7 @@ print "Hello";
 
 Whether `print` is a language keyword, compiler intrinsic, or standard-library function is not yet locked. The preference is to keep capabilities in the standard library when practical.
 
-## 12. Generic syntax
+## 13. Generic syntax
 
 Eristavi currently defines **no explicit generic type syntax**.
 
@@ -308,11 +366,11 @@ List:Text
 
 Collection and generic relationships should be inferred by the compiler where possible. A future explicit abstraction syntax should only be added when real use cases show that inference is insufficient.
 
-## 13. Semicolon status
+## 14. Semicolon status
 
 Current examples use semicolons to terminate simple statements. This is the working parser assumption for the bootstrap compiler, not yet a permanent language commitment.
 
-## 14. Bootstrap subset
+## 15. Bootstrap subset
 
 The first parser only needs enough grammar to accept programs such as:
 
