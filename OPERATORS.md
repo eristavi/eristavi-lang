@@ -114,7 +114,7 @@ Braces delimit structural blocks and named-field construction bodies.
 
 ```eri
 if ready {
-    print "Ready";
+    output("Ready");
 }
 
 let user be User {
