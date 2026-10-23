@@ -37,7 +37,7 @@ Example:
 let x be 40;
 let y be 2;
 
-print x + y;
+output(x + y);
 ```
 
 These statements form the program's implicit entry execution body and run in source order.
@@ -62,7 +62,7 @@ It may not contain executable file-scope statements such as:
 
 ```eri
 let value be load();   // invalid in an imported module
-print value;           // invalid in an imported module
+output(value);         // invalid in an imported module
 ```
 
 This rule applies transitively throughout the imported module graph.
@@ -97,7 +97,7 @@ function double(value Int) returns Int {
 }
 
 let answer be double(21);
-print answer;
+output(answer);
 ```
 
 This ordering keeps the module graph, reusable declarations, and runtime execution visually distinct.
@@ -116,7 +116,7 @@ A top-level executable binding in the entry file belongs to the implicit entry e
 
 ```eri
 let price be 50;
-print price;
+output(price);
 ```
 
 Such a binding is not a public module declaration, cannot be imported by another module, and is not implicitly visible inside module-level function/type/error declarations.
@@ -129,7 +129,7 @@ Therefore this is invalid:
 let price be 50;
 
 function showPrice() {
-    print price;  // error: entry-local binding is not a module declaration
+    output(price);  // error: entry-local binding is not a module declaration
 }
 ```
 
@@ -137,7 +137,7 @@ Pass required values explicitly instead:
 
 ```eri
 function showPrice(price Int) {
-    print price;
+    output(price);
 }
 
 let price be 50;
@@ -197,7 +197,7 @@ Use an exhaustive `else error` handler at the boundary when needed:
 ```eri
 let user be loadUser(1)
 else error DatabaseError {
-    print error.message;
+    output(error.message);
 };
 ```
 
