@@ -250,17 +250,67 @@ Text equality compares the actual Unicode scalar sequence. Eristavi does not sil
 
 ## 6. Collections and inferred generic abstraction — locked for pre-0.1
 
-Collection element types are inferred where possible:
+The first concrete collection family is `List`.
+
+A List is ordered, growable, homogeneous in its static element relationship, and an ordinary Eristavi value by default.
+
+List literals use brackets:
 
 ```eri
 let names be ["Anna", "Maria", "John"];
 ```
 
-An initially empty collection may acquire its element relationship from statically analyzable use. Conflicting uses are compile-time errors rather than a fallback to dynamic typing.
+The compiler infers one coherent element type. Mixed incompatible elements do not silently widen to a dynamic type or implicit union, and the existing no-implicit-conversion rule means `Int` and `Float` do not silently mix inside one List.
 
-For ordered collection values, equality is structural and order-sensitive when the element type is equality-comparable: equal collections have the same element count and pairwise-equal corresponding elements. This locks collection equality behavior without yet choosing the final concrete pre-0.1 collection type name.
+An empty List literal may acquire its element relationship from statically analyzable use:
 
-Pre-0.1 has no user-written generic parameter syntax such as `<T>`, `[T]`, `where`, trait bounds, or explicit generic arguments.
+```eri
+let customers be [];
+
+customers.add(Customer {
+    name = "Anna";
+});
+```
+
+If the compiler cannot establish one element type, or if constraints conflict, compilation fails rather than creating an untyped List.
+
+`List` is a predeclared type-family name, not a keyword. Pre-0.1 still exposes no user-written generic argument syntax such as `List<Text>`; the element relationship remains compiler-inferred.
+
+List indexing is zero-based and requires an `Int` index:
+
+```eri
+output(names[0]);
+```
+
+Valid indexes satisfy `0 <= index < list.count`. Bounds are checked. A statically provable out-of-range index is a compile-time error; otherwise an invalid access produces a defined runtime bounds fault rather than `none`, wrapping, clamping, or a checked `fails` value. Negative indexes are out of bounds rather than from-end shorthand.
+
+Every List exposes a read-only `.count` property of type `Int` and a canonical no-value `.add(value)` append operation:
+
+```eri
+names.add("John");
+output(names.count);
+```
+
+Mutable Lists support indexed assignment and nested writable indexed paths:
+
+```eri
+numbers[1] = 25;
+users[0].name = "Maria";
+```
+
+Assignment remains statement-level and does not become an expression.
+
+Lists preserve ordinary value semantics. If one List is assigned to another ordinary binding, later mutation of one must not mutate the other. The implementation may use copy-on-write or other optimizations as long as this logical independence is preserved. Ordinary function parameters follow the same value rule.
+
+A `fixed` List is deeply immutable and must satisfy the existing deep-fixable rule. A List whose element type contains reachable `identity` is therefore not eligible for `fixed`.
+
+List equality is ordered structural equality when the element type is equality-comparable: equal Lists have equal counts and pairwise-equal corresponding elements.
+
+`for` iteration traverses a List from index `0` upward in stored order and observes the logical List value present when iteration begins. Implementations need not eagerly copy the List if they can preserve that stable observable sequence.
+
+Pre-0.1 deliberately postpones slicing, negative indexing, additional collection families, maps, sets, queues, linked lists, comprehensions, and similar facilities until real programs justify them.
+
+Pre-0.1 also has no user-written generic parameter syntax such as `<T>`, `[T]`, `where`, trait bounds, or explicit generic arguments.
 
 Functions may be implicitly generic when the compiler can infer consistent static relationships:
 
@@ -274,7 +324,7 @@ The compiler may internally understand this as a same-type input/output relation
 
 If safe inference is impossible, compilation fails. Pre-0.1 requires a concrete implementation rather than an explicit generic escape hatch.
 
-See `GENERICS.md` for the locked model.
+See `COLLECTIONS.md` and `GENERICS.md` for the locked detailed models.
 
 ## 7. User-defined value types and construction — locked
 
@@ -683,7 +733,7 @@ or
 
 Comparisons are non-associative, so chained forms such as `10 < age < 65` are invalid. `not a == b` means `not (a == b)`. `and` binds more strongly than `or`.
 
-Assignment `=` is not an expression operator. Assignment is statement-level syntax and does not produce a value, so forms such as `a = b = c` or `let value be (a = b);` are invalid.
+Assignment `=` is not an expression operator. Assignment is statement-level syntax and does not produce a value, so forms such as `a = b = c` or `let value be (a = b);` are invalid. Writable assignment paths may include member and List-index segments, such as `users[0].name = "Maria";`, subject to mutability, type, and bounds checks.
 
 ### Condition typing — locked
 
@@ -719,7 +769,7 @@ Entry-local executable bindings are not module declarations and do not become hi
 
 See `SCOPE.md` for the locked detailed model.
 
-See `PRECEDENCE.md`, `OPERATORS.md`, and `GRAMMAR.md` for expression ordering and assignment.
+See `PRECEDENCE.md`, `OPERATORS.md`, `GRAMMAR.md`, and `COLLECTIONS.md` for expression ordering, assignment, and List indexing semantics.
 
 ## 14. Resource management — locked
 
@@ -808,6 +858,7 @@ The project deliberately postpones advanced concurrency, async/await, reflection
 
 The following are still deliberately unresolved and should not block the first frontend bootstrap unless implementation requires them:
 
+- exact `%` applicability to `Float` versus `Int`;
 - explicit extraction of an independent `T` snapshot from `identity T`, if needed;
 - third-party package root naming and dependency resolution;
 - cleanup-failure composition when another checked failure is already active;
