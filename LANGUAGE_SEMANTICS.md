@@ -429,6 +429,57 @@ Programs that intentionally need wrapping, saturating, or explicitly checked ari
 
 Additional fixed-width signed or unsigned integer types may be added later when real systems-programming, binary-format, FFI, or performance use cases require them. They do not change the portable semantics of `Int`.
 
+### Text and Unicode semantics — locked
+
+`Text` represents valid Unicode text. Eristavi source files and the canonical byte representation of `Text` use UTF-8.
+
+A `Text` value is not treated as an array of bytes. Human-visible characters, Unicode scalar values, and UTF-8 bytes are distinct views and must be requested explicitly.
+
+Eristavi therefore does **not** allow ambiguous direct integer indexing of `Text`:
+
+```eri
+let text be "Hello";
+let first be text[0];       // compile-time error
+```
+
+Instead, the programmer chooses the intended view:
+
+```eri
+let firstCharacter be text.characters[0];
+let firstScalar be text.scalars[0];
+let firstByte be text.bytes[0];
+```
+
+`text.characters` is segmented into Unicode extended grapheme clusters and is the default human-facing character view. This means an emoji sequence or a letter plus combining marks can behave as one visible character where Unicode defines it as one grapheme cluster.
+
+`text.scalars` exposes Unicode scalar values for code-point-level processing.
+
+`text.bytes` exposes the UTF-8 encoded bytes for binary protocols, hashing, FFI, storage formats, and other byte-oriented work.
+
+Counts are equally explicit:
+
+```eri
+text.characters.count
+text.scalars.count
+text.bytes.count
+```
+
+Eristavi should not define a bare `text.length` whose meaning could be mistaken for any of these three counts.
+
+Character-oriented standard-library operations should operate on grapheme clusters unless their API explicitly says otherwise. Byte-oriented and scalar-oriented operations must remain explicit.
+
+Text equality compares the actual Unicode scalar sequence. Eristavi does not silently normalize Unicode during assignment, comparison, hashing, or storage. Canonically equivalent spellings therefore remain distinct unless the programmer explicitly normalizes them through the standard library.
+
+Invalid UTF-8 received from files, networks, FFI, or other byte sources must not silently become `Text`. Decoding invalid bytes must fail through the checked error model unless the programmer deliberately chooses an explicit replacement/lossy decoding operation.
+
+The compiler/runtime should pin a Unicode data version for each Eristavi toolchain release so grapheme segmentation and Unicode properties are deterministic for that release.
+
+The implementation may cache boundaries or use other optimizations, but the language does not promise constant-time random indexing into grapheme clusters or Unicode scalars. Performance-sensitive code should be able to iterate these views without accidental repeated rescanning.
+
+The design rule is:
+
+> Text is Unicode. Characters, scalars, and bytes are different things, and Eristavi makes that difference visible.
+
 ## 10. Functions — working direction
 
 Functions should have a single primary declaration form.
@@ -556,7 +607,6 @@ The following must be decided deliberately before being treated as stable:
 - explicit in-place parameter mutation syntax, if needed;
 - custom error-type declaration syntax;
 - composition of multiple possible checked error types;
-- Unicode indexing semantics;
 - generic abstraction model when inference alone is insufficient;
 - module/import syntax;
 - resource-management syntax;
