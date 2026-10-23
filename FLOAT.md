@@ -34,6 +34,10 @@ a / b
 
 Each ordinary operation has binary64 semantics.
 
+The `%` operator is **not** defined for `Float` in pre-0.1. `%` has one locked source-language meaning: signed `Int` remainder associated with truncation-toward-zero integer division.
+
+Floating-point ecosystems distinguish several reasonable operations commonly described as remainder or modulo. Eristavi therefore does not assign one of those meanings to `%` implicitly. If real programs require floating-point remainder/modulo, the standard library may later define explicitly named operations with precise contracts.
+
 An implementation may optimize or reorder only when it can prove that the observable Eristavi result is unchanged.
 
 In particular, an expression such as:
@@ -43,6 +47,8 @@ a * b + c
 ```
 
 must not silently become a fused multiply-add operation when contraction would change the binary64 result. A future explicit fused operation may be provided separately if justified.
+
+See `INTEGER_REMAINDER.md` for the locked `%` rule.
 
 ## 4. Infinity and NaN
 
@@ -183,4 +189,4 @@ The lexical syntax and the semantic type are separate concerns:
 
 ## 13. Governing rule
 
-> `Float` is deterministic IEEE 754 binary64 with round-to-nearest, ties-to-even behavior, IEEE special values and signed zero, gradual underflow, and no implicit lossy conversion to or from `Int`.
+> `Float` is deterministic IEEE 754 binary64 with round-to-nearest, ties-to-even behavior, IEEE special values and signed zero, gradual underflow, and no implicit lossy conversion to or from `Int`. `%` is not a Float operator in pre-0.1.
