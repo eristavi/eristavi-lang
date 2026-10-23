@@ -274,7 +274,7 @@ Example:
 }
 ```
 
-## 7. Conditionals
+## 7. Conditionals — locked condition typing
 
 ```eri
 if condition {
@@ -291,9 +291,11 @@ if-statement :=
     "if" expression block [ "else" block ]
 ```
 
+The condition expression must have static type `Bool`. Eristavi does not apply implicit truthiness to numbers, text, collections, optional values, identities, or other values.
+
 Comparisons with `none` participate in semantic narrowing for `maybe` values.
 
-The semantic requirement for the condition type is defined separately; the parser does not infer truthiness from syntax.
+See `CONDITIONS.md`.
 
 ## 8. Loops
 
@@ -322,6 +324,8 @@ while condition {
 while-statement :=
     "while" expression block
 ```
+
+A `while` condition must have static type `Bool`, under the same rule as `if`.
 
 ## 9. Functions
 
@@ -766,9 +770,8 @@ The remaining grammar-level work is intentionally narrow:
 
 - settle any parser factoring required for `else error` without changing its surface syntax;
 - classify bootstrap `print` if the first compiler requires that distinction;
-- synchronize condition typing once the Bool-only-versus-truthiness semantic decision is locked;
 - finalize any primary-expression factoring needed by the implementation without changing the locked surface syntax.
 
-Lexical rules, symbolic vocabulary, expression precedence, associativity, and assignment placement are now locked.
+Lexical rules, symbolic vocabulary, expression precedence, associativity, assignment placement, and Bool-only condition typing are now locked.
 
 These remaining items are parser/specification details, not reasons to reopen already-locked language semantics.
