@@ -147,6 +147,34 @@ The initial language should focus on a minimal set:
 
 The project should not add overlapping control-flow constructs until real use cases justify them.
 
+### Boolean operators — locked
+
+Eristavi uses readable word operators for Boolean logic:
+
+```eri
+and
+or
+not
+```
+
+Examples:
+
+```eri
+if ready and connected {
+    start();
+}
+
+if failed or expired {
+    stop();
+}
+
+if not connected {
+    reconnect();
+}
+```
+
+The symbolic aliases `&&`, `||`, and `!` are not part of Eristavi Boolean syntax. This keeps one obvious form for logical operations and preserves symbolic operators for other purposes where needed.
+
 ## 9. Memory management — architectural direction
 
 Ordinary Eristavi code should not manually allocate and free general-purpose memory.
