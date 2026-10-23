@@ -2,7 +2,7 @@
 
 > **Status: Consolidated draft for pre-0.1**
 >
-> This file records the current surface grammar after the pre-0.1 specification audit. Productions marked by already-locked language decisions are authoritative for pre-0.1. Expression precedence and a few implementation-level details remain to be formalized before the parser grammar is frozen.
+> This file records the current surface grammar after the pre-0.1 specification audit. Productions marked by already-locked language decisions are authoritative for pre-0.1. Expression precedence and assignment placement are now locked; only a small number of parser/semantic details remain before parser freeze.
 
 ## Goals
 
@@ -127,12 +127,12 @@ none
 
 `none` is valid only where the expected or inferred type is `maybe ...`.
 
-## 5. Operators
+## 5. Operators and expression precedence — locked
 
-Initial arithmetic operators:
+Arithmetic operators:
 
 ```text
-+  -  *  /
++  -  *  /  %
 ```
 
 Comparison operators:
@@ -141,7 +141,7 @@ Comparison operators:
 ==  !=  <  <=  >  >=
 ```
 
-Boolean operators — locked:
+Boolean operators:
 
 ```text
 not
@@ -151,18 +151,112 @@ or
 
 The symbolic aliases `!`, `&&`, and `||` are not Eristavi Boolean operators.
 
-The working precedence direction includes:
+Pre-0.1 precedence from highest to lowest is:
+
+| Level | Forms / operators | Associativity |
+|---|---|---|
+| 1 | call `()`, index `[]`, member access `.` | left / postfix |
+| 2 | unary `-`, `try`, `identity` | prefix |
+| 3 | `*`, `/`, `%` | left |
+| 4 | `+`, `-` | left |
+| 5 | `==`, `!=`, `<`, `<=`, `>`, `>=` | non-associative |
+| 6 | `not` | prefix |
+| 7 | `and` | left |
+| 8 | `or` | left |
+
+Assignment `=` is not an expression operator and has no precedence level.
+
+Conceptually, the parser may express the hierarchy as:
 
 ```text
-not
-comparison
-and
-or
+expression :=
+    or-expression
+
+or-expression :=
+    and-expression { "or" and-expression }
+
+and-expression :=
+    not-expression { "and" not-expression }
+
+not-expression :=
+    "not" not-expression
+    | comparison-expression
+
+comparison-expression :=
+    additive-expression
+    [ comparison-operator additive-expression ]
+
+comparison-operator :=
+    "==" | "!=" | "<" | "<=" | ">" | ">="
+
+additive-expression :=
+    multiplicative-expression
+    { ( "+" | "-" ) multiplicative-expression }
+
+multiplicative-expression :=
+    prefix-expression
+    { ( "*" | "/" | "%" ) prefix-expression }
+
+prefix-expression :=
+    ( "-" | "try" | "identity" ) prefix-expression
+    | postfix-expression
 ```
 
-The complete operator precedence table must be formalized before parser freeze.
+The non-repeating optional comparison production is intentional: comparison chaining is not part of pre-0.1.
+
+Therefore:
+
+```eri
+a + b * c
+```
+
+means:
+
+```eri
+a + (b * c)
+```
+
+and:
+
+```eri
+not a == b
+```
+
+means:
+
+```eri
+not (a == b)
+```
+
+while:
+
+```eri
+a or b and c
+```
+
+means:
+
+```eri
+a or (b and c)
+```
+
+These are invalid comparison chains:
+
+```text
+10 < age < 65
+a == b == c
+```
+
+Write the intended relationship explicitly:
+
+```eri
+age > 10 and age < 65
+a == b and b == c
+```
 
 For `identity T`, `==` and `!=` use logical identity semantics as defined in `IDENTITY_EQUALITY.md`.
+
+See `PRECEDENCE.md` and `OPERATORS.md` for the locked detailed model.
 
 ## 6. Blocks
 
@@ -198,6 +292,8 @@ if-statement :=
 ```
 
 Comparisons with `none` participate in semantic narrowing for `maybe` values.
+
+The semantic requirement for the condition type is defined separately; the parser does not infer truthiness from syntax.
 
 ## 8. Loops
 
@@ -343,6 +439,8 @@ field-initializer :=
     identifier "=" expression ";"
 ```
 
+The `=` token here belongs to the construction grammar; it is not an assignment expression.
+
 Every declared field is required exactly once in direct pre-0.1 construction.
 
 The language does not use positional construction such as `User(1, "Anna")` or colon-based construction such as `User(id: 1)`.
@@ -362,7 +460,9 @@ identity-expression :=
     "identity" expression
 ```
 
-The expression must produce an eligible ordinary non-resource value. Identity is semantic shared identity, not a raw pointer.
+For precedence purposes `identity` is a prefix form. The expression grammar factors it at prefix precedence; semantic analysis requires the resulting operand to be an eligible ordinary non-resource value.
+
+Identity is semantic shared identity, not a raw pointer.
 
 ## 14. Checked error declarations — locked
 
@@ -472,7 +572,7 @@ try-expression :=
     "try" expression
 ```
 
-Semantic analysis verifies compatibility with the surrounding function's `fails` contract.
+For precedence purposes `try` is a prefix form. Semantic analysis verifies compatibility with the surrounding function's `fails` contract.
 
 ## 18. Resource management — locked
 
@@ -526,7 +626,7 @@ Imports are file-scope declarations and are normally placed before ordinary decl
 
 Wildcard imports, selective unqualified imports, quoted project paths, and relative traversal strings are not part of pre-0.1.
 
-## 20. Calls, member access, and indexing
+## 20. Calls, member access, and indexing — locked precedence
 
 Conceptual postfix grammar:
 
@@ -547,6 +647,8 @@ arguments :=
     expression { "," expression }
 ```
 
+Postfix call, member access, and indexing have the highest expression precedence and chain left to right.
+
 Examples:
 
 ```eri
@@ -554,6 +656,7 @@ add(10, 20)
 customer.name
 customers.add(customer)
 auth.login(account)
+users[0].name
 ```
 
 Direct integer indexing of `Text` is invalid. An explicit Unicode view must be selected first:
@@ -581,9 +684,9 @@ where T: Comparable
 
 Generic relationships may still exist internally through static inference as defined in `GENERICS.md`.
 
-## 22. Statement categories — current parser direction
+## 22. Statement categories and assignment — locked
 
-Conceptually, the parser grows toward:
+Conceptually:
 
 ```text
 statement :=
@@ -601,14 +704,36 @@ statement :=
     | error-declaration
 ```
 
-With simple statements such as assignment and ordinary expression statements terminated by `;`:
+Simple assignment and expression statements end with `;`:
 
 ```text
-assignment-statement := assignment-expression ";"
-expression-statement := value-expression ";"
+assignment-statement :=
+    assignment-target "=" value-expression ";"
+
+assignment-target :=
+    identifier { "." identifier }
+
+expression-statement :=
+    value-expression ";"
 ```
 
-Exact expression and assignment productions will be finalized with the precedence table before parser freeze.
+Assignment is statement-level syntax. It is not part of `expression` or `value-expression`, does not produce a value, and cannot be chained.
+
+Valid:
+
+```eri
+price = 50;
+user.name = "Maria";
+```
+
+Invalid:
+
+```text
+a = b = c;
+let value be (a = b);
+```
+
+Semantic analysis determines whether the assignment target is mutable and whether the right-hand value is type-compatible.
 
 ## 23. Output bootstrap status
 
@@ -639,10 +764,11 @@ Implementation should add already-defined features incrementally rather than inv
 
 The remaining grammar-level work is intentionally narrow:
 
-- formalize the complete expression precedence and associativity table;
-- formalize assignment-expression placement;
-- decide the final lexical/comment rules;
 - settle any parser factoring required for `else error` without changing its surface syntax;
-- classify bootstrap `print` if the first compiler requires that distinction.
+- classify bootstrap `print` if the first compiler requires that distinction;
+- synchronize condition typing once the Bool-only-versus-truthiness semantic decision is locked;
+- finalize any primary-expression factoring needed by the implementation without changing the locked surface syntax.
 
-These are parser/specification details, not reasons to reopen already-locked language semantics.
+Lexical rules, symbolic vocabulary, expression precedence, associativity, and assignment placement are now locked.
+
+These remaining items are parser/specification details, not reasons to reopen already-locked language semantics.
