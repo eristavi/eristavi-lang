@@ -21,7 +21,9 @@ Locked binding forms:
 
 ```eri
 let name be expression;
+let name Type be expression;
 let fixed name be expression;
+let fixed name Type be expression;
 ```
 
 `let` introduces a mutable binding by default. `fixed` makes that binding immutable after initialization.
@@ -30,19 +32,22 @@ Examples:
 
 ```eri
 let age be 44;
-let name be "Anna";
+let age Int be 44;
+let name Text be "Anna";
 let values be [10, 20, 30];
+let user maybe User be none;
 
-let fixed taxRate be 0.19;
+let fixed taxRate Float be 0.19;
 ```
 
 Grammar:
 
 ```text
-variable-declaration := "let" [ "fixed" ] identifier "be" expression ";"
+variable-declaration :=
+    "let" [ "fixed" ] identifier [ type-expression ] "be" expression ";"
 ```
 
-Explicit type annotation is intentionally left out of this first grammar until its final form is decided.
+Explicit annotations use the same name-first form used by parameters and fields: `name Type`. Colon-based annotation syntax is not part of this grammar.
 
 ## 2. Literals
 
@@ -237,7 +242,7 @@ function findUser(id Int) returns maybe User fails DatabaseError {
 }
 ```
 
-The semantic model for inference of parameter/return types is still under discussion, so the grammar below remains provisional apart from the locked `fails` direction.
+The function grammar remains provisional beyond the already locked name-first annotation form, `maybe`, and `fails` directions.
 
 ```text
 function-declaration :=
@@ -248,6 +253,8 @@ function-declaration :=
 parameters := parameter { "," parameter }
 parameter  := identifier [ type-expression ]
 ```
+
+When a parameter type is written, it follows the parameter name directly, for example `id Int` or `user maybe User`.
 
 Ordinary parameter passing follows value semantics. Syntax for explicit in-place mutation of caller-owned values is not defined yet.
 
@@ -356,7 +363,7 @@ type User {
 
 A field without `fixed` is mutable. A `fixed` field is initialized once and cannot be reassigned afterward.
 
-Field declarations use a type expression:
+Field declarations use the same name-first type annotation form:
 
 ```text
 field-declaration := [ "fixed" ] identifier type-expression ";"
@@ -390,9 +397,25 @@ type-expression := [ "maybe" ] type-name
 Examples:
 
 ```eri
+Text
+User
 maybe Text
 maybe User
 maybe Int
+```
+
+Where a type annotates a name, the form is consistently:
+
+```text
+identifier type-expression
+```
+
+Examples:
+
+```eri
+age Int
+name Text
+user maybe User
 ```
 
 `none` is the absence literal for a `maybe` value.
@@ -436,7 +459,7 @@ The first parser only needs enough grammar to accept programs such as:
 
 ```eri
 let x be 40;
-let fixed y be 2;
+let fixed y Int be 2;
 
 print x + y;
 ```
