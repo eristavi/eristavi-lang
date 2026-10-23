@@ -221,12 +221,29 @@ function findUser(id Int) returns maybe User {
 }
 ```
 
-The semantic model for inference of parameter/return types is still under discussion, so the grammar below remains provisional.
+Recoverable checked failures use `fails`:
+
+```eri
+function loadUser(id Int) returns User fails DatabaseError {
+    ...
+}
+```
+
+A function may combine an optional result and a checked error contract:
+
+```eri
+function findUser(id Int) returns maybe User fails DatabaseError {
+    ...
+}
+```
+
+The semantic model for inference of parameter/return types is still under discussion, so the grammar below remains provisional apart from the locked `fails` direction.
 
 ```text
 function-declaration :=
     "function" identifier "(" [ parameters ] ")"
-    [ "returns" type-expression ] block
+    [ "returns" type-expression ]
+    [ "fails" type-expression ] block
 
 parameters := parameter { "," parameter }
 parameter  := identifier [ type-expression ]
@@ -249,7 +266,50 @@ return-statement := "return" [ expression ] ";"
 
 Returning `none` is valid only when the function's result type is `maybe ...` or when surrounding inference establishes an optional result type.
 
-## 9. Calls and member access
+## 9. Checked error handling
+
+A caller of a function with a checked `fails` contract must either handle or propagate that failure.
+
+### Local handling
+
+Current locked direction:
+
+```eri
+let user be loadUser(1) else error {
+    print error.message;
+    return;
+}
+```
+
+Conceptual grammar:
+
+```text
+handled-expression := expression "else" "error" block
+```
+
+The `error` name refers to the typed checked error produced by the preceding operation.
+
+The compiler must reject control-flow paths where the success value would be used even though the error-handling block did not establish a valid replacement value or exit that path.
+
+### Propagation
+
+Current locked direction:
+
+```eri
+let user be try loadUser(1);
+```
+
+Conceptual grammar:
+
+```text
+try-expression := "try" expression
+```
+
+`try` is valid only when the surrounding function declares a compatible checked failure with `fails`.
+
+The exact syntax for declaring custom error types and composing multiple possible checked error types remains open.
+
+## 10. Calls and member access
 
 Function call:
 
@@ -282,7 +342,7 @@ arguments          := expression { "," expression }
 
 A `maybe` value cannot use member access until control-flow analysis has established that it is not `none`.
 
-## 10. User-defined types
+## 11. User-defined types
 
 Ordinary user-defined `type` declarations have value semantics by default.
 
@@ -319,7 +379,7 @@ Explicit shared/reference semantics are not part of ordinary `type` syntax. A fu
 
 The exact constructor/initialization syntax remains provisional.
 
-## 11. Type expressions and optional values
+## 12. Type expressions and optional values
 
 The initial optional type modifier is locked as `maybe`:
 
@@ -341,7 +401,7 @@ Ordinary non-`maybe` types cannot contain `none`.
 
 The language does not define `null` as an ordinary value or as an alias for `none`.
 
-## 12. Output
+## 13. Output
 
 Early examples use:
 
@@ -351,7 +411,7 @@ print "Hello";
 
 Whether `print` is a language keyword, compiler intrinsic, or standard-library function is not yet locked. The preference is to keep capabilities in the standard library when practical.
 
-## 13. Generic syntax
+## 14. Generic syntax
 
 Eristavi currently defines **no explicit generic type syntax**.
 
@@ -366,11 +426,11 @@ List:Text
 
 Collection and generic relationships should be inferred by the compiler where possible. A future explicit abstraction syntax should only be added when real use cases show that inference is insufficient.
 
-## 14. Semicolon status
+## 15. Semicolon status
 
 Current examples use semicolons to terminate simple statements. This is the working parser assumption for the bootstrap compiler, not yet a permanent language commitment.
 
-## 15. Bootstrap subset
+## 16. Bootstrap subset
 
 The first parser only needs enough grammar to accept programs such as:
 
