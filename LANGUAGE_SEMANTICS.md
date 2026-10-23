@@ -173,7 +173,11 @@ The early fundamental set includes:
 
 Normal integer arithmetic is checked. Compile-time-known overflow is a compile-time error; runtime-dependent overflow and division by zero produce defined arithmetic faults. Ordinary `Int` arithmetic never silently wraps.
 
+Signed integer division truncates toward zero. `%` is defined only for `Int` and computes the corresponding signed remainder, whose nonzero sign follows the dividend. Division or remainder by zero is an arithmetic fault. The signed-minimum / `-1` exceptional pair is treated as overflow for both `/` and `%` rather than inheriting target-specific behavior.
+
 Arithmetic faults are runtime defects, not ordinary checked `fails` values.
+
+See `INTEGER_REMAINDER.md` for the locked signed division and `%` model.
 
 ### Float — locked
 
@@ -198,6 +202,8 @@ NaN payload bits are not part of ordinary Eristavi language semantics and may be
 Backends must not expose target-specific excess precision, unsafe fused-operation contraction, flush-to-zero modes, alternate rounding behavior, or other implementation details that would change an observable Eristavi result.
 
 There is no implicit potentially lossy conversion between `Int` and `Float` in either direction.
+
+`%` is not defined for `Float` in pre-0.1. Future floating-point remainder or modulo operations, if needed, belong to explicitly named numeric APIs with separately stated semantics.
 
 See `FLOAT.md` for the locked detailed model and `LEXICAL_RULES.md` for floating-point literal syntax.
 
@@ -460,6 +466,8 @@ Two independently created identities remain unequal even when all fields current
 
 Identity equality is not physical-address equality, and `T` does not implicitly compare with `identity T`.
 
+No explicit identity-to-value snapshot operation is part of pre-0.1. Such an operation is deliberately postponed until a real use case justifies its semantics and API.
+
 See `IDENTITY_EQUALITY.md`.
 
 ## 9. Optional values — locked
@@ -596,7 +604,7 @@ The top-level namespace `std` is reserved for the standard library.
 
 Circular module dependencies are compile-time errors in the initial language.
 
-Third-party package root naming and dependency resolution remain open.
+Third-party package root naming, dependency resolution, versioning, and package-registry behavior are deliberately postponed beyond pre-0.1. Project-local source-root modules and the reserved `std` root are sufficient for the initial compiler.
 
 ### Entrypoint and top-level execution — locked
 
@@ -792,9 +800,19 @@ Nested resources clean up in reverse nesting order.
 
 A deterministic resource cannot be wrapped in `identity` to bypass resource ownership rules.
 
-Pre-0.1 does not expose lifetime annotations, manual reference counting, manual `free`, general borrowing syntax, or a multi-resource `with` header.
+A deterministic resource type has a statically known cleanup-failure contract, which may be empty. Cleanup error types participate in ordinary checked-failure analysis for the enclosing function.
 
-Cleanup-failure composition when another checked failure is already active remains open.
+If cleanup fails while no checked failure is already active, the cleanup failure becomes the primary checked failure and prevents otherwise successful fallthrough or return.
+
+If a checked failure is already propagating from the body, that original failure remains primary. Any cleanup failure is preserved as secondary cleanup failure context rather than replacing or silently discarding the primary failure. With nested resources, cleanup remains reverse-order; the first cleanup failure becomes primary only when no prior failure was active, and later cleanup failures become secondary context.
+
+Secondary cleanup context does not introduce a new source-level union or wrapper error type. The ordinary `error` binding continues to denote the primary typed error. Pre-0.1 does not expose a programmatic API for enumerating secondary cleanup failures, but compiler/runtime implementations must preserve them for diagnostics and failure reporting while the propagation context is active.
+
+The selected entry execution body has no `fails` contract, so a top-level `with` whose cleanup may produce an unhandled checked failure is invalid at that boundary under the same checked-error rules as any other failure source.
+
+Pre-0.1 does not expose lifetime annotations, manual reference counting, manual `free`, general borrowing syntax, ownership-transfer syntax, or a multi-resource `with` header. Advanced transfer and borrowing are deliberately postponed until real programs justify them.
+
+See `RESOURCE_CLEANUP.md` for the locked cleanup and dual-failure model.
 
 ## 15. Memory management — architectural direction
 
@@ -852,19 +870,17 @@ let y be 2;
 output(x + y);
 ```
 
-The project deliberately postpones advanced concurrency, async/await, reflection, macros, pattern matching, explicit generic syntax, advanced GC, package registry work, self-hosting, and multiple native CPU backends until the core compiler is proven.
+The project deliberately postpones advanced concurrency, async/await, reflection, macros, pattern matching, explicit generic syntax, advanced GC, package registry work, identity snapshots, advanced resource transfer/borrowing, self-hosting, and multiple native CPU backends until the core compiler is proven or real programs demonstrate the need.
 
-## 18. Remaining open decisions
+## 18. Deliberately postponed and architectural decisions
 
-The following are still deliberately unresolved and should not block the first frontend bootstrap unless implementation requires them:
+The following are not part of the pre-0.1 semantic freeze and do not block frontend implementation:
 
-- exact `%` applicability to `Float` versus `Int`;
-- explicit extraction of an independent `T` snapshot from `identity T`, if needed;
-- third-party package root naming and dependency resolution;
-- cleanup-failure composition when another checked failure is already active;
-- advanced resource ownership transfer / borrowing, if real programs require it;
+- explicit extraction of an independent `T` snapshot from `identity T`;
+- third-party package root naming, dependency resolution, versioning, and registry behavior;
+- advanced resource ownership transfer / borrowing;
 - first native CPU backend;
 - exact Eristavi IR instruction set and representation;
 - stable portable bytecode/runtime format, if one is later needed in addition to the defined target set.
 
-These questions must be resolved from Eristavi's design philosophy rather than copied automatically from another language.
+These questions must be decided later from real implementation or program needs and Eristavi's design philosophy rather than copied automatically from another language.
