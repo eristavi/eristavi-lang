@@ -17,7 +17,7 @@ The guiding principle is simple:
 
 ## Status
 
-Eristavi is currently in the **language-design and compiler-bootstrap stage**. Syntax and semantics that are not explicitly marked as settled may change while the first specification is being developed.
+Eristavi is currently in the **pre-0.1 specification and compiler-bootstrap stage**. Core semantics are largely settled; the remaining specification work is being narrowed before frontend implementation begins.
 
 ## Design direction
 
@@ -29,9 +29,9 @@ Eristavi aims for:
 - a rich standard library instead of keyword bloat;
 - automatic memory management;
 - deterministic cleanup for files, sockets, and other external resources;
-- a machine-neutral intermediate representation;
+- a machine-neutral Eristavi intermediate representation;
 - native compilation for supported CPU architectures;
-- a portable execution format for broader compatibility;
+- C, JavaScript, and WebAssembly as strategic additional targets;
 - clear compiler diagnostics that explain how to fix problems;
 - performance transparency without forcing low-level complexity into ordinary code.
 
@@ -52,23 +52,51 @@ The intended result is:
 42
 ```
 
-Collection types are intended to be inferred whenever the compiler has enough information:
+User-defined values use named-field construction:
 
 ```eri
-let names be ["Anna", "Maria", "John"];
-let customers be [];
+type Customer {
+    name Text;
+}
 
-customers.add(Customer("Anna"));
-customers.add(Customer("John"));
+let anna be Customer {
+    name = "Anna";
+};
 ```
 
-The compiler should infer the element types rather than requiring generic type syntax in ordinary code.
+Collection element types and generic relationships are inferred when the compiler has enough static information:
+
+```eri
+let customers be [];
+
+customers.add(Customer {
+    name = "Anna";
+});
+
+customers.add(Customer {
+    name = "John";
+});
+```
+
+The compiler infers the element relationship rather than requiring explicit generic type syntax in ordinary pre-0.1 code.
 
 ## Documentation
 
-- [`DESIGN_PHILOSOPHY.md`](DESIGN_PHILOSOPHY.md) — governing principles
-- [`LANGUAGE_SEMANTICS.md`](LANGUAGE_SEMANTICS.md) — current semantic decisions and open questions
-- [`GRAMMAR.md`](GRAMMAR.md) — draft surface grammar
+- [`DESIGN_PHILOSOPHY.md`](DESIGN_PHILOSOPHY.md) — governing design charter
+- [`LANGUAGE_SEMANTICS.md`](LANGUAGE_SEMANTICS.md) — consolidated pre-0.1 semantics
+- [`GRAMMAR.md`](GRAMMAR.md) — consolidated pre-0.1 surface grammar
+- [`CONSTRUCTION.md`](CONSTRUCTION.md) — named-field construction and initialization
+- [`IDENTITY_EQUALITY.md`](IDENTITY_EQUALITY.md) — explicit identity equality semantics
+- [`VALUE_PARAMETER_MUTATION.md`](VALUE_PARAMETER_MUTATION.md) — ordinary value-parameter behavior
+- [`ERRORS.md`](ERRORS.md) — typed checked errors and propagation
+- [`GENERICS.md`](GENERICS.md) — compiler-inferred generic abstraction
+- [`TARGETS.md`](TARGETS.md) — native, C, JavaScript, and WebAssembly target strategy
+
+## Compiler bootstrap
+
+The first compiler implementation will live under [`compiler/`](compiler/) and grow from the settled bootstrap subset rather than attempting to implement every future language feature at once.
+
+The initial example is [`examples/hello.eri`](examples/hello.eri).
 
 ## License
 
