@@ -140,7 +140,7 @@ A caller may handle every checked error produced by an expression with the exist
 
 ```eri
 let user be loadUser(1) else error {
-    print error.message;
+    output(error.message);
     return;
 };
 ```
@@ -158,11 +158,11 @@ When different checked error types require different behavior, handlers may narr
 ```eri
 let user be loadUser(1)
 else error DatabaseError {
-    print "Database problem: " + error.message;
+    output("Database problem: " + error.message);
     return;
 }
 else error DecodeError {
-    print "Invalid data: " + error.message;
+    output("Invalid data: " + error.message);
     return;
 };
 ```
@@ -208,7 +208,7 @@ function load() returns Data fails FileError, DecodeError {
 function run() {
     let data be load()
     else error FileError {
-        print error.message;
+        output(error.message);
         return;
     };
 }
@@ -221,11 +221,11 @@ A final catch-all makes the handler sequence exhaustive:
 ```eri
 let data be load()
 else error FileError {
-    print "Cannot read file.";
+    output("Cannot read file.");
     return;
 }
 else error {
-    print error.message;
+    output(error.message);
     return;
 };
 ```
