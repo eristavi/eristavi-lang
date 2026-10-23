@@ -106,18 +106,18 @@ type User {
 
 A `fixed` field is initialized once and cannot be reassigned afterward.
 
-A `fixed` binding whose value has an `identity` type is invalid in pre-0.1 because `fixed` means deep immutability rather than shallow handle immutability.
+A `fixed` binding whose value itself has an `identity` type is invalid in pre-0.1 because `fixed` means deep immutability rather than shallow handle immutability.
+
+The separate edge case of an ordinary deeply fixed value containing an identity-typed field remains to be resolved before the full pre-0.1 freeze.
 
 ## 5. Fundamental values — locked where specified
 
-The early working set includes:
+The early fundamental set includes:
 
 - `Int`
 - `Float`
 - `Bool`
 - `Text`
-
-`Float` exists in the working set, but its exact numeric semantics are not yet frozen.
 
 ### Int — locked
 
@@ -130,6 +130,45 @@ The early working set includes:
 Normal integer arithmetic is checked. Compile-time-known overflow is a compile-time error; runtime-dependent overflow and division by zero produce defined arithmetic faults. Ordinary `Int` arithmetic never silently wraps.
 
 Arithmetic faults are runtime defects, not ordinary checked `fails` values.
+
+### Float — locked
+
+`Float` is IEEE 754 binary64 on every supported target.
+
+Ordinary floating-point operations and decimal-literal conversion use round-to-nearest, ties-to-even semantics.
+
+`Float` preserves IEEE 754 positive and negative infinity, NaN, signed zero, and gradual underflow with subnormal values.
+
+Floating-point division by zero follows IEEE behavior rather than producing the integer arithmetic fault used by `Int`.
+
+Float comparisons follow IEEE rules. In particular:
+
+```text
+0.0 == -0.0    true
+NaN == NaN     false
+NaN != NaN     true
+```
+
+NaN payload bits are not part of ordinary Eristavi language semantics and may be canonicalized when needed for deterministic cross-target behavior.
+
+Backends must not expose target-specific excess precision, unsafe fused-operation contraction, flush-to-zero modes, alternate rounding behavior, or other implementation details that would change an observable Eristavi result.
+
+There is no implicit potentially lossy conversion between `Int` and `Float` in either direction.
+
+See `FLOAT.md` for the locked detailed model and `LEXICAL_RULES.md` for floating-point literal syntax.
+
+### Bool — locked core value
+
+`Bool` has the two literal values:
+
+```text
+true
+false
+```
+
+Boolean operators are `and`, `or`, and `not`.
+
+Condition typing and truthiness rules are being finalized separately as part of the frontend freeze; no implementation should invent implicit truthiness before that decision is locked.
 
 ### Text and Unicode — locked
 
@@ -553,14 +592,18 @@ The project deliberately postpones advanced concurrency, async/await, reflection
 
 The following are still deliberately unresolved and should not block the first frontend bootstrap unless implementation requires them:
 
-- exact `Float` semantics;
 - full operator precedence table beyond already-established relationships;
 - general equality rules for ordinary user-defined value types;
+- interaction of deep `fixed` ordinary values with contained mutable `identity` fields;
 - explicit extraction of an independent `T` snapshot from `identity T`, if needed;
 - third-party package root naming and dependency resolution;
 - cleanup-failure composition when another checked failure is already active;
 - advanced resource ownership transfer / borrowing, if real programs require it;
-- classification of bootstrap `print` as keyword, intrinsic, or standard-library function;
+- lexical block scope, shadowing, redeclaration, and use-before-declaration rules;
+- final condition typing / truthiness rule;
+- function completion and bare-return rules;
+- top-level execution and entrypoint model;
+- classification of bootstrap `print` as intrinsic or standard-library function;
 - first native CPU backend;
 - exact Eristavi IR instruction set and representation;
 - stable portable bytecode/runtime format, if one is later needed in addition to the defined target set.
