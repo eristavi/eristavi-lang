@@ -258,6 +258,8 @@ let names be ["Anna", "Maria", "John"];
 
 An initially empty collection may acquire its element relationship from statically analyzable use. Conflicting uses are compile-time errors rather than a fallback to dynamic typing.
 
+For ordered collection values, equality is structural and order-sensitive when the element type is equality-comparable: equal collections have the same element count and pairwise-equal corresponding elements. This locks collection equality behavior without yet choosing the final concrete pre-0.1 collection type name.
+
 Pre-0.1 has no user-written generic parameter syntax such as `<T>`, `[T]`, `where`, trait bounds, or explicit generic arguments.
 
 Functions may be implicitly generic when the compiler can infer consistent static relationships:
@@ -296,6 +298,43 @@ b.name = "Maria";
 Changing `b` must not change `a`.
 
 The implementation may use copy elision, shared backing storage, copy-on-write, escape analysis, or destructive optimization as long as observable behavior remains value-based.
+
+### Ordinary value equality — locked
+
+Ordinary user-defined values use structural, recursive, type-preserving equality.
+
+Two ordinary values of the same compatible static type compare equal when every corresponding stored component compares equal under that component type's own equality semantics.
+
+```eri
+type User {
+    id Int;
+    name Text;
+}
+
+let first be User {
+    id = 1;
+    name = "Anna";
+};
+
+let second be User {
+    id = 1;
+    name = "Anna";
+};
+
+output(first == second); // true
+```
+
+Equality composes rather than reinterpreting component types. Nested ordinary values compare recursively; `identity T` fields compare by logical identity; `Float` retains IEEE equality including NaN behavior; `maybe T` compares absence/presence and then contained values; ordered collections compare by length and corresponding elements.
+
+A type supports `==` / `!=` only when its complete stored value structure is equality-comparable. If a nested field type has no equality semantics, the containing ordinary value type does not automatically gain equality either.
+
+Ordinary equality requires compatible static types. Unrelated user-defined types do not compare merely because they have the same field shape, and Eristavi performs no implicit numeric coercion such as `Int` to `Float` for equality.
+
+Pre-0.1 defines no user-written equality overloading, `Equatable` protocol, or custom equality hook. Domain-specific equivalence uses ordinary clearly named functions instead of redefining `==`.
+
+Because Float semantics are preserved compositionally, an ordinary value containing NaN may compare unequal to itself. Nesting does not silently change Float equality.
+
+See `VALUE_EQUALITY.md` and `IDENTITY_EQUALITY.md` for the locked detailed models.
 
 ### Direct construction — locked
 
@@ -394,6 +433,8 @@ if user == none {
 
 output(user.name);
 ```
+
+When `T` is equality-comparable, `maybe T` is equality-comparable: two absent values are equal, absent and present values are unequal, and two present values compare their contained `T` values.
 
 No unsafe unwrap operator is required for normal control flow.
 
@@ -767,7 +808,6 @@ The project deliberately postpones advanced concurrency, async/await, reflection
 
 The following are still deliberately unresolved and should not block the first frontend bootstrap unless implementation requires them:
 
-- general equality rules for ordinary user-defined value types;
 - explicit extraction of an independent `T` snapshot from `identity T`, if needed;
 - third-party package root naming and dependency resolution;
 - cleanup-failure composition when another checked failure is already active;
