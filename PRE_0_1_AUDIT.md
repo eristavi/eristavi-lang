@@ -39,6 +39,7 @@ Dedicated specifications added or finalized during follow-up resolution include:
 - `FIXED_IMMUTABILITY.md`
 - `VALUE_EQUALITY.md`
 - `COLLECTIONS.md`
+- `INTEGER_REMAINDER.md`
 
 ## 2. Documentation drift corrected by the audit
 
@@ -193,6 +194,16 @@ Pre-0.1 does not expose user-written `List<Text>` generic syntax. `List` is a pr
 
 Advanced collection families, slicing, negative indexing, maps, sets, and similar facilities remain postponed until real programs justify them.
 
+### Integer remainder and Float `%` — resolved
+
+`INTEGER_REMAINDER.md` now defines `%` as an `Int`-only operator in pre-0.1.
+
+Signed integer division truncates toward zero, and `%` computes the corresponding signed remainder. A nonzero remainder follows the sign of the dividend. Division or remainder by zero is an integer arithmetic fault, and the signed-minimum / `-1` exceptional pair is treated as overflow rather than inheriting target-specific behavior.
+
+`Float` does not support `%`. Floating-point remainder/modulo, if real programs require it later, belongs to explicitly named numeric library operations with separately defined contracts.
+
+This keeps `%` to one precise source-language meaning rather than conflating several reasonable floating-point remainder/modulo definitions.
+
 ## 4. Semantic edge cases still to resolve before full pre-0.1 freeze
 
 ### Identity-to-value snapshot
@@ -210,10 +221,6 @@ Ownership transfer or borrowing beyond the basic `with` scope remains deliberate
 ### Third-party package roots
 
 Module semantics are locked, but third-party package naming and dependency resolution are not yet defined.
-
-### Float remainder
-
-The `%` token is part of the locked arithmetic vocabulary, but whether `%` applies only to `Int` in pre-0.1 or also receives explicitly defined `Float` remainder semantics remains to be settled.
 
 ## 5. Architectural decisions that do not block the frontend
 
@@ -244,7 +251,7 @@ There is still no reason to pull the following into pre-0.1 implementation work:
 
 ## 7. Current audit conclusion
 
-The original frontend P0 questions and the major semantic edge cases around deep immutability, ordinary value equality, and the first concrete collection model are now resolved. The language has explicit rules for:
+The original frontend P0 questions and the major semantic edge cases around deep immutability, ordinary value equality, collections, and numeric remainder are now resolved. The language has explicit rules for:
 
 - lexical structure;
 - symbolic vocabulary;
@@ -257,15 +264,15 @@ The original frontend P0 questions and the major semantic edge cases around deep
 - deterministic `Float` semantics;
 - transitive deep `fixed` eligibility;
 - structural ordinary value equality;
-- ordered growable `List` collections with inferred element relationships and checked zero-based indexing.
+- ordered growable `List` collections with inferred element relationships and checked zero-based indexing;
+- truncation-toward-zero signed `Int` division and `Int`-only `%` remainder.
 
 The next recommended semantic sequence is:
 
-1. settle `%` applicability for `Float` versus `Int`;
-2. review identity snapshot only if a real use case requires it;
-3. review the remaining resource/package edge cases that actually block pre-0.1;
-4. perform a final cross-document frontend freeze audit;
-5. begin lexer/parser/type-checker implementation from the locked subset.
+1. review identity snapshot only if a real use case requires it;
+2. review the remaining resource/package edge cases that actually block pre-0.1;
+3. perform a final cross-document frontend freeze audit;
+4. begin lexer/parser/type-checker implementation from the locked subset.
 
 The audit continues to support the governing design order:
 
