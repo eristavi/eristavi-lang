@@ -43,7 +43,9 @@ let fixed taxRate Float be 0.19;
 Identity handles use the same annotation position when written explicitly:
 
 ```eri
-let counter identity Counter be identity Counter(...);
+let counter identity Counter be identity Counter {
+    value = 0;
+};
 ```
 
 Grammar:
@@ -169,6 +171,8 @@ Example:
     print x;
 }
 ```
+
+A structural block closes with `}` and does not require a semicolon merely because the block ended.
 
 ## 5. Conditional
 
@@ -427,7 +431,9 @@ type Counter {
 An identity is created from a value expression with the prefix form:
 
 ```eri
-let first be identity Counter(...);
+let first be identity Counter {
+    value = 0;
+};
 let second be first;
 
 second.value = 10;
@@ -459,7 +465,9 @@ function increment(counter identity Counter) {
 The initial language does not allow `fixed` bindings of identity types:
 
 ```eri
-let fixed counter be identity Counter(...);  // compile-time error
+let fixed counter be identity Counter {
+    value = 0;
+};  // compile-time error
 ```
 
 This preserves the locked deep-immutability meaning of `fixed`.
@@ -641,7 +649,7 @@ text.bytes.count
 
 A bare `text.length` is not defined by the core Text semantics.
 
-## 14. User-defined types
+## 14. User-defined types and construction
 
 Ordinary user-defined `type` declarations have value semantics by default.
 
@@ -693,7 +701,27 @@ If a value contains an explicitly declared `identity T` field, copying the outer
 
 A `fixed` binding of an ordinary value is deeply immutable from the programmer's point of view, including nested ordinary fields that are part of the value.
 
-The exact constructor/initialization syntax remains provisional.
+Construction uses the locked named-field brace form defined in `CONSTRUCTION.md`:
+
+```eri
+let user be User {
+    id = 1;
+    name = "Anna";
+    middleName = none;
+};
+```
+
+Conceptual grammar:
+
+```text
+construction-expression :=
+    type-name "{" field-initializer { field-initializer } "}"
+
+field-initializer :=
+    identifier "=" expression ";"
+```
+
+Every declared field is required during direct construction in pre-0.1 and must be initialized exactly once.
 
 ## 15. Type expressions and optional values
 
@@ -765,9 +793,67 @@ List:Text
 
 Collection and generic relationships should be inferred by the compiler where possible. A future explicit abstraction syntax should only be added when real use cases show that inference is insufficient.
 
-## 18. Semicolon status
+## 18. Statement termination — locked
 
-Current examples use semicolons to terminate simple statements. This is the working parser assumption for the bootstrap compiler, not yet a permanent language commitment.
+Eristavi uses explicit semicolons to terminate simple statements.
+
+```eri
+let price be 50;
+price = 60;
+print price;
+return price;
+```
+
+A newline does not terminate a statement and carries no statement-boundary meaning. Formatting may therefore place an expression across multiple lines without requiring a continuation marker:
+
+```eri
+let total be
+    price
+    + tax
+    + delivery;
+```
+
+The semicolon is the syntactic terminator.
+
+Structural constructs that end with a block do not require an additional semicolon after the closing `}`:
+
+```eri
+if ready {
+    start();
+}
+
+while running {
+    tick();
+}
+
+function add(a Int, b Int) returns Int {
+    return a + b;
+}
+```
+
+Likewise, `type`, `for`, and `with` blocks end structurally with `}` rather than `};`.
+
+Semicolons remain required inside structures where the grammar defines simple terminated entries, including field declarations and construction field initializers:
+
+```eri
+type User {
+    fixed id Int;
+    name Text;
+}
+
+let user be User {
+    id = 1;
+    name = "Anna";
+};
+```
+
+The final semicolon above terminates the surrounding variable declaration; the inner semicolons terminate the field initializers.
+
+Eristavi does not use automatic semicolon insertion and does not infer statement termination from indentation or line breaks.
+
+The design rule is:
+
+> Simple statements end with `;`. Structural blocks end with `}`. Newlines are formatting, not syntax.
 
 ## 19. Bootstrap subset
 
@@ -789,7 +875,9 @@ type Counter {
     value Int;
 }
 
-let counter be identity Counter(...);
+let counter be identity Counter {
+    value = 0;
+};
 ```
 
 while keeping the single-file bootstrap case valid:
