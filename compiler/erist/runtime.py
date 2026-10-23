@@ -5,7 +5,21 @@ from dataclasses import dataclass
 from typing import Callable
 
 from .diagnostics import RuntimeFault
-from .syntax import AssignStmt, BinaryExpr, CallExpr, Expr, ExprStmt, LetStmt, LiteralExpr, NameExpr, Program, UnaryExpr
+from .syntax import (
+    AssignStmt,
+    BinaryExpr,
+    Block,
+    CallExpr,
+    Expr,
+    ExprStmt,
+    IfStmt,
+    LetStmt,
+    LiteralExpr,
+    NameExpr,
+    Program,
+    UnaryExpr,
+    WhileStmt,
+)
 
 INT_MIN = -(2**63)
 INT_MAX = 2**63 - 1
@@ -19,30 +33,68 @@ class Cell:
 
 class Interpreter:
     def __init__(self, output: Callable[[str], None] = print):
-        self.env: dict[str, Cell] = {}
+        self.scopes: list[dict[str, Cell]] = [{}]
         self.output_sink = output
 
     def run(self, program: Program) -> None:
         for stmt in program.statements:
-            if isinstance(stmt, LetStmt):
-                self.env[stmt.name] = Cell(self._expr(stmt.initializer), stmt.fixed)
-            elif isinstance(stmt, AssignStmt):
-                cell = self.env[stmt.name]
-                if cell.fixed:
-                    raise RuntimeFault(f"cannot assign to fixed binding {stmt.name!r}", stmt.location)
-                cell.value = self._expr(stmt.value)
-            elif isinstance(stmt, ExprStmt):
-                self._expr(stmt.expression)
-            else:
-                raise RuntimeFault("statement is not implemented by the bootstrap runtime")
+            self._statement(stmt)
+
+    def _statement(self, stmt) -> None:
+        if isinstance(stmt, LetStmt):
+            self.scopes[-1][stmt.name] = Cell(self._expr(stmt.initializer), stmt.fixed)
+            return
+
+        if isinstance(stmt, AssignStmt):
+            cell = self._resolve_cell(stmt.name)
+            if cell is None:
+                raise RuntimeFault(f"unknown name {stmt.name!r}", stmt.location)
+            if cell.fixed:
+                raise RuntimeFault(f"cannot assign to fixed binding {stmt.name!r}", stmt.location)
+            cell.value = self._expr(stmt.value)
+            return
+
+        if isinstance(stmt, ExprStmt):
+            self._expr(stmt.expression)
+            return
+
+        if isinstance(stmt, IfStmt):
+            if self._expr(stmt.condition):
+                self._block(stmt.then_branch)
+            elif stmt.else_branch is not None:
+                self._block(stmt.else_branch)
+            return
+
+        if isinstance(stmt, WhileStmt):
+            while self._expr(stmt.condition):
+                self._block(stmt.body)
+            return
+
+        raise RuntimeFault("statement is not implemented by the bootstrap runtime")
+
+    def _block(self, block: Block) -> None:
+        self.scopes.append({})
+        try:
+            for stmt in block.statements:
+                self._statement(stmt)
+        finally:
+            self.scopes.pop()
+
+    def _resolve_cell(self, name: str) -> Cell | None:
+        for scope in reversed(self.scopes):
+            cell = scope.get(name)
+            if cell is not None:
+                return cell
+        return None
 
     def _expr(self, expr: Expr):
         if isinstance(expr, LiteralExpr):
             return expr.value
 
         if isinstance(expr, NameExpr):
-            if expr.name in self.env:
-                return self.env[expr.name].value
+            cell = self._resolve_cell(expr.name)
+            if cell is not None:
+                return cell.value
             if expr.name == "output":
                 return "<builtin output>"
             raise RuntimeFault(f"unknown name {expr.name!r}", expr.location)
@@ -103,7 +155,10 @@ class Interpreter:
                 self.output_sink(self._format(value))
                 return None
 
-        raise RuntimeFault("expression is not implemented by the bootstrap runtime", getattr(expr, "location", None))
+        raise RuntimeFault(
+            "expression is not implemented by the bootstrap runtime",
+            getattr(expr, "location", None),
+        )
 
     def _checked_numeric(self, result, left, expr):
         if isinstance(left, int) and not isinstance(left, bool):
@@ -120,18 +175,18 @@ class Interpreter:
             raise RuntimeFault("Int division by zero", expr.location)
         if a == INT_MIN and b == -1:
             raise RuntimeFault("signed 64-bit Int overflow", expr.location)
-        q = abs(a) // abs(b)
+        quotient = abs(a) // abs(b)
         if (a < 0) != (b < 0):
-            q = -q
-        return q
+            quotient = -quotient
+        return quotient
 
     def _int_rem(self, a: int, b: int, expr) -> int:
         if b == 0:
             raise RuntimeFault("Int remainder by zero", expr.location)
         if a == INT_MIN and b == -1:
             raise RuntimeFault("signed 64-bit Int overflow", expr.location)
-        q = self._int_div(a, b, expr)
-        return a - q * b
+        quotient = self._int_div(a, b, expr)
+        return a - quotient * b
 
     @staticmethod
     def _float_div(a: float, b: float) -> float:
