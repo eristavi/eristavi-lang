@@ -17,7 +17,9 @@ The guiding principle is simple:
 
 ## Status
 
-Eristavi is currently in the **pre-0.1 specification and compiler-bootstrap stage**. Core semantics are largely settled; the remaining specification work is being narrowed before frontend implementation begins.
+The **pre-0.1 frontend semantics are frozen for implementation**. The Python bootstrap compiler is now under active development in `compiler/` and already runs the canonical hello program through a lexer, parser, AST, semantic analyzer, and temporary execution backend.
+
+See [`PRE_0_1_FREEZE.md`](PRE_0_1_FREEZE.md) for the freeze boundary and deliberately postponed features.
 
 ## Design direction
 
@@ -84,22 +86,51 @@ The compiler infers the element relationship rather than requiring explicit gene
 
 ## Documentation
 
+- [`PRE_0_1_FREEZE.md`](PRE_0_1_FREEZE.md) — frozen frontend boundary and implementation handoff
 - [`DESIGN_PHILOSOPHY.md`](DESIGN_PHILOSOPHY.md) — governing design charter
 - [`LANGUAGE_SEMANTICS.md`](LANGUAGE_SEMANTICS.md) — consolidated pre-0.1 semantics
 - [`GRAMMAR.md`](GRAMMAR.md) — consolidated pre-0.1 surface grammar
+- [`LEXICAL_RULES.md`](LEXICAL_RULES.md) — lexical structure and literal rules
+- [`PRECEDENCE.md`](PRECEDENCE.md) — expression precedence and associativity
 - [`OUTPUT.md`](OUTPUT.md) — standard textual output
+- [`FLOAT.md`](FLOAT.md) — deterministic Float semantics
+- [`INTEGER_REMAINDER.md`](INTEGER_REMAINDER.md) — signed Int division and Int-only `%`
+- [`COLLECTIONS.md`](COLLECTIONS.md) — pre-0.1 `List` model
 - [`CONSTRUCTION.md`](CONSTRUCTION.md) — named-field construction and initialization
+- [`FIXED_IMMUTABILITY.md`](FIXED_IMMUTABILITY.md) — transitive `fixed` eligibility
 - [`IDENTITY_EQUALITY.md`](IDENTITY_EQUALITY.md) — explicit identity equality semantics
+- [`VALUE_EQUALITY.md`](VALUE_EQUALITY.md) — structural ordinary value equality
 - [`VALUE_PARAMETER_MUTATION.md`](VALUE_PARAMETER_MUTATION.md) — ordinary value-parameter behavior
 - [`ERRORS.md`](ERRORS.md) — typed checked errors and propagation
+- [`RESOURCE_CLEANUP.md`](RESOURCE_CLEANUP.md) — deterministic cleanup and dual-failure composition
 - [`GENERICS.md`](GENERICS.md) — compiler-inferred generic abstraction
 - [`TARGETS.md`](TARGETS.md) — native, C, JavaScript, and WebAssembly target strategy
 
 ## Compiler bootstrap
 
-The first compiler implementation will live under [`compiler/`](compiler/) and grow from the settled bootstrap subset rather than attempting to implement every future language feature at once.
+The active bootstrap implementation lives under [`compiler/`](compiler/).
 
-The initial example is [`examples/hello.eri`](examples/hello.eri).
+From the repository root, the current vertical slice can run:
+
+```text
+python -m compiler.erist run examples/hello.eri
+```
+
+Expected output:
+
+```text
+42
+```
+
+The package also defines the `erist` console command through `pyproject.toml` when installed in a Python environment.
+
+Current tests can be run with:
+
+```text
+python -m unittest discover -s tests -v
+```
+
+The compiler will grow incrementally from the frozen subset rather than trying to implement every language feature at once.
 
 ## License
 
