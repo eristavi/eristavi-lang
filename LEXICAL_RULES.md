@@ -705,3 +705,193 @@ The implementation must additionally enforce that `_` occurs only between digits
 ### Governing rule
 
 > Pre-0.1 integer literals use decimal, `0b` binary, or `0x` hexadecimal notation. `_` is a readability separator only between digits, leading-zero decimal forms and octal notation are rejected, and negative values are expressed through the ordinary unary minus operator rather than a signed literal token.
+
+## 6. Floating-point literals — locked
+
+Pre-0.1 floating-point literals use decimal notation only.
+
+Examples:
+
+```eri
+0.0
+1.5
+19.95
+1_000.50
+3.141_592_653
+1e6
+1E6
+1.5e3
+1.5e-3
+1.5E+3
+```
+
+### Float recognition
+
+A numeric literal is recognized as a floating-point literal when it contains either:
+
+- a decimal point with at least one digit on both sides; or
+- a decimal exponent introduced by `e` or `E`.
+
+Therefore:
+
+```eri
+10      // Int literal
+10.0    // Float literal
+10e2    // Float literal
+10E2    // Float literal
+```
+
+### Digits are required on both sides of the decimal point
+
+Shorthand decimal forms are not valid:
+
+```text
+.5
+5.
+```
+
+Use:
+
+```eri
+0.5
+5.0
+```
+
+This keeps decimal literals explicit and prevents unnecessary ambiguity with the `.` token used for member and module access.
+
+### Scientific notation
+
+A decimal exponent begins with `e` or `E`, optionally followed by `+` or `-`, and then a digit sequence.
+
+Valid examples:
+
+```eri
+1e6
+1E6
+2.5e8
+4.2e-10
+4.2E+10
+```
+
+Both `e` and `E` are accepted source spellings because they express the same universally understood scientific-notation concept without changing the programmer's mental model.
+
+The canonical formatter representation uses lowercase `e`.
+
+For example, source written as:
+
+```eri
+2.5E-8
+```
+
+may be formatted canonically as:
+
+```eri
+2.5e-8
+```
+
+### Underscore separators
+
+As with integer literals, underscores are readability separators and are valid only between digits.
+
+Valid:
+
+```eri
+1_000.25
+1.000_001
+6.022_140_76e23
+1e1_000
+```
+
+Invalid:
+
+```text
+_1.0
+1_.0
+1._0
+1.0_
+1e_10
+1e10_
+1__000.0
+```
+
+Underscores do not change the numeric value.
+
+### Negative floats use unary minus
+
+The minus sign is not part of the floating-point literal token.
+
+```eri
+-19.95
+```
+
+is parsed as unary `-` applied to the positive floating-point literal `19.95`.
+
+This preserves one consistent unary-negation rule for numeric literals, names, and grouped expressions.
+
+### Decimal notation only
+
+Pre-0.1 does not define hexadecimal or binary floating-point literal forms such as:
+
+```text
+0x1.2p3
+0b1.01
+```
+
+Binary and hexadecimal notation remain useful for integer masks and low-level integer work, but do not create additional floating-point literal families.
+
+### No floating-point suffixes
+
+Pre-0.1 does not define suffixes such as:
+
+```text
+1.0f
+1.0f32
+1.0f64
+1.0d
+```
+
+`Float` has one language-defined semantic meaning. If future numeric types are added, their conversion and literal interaction should be designed explicitly rather than forcing suffix syntax into the initial language.
+
+### No special NaN or infinity literal tokens
+
+Pre-0.1 does not reserve lexical forms such as:
+
+```text
+NaN
+Infinity
+-inf
+```
+
+If the eventual `Float` semantic model exposes non-finite values, they should be provided through the type or standard library rather than by expanding the lexer vocabulary unnecessarily.
+
+### Conceptual lexical forms
+
+```text
+digit-sequence :=
+    decimal-digit { [ "_" ] decimal-digit }
+
+exponent :=
+    ( "e" | "E" ) [ "+" | "-" ] digit-sequence
+
+fractional-float :=
+    digit-sequence "." digit-sequence [ exponent ]
+
+exponent-float :=
+    digit-sequence exponent
+
+float-literal :=
+    fractional-float
+    | exponent-float
+```
+
+The implementation must enforce that `_` occurs only between digits and never at an edge, adjacent to `.`, adjacent to `e`/`E`, or adjacent to the exponent sign.
+
+### Semantic representation remains separate
+
+This section locks only floating-point literal syntax.
+
+The exact semantic definition of `Float`—including representation, precision, rounding, overflow, non-finite values, and arithmetic behavior—is a separate language-semantic decision and is not implied by the literal spelling rules.
+
+### Governing rule
+
+> Pre-0.1 floating-point literals are decimal, require either a decimal point with digits on both sides or an `e`/`E` exponent, allow `_` only between digits, use the ordinary unary minus operator for negative values, and define no suffixes or alternate-base float forms. Lowercase `e` is the canonical formatter spelling.
