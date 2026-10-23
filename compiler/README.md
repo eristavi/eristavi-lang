@@ -49,6 +49,20 @@ The bootstrap currently supports:
 - `if` / `else` with statically required `Bool` conditions;
 - `while` with statically required `Bool` conditions;
 - mutation of visible outer bindings from nested blocks;
+- module-level function declarations before entry execution;
+- order-independent function resolution across the module declaration region;
+- typed function parameters for the currently implemented basic types;
+- mutable local parameter values that do not mutate caller-owned bindings;
+- ordinary named function calls with static arity and argument-type checking;
+- explicit `returns T` contracts for the implemented basic types;
+- inferred result types when return expressions establish one non-circular type;
+- no-value functions with normal fallthrough and bare `return;`;
+- rejection of no-value calls in value contexts;
+- return-path completion checking for value-producing functions;
+- rejection of mixed bare/value return completion;
+- direct and mutual circular result-inference detection;
+- recursive value-producing functions when an explicit result contract breaks the inference cycle;
+- recursive no-value functions without a result contract;
 - `Int`, `Float`, `Bool`, and `Text` literals;
 - unary `-` and `not`;
 - arithmetic, comparison, `and`, and `or` precedence;
@@ -62,6 +76,8 @@ The bootstrap currently supports:
 - `run` and `check` CLI commands.
 
 The parser and analyzer deliberately reject frozen features that are not implemented yet rather than guessing provisional behavior.
+
+One deliberate bootstrap limitation remains in this function slice: parameters currently require explicit basic types. The frozen language permits omitted parameter types when compiler-inferred generic relationships are statically provable, but that generic inference machinery is not implemented yet.
 
 ## Running the bootstrap
 
@@ -99,20 +115,20 @@ Run the current bootstrap tests from the repository root:
 python -m unittest discover -s tests -v
 ```
 
-The current suite contains 16 tests covering the original arithmetic/output bootstrap plus basic annotations, type mismatch rejection, Bool-only control-flow conditions, lexical block scope, no-shadowing, outer-binding mutation, sibling-block name reuse, and `while` execution.
+The current suite contains 37 tests. In addition to the arithmetic, annotation, scope, and control-flow coverage, it now exercises explicit and inferred function results, no-value functions, bare returns, full successful-path return checking, forward function resolution, argument checking, mutable local parameters, explicit recursive functions, recursive no-value functions, and rejection of circular inferred result contracts.
 
 ## Next implementation slices
 
 The compiler should continue vertically through already-frozen behavior. The next sensible order is:
 
-1. functions, parameters, calls, and return/completion analysis;
-2. `List` literals, indexing, `.count`, `.add`, and indexed assignment;
-3. user-defined value types and named-field construction;
-4. `maybe` / `none` flow narrowing;
-5. checked errors;
-6. identity;
-7. `with` resources and cleanup semantics;
-8. modules/imports;
+1. `List` literals, indexing, `.count`, `.add`, and indexed assignment;
+2. user-defined value types and named-field construction;
+3. `maybe` / `none` flow narrowing;
+4. checked errors;
+5. identity;
+6. `with` resources and cleanup semantics;
+7. modules/imports;
+8. compiler-inferred generic parameter relationships beyond the current typed-parameter bootstrap;
 9. typed Eristavi IR and the first real compilation backend.
 
 Implementation should follow the root specifications rather than inventing semantics for convenience.
