@@ -366,11 +366,15 @@ This keeps grammar vocabulary separate from the set of predeclared library or ty
 
 Its special status is enforced by module/name resolution rather than by the lexer.
 
-### `print` is not reserved
+### Standard `output` is not a keyword
 
-`print` is not part of the pre-0.1 reserved keyword set.
+`output` is not part of the pre-0.1 reserved keyword set.
 
-The bootstrap compiler may temporarily provide it as an intrinsic or library-visible operation, but its final classification remains separate from lexical keyword design.
+The lexer treats `output` as an ordinary identifier. Name resolution supplies the predeclared standard textual-output function described in `OUTPUT.md`.
+
+This means the keyword set remains exactly 28 words; standard-library conveniences do not become grammar merely because they are available without an explicit import.
+
+Names such as `print`, `echo`, `say`, and `out` are also not reserved and have no built-in output meaning in pre-0.1.
 
 ### Future vocabulary is not pre-reserved
 
@@ -924,7 +928,7 @@ This is syntactically valid:
 
 ```eri
 if ready {
-print "Ready";
+output("Ready");
 }
 ```
 
