@@ -251,7 +251,89 @@ The compiler should perform this narrowing through ordinary control-flow analysi
 
 The goal is that absence is always visible in the type system and must be handled before the contained value is used.
 
-## 8. Fundamental types — working set
+## 8. Error model — locked
+
+Recoverable failures are typed and checked by the compiler.
+
+A function that can fail declares the error type with `fails`:
+
+```eri
+function loadUser(id Int) returns User fails DatabaseError {
+    ...
+}
+```
+
+A caller must either handle the failure locally or propagate a compatible declared failure.
+
+Unchecked exceptions are not the normal mechanism for application control flow in Eristavi.
+
+### Absence and failure are different
+
+`maybe` represents legitimate absence. `fails` represents an operation that did not complete successfully.
+
+```eri
+function findUser(id Int) returns maybe User
+```
+
+means the operation succeeds but a matching user may not exist.
+
+```eri
+function loadUser(id Int) returns User fails DatabaseError
+```
+
+means the operation is expected to produce a `User`, but the operation itself may fail.
+
+Both may appear together:
+
+```eri
+function findUser(id Int) returns maybe User fails DatabaseError {
+    ...
+}
+```
+
+This means the operation may fail, and if it succeeds, the requested value may still be absent.
+
+### Local handling — locked direction
+
+The readable local handling form is:
+
+```eri
+let user be loadUser(1) else error {
+    print error.message;
+    return;
+}
+```
+
+Inside the `else error` block, `error` is the typed failure value from the operation.
+
+If the error block completes normally instead of exiting or producing a replacement value, the compiler must reject uses that would assume `user` was successfully initialized.
+
+### Propagation — locked direction
+
+`try` propagates a compatible checked error from the current function:
+
+```eri
+function showUser(id Int) fails DatabaseError {
+    let user be try loadUser(id);
+    print user.name;
+}
+```
+
+A function may use `try` only when its own declared failure contract can represent the propagated error.
+
+The compiler must verify propagation statically.
+
+### Runtime defects
+
+Programmer defects, violated compiler/runtime invariants, or unrecoverable runtime failures are separate from ordinary checked errors and are not required to appear in a function's `fails` contract.
+
+The exact representation and reporting of fatal runtime defects remains an implementation decision.
+
+### Error declarations
+
+The exact syntax for defining custom error types and composing multiple error types is not yet locked. The checked-error semantics above do not depend on that surface syntax.
+
+## 9. Fundamental types — working set
 
 The early language should remain small. The working fundamental type set is:
 
@@ -264,7 +346,7 @@ Additional numeric widths, `Byte`, decimal arithmetic, maps, sets, and other typ
 
 `maybe` is a type modifier for explicit absence, not a separate fundamental payload type.
 
-## 9. Functions — working direction
+## 10. Functions — working direction
 
 Functions should have a single primary declaration form.
 
@@ -276,9 +358,11 @@ function add(a Int, b Int) returns Int {
 }
 ```
 
+Functions that can recoverably fail declare that contract with `fails`.
+
 Parameter and return types may eventually be inferred where doing so remains clear and safe, but public API contracts may reasonably stay explicit.
 
-## 10. Control flow — working set
+## 11. Control flow — working set
 
 The initial language should focus on a minimal set:
 
@@ -317,7 +401,7 @@ if not connected {
 
 The symbolic aliases `&&`, `||`, and `!` are not part of Eristavi Boolean syntax. This keeps one obvious form for logical operations and preserves symbolic operators for other purposes where needed.
 
-## 11. Memory management — architectural direction
+## 12. Memory management — architectural direction
 
 Ordinary Eristavi code should not manually allocate and free general-purpose memory.
 
@@ -334,7 +418,7 @@ The first collector should favor correctness and implementation clarity over adv
 
 External resources such as files and sockets should eventually use deterministic scoped cleanup rather than waiting for garbage collection.
 
-## 12. Standard library boundary
+## 13. Standard library boundary
 
 Capabilities such as text operations, sorting, JSON, networking, files, dates, and databases should normally be libraries rather than language keywords.
 
@@ -348,7 +432,7 @@ items.sort
 
 should be type/library behavior, not special grammar.
 
-## 13. Compilation architecture — locked principle, implementation pending
+## 14. Compilation architecture — locked principle, implementation pending
 
 The language should compile through an Eristavi-owned machine-neutral intermediate representation.
 
@@ -368,7 +452,7 @@ The source language must not be designed around a specific CPU architecture.
 
 The long-term architecture may support both native target backends and a stable portable execution format.
 
-## 14. Initial implementation scope
+## 15. Initial implementation scope
 
 The first implementation should prove the language with a deliberately small feature set:
 
@@ -381,14 +465,15 @@ print x + y;
 
 The first compiler milestone does not require generics, async/await, macros, reflection, multiple native backends, a package registry, or an advanced garbage collector.
 
-## 15. Open decisions
+## 16. Open decisions
 
 The following must be decided deliberately before being treated as stable:
 
 - explicit type-annotation syntax in all positions;
 - explicit reference/identity syntax;
 - explicit in-place parameter mutation syntax, if needed;
-- error model;
+- custom error-type declaration syntax;
+- composition of multiple possible checked error types;
 - exact integer and overflow semantics;
 - Unicode indexing semantics;
 - generic abstraction model when inference alone is insufficient;
