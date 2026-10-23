@@ -4,24 +4,24 @@
 
 This document is the governing design charter for Eristavi.
 
-It defines the principles that should guide decisions about syntax, semantics, the type system, memory management, the compiler, runtime, standard library, tooling, portability, and future evolution.
+It guides syntax, semantics, the type system, memory management, compiler architecture, runtime behavior, the standard library, tooling, portability, and future evolution.
 
-When an implementation choice conflicts with these principles, the default response should be to change the implementation rather than weaken the philosophy for convenience.
+When implementation convenience conflicts with these principles, the default response should be to change the implementation rather than weaken the language model.
 
-The language should grow deliberately. New features must justify their complexity.
+The language should grow deliberately. New features must justify their permanent complexity.
 
 ---
 
-## 1. Core Identity
+## 1. Core identity
 
 Eristavi should combine:
 
-- **Readability**
-- **Native performance**
-- **Universal portability**
-- **Controlled simplicity**
-- **Safety by default**
-- **Low-level power when explicitly requested**
+- **readability**;
+- **native performance**;
+- **universal portability**;
+- **controlled simplicity**;
+- **safety by default**;
+- **low-level power when explicitly requested**.
 
 The central idea is:
 
@@ -31,13 +31,11 @@ The language should be approachable without becoming simplistic, and powerful wi
 
 ---
 
-## 2. Small, Stable Vocabulary
+## 2. Small, stable vocabulary
 
 The core language vocabulary should remain intentionally small.
 
-Keywords exist to describe the structure and semantics of programs, not every operation a program can perform.
-
-Operations such as text reversal, sorting, JSON parsing, networking, encryption, image processing, and database access belong in types, the standard library, or external libraries.
+Keywords describe program structure and semantics, not every operation a program can perform. Text processing, sorting, JSON, networking, encryption, image processing, databases, and similar capabilities normally belong in types, the standard library, or external libraries.
 
 ### Rule
 
@@ -45,18 +43,11 @@ Operations such as text reversal, sorting, JSON parsing, networking, encryption,
 
 ---
 
-## 3. One Obvious Way
+## 3. One obvious way
 
 Fundamental concepts should normally have one preferred form.
 
-Avoid accumulating multiple equivalent syntaxes merely for convenience, familiarity, or compatibility with other languages.
-
-Examples of what to avoid:
-
-- several variable-declaration keywords with overlapping meaning;
-- multiple unrelated function syntaxes;
-- several ways to express the same loop;
-- legacy aliases that permanently increase cognitive load.
+Avoid accumulating multiple equivalent syntaxes merely for familiarity or convenience. In particular, avoid overlapping variable declarations, several unrelated function forms, redundant loop constructs, and legacy aliases that permanently increase cognitive load.
 
 ### Rule
 
@@ -64,11 +55,9 @@ Examples of what to avoid:
 
 ---
 
-## 4. Readable, but Precise
+## 4. Readable, but precise
 
-The language should read naturally, but it should not attempt to imitate unrestricted English.
-
-Example:
+The language should read naturally without trying to imitate unrestricted English.
 
 ```eri
 let total be price * quantity;
@@ -86,13 +75,11 @@ The goal is immediate human comprehension while preserving deterministic grammar
 
 ---
 
-## 5. Safe and Predictable by Default
+## 5. Safe and predictable by default
 
 The language should avoid surprising implicit behavior.
 
-Implicit conversions should be limited to cases that are unquestionably safe and unsurprising.
-
-For example, the language should not silently choose whether:
+Implicit conversions should be limited to cases that are unquestionably safe and unsurprising. For example, Eristavi should not silently choose whether:
 
 ```eri
 "5" + 5
@@ -100,28 +87,22 @@ For example, the language should not silently choose whether:
 
 means numeric addition or text concatenation.
 
-Conversions should be explicit when meaning could be ambiguous.
-
 ### Rule
 
 > **If reasonable programmers could interpret an operation differently, require explicit intent.**
 
 ---
 
-## 6. Strong Types Without Excessive Ceremony
+## 6. Strong types without excessive ceremony
 
 The type system should provide strong static guarantees while allowing concise everyday code.
-
-Type inference should handle obvious cases:
 
 ```eri
 let age be 44;
 let name be "Revaz";
 ```
 
-Explicit types should remain available where contracts, public APIs, documentation, or safety benefit from them.
-
-The type system should help the programmer rather than dominate the source code.
+Explicit types remain available where contracts, public APIs, documentation, or safety benefit from them.
 
 ### Rule
 
@@ -129,26 +110,11 @@ The type system should help the programmer rather than dominate the source code.
 
 ---
 
-## 7. Rich Standard Library, Small Language
+## 7. Rich standard library, small language
 
-The standard library should provide a coherent and useful foundation so programmers do not need third-party dependencies for routine work.
+The standard library should provide a coherent foundation so routine work does not require unnecessary third-party dependencies.
 
-Likely standard-library domains include:
-
-- Text
-- Collections
-- Math
-- Time
-- Files
-- JSON
-- Networking
-- Processes
-- Concurrency
-- Randomness
-- Encoding
-- System interaction
-
-APIs should remain internally consistent.
+Likely domains include Text, Collections, Math, Time, Files, JSON, Networking, Processes, Concurrency, Randomness, Encoding, and System interaction.
 
 ### Rule
 
@@ -156,37 +122,31 @@ APIs should remain internally consistent.
 
 ---
 
-## 8. Automatic Memory Management
+## 8. Automatic memory management
 
 Ordinary programmers should not manually allocate and free general-purpose memory.
 
-The compiler should attempt to avoid heap allocation where possible through:
-
-- register allocation;
-- value optimization;
-- escape analysis;
-- stack allocation;
-- object elimination.
-
-Objects that genuinely require dynamic shared lifetime may use a managed heap.
+The compiler should avoid heap allocation where possible through register allocation, value optimization, escape analysis, stack allocation, object elimination, and related techniques. Values that genuinely require dynamic shared lifetime may use managed heap storage.
 
 ### Rule
 
-> **Programmers express object lifetime through program structure; the compiler/runtime handles memory lifetime.**
+> **Programmers express lifetime through program structure; the compiler/runtime handles memory lifetime.**
 
 ---
 
-## 9. Deterministic Resource Management
+## 9. Deterministic resource management
 
 Memory and external resources are different problems.
 
-Resources such as files, sockets, database connections, locks, OS handles, and GPU resources should support deterministic scoped cleanup.
+Files, sockets, database connections, locks, OS handles, transactions, and similar resources require predictable scoped cleanup.
 
-Conceptually:
+The locked Eristavi model uses `with`:
 
 ```eri
-using file be open("data.txt");
-let contents be file.read();
+with file be try files.open("data.txt") {
+    let contents be try file.readText();
+    print contents;
+}
 ```
 
 ### Rule
@@ -195,9 +155,9 @@ let contents be file.read();
 
 ---
 
-## 10. Explicit Low-Level Power
+## 10. Explicit low-level power
 
-The language should not prevent systems-level or performance-critical programming.
+Eristavi should not prevent systems-level or performance-critical programming.
 
 Low-level capabilities may eventually include raw memory, custom allocators, foreign-function interfaces, direct buffers, SIMD, platform APIs, and hardware-specific operations.
 
@@ -209,13 +169,9 @@ Code that bypasses normal guarantees must be explicitly marked.
 
 ---
 
-## 11. Universal, Machine-Neutral Intermediate Representation
+## 11. Universal, machine-neutral intermediate representation
 
 The compiler should have its own machine-independent intermediate representation.
-
-The IR is the architectural center of the compiler. Source-language semantics must not depend on x86, ARM, RISC-V, or any current CPU.
-
-Conceptually:
 
 ```text
 Source
@@ -224,10 +180,12 @@ Frontend
   ↓
 Typed representation
   ↓
-Universal IR
+Eristavi IR
   ↓
 Backends
 ```
+
+Source semantics must not depend on x86, ARM, RISC-V, WebAssembly, or any other target architecture.
 
 ### Rule
 
@@ -235,47 +193,35 @@ Backends
 
 ---
 
-## 12. Native and Portable Compilation
+## 12. Native and portable compilation
 
-The architecture should eventually support two complementary execution models.
-
-### Native
+Native compilation remains a core goal:
 
 ```text
 Source
   ↓
-Universal IR
+Eristavi IR
   ↓
 Target backend
   ↓
 Native machine code
 ```
 
-### Portable
+The compiler architecture may also support portable execution formats and non-native targets. The currently selected long-term target set is documented in `TARGETS.md` and includes native machine code, C, JavaScript, and WebAssembly.
 
-```text
-Source
-  ↓
-Universal IR
-  ↓
-Stable portable bytecode
-  ↓
-Runtime
-```
-
-The internal compiler IR and the public portable bytecode format should not be assumed to be the same representation.
+The internal Eristavi IR must not be treated as a permanently frozen public bytecode merely because portable execution may later be useful.
 
 ### Rule
 
-> **Portability must not require sacrificing the possibility of true native compilation.**
+> **Portability must not require sacrificing true native compilation.**
 
 ---
 
-## 13. CPU and Operating-System Independence
+## 13. CPU and operating-system independence
 
-Core language semantics should not change depending on operating system or processor architecture.
+Core language semantics should not change with the operating system or processor architecture.
 
-Platform-specific behavior should live behind target backends, runtime abstractions, platform libraries, or explicitly platform-specific APIs.
+Platform-specific behavior belongs behind target backends, runtime abstractions, platform libraries, or explicitly platform-specific APIs.
 
 ### Rule
 
@@ -283,13 +229,11 @@ Platform-specific behavior should live behind target backends, runtime abstracti
 
 ---
 
-## 14. Excellent Compiler Diagnostics
+## 14. Excellent compiler diagnostics
 
 Compiler errors are part of the language experience.
 
-Diagnostics should identify the actual problem, show the relevant source, explain why it is invalid, and suggest likely corrections when confidence is high.
-
-Example:
+Diagnostics should identify the actual problem, show relevant source, explain why it is invalid, and suggest likely corrections when confidence is high.
 
 ```text
 Unknown name "costumer".
@@ -306,11 +250,11 @@ Did you mean "customer"?
 
 ---
 
-## 15. Performance Transparency
+## 15. Performance transparency
 
 High-level syntax should not mean opaque performance.
 
-Tooling should eventually be able to explain decisions such as stack vs heap allocation, eliminated allocations, inlining, object escape, bounds-check removal, vectorization, generated target instructions, and memory pressure.
+Tooling should eventually be able to explain stack versus heap allocation, eliminated allocations, inlining, escape behavior, bounds-check removal, vectorization, generated target instructions, and memory pressure.
 
 Conceptually:
 
@@ -325,20 +269,18 @@ erist explain optimize app.eri
 
 ---
 
-## 16. Avoid Historical Baggage
+## 16. Avoid historical baggage
 
 Eristavi starts without legacy constraints. That opportunity should be protected.
 
-Do not copy a feature merely because another language has it.
-
-Every feature should answer:
+Do not copy a feature merely because another language has it. Every feature should answer:
 
 1. What problem does it solve?
 2. Is that problem common enough for the language itself?
 3. Can the standard library solve it instead?
 4. Does an existing construct already solve it?
-5. Does it introduce another way to do something already supported?
-6. Will programmers still understand this decision ten years later?
+5. Does it create another way to do something already supported?
+6. Will the decision still make sense ten years later?
 
 ### Rule
 
@@ -346,13 +288,13 @@ Every feature should answer:
 
 ---
 
-## 17. Deliberate Evolution
+## 17. Deliberate evolution
 
-The project should follow this order:
+The project follows this order:
 
 > **Philosophy → Semantics → Architecture → Implementation**
 
-Syntax should not be finalized before semantics are understood. Implementation convenience should not define language semantics accidentally. Optimizations should preserve semantics rather than reshape them.
+Syntax should not be finalized before semantics are understood. Implementation convenience must not define language semantics accidentally. Optimizations preserve semantics rather than reshape them.
 
 ### Rule
 
@@ -360,9 +302,9 @@ Syntax should not be finalized before semantics are understood. Implementation c
 
 ---
 
-# Decision Test
+# Decision test
 
-Before accepting a new language, compiler, runtime, or library feature, evaluate it against these questions.
+Before accepting a new language, compiler, runtime, or library feature, evaluate it against the following questions.
 
 ## Necessity
 
@@ -378,7 +320,7 @@ Before accepting a new language, compiler, runtime, or library feature, evaluate
 
 ## Readability
 
-- Is its meaning obvious when encountered for the first time?
+- Is its meaning obvious on first encounter?
 - Is the syntax concise?
 - Is it unambiguous?
 
@@ -391,7 +333,7 @@ Before accepting a new language, compiler, runtime, or library feature, evaluate
 ## Portability
 
 - Does the feature depend on one CPU or OS?
-- Can it be represented cleanly in the universal IR?
+- Can it be represented cleanly in the Eristavi IR?
 - Can future backends implement it without changing source semantics?
 
 ## Performance
@@ -400,18 +342,18 @@ Before accepting a new language, compiler, runtime, or library feature, evaluate
 - Does it force unnecessary runtime cost?
 - Can the programmer inspect relevant performance decisions?
 
-## Long-Term Cost
+## Long-term cost
 
-- Will this feature make future evolution harder?
+- Will the feature make future evolution harder?
 - Does it create syntax or semantics we may regret supporting permanently?
 - Does it make the language easier to learn, or merely more familiar?
 
 ---
 
-# Governing Principle
+# Governing principle
 
 When in doubt, prefer the design that keeps the programmer's mental model smaller while preserving capability.
 
 > **Small language. Rich libraries. Powerful compiler. Predictable runtime. Universal architecture.**
 
-This document is the project's design constitution and should be used as the baseline for future Eristavi decisions.
+This document is the project's design constitution and should remain the baseline for future Eristavi decisions.
