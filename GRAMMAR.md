@@ -247,16 +247,24 @@ arguments          := expression { "," expression }
 
 ## 10. User-defined types
 
-A working example has used:
+Field immutability is now locked to use the same `fixed` modifier as bindings:
 
 ```eri
-type Task {
-    title Text;
-    done Bool;
+type User {
+    fixed id Int;
+    name Text;
 }
 ```
 
-This syntax is **provisional** until value/reference semantics and field mutability rules are finalized.
+A field without `fixed` is mutable. A `fixed` field is initialized once and cannot be reassigned afterward.
+
+The field declaration shape is therefore:
+
+```text
+field-declaration := [ "fixed" ] identifier type-name ";"
+```
+
+The broader type declaration syntax remains provisional until value/reference semantics and initialization rules are finalized.
 
 ## 11. Output
 
