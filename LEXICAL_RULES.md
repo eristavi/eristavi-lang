@@ -405,3 +405,138 @@ A future language version may only reserve a new word through an explicit langua
 ### Governing rule
 
 > Reserve only vocabulary that already has defined grammatical meaning. Do not consume future words speculatively.
+
+## 4. Text literals and escape sequences — locked
+
+A pre-0.1 `Text` literal uses double quotes.
+
+```eri
+let name be "Anna";
+let city be "Paphos";
+let greeting be "Hello 👋";
+```
+
+Eristavi source is UTF-8, so Unicode characters may normally be written directly in source.
+
+### One ordinary string delimiter
+
+Only double quotes delimit ordinary pre-0.1 `Text` literals:
+
+```eri
+"Hello"
+```
+
+Single-quoted literals are not part of pre-0.1. Eristavi does not define a separate `Char` literal syntax at this stage.
+
+### Escape sequences
+
+Pre-0.1 supports exactly these simple escape sequences inside `Text` literals:
+
+```text
+\"     double quote
+\\     backslash
+\n     newline
+\r     carriage return
+\t     horizontal tab
+\0     NUL character
+```
+
+Examples:
+
+```eri
+let quote be "She said \"Hello\".";
+let path be "C:\\Users\\Revaz";
+let message be "First line\nSecond line";
+```
+
+An unknown escape is a lexical error. For example:
+
+```text
+"\q"
+```
+
+is invalid rather than silently becoming `q` or preserving the backslash.
+
+### Unicode scalar escape
+
+A Unicode scalar value may be written with the single escape form:
+
+```text
+\u{HEX}
+```
+
+Examples:
+
+```eri
+let euro be "\u{20AC}";
+let smile be "\u{1F600}";
+```
+
+Hexadecimal digits inside the braces are case-insensitive. The value must denote a valid Unicode scalar value.
+
+The lexer must reject:
+
+- values greater than `U+10FFFF`;
+- surrogate code points `U+D800` through `U+DFFF`;
+- an empty `\u{}` escape;
+- non-hexadecimal characters inside the escape.
+
+Eristavi does not define separate fixed-width forms such as `\uFFFF` or `\U0001F600` in pre-0.1.
+
+### No byte escape syntax
+
+Pre-0.1 does not define byte-oriented escapes such as:
+
+```text
+\x41
+```
+
+`Text` represents Unicode text, not arbitrary bytes. Byte-oriented literals belong to a future byte/buffer abstraction if one is needed.
+
+### Physical newlines are not allowed inside ordinary literals
+
+An ordinary `Text` literal cannot cross a physical source line.
+
+This is invalid:
+
+```text
+"Hello
+world"
+```
+
+A newline character is written explicitly:
+
+```eri
+let message be "Hello\nworld";
+```
+
+An unterminated `Text` literal is a lexical error and should report the location of the opening quote.
+
+### No interpolation in pre-0.1
+
+Pre-0.1 does not define built-in string interpolation forms such as:
+
+```text
+"Hello ${name}"
+$"Hello {name}"
+```
+
+Programs may combine text through ordinary expressions and future formatting-library APIs.
+
+Interpolation may be designed later if real Eristavi programs demonstrate a need for dedicated syntax.
+
+### No raw or multiline string form yet
+
+Pre-0.1 does not define triple-quoted strings, raw strings, heredocs, or another second string-literal family.
+
+This keeps the initial lexer small and leaves room to design a single coherent raw/multiline facility later if required by real use cases such as SQL, HTML, JSON, regular expressions, or embedded source text.
+
+### Unicode preservation
+
+After escape decoding, the resulting `Text` value preserves its Unicode content. String literals are not silently NFC-normalized or otherwise canonically normalized.
+
+This intentionally differs from identifier comparison, where NFC normalization is part of identifier identity.
+
+### Governing rule
+
+> Pre-0.1 `Text` literals are double-quoted UTF-8 text with a small explicit escape set and `\u{...}` scalar escapes. Unknown escapes, physical newlines, invalid Unicode scalars, and unterminated literals are lexical errors; interpolation, raw strings, multiline strings, and byte escapes are postponed.
