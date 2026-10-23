@@ -2,7 +2,7 @@
 
 > **Status: Consolidated draft for pre-0.1**
 >
-> This file records the current surface grammar after the pre-0.1 specification audit. Productions marked by already-locked language decisions are authoritative for pre-0.1. Expression precedence, assignment placement, condition typing, function completion, the entry-module model, and standard textual output are now locked; only a small number of parser/semantic details remain before parser freeze.
+> This file records the current surface grammar after the pre-0.1 specification audit. Productions marked by already-locked language decisions are authoritative for pre-0.1. Expression precedence, assignment placement, condition typing, function completion, the entry-module model, standard textual output, and deep `fixed` eligibility are now locked; only a small number of parser/semantic details remain before parser freeze.
 
 ## Goals
 
@@ -89,7 +89,9 @@ variable-declaration :=
     "let" [ "fixed" ] identifier [ type-expression ] "be" value-expression ";"
 ```
 
-A `fixed` binding whose inferred or explicit type is `identity ...` is invalid in pre-0.1.
+When `fixed` is present, semantic analysis requires the inferred or explicit static type to be **deep-fixable**. A type is not deep-fixable if `identity` occurs at any reachable stored type position, directly or transitively. This includes optional or collection positions that may contain identity values.
+
+The parser introduces no extra syntax for this rule; it is a type-checker constraint defined in `FIXED_IMMUTABILITY.md`.
 
 ## 4. Literals
 
@@ -457,6 +459,10 @@ type-declaration :=
 field-declaration :=
     [ "fixed" ] identifier type-expression ";"
 ```
+
+When a field declaration uses `fixed`, its declared type must be deep-fixable under the same transitive rule as a `fixed` binding. A `fixed identity T` field and a `fixed` field whose nested value structure contains identity are compile-time errors.
+
+This is a semantic restriction on the existing field grammar; it adds no new syntax. See `FIXED_IMMUTABILITY.md`.
 
 Type blocks end with `}`, not `};`.
 
@@ -867,6 +873,6 @@ The remaining grammar-level work is intentionally narrow:
 - settle any parser factoring required for `else error` without changing its surface syntax;
 - finalize any primary-expression factoring needed by the implementation without changing the locked surface syntax.
 
-Lexical rules, symbolic vocabulary, expression precedence, associativity, assignment placement, Bool-only condition typing, function result/completion semantics, the entry-module/top-level execution model, and standard textual output classification are now locked.
+Lexical rules, symbolic vocabulary, expression precedence, associativity, assignment placement, Bool-only condition typing, function result/completion semantics, the entry-module/top-level execution model, standard textual output classification, and transitive deep-`fixed` eligibility are now locked.
 
 These remaining items are parser/specification details, not reasons to reopen already-locked language semantics.
