@@ -2,7 +2,7 @@
 
 > **Initial audit date: 2026-10-23**
 >
-> **Status: Original frontend P0 decisions resolved; semantic freeze edge cases remain**
+> **Status: Semantic freeze candidates resolved; final cross-document verification in progress**
 
 This document records the consolidation audit performed before implementation of the Eristavi compiler frontend and tracks the resolution of the freeze items identified by that audit.
 
@@ -40,6 +40,7 @@ Dedicated specifications added or finalized during follow-up resolution include:
 - `VALUE_EQUALITY.md`
 - `COLLECTIONS.md`
 - `INTEGER_REMAINDER.md`
+- `RESOURCE_CLEANUP.md`
 
 ## 2. Documentation drift corrected by the audit
 
@@ -116,13 +117,13 @@ The selected target direction is:
 
 Rust, Go, and PHP are not planned targets.
 
-## 3. Frontend P0 resolution status
+## 3. Resolved pre-0.1 freeze decisions
 
-Every P0 item identified by the initial audit has now received an explicit pre-0.1 decision.
+Every frontend P0 item and every semantic edge case required for the initial pre-0.1 implementation now has an explicit decision.
 
 ### Lexical rules — resolved
 
-`LEXICAL_RULES.md` now defines comments, Unicode identifiers, the exact 28-keyword set, text escapes, integer and floating-point literal forms, and source whitespace behavior.
+`LEXICAL_RULES.md` defines comments, Unicode identifiers, the exact 28-keyword set, text escapes, integer and floating-point literal forms, and source whitespace behavior.
 
 ### Expression precedence and associativity — resolved
 
@@ -158,31 +159,29 @@ Pre-0.1 defines no built-in `print`, `echo`, `say`, or `out` alias.
 
 ### Float semantics — resolved
 
-`FLOAT.md` now defines `Float` as deterministic IEEE 754 binary64, including rounding, special values, signed zero, gradual underflow, and cross-target behavior. There is no implicit `Int`/`Float` conversion in either direction.
+`FLOAT.md` defines `Float` as deterministic IEEE 754 binary64, including rounding, special values, signed zero, gradual underflow, and cross-target behavior. There is no implicit `Int`/`Float` conversion in either direction.
 
 ### Deep `fixed` with contained identity — resolved
 
-`FIXED_IMMUTABILITY.md` now defines a transitive deep-fixable rule.
+`FIXED_IMMUTABILITY.md` defines a transitive deep-fixable rule.
 
 A `fixed` binding or `fixed` field is valid only when its static type contains no `identity` at any reachable stored type position. The rule is recursive through nested ordinary values and applies through optional and collection positions.
 
 Eristavi rejects the combination rather than weakening `fixed` into shallow handle immutability, implicitly freezing other aliases, or silently snapshotting identity state.
 
-Deep-fixable is a compiler property rather than new source syntax.
-
 ### Ordinary value equality — resolved
 
-`VALUE_EQUALITY.md` now defines ordinary user-defined value equality as structural, recursive, type-preserving, and compositional.
+`VALUE_EQUALITY.md` defines ordinary user-defined value equality as structural, recursive, type-preserving, and compositional.
 
 Two ordinary values of the same compatible static type compare equal when every corresponding stored component compares equal under that component type's own equality semantics.
 
 This preserves existing component rules rather than replacing them: `identity T` fields compare by logical identity, `Float` retains IEEE behavior including NaN, `maybe T` composes contained equality, and ordered collections compare by length and corresponding elements when their element type is equality-comparable.
 
-Equality availability is derived statically from the complete value structure. Pre-0.1 introduces no equality-overloading syntax, `Equatable` protocol, or implicit cross-type coercion.
+Pre-0.1 introduces no equality-overloading syntax, `Equatable` protocol, or implicit cross-type coercion.
 
 ### Collections — resolved
 
-`COLLECTIONS.md` now defines the first concrete pre-0.1 collection family as `List`.
+`COLLECTIONS.md` defines the first concrete pre-0.1 collection family as `List`.
 
 A List is ordered, growable, homogeneous in its statically inferred element relationship, and an ordinary value by default. List literals use `[...]`; indexing is zero-based and requires `Int`; bounds are checked; `.count` is the single element-count property; `.add(value)` is the canonical append operation; and mutable Lists support indexed assignment.
 
@@ -192,35 +191,47 @@ List assignment and parameter passing preserve ordinary value semantics. `fixed`
 
 Pre-0.1 does not expose user-written `List<Text>` generic syntax. `List` is a predeclared type-family name rather than a keyword, while the element relation remains compiler-inferred.
 
-Advanced collection families, slicing, negative indexing, maps, sets, and similar facilities remain postponed until real programs justify them.
-
 ### Integer remainder and Float `%` — resolved
 
-`INTEGER_REMAINDER.md` now defines `%` as an `Int`-only operator in pre-0.1.
+`INTEGER_REMAINDER.md` defines `%` as an `Int`-only operator in pre-0.1.
 
 Signed integer division truncates toward zero, and `%` computes the corresponding signed remainder. A nonzero remainder follows the sign of the dividend. Division or remainder by zero is an integer arithmetic fault, and the signed-minimum / `-1` exceptional pair is treated as overflow rather than inheriting target-specific behavior.
 
 `Float` does not support `%`. Floating-point remainder/modulo, if real programs require it later, belongs to explicitly named numeric library operations with separately defined contracts.
 
-This keeps `%` to one precise source-language meaning rather than conflating several reasonable floating-point remainder/modulo definitions.
+### Resource cleanup and dual failure — resolved
 
-## 4. Semantic edge cases still to resolve before full pre-0.1 freeze
+`RESOURCE_CLEANUP.md` defines deterministic cleanup-failure composition without adding new surface syntax.
+
+A cleanup failure prevents an otherwise successful fallthrough or return and becomes the primary checked failure when no failure is already active.
+
+If the body is already propagating a checked failure, that original failure remains primary. Cleanup failures are preserved as secondary cleanup failure context rather than replacing or silently discarding the original cause.
+
+Nested resources clean up in reverse order. If no failure was active, the first cleanup failure encountered becomes primary and later cleanup failures become secondary context. If a body failure was already active, all cleanup failures are secondary to that body failure.
+
+Resource cleanup failure sets are statically known and participate in ordinary checked-failure analysis. Secondary context is runtime/compiler failure metadata rather than a new source-level union, wrapper error, keyword, or exception hierarchy.
+
+## 4. Deliberately postponed — not pre-0.1 blockers
+
+The following areas are intentionally outside the pre-0.1 semantic freeze. Their absence is a design decision, not an unresolved contradiction.
 
 ### Identity-to-value snapshot
 
-No explicit operation for extracting an independent ordinary `T` snapshot from `identity T` is currently defined. It should be added only if real use cases require it.
+Pre-0.1 defines no operation for extracting an independent ordinary `T` snapshot from `identity T`.
 
-### Resource cleanup dual failure
+This capability should be added only if real programs demonstrate a need and its copying/snapshot semantics can be named clearly.
 
-If a checked failure is already propagating and deterministic resource cleanup itself fails, composition/reporting remains unresolved. No recoverable cleanup failure may be silently discarded.
+### Advanced resource transfer and borrowing
 
-### Advanced resource transfer
+Pre-0.1 keeps the existing scoped single-owner `with` model.
 
-Ownership transfer or borrowing beyond the basic `with` scope remains deliberately postponed unless real programs require it.
+It does not add ownership transfer, general borrowing, lifetime annotations, manual release, or move syntax. Those features remain postponed until concrete use cases justify the additional vocabulary and complexity.
 
-### Third-party package roots
+### Third-party package roots and package management
 
-Module semantics are locked, but third-party package naming and dependency resolution are not yet defined.
+Project-local source-root modules and the reserved `std` root are sufficient for pre-0.1.
+
+Third-party package root naming, dependency resolution, versioning, registry behavior, lockfiles, and related package-manager policy are postponed beyond the initial compiler.
 
 ## 5. Architectural decisions that do not block the frontend
 
@@ -246,12 +257,14 @@ There is still no reason to pull the following into pre-0.1 implementation work:
 - macros;
 - advanced garbage collection;
 - package registry infrastructure;
+- identity snapshots;
+- advanced resource transfer/borrowing;
 - multiple native CPU backends;
 - self-hosting.
 
 ## 7. Current audit conclusion
 
-The original frontend P0 questions and the major semantic edge cases around deep immutability, ordinary value equality, collections, and numeric remainder are now resolved. The language has explicit rules for:
+All semantic decisions identified as necessary for the pre-0.1 frontend are now resolved. The language has explicit rules for:
 
 - lexical structure;
 - symbolic vocabulary;
@@ -265,14 +278,10 @@ The original frontend P0 questions and the major semantic edge cases around deep
 - transitive deep `fixed` eligibility;
 - structural ordinary value equality;
 - ordered growable `List` collections with inferred element relationships and checked zero-based indexing;
-- truncation-toward-zero signed `Int` division and `Int`-only `%` remainder.
+- truncation-toward-zero signed `Int` division and `Int`-only `%` remainder;
+- deterministic resource cleanup and dual checked-failure composition.
 
-The next recommended semantic sequence is:
-
-1. review identity snapshot only if a real use case requires it;
-2. review the remaining resource/package edge cases that actually block pre-0.1;
-3. perform a final cross-document frontend freeze audit;
-4. begin lexer/parser/type-checker implementation from the locked subset.
+The only remaining step before declaring the pre-0.1 semantic/frontend specification frozen is a final cross-document consistency verification. After that verification, implementation should begin rather than expanding the language surface.
 
 The audit continues to support the governing design order:
 
