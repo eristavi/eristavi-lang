@@ -2,14 +2,6 @@ import compiler.source;
 import compiler.token;
 import compiler.diagnostic;
 
-function failLex(message Text, line Int, column Int) fails diagnostic.LexError {
-    fail diagnostic.LexError {
-        message = message;
-        line = line;
-        column = column;
-    };
-}
-
 function isNonAsciiScalar(scalar Text) returns Bool {
     return scalar.bytes.count > 1;
 }
@@ -54,7 +46,11 @@ public function lex(input Text) fails diagnostic.LexError {
             column = column + 2;
             while depth > 0 {
                 if i >= count {
-                    try failLex("unterminated block comment", startLine, startColumn);
+                    fail diagnostic.LexError {
+                        message = "unterminated block comment";
+                        line = startLine;
+                        column = startColumn;
+                    };
                 }
                 let current be source.scalarAt(input, i);
                 let next be source.scalarAt(input, i + 1);
@@ -101,12 +97,20 @@ public function lex(input Text) fails diagnostic.LexError {
                     closed = true;
                 }
                 if not closed and (current == "\n" or current == "\r") {
-                    try failLex("Text literals may not contain a raw newline", startLine, startColumn);
+                    fail diagnostic.LexError {
+                        message = "Text literals may not contain a raw newline";
+                        line = startLine;
+                        column = startColumn;
+                    };
                 }
                 if not closed and current == "\\" {
                     let next be source.scalarAt(input, i + 1);
                     if next == "\0" {
-                        try failLex("unterminated Text escape", startLine, startColumn);
+                        fail diagnostic.LexError {
+                            message = "unterminated Text escape";
+                            line = startLine;
+                            column = startColumn;
+                        };
                     }
                     lexeme = lexeme + current + next;
                     let escapeKnown be false;
@@ -117,7 +121,11 @@ public function lex(input Text) fails diagnostic.LexError {
                     if next == "\"" { value = value + "\""; escapeKnown = true; }
                     if next == "\\" { value = value + "\\"; escapeKnown = true; }
                     if not escapeKnown {
-                        try failLex("Stage-1 lexer does not yet decode this Text escape", line, column);
+                        fail diagnostic.LexError {
+                            message = "Stage-1 lexer does not yet decode this Text escape";
+                            line = line;
+                            column = column;
+                        };
                     }
                     i = i + 2;
                     column = column + 2;
@@ -130,7 +138,11 @@ public function lex(input Text) fails diagnostic.LexError {
                 }
             }
             if not closed {
-                try failLex("unterminated Text literal", startLine, startColumn);
+                fail diagnostic.LexError {
+                    message = "unterminated Text literal";
+                    line = startLine;
+                    column = startColumn;
+                };
             }
             tokens.add(token.make(token.text(), lexeme, value, startLine, startColumn));
             handled = true;
@@ -149,7 +161,11 @@ public function lex(input Text) fails diagnostic.LexError {
                 i = i + 2;
                 column = column + 2;
                 if source.scalarAt(input, i) != "0" and source.scalarAt(input, i) != "1" {
-                    try failLex("binary literal requires digits", startLine, startColumn);
+                    fail diagnostic.LexError {
+                        message = "binary literal requires digits";
+                        line = startLine;
+                        column = startColumn;
+                    };
                 }
                 while source.scalarAt(input, i) == "0" or source.scalarAt(input, i) == "1" or source.scalarAt(input, i) == "_" {
                     lexeme = lexeme + source.scalarAt(input, i);
@@ -163,7 +179,11 @@ public function lex(input Text) fails diagnostic.LexError {
                 i = i + 2;
                 column = column + 2;
                 if not source.isAsciiHexDigit(source.scalarAt(input, i)) {
-                    try failLex("hexadecimal literal requires digits", startLine, startColumn);
+                    fail diagnostic.LexError {
+                        message = "hexadecimal literal requires digits";
+                        line = startLine;
+                        column = startColumn;
+                    };
                 }
                 while source.isAsciiHexDigit(source.scalarAt(input, i)) or source.scalarAt(input, i) == "_" {
                     lexeme = lexeme + source.scalarAt(input, i);
@@ -200,7 +220,11 @@ public function lex(input Text) fails diagnostic.LexError {
                         column = column + 1;
                     }
                     if not source.isAsciiDigit(source.scalarAt(input, i)) {
-                        try failLex("Float exponent requires decimal digits", line, column);
+                        fail diagnostic.LexError {
+                            message = "Float exponent requires decimal digits";
+                            line = line;
+                            column = column;
+                        };
                     }
                     while source.isAsciiDigit(source.scalarAt(input, i)) or source.scalarAt(input, i) == "_" {
                         lexeme = lexeme + source.scalarAt(input, i);
@@ -227,7 +251,11 @@ public function lex(input Text) fails diagnostic.LexError {
         }
 
         if not handled and isNonAsciiScalar(ch) {
-            try failLex("Stage-1 self-host lexer requires the frozen Unicode identifier service for non-ASCII source", line, column);
+            fail diagnostic.LexError {
+                message = "Stage-1 self-host lexer requires the frozen Unicode identifier service for non-ASCII source";
+                line = line;
+                column = column;
+            };
         }
 
         if not handled {
@@ -260,7 +288,11 @@ public function lex(input Text) fails diagnostic.LexError {
             if kind == -1 and ch == "<" { kind = token.less(); }
             if kind == -1 and ch == ">" { kind = token.greater(); }
             if kind == -1 {
-                try failLex("unexpected source character", line, column);
+                fail diagnostic.LexError {
+                    message = "unexpected source character";
+                    line = line;
+                    column = column;
+                };
             }
 
             let spelling be ch;
