@@ -8,13 +8,33 @@ from .parser import Parser
 from .semantic import Analyzer
 from .runtime import Interpreter
 from .project import compile_entry
-from .ir import ProjectLowerer
+from .ir import Lowerer, IRProgram
 from .c_backend import CBackend
 
 def analyze_frontend(source:str):
     program=Parser(Lexer(source).lex()).parse(); analyzer=Analyzer(); analyzer.analyze(program); return program,analyzer
 
 def compile_frontend(source:str): return analyze_frontend(source)[0]
+
+def lower_project(entry_module):
+    order=[]; seen=set()
+    def visit(mod):
+        key=mod.module_id or str(mod.file_path)
+        if key in seen: return
+        seen.add(key)
+        for child in mod.imports.values(): visit(child)
+        order.append(mod)
+    visit(entry_module)
+    structs=[]; functions=[]; entry=[]
+    for mod in order:
+        # Keep the selected entry module unqualified so predeclared names such as
+        # output remain ordinary builtins. Imported module declarations are
+        # canonicalized to their module IDs to avoid cross-module collisions.
+        module_id='' if mod is entry_module else mod.module_id
+        part=Lowerer(mod.analyzer,module_id).lower(mod.program,mod is entry_module)
+        structs.extend(part.structs); functions.extend(part.functions)
+        if mod is entry_module: entry.extend(part.entry)
+    return IRProgram(structs,functions,entry)
 
 def run_file(path:Path,source_root:Path|None=None)->int:
     try:
@@ -29,13 +49,13 @@ def check_file(path:Path,source_root:Path|None=None)->int:
 
 def build_c_file(path:Path,output:Path,source_root:Path|None=None)->int:
     try:
-        mod=compile_entry(path,source_root); ir=ProjectLowerer(mod).lower(); output.write_text(CBackend().emit(ir),encoding='utf-8'); return 0
+        mod=compile_entry(path,source_root); ir=lower_project(mod); output.write_text(CBackend().emit(ir),encoding='utf-8'); return 0
     except (EristaviError,OSError,ValueError) as e:
         print(e.format() if isinstance(e,EristaviError) else f'error: {e}',file=sys.stderr); return 1
 
 def build_native(path:Path,output:Path,source_root:Path|None=None,cc:str='cc')->int:
     try:
-        mod=compile_entry(path,source_root); ir=ProjectLowerer(mod).lower(); c=CBackend().emit(ir)
+        mod=compile_entry(path,source_root); ir=lower_project(mod); c=CBackend().emit(ir)
         with tempfile.TemporaryDirectory() as td:
             cp=Path(td)/'program.c'; cp.write_text(c,encoding='utf-8')
             proc=subprocess.run([cc,'-std=c11',str(cp),'-lm','-o',str(output)],capture_output=True,text=True)
