@@ -78,7 +78,7 @@ class SelfHostedSemanticTests(unittest.TestCase):
                     expected=case['diagnostic']
                     match=re.search(r'^(.*):(\d+):(\d+): (\w+) error(?: \[(\w+)\])?: (.+)',result.stderr)
                     self.assertIsNotNone(match,result.stderr)
-                    self.assertEqual(Path(match[1]).relative_to(root),Path(expected['path']))
+                    self.assertEqual(Path(match[1]).resolve().relative_to(root.resolve()),Path(expected['path']))
                     self.assertEqual((int(match[2]),int(match[3]),match[4]),(expected['line'],expected['column'],expected['phase']))
                     self.assertEqual(match[5],expected.get('category'))
                     self.assertTrue(match[6].strip())
