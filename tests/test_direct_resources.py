@@ -42,7 +42,8 @@ class DirectResourceTests(unittest.TestCase):
                 'import std.files; '
                 'function read(path Text) returns Text fails files.FileError { '
                 'with file be try files.open(path) { return try file.readText(); } } '
-                f'let text be read("{path}") else error {{ output(error.message); return; }}; output(text);'
+                'function show(path Text) { let text be read(path) else error { output(error.message); return; }; output(text); } '
+                f'show("{path}");'
             )
         p, _ = self.compile_run(source, {"data.txt": "hello"})
         self.assertEqual(p.returncode, 0, p.stderr)
@@ -55,7 +56,8 @@ class DirectResourceTests(unittest.TestCase):
                 'import std.files; '
                 'function work(path Text) returns Text fails files.FileError { '
                 'with file be try files.open(path) { try file.writeText("A\\0B"); return try file.readText(); } } '
-                f'let text be work("{path}") else error {{ output(error.message); return; }}; output(text);'
+                'function show(path Text) { let text be work(path) else error { output(error.message); return; }; output(text); } '
+                f'show("{path}");'
             )
         p, files = self.compile_run(source, {"data.txt": "old"})
         self.assertEqual(p.returncode, 0, p.stderr)
@@ -148,7 +150,8 @@ class DirectResourceTests(unittest.TestCase):
                 'function readBoth(a Text,b Text) returns Text fails files.FileError { '
                 'with first be try files.open(a) { with second be try files.open(b) { '
                 'return try first.readText() + try second.readText(); } } } '
-                f'let text be readBoth("{a}","{b}") else error {{ output(error.message); return; }}; output(text);'
+                'function show(a Text,b Text) { let text be readBoth(a,b) else error { output(error.message); return; }; output(text); } '
+                f'show("{a}","{b}");'
             )
         p, _ = self.compile_run(source, {"a.txt": "A", "b.txt": "B"})
         self.assertEqual(p.returncode, 0, p.stderr)
