@@ -11,8 +11,8 @@ class BackendGenericTests(unittest.TestCase):
             self.assertEqual(build_native(src,exe,root),0)
             return subprocess.run([str(exe)],capture_output=True,text=True)
 
-    def test_native_identity_specializes_for_multiple_types(self):
-        p=self.compile_run('function identity(value) { return value; } output(identity(42)); output(identity("hello"));')
+    def test_native_preserve_specializes_for_multiple_types(self):
+        p=self.compile_run('function preserve(value) { return value; } output(preserve(42)); output(preserve("hello"));')
         self.assertEqual(p.returncode,0); self.assertEqual(p.stdout,'42\nhello\n')
 
     def test_native_choose_infers_same_type_relationship(self):
