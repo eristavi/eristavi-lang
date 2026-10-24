@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from .diagnostics import SemanticError
 from .semantic import Analyzer as BaseAnalyzer, STD_FILE_ERROR
-from .syntax import CallExpr, IndexExpr, MemberExpr, NameExpr
+from .syntax import CallExpr, ForStmt, IndexExpr, MemberExpr, NameExpr
 from .typesys import (
     BOOL,
     INT,
@@ -21,6 +21,15 @@ from .typesys import (
 
 class Analyzer(BaseAnalyzer):
     """Frontend extensions for pinned Unicode/Text and small stdlib additions."""
+
+    def _statement(self, stmt):
+        if isinstance(stmt, ForStmt):
+            raw_iterable = self._expr(stmt.iterable, True, False)
+            iterable = resolve(raw_iterable)
+            if isinstance(iterable, TypeVar):
+                element = TypeVar("element")
+                unify(raw_iterable, ListType(element))
+        return super()._statement(stmt)
 
     def _member(self, expr, allow_checked):
         bt = resolve(self._expr(expr.base, True, allow_checked))
@@ -101,9 +110,9 @@ class Analyzer(BaseAnalyzer):
                 return INT if bt.kind == "bytes" else TEXT
 
             # Reading through a generic indexed expression already shapes an
-            # unresolved parameter as List<T>.  Indexed assignment must impose
+            # unresolved parameter as List<T>. Indexed assignment must impose
             # the same relationship so generic functions can express ordinary
-            # List mutation without explicit generic syntax.  The List is still
+            # List mutation without explicit generic syntax. The List is still
             # passed by value; this only completes the inference relationship.
             if isinstance(bt, TypeVar):
                 element = TypeVar("element")
