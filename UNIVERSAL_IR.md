@@ -1,6 +1,6 @@
 # Eristavi Universal IR
 
-> **Status: broad executable lower IR with verification, optimization, CFG analysis and multiple consumers**
+> **Status: broad executable lower IR with verification, optimization, CFG analysis, initial x86 physical allocation and multiple consumers**
 
 Eristavi has two intentionally distinct compiler IR levels:
 
@@ -37,7 +37,7 @@ Bootstrap optimization currently performs:
 
 ## CFG and allocation analyses
 
-The analysis layer now provides:
+The analysis layer provides:
 
 - block live-in/live-out sets;
 - instruction-level liveness;
@@ -48,7 +48,9 @@ The analysis layer now provides:
 
 The x86-64 collector consumes safe-point liveness to root only heap temporaries that must survive collection and uses interference coloring to reuse non-overlapping scalar spill slots. Heap spill slots that participate in root metadata stay pinned and unique.
 
-A mature physical-register allocator is not implemented yet.
+The x86-64 backend now also consumes these analyses through an initial conservative physical-register allocator. Eligible short-lived Int/Bool and Float values can remain register-resident in lowering regions explicitly known to be call-free. Higher-level lowering instructions are treated as clobber regions: their operands and values that must survive them remain stack-backed, because helper calls may occur before all operands are consumed.
+
+This is intentionally not yet a mature whole-function allocator. Explicit per-lowering machine use/clobber contracts, broader register pools, move/coalescing improvements and dead spill-slot/frame compaction remain open.
 
 ## Checked failures
 
@@ -62,7 +64,7 @@ Checked failures remain explicit state/CFG operations (`set_error`, `error_pendi
 
 Universal IR exposes heap-backed semantic type information while direct runtimes choose target-specific collection machinery.
 
-The x86-64 runtime now has liveness-aware compiler roots plus static descriptors for Text leaves, nominal fields, Lists, maybe/identity wrappers and file resources. Dynamic checked-error state retains a conservative exact-pointer fallback. ARM64 automatic reclamation remains a backend parity gap.
+The x86-64 runtime has liveness-aware compiler roots plus static descriptors for Text leaves, nominal fields, Lists, maybe/identity wrappers and file resources. Dynamic checked-error state retains a conservative exact-pointer fallback. ARM64 automatic reclamation remains a backend parity gap.
 
 ## Module objects
 
@@ -71,10 +73,10 @@ Versioned `.eri-object.json` artifacts serialize verified/optimized Universal-IR
 ## Current consumers
 
 ### x86-64 Linux
-Broad direct consumer with functions, Float/Text/Text views, aggregates, Lists, maybe, identity, checked errors, resources, module objects and GC.
+Broad direct consumer with functions, Float/Text/Text views, aggregates, Lists, maybe, identity, checked errors, resources, module objects, GC and an initial verified scalar physical-register allocation path.
 
 ### ARM64 Linux
-Consumes the same IR and is now native-tested for Text, aggregates, maybe/identity, checked failures and file resources in addition to scalar/functions. Automatic reclamation and explicit Text-view runtime parity remain incomplete.
+Consumes the same IR and is native-tested for Text, aggregates, maybe/identity, checked failures and file resources in addition to scalar/functions. Automatic reclamation and explicit Text-view runtime parity remain incomplete.
 
 ### JavaScript
 The ES2020 consumer supports functions/control/scalars plus nominal values, Lists, maybe, identity, deep cloning and structural equality. Int remains checked `BigInt`.
@@ -86,7 +88,7 @@ The WAT consumer supports scalar/function/control operations plus Text through a
 
 The main work is maturation rather than semantic invention:
 
-1. physical register allocation and broader optimization;
+1. register-allocation maturation and broader optimization;
 2. ARM64 GC/Text-view parity;
 3. broader JavaScript/WebAssembly failures/resources/Text views;
 4. compact production artifact/linker metadata;
