@@ -24,7 +24,7 @@ class InterfaceTests(unittest.TestCase):
             "models/user.eri": (
                 "public type User { fixed id Int; name Text; } "
                 "function secret() returns Int { return 7; } "
-                "public function identity(value) { return value; }"
+                "public function preserve(value) { return value; }"
             )
         })
         try:
@@ -35,7 +35,7 @@ class InterfaceTests(unittest.TestCase):
             self.assertEqual(mod.interface.schema, INTERFACE_SCHEMA)
             self.assertEqual(mod.interface.version, INTERFACE_VERSION)
             self.assertIsNone(mod.interface.function("secret"))
-            self.assertIsNotNone(mod.interface.function("identity"))
+            self.assertIsNotNone(mod.interface.function("preserve"))
             self.assertEqual(len(mod.interface.digest), 64)
         finally:
             td.cleanup()
@@ -44,13 +44,13 @@ class InterfaceTests(unittest.TestCase):
         td, root = self.project({
             "models/user.eri": (
                 "public type User { name Text; } "
-                "public function identity(value) { return value; }"
+                "public function preserve(value) { return value; }"
             ),
             "app.eri": (
                 "import models.user; "
-                "let user be user.User { name=\"Anna\"; }; "
-                "let n be user.identity(42); "
-                "output(user.name); output(n);"
+                "let person be user.User { name=\"Anna\"; }; "
+                "let n be user.preserve(42); "
+                "output(person.name); output(n);"
             ),
         })
         try:
@@ -73,8 +73,7 @@ class InterfaceTests(unittest.TestCase):
             ),
             "app.eri": (
                 "import service; "
-                "let value be service.risky() else error service.ServiceError { return; }; "
-                "output(value);"
+                "service.risky() else error service.ServiceError { output(error.message); };"
             ),
         })
         try:
