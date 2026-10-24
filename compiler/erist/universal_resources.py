@@ -11,37 +11,65 @@ from .ir import (
 )
 from .ir_text import IRFileExists, IRFileRemove
 from .universal_checked import CheckedUniversalLowerer
-from .universal_ir import BOOL, TEXT, UField, UReturn, UType
+from .universal_ir import BOOL, TEXT, UBranch, UField, UProgram, UReturn, UType
 
 
 class ResourceUniversalLowerer(CheckedUniversalLowerer):
-    """Universal lowering for deterministic `with` resources and std.files.
+    """Universal lowering for deterministic resources and linked contracts.
 
-    Cleanup is made explicit as Universal-IR operations. The lowering stack is
-    consulted by return and failure propagation, guaranteeing reverse-order
-    cleanup without CPU-specific unwinding semantics.
+    External module-object contracts and type layouts can be injected directly,
+    so source modules compile against serialized implementations without fake
+    source bodies. Cleanup is explicit and walks the active ownership stack in
+    reverse order on normal exit, return, or checked-failure propagation.
     """
 
-    def __init__(self):
+    def __init__(self, external_functions=None, external_types=()):
         super().__init__()
         self.cleanup_stack = []
+        self.external_functions = dict(external_functions or {})
+        self.external_types = list(external_types)
 
     def lower(self, program):
-        result = super().lower(program)
-        if not any(item.name == STD_FILE_ERROR for item in result.types):
-            result.types.append(
-                UType(
-                    STD_FILE_ERROR,
-                    (
-                        UField("message", TEXT, False),
-                        UField("path", TEXT, False),
-                    ),
-                    True,
-                )
+        source_types = [
+            UType(
+                item.name,
+                tuple(UField(field.name, self._map_type(field.type_name), field.fixed) for field in item.fields),
+                item.is_error,
             )
-        self.types = result.types
-        self.type_by_name = {item.name: item for item in result.types}
-        return result
+            for item in program.structs
+        ]
+        self.types = []
+        known = {}
+        for item in [*self.external_types, *source_types]:
+            existing = known.get(item.name)
+            if existing is not None and existing != item:
+                raise ValueError(f"conflicting Universal-IR type layout for {item.name!r}")
+            if existing is None:
+                known[item.name] = item
+                self.types.append(item)
+        if STD_FILE_ERROR not in known:
+            file_error = UType(
+                STD_FILE_ERROR,
+                (UField("message", TEXT, False), UField("path", TEXT, False)),
+                True,
+            )
+            known[file_error.name] = file_error
+            self.types.append(file_error)
+        self.type_by_name = dict(known)
+
+        self.known_functions = dict(self.external_functions)
+        for fn in program.functions:
+            params = [self._map_type(p.type_name) for p in fn.parameters]
+            result = "void" if fn.return_type is None else self._map_type(fn.return_type)
+            contract = (params, result, tuple(fn.fails))
+            existing = self.known_functions.get(fn.name)
+            if existing is not None and existing != contract:
+                raise ValueError(f"conflicting Universal-IR function contract for {fn.name!r}")
+            self.known_functions[fn.name] = contract
+
+        functions = [self._lower_function(fn) for fn in program.functions]
+        functions.append(self._lower_entry(program.entry))
+        return UProgram(functions, "__entry", list(self.types))
 
     def _map_type(self, source_type: str) -> str:
         if source_type == STD_FILE:
@@ -71,7 +99,6 @@ class ResourceUniversalLowerer(CheckedUniversalLowerer):
                 fail_block = self._new_block("cleanup.propagate")
                 return_block = self._new_block("cleanup.return")
                 assert source is not None
-                from .universal_ir import UBranch
                 source.terminator = UBranch(pending, fail_block.name, return_block.name)
                 self.current = fail_block
                 super()._terminate_propagation()
@@ -88,7 +115,6 @@ class ResourceUniversalLowerer(CheckedUniversalLowerer):
             source = self.current
             fail_block = self._new_block("cleanup.propagate")
             return_block = self._new_block("cleanup.return")
-            from .universal_ir import UBranch
             assert source is not None
             source.terminator = UBranch(pending, fail_block.name, return_block.name)
             self.current = fail_block
@@ -114,7 +140,6 @@ class ResourceUniversalLowerer(CheckedUniversalLowerer):
             if self.current is not None and self.current.terminator is None:
                 active = self._load_local_value(local)
                 self._emit("resource_cleanup", args=(active,), immediate=resource_type)
-                # Cleanup on an otherwise normal path becomes a checked failure.
                 self._propagate_if_pending()
             return
 
