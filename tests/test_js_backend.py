@@ -44,6 +44,40 @@ class JavaScriptBackendTests(unittest.TestCase):
             td.cleanup()
 
     @unittest.skipUnless(shutil.which("node"), "Node.js is required to execute the JavaScript target")
+    def test_value_lists_maybe_and_identity_preserve_eristavi_semantics(self):
+        td, js = self.emit(
+            'type Inner { value Int; } type Box { inner Inner; name Text; } '
+            'let original be Box { inner = Inner { value = 1; }; name = "A"; }; '
+            'let copy be original; copy.inner.value = 9; '
+            'let values be [original]; values.add(copy); '
+            'let maybeValue maybe Int be 5; '
+            'let first be identity Inner { value = 3; }; let second be first; second.value = 7; '
+            'output(original.inner.value); output(copy.inner.value); output(values.count); '
+            'output(original == copy); output(maybeValue != none); '
+            'if maybeValue != none { output(maybeValue); } output(first.value); output(first == second);'
+        )
+        try:
+            path = Path(td.name) / "values.js"
+            path.write_text(js, encoding="utf-8")
+            p = subprocess.run([shutil.which("node"), str(path)], capture_output=True, text=True)
+            self.assertEqual(p.returncode, 0, p.stderr)
+            self.assertEqual(p.stdout, "1\n9\n2\nfalse\ntrue\n5\n7\ntrue\n")
+        finally:
+            td.cleanup()
+
+    @unittest.skipUnless(shutil.which("node"), "Node.js is required to execute the JavaScript target")
+    def test_javascript_list_bounds_fault_is_eristavi_defined(self):
+        td, js = self.emit('let values be [1]; let i be 1; output(values[i]);')
+        try:
+            path = Path(td.name) / "bounds.js"
+            path.write_text(js, encoding="utf-8")
+            p = subprocess.run([shutil.which("node"), str(path)], capture_output=True, text=True)
+            self.assertNotEqual(p.returncode, 0)
+            self.assertIn("List index out of bounds", p.stderr)
+        finally:
+            td.cleanup()
+
+    @unittest.skipUnless(shutil.which("node"), "Node.js is required to execute the JavaScript target")
     def test_runtime_int_overflow_is_not_javascript_wrapping(self):
         td, js = self.emit('let x be 9223372036854775807; let one be 1; output(x + one);')
         try:
