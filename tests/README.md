@@ -6,7 +6,7 @@ Run the full suite from the repository root:
 python -m unittest discover -s tests -v
 ```
 
-The current suite contains **255 tests**.
+The current suite contains **262 tests**.
 
 Coverage spans frontend/reference semantics and multiple compiler/runtime layers, including:
 
@@ -23,9 +23,10 @@ Coverage spans frontend/reference semantics and multiple compiler/runtime layers
 - reusable inferred-generic object specialization after source removal;
 - direct x86-64 functions/ABI, Float/Text/Text views, aggregates, Lists, maybe/identity, checked errors and resources;
 - x86-64 typed GC descriptors, liveness-aware roots, spill-slot planning and heap-reachability stress cases;
+- x86-64 physical-register-allocation regressions covering interference, GP/XMM register classes, call/GC boundaries, complex clobber-region operands and emitted register-resident scalar chains;
 - native ARM64 Text/aggregate/maybe/identity/error/resource execution plus cross-assembly checks;
 - content/interface-digest keyed module caching;
-- Universal-IR verification, optimization, CFG liveness, interference and escape-analysis groundwork;
+- Universal-IR verification, optimization, CFG liveness, interference and escape analysis;
 - ES2020 JavaScript execution through ordinary-value/List/maybe/identity semantics;
 - WebAssembly-text scalar/function/control contracts and explicit Text `externref` host ABI.
 

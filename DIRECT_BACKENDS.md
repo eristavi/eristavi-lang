@@ -1,6 +1,6 @@
 # Eristavi Direct Backends
 
-> **Status: broad x86-64 bootstrap backend; native-tested ARM64 runtime backend**
+> **Status: broad x86-64 bootstrap backend with initial physical register allocation; native-tested ARM64 runtime backend**
 
 Direct backends consume Eristavi Universal IR and emit CPU assembly without generated C.
 
@@ -40,9 +40,26 @@ Typed heap traversal currently understands:
 
 Dynamic checked-error state retains a conservative fallback that follows only exact tracked-allocation pointers. This is safer than scanning arbitrary addresses but remains bootstrap infrastructure rather than a final concurrent/generational collector.
 
-Scalar Universal-IR temporaries now use CFG-aware interference-based spill-slot coloring, so non-overlapping values may reuse stack storage. Heap temporary slots remain pinned and unique whenever they participate in GC root metadata.
+Scalar Universal-IR temporaries use CFG-aware interference-based spill-slot coloring, so non-overlapping values may reuse stack storage. Heap temporary slots remain pinned and unique whenever they participate in GC root metadata.
 
 Deterministic non-memory resources remain outside GC ownership.
+
+### Physical register allocation
+
+The x86-64 backend now has an initial verified physical-register allocation path layered beneath the checked-error/resource/direct/GC composition.
+
+The first allocator slice is deliberately conservative:
+
+- eligible short-lived Int/Bool values may remain in a caller-saved GP register;
+- eligible short-lived Float values may remain in a caller-saved XMM register;
+- CFG interference prevents simultaneously live virtual values from sharing the same physical register;
+- only scalar lowering operations explicitly known to be call-free currently produce register-resident values;
+- values that must survive helper, PLT or GC clobbers remain stack-backed;
+- operands of complex lowerings also remain stack-backed because those lowerings may call helpers before every source operand has been consumed;
+- scalar values extracted through higher-level aggregate/List/error operations remain spilled until those machine lowerings have explicit use/clobber contracts;
+- stack slots remain the correctness fallback.
+
+This establishes a real register-resident execution path without weakening the System V ABI or precise-GC rooting contract. It is not yet a mature whole-function allocator. The next work is explicit machine-level use/clobber metadata, a broader safe register pool, better move/coalescing decisions and compaction of spill slots that are no longer necessary.
 
 ### Unicode Text views
 
@@ -69,7 +86,7 @@ The composed direct backend covers:
 - checked-error state/handler operations;
 - deterministic file resources and secondary-failure state.
 
-Hosted CI now includes a native ARM64 Ubuntu runner. Native behavioral tests execute Text, ordinary values, Lists, maybe/identity, checked errors and exact UTF-8 file-resource round trips. Cross-assembly tests remain as an additional structural check.
+Hosted CI includes a native ARM64 Ubuntu runner. Native behavioral tests execute Text, ordinary values, Lists, maybe/identity, checked errors and exact UTF-8 file-resource round trips. Cross-assembly tests remain as an additional structural check.
 
 Mixed scalar/Text output uses the same ordering contract as x86-64: stdio is flushed before exact-length raw Text writes.
 
@@ -96,7 +113,7 @@ The next work is production hardening rather than source-language redesign:
 
 - ARM64 automatic memory management and explicit Text-view parity;
 - tighter dynamic-error descriptor coverage and shorter x86 GC root lifetimes;
-- real register allocation beyond current spill-slot coloring/candidate analysis;
+- x86 register-allocation maturation: explicit lowering clobber contracts, broader register pools and dead-spill/frame compaction;
 - additional OS/ABI targets;
 - broader standard-library runtime support.
 
