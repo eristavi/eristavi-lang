@@ -15,46 +15,44 @@ Eristavi is an experimental general-purpose programming language focused on **re
 
 ## Status
 
-The **pre-0.1 source-language/frontend contract is frozen for implementation**.
+The **pre-0.1 source-language/frontend contract is frozen for implementation**. The Python bootstrap frontend/runtime covers the principal frozen language surface: functions, collections, ordinary values, maybe/identity, checked errors, deterministic resources, modules/imports, inferred generic relationships and explicit Unicode Text views.
 
-The Python bootstrap implements the principal frozen language surface through collections, user-defined values, maybe/identity, checked errors, deterministic resources, modules/imports, inferred generic relationships, and explicit Unicode Text views.
+Unicode identifier, normalization and grapheme behavior is pinned to Unicode **17.0.0**. The broad generated-C backend supports all three explicit Text views, including compiled grapheme segmentation. Compiled Text is length-aware UTF-8 rather than C-string data, so embedded NUL and UTF-8 validation preserve Eristavi semantics.
 
-Unicode identifier, normalization and grapheme behavior is pinned to Unicode **17.0.0**. All three explicit Text views now execute through the compiled C path:
+## Compiler architecture
 
-```eri
-text.characters
-text.scalars
-text.bytes
-```
-
-Compiled `Text` uses explicit UTF-8 bytes plus length rather than C-string semantics, preserving embedded NUL and validating UTF-8 at file boundaries.
-
-### Compiler layers
-
-Eristavi now has both a broad portability backend and the beginning of a direct native architecture:
+Eristavi now has three useful execution/compiler layers:
 
 ```text
 Eristavi source
     ↓
-frontend / semantic analysis
+lexer / parser / semantic analysis + inference
     ↓
-typed Eristavi IR
-    ├──────────────→ C11 → system C compiler → native executable
+typed/source-close Eristavi IR
+    ├─→ C11 backend → C toolchain → native executable
     ↓
 Universal IR
-    ↓
-direct x86-64 backend → assembly → system assembler/linker → native executable
+    ├─→ x86-64 Linux direct backend → assembly → native executable
+    └─→ ARM64 Linux backend → assembly
 ```
 
-The generated-C backend covers the broad pre-0.1 implementation surface. The first direct x86-64 Linux slice is intentionally narrower and currently proves Int/Bool locals, checked integer arithmetic, comparisons, `if / else`, `while`, and output without generated C.
+The direct x86-64 path no longer depends on generated C and now executes a substantial pre-0.1 subset: functions/recursion, Int/Bool/Float/Text, Lists, ordinary values, maybe, identity, checked failures, inferred source-generic specializations, deterministic file resources and module-object linkage.
 
-### Module artifacts
+The ARM64 backend consumes the **same Universal IR** for the current scalar/function slice. CI cross-assembles its AArch64 output; native ARM64 execution activates when an ARM64 Linux runner is available.
 
-The compiler can emit deterministic, versioned `.eri-interface.json` module artifacts. Importers can type-check public types, checked-error contracts and inferred generic function relationships from the interface even when the imported `.eri` implementation source is unavailable.
+## Module artifacts
 
-Executable linkage still requires implementation source until compiled object/module artifacts are added.
+Eristavi separates public contracts from concrete implementation artifacts:
 
-See [`IMPLEMENTATION_AUDIT.md`](IMPLEMENTATION_AUDIT.md) for the current audited boundary.
+```text
+module.eri
+  ├─→ module.eri-interface.json
+  └─→ module.eri-object.json
+```
+
+`erist interface` emits a deterministic versioned public contract. `erist object` emits a versioned concrete Universal-IR implementation bound to the interface digest.
+
+For supported concrete functions and types, the direct compiler can type-check and link a dependency from the interface + object pair **after its `.eri` implementation source has been removed**.
 
 ## Design direction
 
@@ -65,11 +63,11 @@ Eristavi aims for:
 - strong static typing with aggressive type inference;
 - a rich standard library instead of keyword bloat;
 - automatic memory management;
-- deterministic cleanup for files, sockets, and other external resources;
+- deterministic cleanup for files, sockets and other external resources;
 - machine-neutral compiler IRs;
 - direct native compilation for supported CPU architectures;
-- C, JavaScript, and WebAssembly as strategic additional targets;
-- clear compiler diagnostics that explain how to fix problems;
+- C, JavaScript and WebAssembly as strategic additional targets;
+- clear compiler diagnostics;
 - performance transparency without forcing low-level complexity into ordinary code.
 
 See [`DESIGN_PHILOSOPHY.md`](DESIGN_PHILOSOPHY.md).
@@ -92,7 +90,7 @@ function double(value Int) {
 output(double(21));
 ```
 
-User-defined values use named fields:
+Ordinary user-defined types are values:
 
 ```eri
 type Customer {
@@ -106,14 +104,6 @@ let customer be Customer {
 };
 ```
 
-Collections are ordinary values with inferred element relationships:
-
-```eri
-let customers be [];
-customers.add(customer);
-output(customers.count);
-```
-
 Generic relationships are inferred rather than written with generic syntax:
 
 ```eri
@@ -125,7 +115,7 @@ output(preserve(10));
 output(preserve("Hello"));
 ```
 
-Text indexing makes the intended Unicode unit explicit:
+Unicode units are explicit:
 
 ```eri
 let text be "A\u{301}";
@@ -134,49 +124,53 @@ output(text.scalars.count);    // 2 Unicode scalars
 output(text.bytes.count);      // 3 UTF-8 bytes
 ```
 
-Standard-library capability grows without keyword growth. For example:
+Checked failures and deterministic resources remain explicit:
 
 ```eri
 import std.files;
 
-function exists(path Text) returns Bool fails files.FileError {
-    return try files.exists(path);
+function read(path Text) returns Text fails files.FileError {
+    with file be try files.open(path) {
+        return try file.readText();
+    }
 }
 ```
 
-Checked failures remain explicit, and deterministic resources use `with` rather than manual lifetime management.
-
 ## Toolchain
 
-Bootstrap execution/checking:
+Bootstrap/reference execution:
 
 ```text
 erist run examples/hello.eri
 erist check examples/hello.eri
 ```
 
-Versioned module interface:
+Module artifacts:
 
 ```text
 erist interface models/user.eri
+erist object models/user.eri
 ```
 
-Broad generated-C backend:
+Broad generated-C path:
 
 ```text
 erist build-c examples/hello.eri -o hello.c
 erist build examples/hello.eri -o hello
 ```
 
-First Universal-IR/direct backend commands:
+Universal IR / direct CPU paths:
 
 ```text
 erist uir examples/hello.eri -o hello.uir
+
 erist build-asm examples/hello.eri -o hello.s --target x86_64-linux
 erist build-direct examples/hello.eri -o hello --target x86_64-linux
+
+erist build-asm examples/hello.eri -o hello-aarch64.s --target arm64-linux
 ```
 
-The direct route emits CPU assembly from Eristavi Universal IR; it does not generate C source. The system compiler driver is currently used only as assembler/linker for `build-direct`.
+The direct route emits CPU assembly from Eristavi Universal IR; generated C is not involved.
 
 ## Tests
 
@@ -184,33 +178,39 @@ The direct route emits CPU assembly from Eristavi Universal IR; it does not gene
 python -m unittest discover -s tests -v
 ```
 
-The suite now contains **174 tests**. CI runs the full suite with GCC and Clang on Ubuntu and Clang on macOS at `-O2`. Direct x86-64 executable tests run on the Linux jobs; macOS validates the rest of the portable compiler/runtime surface.
+The current suite contains **216 tests** and passes in all three CI jobs:
 
-Coverage now includes versioned source-independent module interfaces, pinned compiled Unicode grapheme segmentation, generated-C execution, Universal IR, real direct x86-64 execution, checked direct arithmetic faults, and expanded `std.files` path operations.
+- GCC on Ubuntu at `-O2`;
+- Clang on Ubuntu at `-O2`;
+- Clang on macOS at `-O2`.
+
+Direct x86-64 executable tests run on Linux. ARM64 assembly is cross-assembled in CI; native ARM64 execution is skipped unless the runner itself is ARM64 Linux.
+
+Coverage includes frontend semantics, generated-C execution, pinned Unicode, serialized interfaces/objects, source-independent object linkage, direct functions/ABI, Float/Text, deep values, Lists, maybe, identity, checked errors, deterministic resources and inferred generic specializations.
+
+See [`IMPLEMENTATION_AUDIT.md`](IMPLEMENTATION_AUDIT.md) for the audited boundary and remaining work.
 
 ## Documentation
 
 - [`PRE_0_1_FREEZE.md`](PRE_0_1_FREEZE.md) — frozen source-language/frontend boundary
-- [`IMPLEMENTATION_AUDIT.md`](IMPLEMENTATION_AUDIT.md) — current implementation coverage, backend status, and audited gaps
+- [`IMPLEMENTATION_AUDIT.md`](IMPLEMENTATION_AUDIT.md) — current audited implementation status
 - [`DESIGN_PHILOSOPHY.md`](DESIGN_PHILOSOPHY.md) — governing design charter
 - [`LANGUAGE_SEMANTICS.md`](LANGUAGE_SEMANTICS.md) — consolidated semantics
 - [`GRAMMAR.md`](GRAMMAR.md) — consolidated surface grammar
 - [`LEXICAL_RULES.md`](LEXICAL_RULES.md) — lexical rules
 - [`TEXT_VIEWS.md`](TEXT_VIEWS.md) — Unicode character/scalar/UTF-8 views
-- [`MODULE_INTERFACES.md`](MODULE_INTERFACES.md) — serialized public module contracts
-- [`UNIVERSAL_IR.md`](UNIVERSAL_IR.md) — lower target-neutral IR and direct backend boundary
-- [`STANDARD_LIBRARY.md`](STANDARD_LIBRARY.md) — current bootstrap standard-library surface
-- [`PRECEDENCE.md`](PRECEDENCE.md) — expression ordering
-- [`FUNCTION_RETURNS.md`](FUNCTION_RETURNS.md) — function completion/result semantics
+- [`MODULE_INTERFACES.md`](MODULE_INTERFACES.md) — versioned contract and implementation artifacts
+- [`UNIVERSAL_IR.md`](UNIVERSAL_IR.md) — target-neutral lower IR
+- [`DIRECT_BACKENDS.md`](DIRECT_BACKENDS.md) — x86-64 and ARM64 direct backend status
+- [`STANDARD_LIBRARY.md`](STANDARD_LIBRARY.md) — current standard-library surface
 - [`COLLECTIONS.md`](COLLECTIONS.md) — `List`
-- [`CONSTRUCTION.md`](CONSTRUCTION.md) — named-field construction
 - [`FIXED_IMMUTABILITY.md`](FIXED_IMMUTABILITY.md) — transitive `fixed`
 - [`VALUE_EQUALITY.md`](VALUE_EQUALITY.md) — ordinary structural equality
 - [`IDENTITY_EQUALITY.md`](IDENTITY_EQUALITY.md) — identity equality
 - [`ERRORS.md`](ERRORS.md) — checked failures
 - [`RESOURCE_CLEANUP.md`](RESOURCE_CLEANUP.md) — deterministic cleanup and dual-failure composition
 - [`GENERICS.md`](GENERICS.md) — inferred generic relationships
-- [`TARGETS.md`](TARGETS.md) — target strategy and direct backend status
+- [`TARGETS.md`](TARGETS.md) — target strategy and implementation status
 
 ## License
 
