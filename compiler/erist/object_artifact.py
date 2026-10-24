@@ -9,18 +9,20 @@ from .unicode_support import UNICODE_VERSION
 from .universal_ir import (
     UBlock,
     UBranch,
+    UField,
     UFunction,
     UInstruction,
     UJump,
     ULocal,
     UProgram,
     UReturn,
+    UType,
     UValue,
 )
 
 OBJECT_SCHEMA = "eristavi.module-object"
-OBJECT_VERSION = 1
-OBJECT_IR = "universal-ir-v1"
+OBJECT_VERSION = 2
+OBJECT_IR = "universal-ir-v2"
 
 
 def _value(v: UValue | None):
@@ -37,6 +39,30 @@ def _local(v: ULocal):
 
 def _local_from(data):
     return ULocal(int(data["id"]), str(data["name"]), str(data["type"]))
+
+
+def _field(v: UField):
+    return {"name": v.name, "type": v.type_name, "fixed": v.fixed}
+
+
+def _field_from(data):
+    return UField(str(data["name"]), str(data["type"]), bool(data.get("fixed", False)))
+
+
+def _type(v: UType):
+    return {
+        "name": v.name,
+        "error": v.is_error,
+        "fields": [_field(field) for field in v.fields],
+    }
+
+
+def _type_from(data):
+    return UType(
+        str(data["name"]),
+        tuple(_field_from(field) for field in data.get("fields", ())),
+        bool(data.get("error", False)),
+    )
 
 
 def _instruction(i: UInstruction):
@@ -90,6 +116,7 @@ def function_to_data(fn: UFunction) -> dict[str, Any]:
         "name": fn.name,
         "returns": fn.return_type,
         "public": fn.public,
+        "fails": list(fn.fails),
         "parameters": [_local(v) for v in fn.parameters],
         "locals": [_local(v) for v in fn.locals],
         "value_count": fn.value_count,
@@ -120,6 +147,7 @@ def function_from_data(data: dict[str, Any]) -> UFunction:
         ],
         int(data.get("value_count", 0)),
         bool(data.get("public", False)),
+        tuple(str(x) for x in data.get("fails", ())),
     )
 
 
@@ -129,6 +157,7 @@ class ModuleObjectArtifact:
     interface_digest: str
     dependencies: tuple[str, ...]
     functions: tuple[UFunction, ...]
+    types: tuple[UType, ...] = ()
     unicode_version: str = UNICODE_VERSION
     schema: str = OBJECT_SCHEMA
     version: int = OBJECT_VERSION
@@ -143,6 +172,7 @@ class ModuleObjectArtifact:
             "unicode": self.unicode_version,
             "interface_digest": self.interface_digest,
             "dependencies": list(self.dependencies),
+            "types": [_type(item) for item in self.types],
             "functions": [function_to_data(fn) for fn in self.functions],
         }
 
@@ -170,6 +200,7 @@ class ModuleObjectArtifact:
             str(data["interface_digest"]),
             tuple(str(x) for x in data.get("dependencies", ())),
             tuple(function_from_data(x) for x in data.get("functions", ())),
+            tuple(_type(x) if isinstance(x, UType) else _type_from(x) for x in data.get("types", ())),
             str(data["unicode"]),
             str(data["schema"]),
             int(data["version"]),
@@ -184,4 +215,4 @@ class ModuleObjectArtifact:
         return cls.from_data(data)
 
     def as_program(self) -> UProgram:
-        return UProgram(list(self.functions))
+        return UProgram(list(self.functions), "__entry", list(self.types))
