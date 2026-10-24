@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from compiler.erist.cli import build_direct, build_native
+from compiler.erist.cli import emit_direct_asm, build_native
 from compiler.erist.diagnostics import LexError
 from compiler.erist.lexer import Lexer, TokenKind
 from selfhost_support import execute, literal, prepare
@@ -104,5 +104,5 @@ class SelfHostedLexerConformanceTests(unittest.TestCase):
             from io import StringIO
             errors = StringIO()
             with redirect_stderr(errors):
-                self.assertEqual(build_direct(entry, root / 'app', root), 1)
+                self.assertEqual(emit_direct_asm(entry, root / 'app.s', root), 1)
             self.assertIn("use 'erist build'", errors.getvalue())
