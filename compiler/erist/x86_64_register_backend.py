@@ -50,7 +50,13 @@ _REGISTER_SAFE_OPS = frozenset({
 
 
 def _caller_saved_survivors(fn: UFunction) -> frozenset[int]:
-    """Return values that may not live solely in caller-saved registers."""
+    """Return values that may not live solely in caller-saved registers.
+
+    An unsafe Universal-IR instruction is a machine-level clobber region, not a
+    single point. Its lowering may call helpers before all source operands have
+    been consumed. Therefore both values live beyond the instruction and the
+    instruction's own input operands must be stack-backed in this first phase.
+    """
 
     liveness = cfg_liveness(fn)
     blocked: set[int] = set()
@@ -62,6 +68,7 @@ def _caller_saved_survivors(fn: UFunction) -> frozenset[int]:
             if ins.result is not None:
                 live_after.discard(ins.result.id)
             blocked.update(live_after)
+            blocked.update(arg.id for arg in ins.args)
     return frozenset(blocked)
 
 
@@ -76,6 +83,7 @@ def allocate_x86_registers(
 
     - only the existing short-lived scalar register candidates participate;
     - the producing instruction must itself be a known call-free scalar op;
+    - inputs to complex/clobbering instructions remain stack-backed;
     - values that survive any possible helper/PLT/GC clobber remain spilled;
     - Int/Bool and Float use independent register classes;
     - the existing CFG interference graph prevents overlapping values from
