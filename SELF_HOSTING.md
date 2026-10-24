@@ -13,7 +13,7 @@ The migration therefore follows these rules:
 - no new source syntax is introduced for compiler convenience;
 - the Stage-0 compiler remains the semantic reference during migration;
 - Eristavi compiler modules live under `src/compiler/`;
-- new compiler data structures use ordinary Eristavi values, Lists and integer arena indexes;
+- compiler data structures use ordinary values and Lists, with explicit `identity` handles for shared AST/cursor state;
 - no hidden pointer/reference model is introduced;
 - every migrated stage receives differential or structural tests against Stage-0;
 - a stage is not promoted merely because it parses its own source; semantic equivalence matters;
@@ -43,7 +43,7 @@ The first Eristavi-written compiler is intentionally implemented with the alread
 - modules/imports;
 - deterministic file resources.
 
-Compiler structures that would conventionally use enums, maps, tagged unions, recursive generic containers or pointers use explicit integer kind tags, flat Lists and arena indexes during the first self-hosting stages. These are implementation choices, not new language concepts.
+Compiler structures use integer kind tags and Lists. Recursive AST links use the existing `maybe identity Node` model explicitly, and parser cursor state uses `identity ParserState`. There are no hidden references, compiler-only pointer rules or new generic syntax. These are implementation choices within the frozen language.
 
 ## Stages
 
@@ -55,9 +55,9 @@ Python parses, analyses and lowers Eristavi. It already produces native x86-64/A
 
 `src/compiler/` gains source locations, spans, tokens, diagnostics and a lexer. Stage-0 compiles/checks these modules and tests compare their behavior with the frozen lexical contract.
 
-### Stage 2 — parser and flat AST
+### Stage 2 — parser and explicit identity AST
 
-The parser is ported with a flat arena representation. Nodes reference child nodes by integer index so the port does not require recursive generic source syntax.
+The parser is written in Eristavi using `maybe identity Node` child/sibling links and explicit identity cursor state. Recursive helpers declare their result contracts. Optional child handles are copied into local bindings before presence checks, using the existing narrowing rules instead of adding mutable-field narrowing for compiler convenience.
 
 ### Stage 3 — semantic analysis
 
@@ -89,7 +89,31 @@ B and C must agree under the documented reproducibility policy and pass the same
 
 ## Current bootstrap gaps
 
-The current language is sufficient to begin the port, but a production self-hosted compiler will eventually need library/runtime depth in areas such as paths, process arguments/environment, efficient builders and frozen Unicode identifier/NFC services. Those are standard-library/runtime tasks; they should not be solved by adding redundant language syntax.
+The current language is sufficient to begin the port, but a production self-hosted compiler will eventually need library/runtime depth in areas such as paths, process arguments/environment and efficient builders. Those are standard-library/runtime tasks; they should not be solved by adding redundant language syntax.
+
+## Verified frontend boundary
+
+The lexer covers Unicode-17 XID identifiers/NFC, scalar escapes, numeric separators,
+leading-zero/Float rules, nested comments, BOM placement and source locations.
+Numeric token values retain their validated source spelling until the later typed
+literal stage; Text values contain decoded scalars. Stage-0 now preserves the raw
+Text lexeme as diagnostic metadata too.
+
+Tests compare token kinds, raw lexemes, identifier/Text values and locations, and
+compare rejected cases and diagnostic locations. The parser has acceptance,
+rejection and expression-tree precedence checks. Both components execute as
+compiled C programs as well as under the reference interpreter.
+
+`std.unicode` is a small library boundary, not language syntax. Its C implementation
+embeds tables generated from the pinned Unicode 17 dependencies. It does not use
+locale, host OS normalization, ICU or a Python process at executable runtime.
+Canonical decomposition, canonical ordering, blocked composition and algorithmic
+Hangul normalization are checked against the reference Unicode-17 database.
+
+For this migration, use `erist build` for compiler components requiring
+`std.unicode`. The direct/JS/Wasm routes do not yet implement this new library and
+report that limitation explicitly. This C bootstrap path is an implementation
+bridge; Stage-0 is still required to build it, and it is not full self-hosting.
 
 ## Promotion rule
 

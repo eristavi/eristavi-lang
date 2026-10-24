@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from .diagnostics import SemanticError
+from .stdlib import UNICODE_FUNCTIONS
 from .semantic import Analyzer as BaseAnalyzer, STD_FILE_ERROR
-from .syntax import BinaryExpr, CallExpr, ForStmt, IndexExpr, MemberExpr, NameExpr, NoneExpr
+from .syntax import CallExpr, ForStmt, IndexExpr, MemberExpr, NameExpr
 from .typesys import (
     BOOL,
     INT,
@@ -12,7 +13,6 @@ from .typesys import (
     TEXT_CHARACTERS,
     TEXT_SCALARS,
     ListType,
-    MaybeType,
     NoValueType,
     TextViewType,
     TypeVar,
@@ -32,58 +32,6 @@ class Analyzer(BaseAnalyzer):
                 element = TypeVar("element")
                 unify(raw_iterable, ListType(element))
         return super()._statement(stmt)
-
-    @staticmethod
-    def _narrowing_path(expr):
-        if isinstance(expr, NameExpr):
-            return expr.name
-        if isinstance(expr, MemberExpr):
-            base = Analyzer._narrowing_path(expr.base)
-            return f"{base}.{expr.name}" if base else None
-        return None
-
-    def _visible_path_narrowing(self, path):
-        if path is None:
-            return None
-        for narrowing in reversed(self.narrowings):
-            if path in narrowing:
-                return narrowing[path]
-        return None
-
-    def _condition_narrowings(self, expr):
-        then, other = super()._condition_narrowings(expr)
-        if isinstance(expr, BinaryExpr) and expr.operator == "and":
-            left_then, _ = self._condition_narrowings(expr.left)
-            right_then, _ = self._condition_narrowings(expr.right)
-            then.update(left_then)
-            then.update(right_then)
-            return then, other
-
-        if isinstance(expr, BinaryExpr) and expr.operator in ("==", "!="):
-            candidate = None
-            if isinstance(expr.left, MemberExpr) and isinstance(expr.right, NoneExpr):
-                candidate = expr.left
-            elif isinstance(expr.right, MemberExpr) and isinstance(expr.left, NoneExpr):
-                candidate = expr.right
-            if candidate is not None:
-                path = self._narrowing_path(candidate)
-                recorded = self.expr_types.get(id(candidate))
-                if path and recorded is not None:
-                    candidate_type = resolve(recorded)
-                    if isinstance(candidate_type, MaybeType):
-                        if expr.operator == "!=":
-                            then[path] = candidate_type.inner
-                        else:
-                            other[path] = candidate_type.inner
-        return then, other
-
-    def _clear_narrowing(self, name):
-        super()._clear_narrowing(name)
-        prefix = name + "."
-        for narrowing in self.narrowings:
-            for key in list(narrowing):
-                if key.startswith(prefix):
-                    narrowing.pop(key, None)
 
     def _member(self, expr, allow_checked):
         bt = resolve(self._expr(expr.base, True, allow_checked))
@@ -105,13 +53,24 @@ class Analyzer(BaseAnalyzer):
                 expr.location,
             )
 
-        result = super()._member(expr, allow_checked)
-        narrowed = self._visible_path_narrowing(self._narrowing_path(expr))
-        if narrowed is not None:
-            return self._record(expr, narrowed, fails)
-        return result
+        return super()._member(expr, allow_checked)
 
     def _call(self, expr: CallExpr, value_required, allow_checked):
+        if (isinstance(expr.callee, MemberExpr)
+                and isinstance(expr.callee.base, NameExpr)
+                and self.imports.get(expr.callee.base.name) == ("std", "unicode")):
+            contract = UNICODE_FUNCTIONS.get(expr.callee.name)
+            if contract is None:
+                raise SemanticError(f"unknown std.unicode function {expr.callee.name!r}", expr.location)
+            argument_type, result_type = contract
+            if len(expr.arguments) != 1:
+                raise SemanticError(f"unicode.{expr.callee.name} requires one argument", expr.location)
+            argument = expr.arguments[0]
+            actual = self._expr(argument, True, allow_checked)
+            self._require_type(actual, argument_type, argument.location,
+                               f"unicode.{expr.callee.name} requires {argument_type.name}")
+            return self._record(expr, result_type, self.expr_failures.get(id(argument), set()))
+
         if (
             isinstance(expr.callee, MemberExpr)
             and isinstance(expr.callee.base, NameExpr)

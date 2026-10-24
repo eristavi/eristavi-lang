@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+from .stdlib import BUILTIN_MODULES
 from dataclasses import dataclass, field
 from .diagnostics import SemanticError
 from .syntax import *
@@ -89,7 +91,7 @@ class Analyzer:
                 if phase!="imports": raise SemanticError("imports must appear before module declarations or entry statements",stmt.location)
                 alias=stmt.alias or stmt.path[-1]
                 if alias in self.imports: raise SemanticError(f"duplicate import qualifier {alias!r}",stmt.location)
-                if stmt.path != ("std","files"):
+                if stmt.path not in BUILTIN_MODULES:
                     mod=self.imported_modules.get(alias)
                     if mod is None or tuple(mod.path)!=stmt.path:
                         raise SemanticError(f"module {'.'.join(stmt.path)!r} was not loaded by the project compiler",stmt.location)
@@ -166,10 +168,11 @@ class Analyzer:
         return base
 
     def _ensure_function(self,fn:FunctionSymbol,param_types:list[TypeLike],value_required:bool)->TypeLike:
-        key=tuple(describe(resolve(t)) for t in param_types)
+        key=specialization_key(param_types)
         spec=fn.specializations.get(key)
         if spec is None:
-            spec=FunctionSpec([clone_type(t) for t in param_types],fn.explicit_return)
+            variables={}
+            spec=FunctionSpec([clone_type(t,variables) for t in param_types],fn.explicit_return)
             fn.specializations[key]=spec
         if spec.state=="done": return resolve(spec.return_type or NO_VALUE)
         if spec.state=="visiting":
@@ -339,7 +342,7 @@ class Analyzer:
             return self._record(expr,IdentityType(t),fails)
         if isinstance(expr,TryExpr):
             if self.current_function is None: raise SemanticError("try cannot propagate a checked failure beyond the entry boundary",expr.location)
-            t=self._expr(expr.value,True,True); inner=self.expr_failures.get(id(expr.value),set()); missing=inner-self.current_function.function.fails
+            t=self._expr(expr.value,value_required,True); inner=self.expr_failures.get(id(expr.value),set()); missing=inner-self.current_function.function.fails
             if missing: raise SemanticError(f"try may propagate {', '.join(sorted(missing))}, which is not declared by the current function",expr.location)
             return self._record(expr,t,set())
         if isinstance(expr,HandledExpr): return self._handled(expr,value_required)

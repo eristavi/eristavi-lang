@@ -13,7 +13,8 @@ from .runtime import (
     file_error,
 )
 from .syntax import CallExpr, FunctionDecl, IndexExpr, MemberExpr, NameExpr
-from .unicode_support import grapheme_clusters, scalar_texts, utf8_bytes
+from .unicode_support import (grapheme_clusters, scalar_texts, utf8_bytes,
+                              is_xid_start, is_xid_continue, normalize_nfc)
 
 
 @dataclass(frozen=True)
@@ -59,6 +60,23 @@ class Interpreter(BaseInterpreter):
         return super()._expr(e)
 
     def _call(self, e: CallExpr):
+        if (isinstance(e.callee, MemberExpr)
+                and isinstance(e.callee.base, NameExpr)
+                and self.imports.get(e.callee.base.name) == ("std", "unicode")):
+            value = self._expr(e.arguments[0])
+            name = e.callee.name
+            if name == "isIdentifierStart":
+                return value == "_" or is_xid_start(value)
+            if name == "isIdentifierContinue":
+                return value == "_" or is_xid_continue(value)
+            if name == "normalizeNfc":
+                return normalize_nfc(value)
+            if name == "fromScalar":
+                if value < 0 or value > 0x10FFFF or 0xD800 <= value <= 0xDFFF:
+                    raise RuntimeFault("invalid Unicode scalar value", e.location)
+                return chr(value)
+            raise RuntimeFault(f"unknown std.unicode function {name!r}", e.location)
+
         if (
             isinstance(e.callee, MemberExpr)
             and isinstance(e.callee.base, NameExpr)

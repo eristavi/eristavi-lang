@@ -1,308 +1,258 @@
+import std.unicode;
 import compiler.source;
 import compiler.token;
 import compiler.diagnostic;
 
-function isNonAsciiScalar(scalar Text) returns Bool {
-    return scalar.bytes.count > 1;
+type Scanner {
+    input Text;
+    index Int;
+    count Int;
+    line Int;
+    column Int;
+}
+
+function peek(scanner identity Scanner, offset Int) returns Text {
+    return source.scalarAt(scanner.input, scanner.index + offset);
+}
+
+function advance(scanner identity Scanner) returns Text {
+    let ch be peek(scanner, 0);
+    scanner.index = scanner.index + 1;
+    if ch == "\n" { scanner.line = scanner.line + 1; scanner.column = 1; }
+    else { scanner.column = scanner.column + 1; }
+    return ch;
+}
+
+function digit(ch Text, base Int) returns Bool {
+    if base == 2 { return ch == "0" or ch == "1"; }
+    if base == 16 { return source.isAsciiHexDigit(ch); }
+    return source.isAsciiDigit(ch);
+}
+
+function digits(scanner identity Scanner, base Int, line Int, column Int) returns Text fails diagnostic.LexError {
+    if not digit(peek(scanner, 0), base) {
+        fail diagnostic.LexError { message = "numeric literal requires digits"; line = line; column = column; };
+    }
+    let raw be "";
+    let more be true;
+    while more {
+        let ch be peek(scanner, 0);
+        if digit(ch, base) { raw = raw + advance(scanner); }
+        else {
+            if ch == "_" {
+                if not digit(peek(scanner, 1), base) {
+                    fail diagnostic.LexError { message = "numeric underscores must appear only between digits"; line = scanner.line; column = scanner.column; };
+                }
+                raw = raw + advance(scanner);
+            } else { more = false; }
+        }
+    }
+    return raw;
+}
+
+function number(scanner identity Scanner) returns token.Token fails diagnostic.LexError {
+    let line be scanner.line;
+    let column be scanner.column;
+    let raw be "";
+    let kind be token.integer();
+    let base be 10;
+    if peek(scanner, 0) == "0" {
+        if peek(scanner, 1) == "b" or peek(scanner, 1) == "B" { base = 2; }
+        if peek(scanner, 1) == "x" or peek(scanner, 1) == "X" { base = 16; }
+    }
+    if base != 10 {
+        raw = advance(scanner);
+        raw = raw + advance(scanner);
+        raw = raw + try digits(scanner, base, line, column);
+    } else {
+        raw = try digits(scanner, 10, line, column);
+        let integerPart be raw;
+        if peek(scanner, 0) == "." {
+            if not source.isAsciiDigit(peek(scanner, 1)) {
+                fail diagnostic.LexError { message = "a decimal point in a Float literal requires digits on both sides"; line = scanner.line; column = scanner.column; };
+            }
+            kind = token.float();
+            raw = raw + advance(scanner);
+            raw = raw + try digits(scanner, 10, line, column);
+        }
+        if peek(scanner, 0) == "e" or peek(scanner, 0) == "E" {
+            kind = token.float();
+            raw = raw + advance(scanner);
+            if peek(scanner, 0) == "+" or peek(scanner, 0) == "-" { raw = raw + advance(scanner); }
+            if not source.isAsciiDigit(peek(scanner, 0)) {
+                fail diagnostic.LexError { message = "Float exponent requires decimal digits"; line = scanner.line; column = scanner.column; };
+            }
+            raw = raw + try digits(scanner, 10, line, column);
+        }
+        if kind == token.integer() and integerPart.scalars.count > 1 and integerPart.scalars[0] == "0" {
+            fail diagnostic.LexError { message = "decimal Int literals may not have leading zeroes"; line = line; column = column; };
+        }
+    }
+    // Numeric values remain source spelling until the typed literal stage.
+    return token.make(kind, raw, raw, line, column);
+}
+
+function hexValue(ch Text) returns Int {
+    let code be source.asciiCode(ch);
+    if code >= 48 and code <= 57 { return code - 48; }
+    if code >= 65 and code <= 70 { return code - 55; }
+    return code - 87;
+}
+
+function textLiteral(scanner identity Scanner) returns token.Token fails diagnostic.LexError {
+    let line be scanner.line;
+    let column be scanner.column;
+    let raw be advance(scanner);
+    let value be "";
+    while scanner.index < scanner.count and peek(scanner, 0) != "\"" {
+        let ch be advance(scanner);
+        raw = raw + ch;
+        if ch == "\n" or ch == "\r" {
+            fail diagnostic.LexError { message = "Text literals may not contain a raw newline"; line = line; column = column; };
+        }
+        if ch != "\\" { value = value + ch; }
+        else {
+            if scanner.index >= scanner.count {
+                fail diagnostic.LexError { message = "unterminated Text escape"; line = line; column = column; };
+            }
+            let escape be advance(scanner);
+            raw = raw + escape;
+            let known be true;
+            if escape == "n" { value = value + "\n"; }
+            else { if escape == "r" { value = value + "\r"; }
+            else { if escape == "t" { value = value + "\t"; }
+            else { if escape == "0" { value = value + "\0"; }
+            else { if escape == "\"" { value = value + "\""; }
+            else { if escape == "\\" { value = value + "\\"; }
+            else { known = false; } } } } } }
+            if not known {
+                if escape != "u" or peek(scanner, 0) != "{" {
+                    fail diagnostic.LexError { message = "unsupported Text escape"; line = scanner.line; column = scanner.column; };
+                }
+                raw = raw + advance(scanner);
+                let scalar be 0;
+                let size be 0;
+                while peek(scanner, 0) != "}" {
+                    if scanner.index >= scanner.count or not source.isAsciiHexDigit(peek(scanner, 0)) {
+                        fail diagnostic.LexError { message = "invalid Unicode scalar escape"; line = scanner.line; column = scanner.column; };
+                    }
+                    let item be advance(scanner);
+                    raw = raw + item;
+                    scalar = scalar * 16 + hexValue(item);
+                    size = size + 1;
+                    if size > 6 {
+                        fail diagnostic.LexError { message = "Unicode scalar escape is too long"; line = scanner.line; column = scanner.column; };
+                    }
+                }
+                raw = raw + advance(scanner);
+                if size == 0 {
+                    fail diagnostic.LexError { message = "Unicode scalar escape requires hexadecimal digits"; line = scanner.line; column = scanner.column; };
+                }
+                if scalar > 1114111 or (scalar >= 55296 and scalar <= 57343) {
+                    fail diagnostic.LexError { message = "Unicode escape must name a Unicode scalar value"; line = line; column = column; };
+                }
+                value = value + unicode.fromScalar(scalar);
+            }
+        }
+    }
+    if scanner.index >= scanner.count {
+        fail diagnostic.LexError { message = "unterminated Text literal"; line = line; column = column; };
+    }
+    raw = raw + advance(scanner);
+    return token.make(token.text(), raw, value, line, column);
+}
+
+function blockComment(scanner identity Scanner) fails diagnostic.LexError {
+    let line be scanner.line;
+    let column be scanner.column;
+    advance(scanner); advance(scanner);
+    let depth be 1;
+    while depth > 0 {
+        if scanner.index >= scanner.count {
+            fail diagnostic.LexError { message = "unterminated block comment"; line = line; column = column; };
+        }
+        if peek(scanner, 0) == "/" and peek(scanner, 1) == "*" {
+            advance(scanner); advance(scanner); depth = depth + 1;
+        } else {
+            if peek(scanner, 0) == "*" and peek(scanner, 1) == "/" {
+                advance(scanner); advance(scanner); depth = depth - 1;
+            } else { advance(scanner); }
+        }
+    }
+}
+
+function symbolKind(spelling Text) returns Int {
+    if spelling == "==" { return token.equalEqual(); }
+    if spelling == "!=" { return token.bangEqual(); }
+    if spelling == "<=" { return token.lessEqual(); }
+    if spelling == ">=" { return token.greaterEqual(); }
+    if spelling == ";" { return token.semicolon(); }
+    if spelling == "," { return token.comma(); }
+    if spelling == "." { return token.dot(); }
+    if spelling == "(" { return token.leftParen(); }
+    if spelling == ")" { return token.rightParen(); }
+    if spelling == "{" { return token.leftBrace(); }
+    if spelling == "}" { return token.rightBrace(); }
+    if spelling == "[" { return token.leftBracket(); }
+    if spelling == "]" { return token.rightBracket(); }
+    if spelling == "=" { return token.equal(); }
+    if spelling == "+" { return token.plus(); }
+    if spelling == "-" { return token.minus(); }
+    if spelling == "*" { return token.star(); }
+    if spelling == "/" { return token.slash(); }
+    if spelling == "%" { return token.percent(); }
+    if spelling == "<" { return token.less(); }
+    if spelling == ">" { return token.greater(); }
+    return -1;
 }
 
 public function lex(input Text) fails diagnostic.LexError {
-    let tokens be [];
-    let i be 0;
-    let line be 1;
-    let column be 1;
-    let count be input.scalars.count;
-
-    while i < count {
-        let ch be source.scalarAt(input, i);
-        let handled be false;
-
-        if source.isSourceWhitespace(ch) {
-            if ch == "\n" {
-                line = line + 1;
-                column = 1;
-            } else {
-                column = column + 1;
-            }
-            i = i + 1;
-            handled = true;
+    let scanner be identity Scanner { input = input; index = 0; count = input.scalars.count; line = 1; column = 1; };
+    // A single initial BOM is ignored, including for source column numbering.
+    if peek(scanner, 0) == "\u{FEFF}" { scanner.index = 1; }
+    let cursor be scanner.index;
+    let bomLine be 1;
+    let bomColumn be 1;
+    while cursor < scanner.count {
+        let ch be source.scalarAt(input, cursor);
+        if ch == "\u{FEFF}" {
+            fail diagnostic.LexError { message = "BOM is allowed only at the start of a source file"; line = bomLine; column = bomColumn; };
         }
-
-        if not handled and ch == "/" and source.scalarAt(input, i + 1) == "/" {
-            i = i + 2;
-            column = column + 2;
-            while i < count and source.scalarAt(input, i) != "\n" {
-                i = i + 1;
-                column = column + 1;
-            }
-            handled = true;
-        }
-
-        if not handled and ch == "/" and source.scalarAt(input, i + 1) == "*" {
-            let startLine be line;
-            let startColumn be column;
-            let depth be 1;
-            i = i + 2;
-            column = column + 2;
-            while depth > 0 {
-                if i >= count {
-                    fail diagnostic.LexError {
-                        message = "unterminated block comment";
-                        line = startLine;
-                        column = startColumn;
-                    };
-                }
-                let current be source.scalarAt(input, i);
-                let next be source.scalarAt(input, i + 1);
-                let nestedOpen be current == "/" and next == "*";
-                let nestedClose be current == "*" and next == "/";
-                if nestedOpen {
-                    depth = depth + 1;
-                    i = i + 2;
-                    column = column + 2;
-                }
-                if not nestedOpen and nestedClose {
-                    depth = depth - 1;
-                    i = i + 2;
-                    column = column + 2;
-                }
-                if not nestedOpen and not nestedClose {
-                    if current == "\n" {
-                        line = line + 1;
-                        column = 1;
-                    } else {
-                        column = column + 1;
-                    }
-                    i = i + 1;
-                }
-            }
-            handled = true;
-        }
-
-        if not handled and ch == "\"" {
-            let startLine be line;
-            let startColumn be column;
-            let lexeme be "\"";
-            let value be "";
-            let closed be false;
-            i = i + 1;
-            column = column + 1;
-
-            while i < count and not closed {
-                let current be source.scalarAt(input, i);
-                if current == "\"" {
-                    lexeme = lexeme + current;
-                    i = i + 1;
-                    column = column + 1;
-                    closed = true;
-                }
-                if not closed and (current == "\n" or current == "\r") {
-                    fail diagnostic.LexError {
-                        message = "Text literals may not contain a raw newline";
-                        line = startLine;
-                        column = startColumn;
-                    };
-                }
-                if not closed and current == "\\" {
-                    let next be source.scalarAt(input, i + 1);
-                    if next == "\0" {
-                        fail diagnostic.LexError {
-                            message = "unterminated Text escape";
-                            line = startLine;
-                            column = startColumn;
-                        };
-                    }
-                    lexeme = lexeme + current + next;
-                    let escapeKnown be false;
-                    if next == "n" { value = value + "\n"; escapeKnown = true; }
-                    if next == "r" { value = value + "\r"; escapeKnown = true; }
-                    if next == "t" { value = value + "\t"; escapeKnown = true; }
-                    if next == "0" { value = value + "\0"; escapeKnown = true; }
-                    if next == "\"" { value = value + "\""; escapeKnown = true; }
-                    if next == "\\" { value = value + "\\"; escapeKnown = true; }
-                    if not escapeKnown {
-                        fail diagnostic.LexError {
-                            message = "Stage-1 lexer does not yet decode this Text escape";
-                            line = line;
-                            column = column;
-                        };
-                    }
-                    i = i + 2;
-                    column = column + 2;
-                }
-                if not closed and current != "\\" and current != "\n" and current != "\r" {
-                    lexeme = lexeme + current;
-                    value = value + current;
-                    i = i + 1;
-                    column = column + 1;
-                }
-            }
-            if not closed {
-                fail diagnostic.LexError {
-                    message = "unterminated Text literal";
-                    line = startLine;
-                    column = startColumn;
-                };
-            }
-            tokens.add(token.make(token.text(), lexeme, value, startLine, startColumn));
-            handled = true;
-        }
-
-        if not handled and source.isAsciiDigit(ch) {
-            let startLine be line;
-            let startColumn be column;
-            let lexeme be "";
-            let kind be token.integer();
-            let binaryMode be ch == "0" and (source.scalarAt(input, i + 1) == "b" or source.scalarAt(input, i + 1) == "B");
-            let hexMode be ch == "0" and (source.scalarAt(input, i + 1) == "x" or source.scalarAt(input, i + 1) == "X");
-
-            if binaryMode {
-                lexeme = "0" + source.scalarAt(input, i + 1);
-                i = i + 2;
-                column = column + 2;
-                if source.scalarAt(input, i) != "0" and source.scalarAt(input, i) != "1" {
-                    fail diagnostic.LexError {
-                        message = "binary literal requires digits";
-                        line = startLine;
-                        column = startColumn;
-                    };
-                }
-                while source.scalarAt(input, i) == "0" or source.scalarAt(input, i) == "1" or source.scalarAt(input, i) == "_" {
-                    lexeme = lexeme + source.scalarAt(input, i);
-                    i = i + 1;
-                    column = column + 1;
-                }
-            }
-
-            if not binaryMode and hexMode {
-                lexeme = "0" + source.scalarAt(input, i + 1);
-                i = i + 2;
-                column = column + 2;
-                if not source.isAsciiHexDigit(source.scalarAt(input, i)) {
-                    fail diagnostic.LexError {
-                        message = "hexadecimal literal requires digits";
-                        line = startLine;
-                        column = startColumn;
-                    };
-                }
-                while source.isAsciiHexDigit(source.scalarAt(input, i)) or source.scalarAt(input, i) == "_" {
-                    lexeme = lexeme + source.scalarAt(input, i);
-                    i = i + 1;
-                    column = column + 1;
-                }
-            }
-
-            if not binaryMode and not hexMode {
-                while source.isAsciiDigit(source.scalarAt(input, i)) or source.scalarAt(input, i) == "_" {
-                    lexeme = lexeme + source.scalarAt(input, i);
-                    i = i + 1;
-                    column = column + 1;
-                }
-                if source.scalarAt(input, i) == "." and source.isAsciiDigit(source.scalarAt(input, i + 1)) {
-                    kind = token.float();
-                    lexeme = lexeme + ".";
-                    i = i + 1;
-                    column = column + 1;
-                    while source.isAsciiDigit(source.scalarAt(input, i)) or source.scalarAt(input, i) == "_" {
-                        lexeme = lexeme + source.scalarAt(input, i);
-                        i = i + 1;
-                        column = column + 1;
-                    }
-                }
-                if source.scalarAt(input, i) == "e" or source.scalarAt(input, i) == "E" {
-                    kind = token.float();
-                    lexeme = lexeme + source.scalarAt(input, i);
-                    i = i + 1;
-                    column = column + 1;
-                    if source.scalarAt(input, i) == "+" or source.scalarAt(input, i) == "-" {
-                        lexeme = lexeme + source.scalarAt(input, i);
-                        i = i + 1;
-                        column = column + 1;
-                    }
-                    if not source.isAsciiDigit(source.scalarAt(input, i)) {
-                        fail diagnostic.LexError {
-                            message = "Float exponent requires decimal digits";
-                            line = line;
-                            column = column;
-                        };
-                    }
-                    while source.isAsciiDigit(source.scalarAt(input, i)) or source.scalarAt(input, i) == "_" {
-                        lexeme = lexeme + source.scalarAt(input, i);
-                        i = i + 1;
-                        column = column + 1;
-                    }
-                }
-            }
-            tokens.add(token.make(kind, lexeme, lexeme, startLine, startColumn));
-            handled = true;
-        }
-
-        if not handled and source.isAsciiIdentifierStart(ch) {
-            let startLine be line;
-            let startColumn be column;
-            let name be "";
-            while source.isAsciiIdentifierContinue(source.scalarAt(input, i)) {
-                name = name + source.scalarAt(input, i);
-                i = i + 1;
-                column = column + 1;
-            }
-            tokens.add(token.make(token.keywordKind(name), name, name, startLine, startColumn));
-            handled = true;
-        }
-
-        if not handled and isNonAsciiScalar(ch) {
-            fail diagnostic.LexError {
-                message = "Stage-1 self-host lexer requires the frozen Unicode identifier service for non-ASCII source";
-                line = line;
-                column = column;
-            };
-        }
-
-        if not handled {
-            let startLine be line;
-            let startColumn be column;
-            let next be source.scalarAt(input, i + 1);
-            let pair be ch + next;
-            let kind be -1;
-            let width be 1;
-
-            if pair == "==" { kind = token.equalEqual(); width = 2; }
-            if kind == -1 and pair == "!=" { kind = token.bangEqual(); width = 2; }
-            if kind == -1 and pair == "<=" { kind = token.lessEqual(); width = 2; }
-            if kind == -1 and pair == ">=" { kind = token.greaterEqual(); width = 2; }
-            if kind == -1 and ch == ";" { kind = token.semicolon(); }
-            if kind == -1 and ch == "," { kind = token.comma(); }
-            if kind == -1 and ch == "." { kind = token.dot(); }
-            if kind == -1 and ch == "(" { kind = token.leftParen(); }
-            if kind == -1 and ch == ")" { kind = token.rightParen(); }
-            if kind == -1 and ch == "{" { kind = token.leftBrace(); }
-            if kind == -1 and ch == "}" { kind = token.rightBrace(); }
-            if kind == -1 and ch == "[" { kind = token.leftBracket(); }
-            if kind == -1 and ch == "]" { kind = token.rightBracket(); }
-            if kind == -1 and ch == "=" { kind = token.equal(); }
-            if kind == -1 and ch == "+" { kind = token.plus(); }
-            if kind == -1 and ch == "-" { kind = token.minus(); }
-            if kind == -1 and ch == "*" { kind = token.star(); }
-            if kind == -1 and ch == "/" { kind = token.slash(); }
-            if kind == -1 and ch == "%" { kind = token.percent(); }
-            if kind == -1 and ch == "<" { kind = token.less(); }
-            if kind == -1 and ch == ">" { kind = token.greater(); }
-            if kind == -1 {
-                fail diagnostic.LexError {
-                    message = "unexpected source character";
-                    line = line;
-                    column = column;
-                };
-            }
-
-            let spelling be ch;
-            if width == 2 { spelling = pair; }
-            tokens.add(token.make(kind, spelling, spelling, startLine, startColumn));
-            i = i + width;
-            column = column + width;
-        }
+        if ch == "\n" { bomLine = bomLine + 1; bomColumn = 1; }
+        else { bomColumn = bomColumn + 1; }
+        cursor = cursor + 1;
     }
-
-    tokens.add(token.make(token.eof(), "", "", line, column));
+    let tokens be [];
+    while scanner.index < scanner.count {
+        let ch be peek(scanner, 0);
+        if source.isSourceWhitespace(ch) { advance(scanner); }
+        else { if ch == "/" and peek(scanner, 1) == "/" {
+            advance(scanner); advance(scanner);
+            while scanner.index < scanner.count and peek(scanner, 0) != "\n" { advance(scanner); }
+        } else { if ch == "/" and peek(scanner, 1) == "*" {
+            try blockComment(scanner);
+        } else { if ch == "\"" { tokens.add(try textLiteral(scanner)); }
+        else { if source.isAsciiDigit(ch) { tokens.add(try number(scanner)); }
+        else { if unicode.isIdentifierStart(ch) {
+            let line be scanner.line;
+            let column be scanner.column;
+            let raw be advance(scanner);
+            while unicode.isIdentifierContinue(peek(scanner, 0)) { raw = raw + advance(scanner); }
+            let name be unicode.normalizeNfc(raw);
+            tokens.add(token.make(token.keywordKind(name), raw, name, line, column));
+        } else {
+            let line be scanner.line;
+            let column be scanner.column;
+            let raw be ch + peek(scanner, 1);
+            let kind be symbolKind(raw);
+            if kind != -1 { advance(scanner); advance(scanner); }
+            else { raw = ch; kind = symbolKind(raw); advance(scanner); }
+            if kind == -1 {
+                fail diagnostic.LexError { message = "unexpected source character"; line = line; column = column; };
+            }
+            tokens.add(token.make(kind, raw, raw, line, column));
+        } } } } } }
+    }
+    tokens.add(token.make(token.eof(), "", "", scanner.line, scanner.column));
     return tokens;
 }

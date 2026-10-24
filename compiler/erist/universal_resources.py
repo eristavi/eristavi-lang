@@ -9,7 +9,7 @@ from .ir import (
     STD_FILE,
     STD_FILE_ERROR,
 )
-from .ir_text import IRFileExists, IRFileRemove, IRTextView, IRTextViewCount, IRTextViewIndex
+from .ir_text import IRUnicodeCall, IRFileExists, IRFileRemove, IRTextView, IRTextViewCount, IRTextViewIndex
 from .universal_checked import CheckedUniversalLowerer
 from .universal_ir import BOOL, I64, TEXT, UBranch, UField, UProgram, UReturn, UType
 
@@ -189,6 +189,9 @@ class ResourceUniversalLowerer(CheckedUniversalLowerer):
             result = self._emit("text_view_index", result_type, (view, index), immediate=kind)
             assert result is not None
             return result
+
+        if isinstance(expr, IRUnicodeCall):
+            raise ValueError("std.unicode currently requires the reference runtime or generated-C backend; use 'erist build'")
 
         if isinstance(expr, IRFileOpen):
             path = self._expr(expr.path)

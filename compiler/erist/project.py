@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .stdlib import BUILTIN_MODULES
+
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -78,7 +80,7 @@ class ProjectCompiler:
         program = Parser(Lexer(source).lex()).parse()
         imports: dict[str, CompiledModule] = {}
         for stmt in program.statements:
-            if not isinstance(stmt, ImportDecl) or stmt.path == ("std", "files"):
+            if not isinstance(stmt, ImportDecl) or stmt.path in BUILTIN_MODULES:
                 continue
             target = self.root.joinpath(*stmt.path).with_suffix(".eri")
             alias = stmt.alias or stmt.path[-1]

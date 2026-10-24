@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .stdlib import BUILTIN_MODULES
+
 from dataclasses import dataclass
 import hashlib
 import json
@@ -53,7 +55,7 @@ class ArtifactBuilder:
         program = Parser(Lexer(source).lex()).parse()
         return source, [
             stmt for stmt in program.statements
-            if isinstance(stmt, ImportDecl) and stmt.path != ("std", "files")
+            if isinstance(stmt, ImportDecl) and stmt.path not in BUILTIN_MODULES
         ]
 
     @staticmethod

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .stdlib import BUILTIN_MODULES
+
 from dataclasses import dataclass
 import hashlib
 import json
@@ -261,7 +263,7 @@ class ModuleInterface:
             sorted(
                 ".".join(path)
                 for path in analyzer.imports.values()
-                if path != ("std", "files")
+                if path not in BUILTIN_MODULES
             )
         )
         return cls(module_id, dependencies, tuple(types), tuple(functions))

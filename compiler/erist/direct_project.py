@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .stdlib import BUILTIN_MODULES
+
 from dataclasses import fields, is_dataclass
 from pathlib import Path
 
@@ -135,7 +137,7 @@ def _template_module(artifact: ModuleObjectArtifact, registry: dict[str, Compile
     program = Parser(Lexer(artifact.generic_source).lex()).parse()
     imports = {}
     for stmt in program.statements:
-        if not isinstance(stmt, ImportDecl) or stmt.path == ("std", "files"):
+        if not isinstance(stmt, ImportDecl) or stmt.path in BUILTIN_MODULES:
             continue
         module_id = ".".join(stmt.path)
         dependency = registry.get(module_id)

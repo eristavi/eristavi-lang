@@ -153,24 +153,21 @@ function parseErrorTypeRef(tokens, state identity parser_state.ParserState) retu
 }
 
 function expressionRootName(root identity ast.Node) returns Text {
-    let cursor be root;
-    while cursor.kind == ast.memberExpr() and cursor.first != none {
-        cursor = cursor.first;
+    if root.kind == ast.memberExpr() {
+        let base be root.first;
+        if base != none { return expressionRootName(base); }
     }
-    if cursor.kind == ast.nameExpr() {
-        return cursor.text;
-    }
+    if root.kind == ast.nameExpr() { return root.text; }
     return "";
 }
 
 function expressionQualifiedPath(root identity ast.Node) returns Text {
-    if root.kind == ast.nameExpr() {
-        return root.text;
-    }
-    if root.kind == ast.memberExpr() and root.first != none {
-        let base be expressionQualifiedPath(root.first);
-        if base != "" {
-            return base + "." + root.text;
+    if root.kind == ast.nameExpr() { return root.text; }
+    if root.kind == ast.memberExpr() {
+        let parent be root.first;
+        if parent != none {
+            let base be expressionQualifiedPath(parent);
+            if base != "" { return base + "." + root.text; }
         }
     }
     return "";

@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from . import c_backend as base
 from .c_backend_text import CBackend as TextBackend, TEXT_RUNTIME, _BASE_CTYPE
-from .ir_text import IRFileExists, IRFileRemove, IRTextView, IRTextViewCount, IRTextViewIndex
+from .ir_text import IRUnicodeCall, IRFileExists, IRFileRemove, IRTextView, IRTextViewCount, IRTextViewIndex
 from .unicode_c import grapheme_runtime_c
+from .unicode_library_c import unicode_library_c
+from dataclasses import fields, is_dataclass
 
 
 def _view_ctype(t: str) -> str:
@@ -102,7 +104,16 @@ class CBackend(TextBackend):
 
     def emit(self, program):
         old_runtime, old_ctype = base.RUNTIME, base.ctype
-        base.RUNTIME, base.ctype = VIEW_RUNTIME, _view_ctype
+        def uses_unicode(value):
+            if isinstance(value, IRUnicodeCall):
+                return True
+            if isinstance(value, (list, tuple)):
+                return any(uses_unicode(item) for item in value)
+            if is_dataclass(value):
+                return any(uses_unicode(getattr(value, field.name)) for field in fields(value))
+            return False
+        runtime = VIEW_RUNTIME + (unicode_library_c() if uses_unicode(program) else "")
+        base.RUNTIME, base.ctype = runtime, _view_ctype
         try:
             # Bypass TextBackend.emit because it would replace the runtime/ctype
             # with its narrower Text-only pair. base.CBackend.emit still
@@ -112,6 +123,8 @@ class CBackend(TextBackend):
             base.RUNTIME, base.ctype = old_runtime, old_ctype
 
     def _expr(self, e):
+        if isinstance(e, IRUnicodeCall):
+            return f"eri_unicode_{e.name}({self._expr(e.argument)})"
         if isinstance(e, IRTextView):
             kinds = {
                 "bytes": "ERI_TEXT_VIEW_BYTES",

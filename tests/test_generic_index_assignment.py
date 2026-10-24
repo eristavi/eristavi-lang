@@ -37,12 +37,13 @@ class GenericListRelationshipTests(unittest.TestCase):
         )
         self.assertEqual(self.execute(source), ['6'])
 
-    def test_member_maybe_narrowing_refines_exact_path(self):
+    def test_optional_identity_snapshot_survives_alias_write(self):
         source = (
             'type Node { value Int; next maybe identity Node; } '
             'let tail be identity Node { value=2; next=none; }; '
             'let head be identity Node { value=1; next=tail; }; '
-            'if head.next != none { output(head.next.value); }'
+            'let snapshot be head.next; '
+            'if snapshot != none { head.next = none; output(snapshot.value); }'
         )
         self.assertEqual(self.execute(source), ['2'])
 

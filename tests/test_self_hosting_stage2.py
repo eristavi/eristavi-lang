@@ -89,6 +89,78 @@ class SelfHostingStage2Tests(unittest.TestCase):
         )
         self.assertEqual(self.run_self_host_parser(source), ["1"])
 
+    def test_parser_rejects_invalid_frozen_syntax(self):
+        from compiler.erist.lexer import Lexer
+        from compiler.erist.parser import Parser
+        from compiler.erist.diagnostics import ParseError
+        cases = ['output(1 < 2 < 3);', 'function f(x,) {}', 'let x be [1,];',
+                 'let x be 1; x = x = 2;', 'type U { x Int }', 'if true {']
+        for source in cases:
+            with self.subTest(source=source):
+                with self.assertRaises(ParseError):
+                    Parser(Lexer(source).lex()).parse()
+                self.assertEqual(self.run_self_host_parser(source), ["-2"])
+
+    def test_expression_precedence_matches_stage0_structure(self):
+        from compiler.erist.lexer import Lexer
+        from compiler.erist.parser import Parser
+        from compiler.erist.syntax import BinaryExpr, UnaryExpr, LiteralExpr
+        from selfhost_support import literal, prepare, execute
+
+        def render(node):
+            if isinstance(node, BinaryExpr):
+                return f"({node.operator} {render(node.left)} {render(node.right)})"
+            if isinstance(node, UnaryExpr):
+                return f"({node.operator} {render(node.operand)})"
+            if isinstance(node, LiteralExpr):
+                return str(node.value).lower() if isinstance(node.value, bool) else str(node.value)
+            raise AssertionError(type(node))
+
+        helper = (
+            'import compiler.lexer; import compiler.parser; import compiler.ast; '
+            'function render(node identity ast.Node) returns Text { '
+            'if node.kind == ast.literalExpr() { return node.text; } '
+            'let first be node.first; let second be node.second; '
+            'let left be ""; let right be ""; '
+            'if first != none { left = render(first); } '
+            'if second != none { right = render(second); } '
+            'if node.kind == ast.unaryExpr() { return "(" + node.text + " " + left + ")"; } '
+            'if node.kind == ast.binaryExpr() { return "(" + node.text + " " + left + " " + right + ")"; } '
+            'return "unexpected"; } '
+            'function probe(source Text) { '
+            'let tokens be lexer.lex(source) else error { output("lex-error"); return; }; '
+            'let tree be parser.parse(tokens) else error { output("parse-error"); return; }; '
+            'let statement be tree.first; if statement == none { return; } '
+            'let expression be statement.second; if expression != none { output(render(expression)); } } '
+        )
+        for expression in ['1 + 2 * 3 - 4', '-(1 + 2) * 3', 'not true and false or true',
+                           '1 + 2 == 3 and 4 > 2', '8 / 2 / 2', 'true or false and false']:
+            source = 'let result be ' + expression + ';'
+            expected = render(Parser(Lexer(source).lex()).parse().statements[0].initializer)
+            with self.subTest(expression=expression), tempfile.TemporaryDirectory() as td:
+                root = Path(td)
+                entry = prepare(root, helper + f'probe({literal(source)});')
+                self.assertEqual(execute(entry, root), [expected])
+
+    def test_portable_c_executes_eristavi_parser(self):
+        import subprocess
+        from compiler.erist.cli import build_native
+        from selfhost_support import literal, prepare
+        source = ('import compiler.lexer; import compiler.parser; import compiler.ast; '
+                  'function probe(source Text) { '
+                  'let tokens be lexer.lex(source) else error { output("lexer-error"); return; }; '
+                  'let tree be parser.parse(tokens) else error { output("parser-error"); return; }; '
+                  'output(tree.kind == ast.program()); } '
+                  f'probe({literal("let café be 1 + 2 * 3;")});')
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            entry = prepare(root, source)
+            binary = root / 'parser'
+            self.assertEqual(build_native(entry, binary, root), 0)
+            result = subprocess.run([str(binary)], capture_output=True, text=True, timeout=30)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout, 'true\n')
+
 
 if __name__ == "__main__":
     unittest.main()
