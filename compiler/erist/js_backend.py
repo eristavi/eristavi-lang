@@ -2,18 +2,18 @@ from __future__ import annotations
 
 import hashlib
 import json
-import re
 
 from .universal_ir import BOOL, F64, I64, TEXT, UBranch, UJump, UProgram, UReturn
 
 
 class JavaScriptBackend:
-    """ES2020 backend for the scalar/function Universal-IR contract.
+    """ES2020 backend for the current scalar and ordinary-value Universal IR.
 
     Eristavi `Int` is emitted as JavaScript `BigInt`, never `Number`, and every
-    arithmetic result is range-checked back to signed Int64. This makes the
-    target implement Eristavi integer semantics rather than silently inheriting
-    JavaScript numeric precision/wrapping behavior.
+    arithmetic result is range-checked back to signed Int64. Ordinary nominal
+    values, Lists and maybe values are represented with explicit runtime helpers
+    so Eristavi deep value semantics do not silently become JavaScript reference
+    semantics. `identity<T>` deliberately remains a shared object handle.
     """
 
     SUPPORTED = {
@@ -24,6 +24,11 @@ class JavaScriptBackend:
         "f64_neg", "f64_add", "f64_sub", "f64_mul", "f64_div",
         "f64_cmp_eq", "f64_cmp_ne", "f64_cmp_lt", "f64_cmp_le", "f64_cmp_gt", "f64_cmp_ge",
         "text_concat", "text_eq", "text_ne",
+        "clone_value", "make_struct", "get_field", "set_field",
+        "make_identity", "identity_get", "identity_eq", "identity_ne",
+        "maybe_none", "maybe_some", "maybe_get",
+        "make_list", "list_count", "list_get", "list_set", "list_add",
+        "value_eq", "value_ne",
         "output_i64", "output_bool", "output_f64", "output_text",
     }
 
@@ -36,17 +41,42 @@ class JavaScriptBackend:
     def _literal(value):
         return json.dumps(value, ensure_ascii=False)
 
+    @staticmethod
+    def _field_index(ins) -> int:
+        if not isinstance(ins.immediate, dict) or "index" not in ins.immediate:
+            raise ValueError(f"JavaScript {ins.op} is missing field metadata")
+        return int(ins.immediate["index"])
+
     def emit(self, program: UProgram) -> str:
         names = {fn.name for fn in program.functions}
         if program.entry not in names:
             raise ValueError("Universal program has no JavaScript entry function")
+        type_map = {item.name: [field.type_name for field in item.fields] for item in program.types}
         lines = [
             '"use strict";',
             "const ERI_MIN = -(1n << 63n);",
             "const ERI_MAX = (1n << 63n) - 1n;",
+            f"const ERI_TYPES={json.dumps(type_map, ensure_ascii=False, sort_keys=True, separators=(',', ':'))};",
             "function eriI64(v){ if(v < ERI_MIN || v > ERI_MAX) throw new Error('Eristavi runtime fault: Int arithmetic overflow'); return v; }",
             "function eriDiv(a,b){ if(b===0n) throw new Error('Eristavi runtime fault: Int division by zero'); if(a===ERI_MIN && b===-1n) throw new Error('Eristavi runtime fault: Int arithmetic overflow'); return a/b; }",
             "function eriRem(a,b){ const q=eriDiv(a,b); return a-q*b; }",
+            "function eriInner(t,p){ return t.slice(p.length,-1); }",
+            "function eriClone(t,v){",
+            "  if(t==='i64'||t==='f64'||t==='bool'||t==='text'||t.startsWith('identity<')||t.startsWith('resource<')) return v;",
+            "  if(t.startsWith('maybe<')) return v===null?null:{v:eriClone(eriInner(t,'maybe<'),v.v)};",
+            "  if(t.startsWith('list<')){ const inner=eriInner(t,'list<'); return v.map(x=>eriClone(inner,x)); }",
+            "  if(t.startsWith('nominal<')){ const name=eriInner(t,'nominal<'); const fields=ERI_TYPES[name]; if(!fields) throw new Error('missing Eristavi JavaScript type layout '+name); return v.map((x,i)=>eriClone(fields[i],x)); }",
+            "  throw new Error('unsupported Eristavi JavaScript clone type '+t);",
+            "}",
+            "function eriEq(t,a,b){",
+            "  if(t==='i64'||t==='f64'||t==='bool'||t==='text'||t.startsWith('identity<')||t.startsWith('resource<')) return a===b;",
+            "  if(t.startsWith('maybe<')){ if(a===null||b===null) return a===b; return eriEq(eriInner(t,'maybe<'),a.v,b.v); }",
+            "  if(t.startsWith('list<')){ if(a.length!==b.length) return false; const inner=eriInner(t,'list<'); for(let i=0;i<a.length;i++) if(!eriEq(inner,a[i],b[i])) return false; return true; }",
+            "  if(t.startsWith('nominal<')){ const name=eriInner(t,'nominal<'); const fields=ERI_TYPES[name]; if(!fields) throw new Error('missing Eristavi JavaScript type layout '+name); for(let i=0;i<fields.length;i++) if(!eriEq(fields[i],a[i],b[i])) return false; return true; }",
+            "  throw new Error('unsupported Eristavi JavaScript equality type '+t);",
+            "}",
+            "function eriIndex(a,i){ if(i<0n||i>=BigInt(a.length)) throw new Error('Eristavi runtime fault: List index out of bounds'); return Number(i); }",
+            "function eriMaybeGet(v){ if(v===null) throw new Error('Eristavi runtime fault: absent maybe value'); return v.v; }",
             "function eriOut(v){ if(typeof v==='bigint') console.log(v.toString()); else if(typeof v==='boolean') console.log(v?'true':'false'); else console.log(String(v)); }",
         ]
         for fn in program.functions:
@@ -105,6 +135,26 @@ class JavaScriptBackend:
             if target not in names: raise ValueError(f"JavaScript call target {target!r} is missing")
             call=f"{self._symbol(target)}({', '.join(f'v[{x.id}]' for x in ins.args)})"
             return [f"{dst}={call};" if dst else call+";"]
+        if op == "clone_value": return [f"{dst}=eriClone({self._literal(str(ins.immediate))},{arg(0)});"]
+        if op == "make_struct": return [f"{dst}=[{', '.join(f'v[{value.id}]' for value in ins.args)}];"]
+        if op == "get_field": return [f"{dst}={arg(0)}[{self._field_index(ins)}];"]
+        if op == "set_field": return [f"{arg(0)}[{self._field_index(ins)}]={arg(1)};"]
+        if op == "make_identity": return [f"{dst}={{v:{arg(0)}}};"]
+        if op == "identity_get": return [f"{dst}={arg(0)}.v;"]
+        if op in ("identity_eq", "identity_ne"):
+            operator="===" if op=="identity_eq" else "!=="
+            return [f"{dst}=({arg(0)}{operator}{arg(1)});"]
+        if op == "maybe_none": return [f"{dst}=null;"]
+        if op == "maybe_some": return [f"{dst}={{v:{arg(0)}}};"]
+        if op == "maybe_get": return [f"{dst}=eriMaybeGet({arg(0)});"]
+        if op == "make_list": return [f"{dst}=[{', '.join(f'v[{value.id}]' for value in ins.args)}];"]
+        if op == "list_count": return [f"{dst}=BigInt({arg(0)}.length);"]
+        if op == "list_get": return [f"{dst}={arg(0)}[eriIndex({arg(0)},{arg(1)})];"]
+        if op == "list_set": return [f"{arg(0)}[eriIndex({arg(0)},{arg(1)})]={arg(2)};"]
+        if op == "list_add": return [f"{arg(0)}.push({arg(1)});"]
+        if op in ("value_eq", "value_ne"):
+            expr=f"eriEq({self._literal(str(ins.immediate))},{arg(0)},{arg(1)})"
+            return [f"{dst}={'!' if op=='value_ne' else ''}{expr};"]
         if op == "neg_checked": return [f"{dst}=eriI64(-{arg(0)});"]
         if op in ("add_checked","sub_checked","mul_checked"):
             operator={"add_checked":"+","sub_checked":"-","mul_checked":"*"}[op]
