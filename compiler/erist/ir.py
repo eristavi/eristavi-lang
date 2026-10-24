@@ -2,7 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from .diagnostics import SemanticError, SourceLocation
 from .syntax import *
-from .typesys import describe, resolve, NoValueType
+from .typesys import describe, resolve, NoValueType, IdentityType
 
 @dataclass(frozen=True)
 class IRExpr:
@@ -121,8 +121,19 @@ class Lowerer:
         if isinstance(s,ForStmt): return IRFor(s.name,self._expr(s.iterable),[self._stmt(x) for x in s.body.statements],s.location)
         if isinstance(s,ReturnStmt): return IRReturn(self._expr(s.value) if s.value else None,s.location)
         raise SemanticError(f"the current typed IR backend does not yet lower {type(s).__name__}",getattr(s,"location",None))
+    def _ast_type(self,e:Expr):
+        known=self.a.expr_types.get(id(e))
+        if known is not None: return resolve(known)
+        if isinstance(e,MemberExpr):
+            bt=self._ast_type(e.base)
+            base=resolve(bt.inner) if isinstance(bt,IdentityType) else bt
+            name=describe(base)
+            info=self.a.structs.get(name)
+            if info is None or e.name not in info.fields: raise SemanticError(f"cannot derive member type for {e.name!r}",e.location)
+            return resolve(info.fields[e.name].type)
+        raise SemanticError("cannot derive expression type during IR lowering",getattr(e,"location",None))
     def _member_expr(self,e:MemberExpr):
-        t=describe(resolve(self.a.expr_types[id(e)])); self._supported_type(t,e.location)
+        t=describe(self._ast_type(e)); self._supported_type(t,e.location)
         return IRMember(t,e.location,self._expr(e.base),e.name)
     def _expr(self,e):
         t=describe(resolve(self.a.expr_types[id(e)]))
