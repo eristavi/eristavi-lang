@@ -1,30 +1,83 @@
 from __future__ import annotations
+from dataclasses import fields as dc_fields, is_dataclass
 from .ir import *
 
 class CBackend:
-    def __init__(self): self.indent=0; self.temp=0; self.struct_names=set()
+    def __init__(self):
+        self.indent=0; self.temp=0; self.struct_names=set(); self.maybe_types=set(); self.maybe_defined=set()
     def emit(self,p:IRProgram)->str:
         self.struct_names={s.name for s in p.structs}
-        parts=[RUNTIME]
+        self.maybe_types=self._collect_maybe_types(p)
         ordered=self._order_structs(p.structs)
+        parts=[RUNTIME]
+        if ordered: parts.append('\n'.join(f'typedef struct {struct_tag(s.name)} {ctype(s.name)};' for s in ordered))
+        # Define optional wrappers only when their by-value inner type is already complete.
+        for t in sorted(self.maybe_types):
+            if self._maybe_ready(t,set()): parts.append(self._maybe_typedef(t)); self.maybe_defined.add(t)
+        defined_structs=set()
+        for s in ordered:
+            needed=[f.type_name for f in s.fields if f.type_name.startswith('maybe ')]
+            for t in needed:
+                if t not in self.maybe_defined and self._maybe_ready(t,defined_structs):
+                    parts.append(self._maybe_typedef(t)); self.maybe_defined.add(t)
+            parts.append(self._struct_definition(s)); defined_structs.add(s.name)
+        for t in sorted(self.maybe_types):
+            if t not in self.maybe_defined:
+                if not self._maybe_ready(t,defined_structs): raise ValueError(f'cannot lay out {t}')
+                parts.append(self._maybe_typedef(t)); self.maybe_defined.add(t)
         if ordered:
-            parts.append('\n'.join(f'typedef struct {struct_tag(s.name)} {ctype(s.name)};' for s in ordered))
-            for s in ordered: parts.append(self._struct_definition(s))
-            for s in ordered: parts.append(self._identity_helper_for_struct(s.name))
-            for s in ordered: parts.append(self._struct_equality(s))
+            parts.append('\n'.join(f'static bool {eq_helper(s.name)}({ctype(s.name)} a, {ctype(s.name)} b);' for s in ordered))
+        if self.maybe_types:
+            parts.append('\n'.join(f'static bool {maybe_eq(t)}({ctype(t)} a, {ctype(t)} b);' for t in sorted(self.maybe_types)))
+        for s in ordered: parts.append(self._identity_helper_for_struct(s.name))
+        for s in ordered: parts.append(self._struct_equality(s))
+        for t in sorted(self.maybe_types): parts.append(self._maybe_equality(t))
         for f in p.functions: parts.append(self._function(f))
         body=self._stmts(p.entry)
         parts.append('int main(void) {\n    fesetround(FE_TONEAREST);\n'+self._indent_text(body,1)+'    return 0;\n}\n')
-        return '\n'.join(parts)
+        return '\n'.join(x for x in parts if x)
+    def _collect_maybe_types(self,p):
+        out=set()
+        def add_type(t):
+            if not isinstance(t,str): return
+            if t.startswith('maybe '): out.add(t); add_type(maybe_inner(t))
+        def walk(x):
+            if isinstance(x,str): return
+            if isinstance(x,(list,tuple,set)):
+                for y in x: walk(y)
+                return
+            if is_dataclass(x):
+                if hasattr(x,'type_name'): add_type(getattr(x,'type_name'))
+                if isinstance(x,IRFunction) and x.return_type: add_type(x.return_type)
+                for f in dc_fields(x): walk(getattr(x,f.name))
+        walk(p); return out
+    def _maybe_ready(self,t,defined):
+        inner=maybe_inner(t)
+        if inner.startswith('identity '): return True
+        if inner in ('Int','Float','Bool','Text'): return True
+        return inner in defined
+    def _maybe_typedef(self,t):
+        inner=maybe_inner(t); ct=ctype(t); ict=ctype(inner)
+        return f'typedef struct {{ bool has; {ict} value; }} {ct};\nstatic {ict} {maybe_get(t)}({ct} v) {{ if(!v.has) eri_fault("optional value is absent"); return v.value; }}\n'
+    def _maybe_equality(self,t):
+        inner=maybe_inner(t); comp=self._eq_component(inner,'a.value','b.value')
+        return f'static bool {maybe_eq(t)}({ctype(t)} a, {ctype(t)} b) {{ if(a.has!=b.has)return false; if(!a.has)return true; return {comp}; }}\n'
     def _order_structs(self,structs):
         by={s.name:s for s in structs}; out=[]; visiting=set(); done=set()
+        def dep_type(t):
+            if t.startswith('identity '): return None
+            if t.startswith('maybe '):
+                inner=maybe_inner(t)
+                if inner.startswith('identity '): return None
+                return inner
+            return t
         def visit(s):
             if s.name in done: return
             if s.name in visiting: raise ValueError(f'recursive by-value struct layout is not supported: {s.name}')
             visiting.add(s.name)
             for f in s.fields:
-                dep=identity_inner(f.type_name) if f.type_name.startswith('identity ') else f.type_name
-                if dep in by and not f.type_name.startswith('identity '): visit(by[dep])
+                dep=dep_type(f.type_name)
+                if dep in by: visit(by[dep])
             visiting.remove(s.name); done.add(s.name); out.append(s)
         for s in structs: visit(s)
         return out
@@ -39,6 +92,7 @@ class CBackend:
         expr=' && '.join(checks) if checks else 'true'
         return f'static bool {eq_helper(s.name)}({ctype(s.name)} a, {ctype(s.name)} b) {{ return {expr}; }}\n'
     def _eq_component(self,t,a,b):
+        if t.startswith('maybe '): return f'{maybe_eq(t)}({a}, {b})'
         if t.startswith('identity '): return f'({a} == {b})'
         if t=='Text': return f'(strcmp({a}, {b}) == 0)'
         if t in ('Int','Float','Bool'): return f'({a} == {b})'
@@ -73,6 +127,7 @@ class CBackend:
         raise TypeError(s)
     def _lvalue(self,e):
         if isinstance(e,IRVar): return cname(e.name)
+        if isinstance(e,IRMaybeGet): return f'({self._lvalue(e.value)}).value'
         if isinstance(e,IRMember):
             base=self._lvalue(e.base)
             op='->' if e.base.type_name.startswith('identity ') else '.'
@@ -88,10 +143,13 @@ class CBackend:
                 return repr(v)
             return str(e.value)
         if isinstance(e,IRVar): return cname(e.name)
+        if isinstance(e,IRMaybeNone): return f'({ctype(e.type_name)}){{.has=false}}'
+        if isinstance(e,IRMaybeSome): return f'({ctype(e.type_name)}){{.has=true,.value={self._expr(e.value)}}}'
+        if isinstance(e,IRMaybeGet): return f'{maybe_get(e.value.type_name)}({self._expr(e.value)})'
         if isinstance(e,IRIdentity): return f'{identity_helper(identity_inner(e.type_name))}({self._expr(e.value)})'
         if isinstance(e,IRConstruct):
-            fields=', '.join(f'.{field_name(x.name)} = {self._expr(x.value)}' for x in e.fields)
-            return f'({ctype(e.type_name)}){{{fields}}}'
+            vals=', '.join(f'.{field_name(x.name)} = {self._expr(x.value)}' for x in e.fields)
+            return f'({ctype(e.type_name)}){{{vals}}}'
         if isinstance(e,IRMember):
             op='->' if e.base.type_name.startswith('identity ') else '.'
             return f'({self._expr(e.base)}){op}{field_name(e.name)}'
@@ -109,20 +167,19 @@ class CBackend:
             if e.operator=='-' and e.type_name=='Float': return f'eri_fneg({self._expr(e.operand)})'
         if isinstance(e,IRBinary):
             a=self._expr(e.left); b=self._expr(e.right); op=e.operator
+            if e.left.type_name.startswith('maybe ') and op in ('==','!='):
+                cmp=f'{maybe_eq(e.left.type_name)}({a}, {b})'
+                return cmp if op=='==' else f'(!{cmp})'
             if e.left.type_name.startswith('identity ') and op in ('==','!='):
-                cmp=f'({a} == {b})'
-                return cmp if op=='==' else f'(!{cmp})'
+                cmp=f'({a} == {b})'; return cmp if op=='==' else f'(!{cmp})'
             if e.left.type_name.startswith('List of ') and op in ('==','!='):
-                cmp=f'{list_helper(e.left.type_name)}_eq({a}, {b})'
-                return cmp if op=='==' else f'(!{cmp})'
+                cmp=f'{list_helper(e.left.type_name)}_eq({a}, {b})'; return cmp if op=='==' else f'(!{cmp})'
             if e.left.type_name not in ('Int','Float','Bool','Text') and op in ('==','!='):
-                cmp=f'{eq_helper(e.left.type_name)}({a}, {b})'
-                return cmp if op=='==' else f'(!{cmp})'
+                cmp=f'{eq_helper(e.left.type_name)}({a}, {b})'; return cmp if op=='==' else f'(!{cmp})'
             if e.left.type_name=='Int' and op in '+-*/%': return f'eri_i{OPNAME[op]}({a}, {b})'
             if e.left.type_name=='Float' and op in '+-*/': return f'eri_f{OPNAME[op]}({a}, {b})'
             if e.left.type_name=='Text' and op in ('==','!='):
-                cmp=f'(strcmp({a}, {b}) == 0)'
-                return cmp if op=='==' else f'(!{cmp})'
+                cmp=f'(strcmp({a}, {b}) == 0)'; return cmp if op=='==' else f'(!{cmp})'
             cop={'and':'&&','or':'||','==':'==','!=':'!=','<':'<','<=':'<=','>':'>','>=':'>='}.get(op,op)
             return f'({a} {cop} {b})'
         if isinstance(e,IRCall):
@@ -152,6 +209,12 @@ def cname(n): return 'v_'+mangle(n)
 def field_name(n): return 'f_'+mangle(n)
 def struct_tag(t): return 'eri_struct_tag_'+mangle(t)
 def eq_helper(t): return 'eri_eq_'+mangle(t)
+def maybe_inner(t):
+    if not t.startswith('maybe '): raise KeyError(t)
+    return t[6:]
+def maybe_name(t): return 'eri_maybe_'+mangle(maybe_inner(t))
+def maybe_eq(t): return maybe_name(t)+'_eq'
+def maybe_get(t): return maybe_name(t)+'_get'
 def identity_inner(t):
     if not t.startswith('identity '): raise KeyError(t)
     return t[9:]
@@ -166,6 +229,7 @@ def list_helper_from_element(t):
 def ctype(t):
     scalars={'Int':'int64_t','Float':'double','Bool':'bool','Text':'const char *'}
     if t in scalars: return scalars[t]
+    if t.startswith('maybe '): return maybe_name(t)
     if t.startswith('identity '): return ctype(identity_inner(t))+' *'
     if t.startswith('List of '): return list_helper(t)
     return 'eri_struct_'+mangle(t)
