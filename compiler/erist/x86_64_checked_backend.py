@@ -79,11 +79,27 @@ class X86_64CheckedLinuxBackend(X86_64LinuxBackend):
             self._store_result(ins)
             return
         if op == "error_value":
-            self.lines.append("    movq .Leri_error_value(%rip), %rax")
+            if ins.result is None:
+                raise ValueError("error_value requires a result")
+            if ins.result.type_name == "error<any>":
+                # Catch-all handlers expose a stable error view even after the
+                # active global checked-error state is cleared before executing
+                # the handler body. The first word is the captured message Text.
+                self.lines.extend([
+                    "    movq .Leri_error_message(%rip), %r12",
+                    "    movl $8, %edi",
+                    "    call malloc@PLT",
+                    "    movq %r12, 0(%rax)",
+                ])
+            else:
+                self.lines.append("    movq .Leri_error_value(%rip), %rax")
             self._store_result(ins)
             return
         if op == "error_message":
-            self.lines.append("    movq .Leri_error_message(%rip), %rax")
+            if len(ins.args) != 1:
+                raise ValueError("error_message requires one captured error view")
+            self._load(ins.args[0], "%rax")
+            self.lines.append("    movq 0(%rax), %rax")
             self._store_result(ins)
             return
         if op == "error_clear":
