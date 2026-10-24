@@ -1,5 +1,5 @@
 from __future__ import annotations
-import argparse, os, subprocess, tempfile
+import argparse, os, shlex, subprocess, tempfile
 from pathlib import Path
 import sys
 from .diagnostics import EristaviError
@@ -53,10 +53,11 @@ def build_c_file(path:Path,output:Path,source_root:Path|None=None)->int:
 def build_native(path:Path,output:Path,source_root:Path|None=None,cc:str|None=None)->int:
     try:
         compiler=cc or os.environ.get('CC','cc')
+        cflags=shlex.split(os.environ.get('CFLAGS',''))
         mod=compile_entry(path,source_root); ir=lower_project(mod); c=CBackend().emit(ir)
         with tempfile.TemporaryDirectory() as td:
             cp=Path(td)/'program.c'; cp.write_text(c,encoding='utf-8')
-            proc=subprocess.run([compiler,'-std=c11',str(cp),'-lm','-o',str(output)],capture_output=True,text=True)
+            proc=subprocess.run([compiler,'-std=c11',*cflags,str(cp),'-lm','-o',str(output)],capture_output=True,text=True)
             if proc.returncode!=0:
                 if proc.stdout: print(proc.stdout,file=sys.stderr,end='')
                 if proc.stderr: print(proc.stderr,file=sys.stderr,end='')
