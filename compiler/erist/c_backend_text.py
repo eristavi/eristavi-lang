@@ -37,6 +37,12 @@ def _text_runtime() -> str:
 
     r = _replace_once(
         r,
+        "static eri_failure_value eri_failure = {NULL,NULL,NULL,NULL};",
+        "static eri_failure_value eri_failure = {NULL,NULL,{0,NULL},NULL};",
+    )
+
+    r = _replace_once(
+        r,
         "static char *eri_text_dup(const char *s){ size_t n=strlen(s); char *r=(char*)eri_alloc(n+1); memcpy(r,s,n+1); return r; }\n"
         "static void eri_attach_secondary(eri_failure_value *primary, eri_failure_value secondary){ eri_secondary_failure *n=(eri_secondary_failure*)eri_alloc(sizeof(*n)); n->type=secondary.type; n->payload=secondary.payload; n->message=secondary.message; n->next=NULL; eri_secondary_failure **p=&primary->secondary; while(*p)p=&(*p)->next; *p=n; }\n"
         "static void eri_raise(const char *type, void *payload, const char *message){ eri_failure=(eri_failure_value){type,payload,message,NULL}; if(!eri_handler_top)eri_fault(message?message:\"unhandled checked failure\"); longjmp(eri_handler_top->env,1); }\n"
