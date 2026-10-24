@@ -1,0 +1,17 @@
+public error LexError {
+    message Text;
+    line Int;
+    column Int;
+}
+
+public error ParseError {
+    message Text;
+    line Int;
+    column Int;
+}
+
+public error SemanticError {
+    message Text;
+    line Int;
+    column Int;
+}

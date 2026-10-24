@@ -202,7 +202,7 @@ class Interpreter:
             mod=self.imported_modules[e.callee.base.name]
             fn=next((x for x in mod.program.statements if isinstance(x,FunctionDecl) and x.name==e.callee.name and x.public),None)
             if fn is None: raise RuntimeFault(f"module {e.callee.base.name!r} has no public function {e.callee.name!r}",e.location)
-            child=Interpreter(self.output_sink,mod.module_id,mod.imports)
+            child=type(self)(self.output_sink,mod.module_id,mod.imports)
             child._prepare(mod.program)
             return child._call_function(fn,[self._expr(a) for a in e.arguments])
         if isinstance(e.callee,MemberExpr):

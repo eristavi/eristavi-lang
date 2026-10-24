@@ -1,0 +1,104 @@
+public type Token {
+    kind Int;
+    lexeme Text;
+    value Text;
+    line Int;
+    column Int;
+}
+
+public function make(kind Int, lexeme Text, value Text, line Int, column Int) returns Token {
+    return Token {
+        kind = kind;
+        lexeme = lexeme;
+        value = value;
+        line = line;
+        column = column;
+    };
+}
+
+public function eof() returns Int { return 0; }
+public function identifier() returns Int { return 1; }
+public function integer() returns Int { return 2; }
+public function float() returns Int { return 3; }
+public function text() returns Int { return 4; }
+public function letKeyword() returns Int { return 5; }
+public function fixedKeyword() returns Int { return 6; }
+public function beKeyword() returns Int { return 7; }
+public function functionKeyword() returns Int { return 8; }
+public function returnsKeyword() returns Int { return 9; }
+public function returnKeyword() returns Int { return 10; }
+public function ifKeyword() returns Int { return 11; }
+public function elseKeyword() returns Int { return 12; }
+public function forKeyword() returns Int { return 13; }
+public function inKeyword() returns Int { return 14; }
+public function whileKeyword() returns Int { return 15; }
+public function typeKeyword() returns Int { return 16; }
+public function identityKeyword() returns Int { return 17; }
+public function maybeKeyword() returns Int { return 18; }
+public function errorKeyword() returns Int { return 19; }
+public function failsKeyword() returns Int { return 20; }
+public function failKeyword() returns Int { return 21; }
+public function tryKeyword() returns Int { return 22; }
+public function withKeyword() returns Int { return 23; }
+public function importKeyword() returns Int { return 24; }
+public function asKeyword() returns Int { return 25; }
+public function publicKeyword() returns Int { return 26; }
+public function andKeyword() returns Int { return 27; }
+public function orKeyword() returns Int { return 28; }
+public function notKeyword() returns Int { return 29; }
+public function trueKeyword() returns Int { return 30; }
+public function falseKeyword() returns Int { return 31; }
+public function noneKeyword() returns Int { return 32; }
+public function semicolon() returns Int { return 33; }
+public function comma() returns Int { return 34; }
+public function dot() returns Int { return 35; }
+public function leftParen() returns Int { return 36; }
+public function rightParen() returns Int { return 37; }
+public function leftBrace() returns Int { return 38; }
+public function rightBrace() returns Int { return 39; }
+public function leftBracket() returns Int { return 40; }
+public function rightBracket() returns Int { return 41; }
+public function equal() returns Int { return 42; }
+public function plus() returns Int { return 43; }
+public function minus() returns Int { return 44; }
+public function star() returns Int { return 45; }
+public function slash() returns Int { return 46; }
+public function percent() returns Int { return 47; }
+public function equalEqual() returns Int { return 48; }
+public function bangEqual() returns Int { return 49; }
+public function less() returns Int { return 50; }
+public function lessEqual() returns Int { return 51; }
+public function greater() returns Int { return 52; }
+public function greaterEqual() returns Int { return 53; }
+
+public function keywordKind(name Text) returns Int {
+    if name == "let" { return letKeyword(); }
+    if name == "fixed" { return fixedKeyword(); }
+    if name == "be" { return beKeyword(); }
+    if name == "function" { return functionKeyword(); }
+    if name == "returns" { return returnsKeyword(); }
+    if name == "return" { return returnKeyword(); }
+    if name == "if" { return ifKeyword(); }
+    if name == "else" { return elseKeyword(); }
+    if name == "for" { return forKeyword(); }
+    if name == "in" { return inKeyword(); }
+    if name == "while" { return whileKeyword(); }
+    if name == "type" { return typeKeyword(); }
+    if name == "identity" { return identityKeyword(); }
+    if name == "maybe" { return maybeKeyword(); }
+    if name == "error" { return errorKeyword(); }
+    if name == "fails" { return failsKeyword(); }
+    if name == "fail" { return failKeyword(); }
+    if name == "try" { return tryKeyword(); }
+    if name == "with" { return withKeyword(); }
+    if name == "import" { return importKeyword(); }
+    if name == "as" { return asKeyword(); }
+    if name == "public" { return publicKeyword(); }
+    if name == "and" { return andKeyword(); }
+    if name == "or" { return orKeyword(); }
+    if name == "not" { return notKeyword(); }
+    if name == "true" { return trueKeyword(); }
+    if name == "false" { return falseKeyword(); }
+    if name == "none" { return noneKeyword(); }
+    return identifier();
+}
