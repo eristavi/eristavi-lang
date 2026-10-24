@@ -240,8 +240,6 @@ class ModuleInterface:
             done = [spec for spec in fn.specializations.values() if spec.state == "done" and spec.return_type is not None]
             if not done:
                 raise ValueError(f"public function {name!r} has no completed interface specialization")
-            # Analyzer insertion order guarantees the first specialization is the
-            # symbolic contract checked before call-site specializations.
             spec = done[0]
             variables: dict[int, str] = {}
             params = tuple(
@@ -332,7 +330,10 @@ class _InterfaceFunctionSymbol:
         self.declaration = SimpleNamespace(
             name=contract.name,
             public=True,
-            parameters=[SimpleNamespace(name=p.name) for p in contract.parameters],
+            parameters=[
+                SimpleNamespace(name=p.name, type_annotation=(object() if p.declared else None))
+                for p in contract.parameters
+            ],
         )
         self.typed_parameters = contract.declared_parameter_types()
         self.explicit_return = None
@@ -341,11 +342,7 @@ class _InterfaceFunctionSymbol:
 
 
 class InterfaceAnalyzerProxy:
-    """Analyzer-shaped read-only view backed solely by serialized metadata.
-
-    It intentionally implements only the public contract operations needed by an
-    importing frontend.  Function bodies and private callable names are absent.
-    """
+    """Analyzer-shaped read-only view backed solely by serialized metadata."""
 
     def __init__(self, interface: ModuleInterface):
         self.interface = interface
