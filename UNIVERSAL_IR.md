@@ -1,6 +1,6 @@
 # Eristavi Universal IR
 
-> **Status: broad executable lower IR with verification, optimization, CFG analysis, initial x86 physical allocation and multiple consumers**
+> **Status: broad executable lower IR with verification, optimization, CFG analysis, contract-driven x86 physical allocation and multiple consumers**
 
 Eristavi has two intentionally distinct compiler IR levels:
 
@@ -46,11 +46,11 @@ The analysis layer provides:
 - escape classification;
 - short-lived scalar register candidates.
 
-The x86-64 collector consumes safe-point liveness to root only heap temporaries that must survive collection and uses interference coloring to reuse non-overlapping scalar spill slots. Heap spill slots that participate in root metadata stay pinned and unique.
+The x86-64 collector consumes safe-point liveness to root only heap temporaries that must survive collection. Heap spill slots that participate in root metadata stay pinned and unique.
 
-The x86-64 backend now also consumes these analyses through an initial conservative physical-register allocator. Eligible short-lived Int/Bool and Float values can remain register-resident in lowering regions explicitly known to be call-free. Higher-level lowering instructions are treated as clobber regions: their operands and values that must survive them remain stack-backed, because helper calls may occur before all operands are consumed.
+The x86-64 backend consumes the same analyses through explicit machine-lowering use/clobber contracts. The current audited allocation pools are `r10`/`r11` for Int/Bool and `xmm8`/`xmm9` for Float. Values crossing helper, PLT or GC clobbers remain spilled; audited values whose complete lifetime is register-resident omit their spill slots entirely. Unknown lowerings default to full conservative caller-saved clobbers and cannot silently become allocation-safe.
 
-This is intentionally not yet a mature whole-function allocator. Explicit per-lowering machine use/clobber contracts, broader register pools, move/coalescing improvements and dead spill-slot/frame compaction remain open.
+This is a real physical allocation path, but not yet a mature whole-function allocator. Broader audited register use, move/coalescing improvements, better cost heuristics and tighter instruction-selection integration remain open.
 
 ## Checked failures
 
@@ -73,7 +73,7 @@ Versioned `.eri-object.json` artifacts serialize verified/optimized Universal-IR
 ## Current consumers
 
 ### x86-64 Linux
-Broad direct consumer with functions, Float/Text/Text views, aggregates, Lists, maybe, identity, checked errors, resources, module objects, GC and an initial verified scalar physical-register allocation path.
+Broad direct consumer with functions, Float/Text/Text views, aggregates, Lists, maybe, identity, checked errors, resources, module objects, typed GC, lowering contracts, physical register allocation and spill-frame compaction.
 
 ### ARM64 Linux
 Consumes the same IR and is native-tested for Text, aggregates, maybe/identity, checked failures and file resources in addition to scalar/functions. Automatic reclamation and explicit Text-view runtime parity remain incomplete.
