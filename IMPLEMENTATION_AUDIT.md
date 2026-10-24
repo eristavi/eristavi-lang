@@ -1,150 +1,49 @@
 # Eristavi pre-0.1 Implementation Audit
 
-> **Audit date: 2026-10-23**
+> **Audit date: 2026-10-24**
 >
-> **Scope:** frozen pre-0.1 language contract versus the current Python bootstrap compiler, AST execution runtime, project loader, typed Eristavi IR, and first C/native backend.
+> **Scope:** frozen pre-0.1 language contract versus the current Python bootstrap compiler, AST execution runtime, project loader, typed Eristavi IR, C/native backend, Unicode support and cross-toolchain CI.
 
 ## 1. Executive result
 
-The project has moved beyond a lexer/parser proof of concept into a broad executable implementation of the frozen language model.
+Eristavi has moved beyond an interpreter/bootstrap experiment into a broad executable compiler implementation.
 
 At this audit point:
 
-- the Python sources compile successfully with `compileall`;
-- the complete local suite contains **80 passing tests**;
-- the canonical hello program runs through the AST bootstrap runtime and produces `42`;
-- the same scalar program lowers through typed Eristavi IR, emits C, compiles with the system C compiler, and produces `42` as a native executable;
-- the broad bootstrap runtime implements the principal pre-0.1 slices through modules/imports;
-- the first typed IR/C backend is intentionally narrower and is not yet feature-parity with the frontend/runtime.
+- the source-language/frontend contract remains frozen and no major semantic decision had to be reopened;
+- the frontend and bootstrap runtime cover the principal pre-0.1 language surface;
+- the typed IR/C backend now compiles the major value, collection, optional, identity, checked-error, resource, module and inferred-generic slices that were previously frontend-only;
+- Unicode behavior is pinned to Unicode **17.0.0** rather than inherited from the host Python Unicode database;
+- explicit Text views are implemented in the frontend/bootstrap runtime;
+- the verified suite contains **144 tests**;
+- the native suite passes under GCC and Clang on Ubuntu and Clang on macOS, with `-O2` enabled;
+- the current native route remains Eristavi IR → C11 → system C compiler, not a direct machine-code backend.
 
-The source-language freeze remains valid. The implementation work completed here did not require adding alternate syntax or reopening the major semantic decisions.
+The implementation continues to support the central architecture rule:
 
-## 2. Frontend and runtime coverage
+> Target platforms implement Eristavi semantics; they do not redefine them.
 
-### Lexer — implemented
+## 2. Frontend and bootstrap runtime
 
-Implemented behavior includes:
+The implemented frontend/runtime surface includes:
 
-- exact frozen keyword vocabulary;
-- SPACE/TAB/LF/CR whitespace model and BOM handling;
-- Unicode identifiers with NFC normalization using the host Unicode tables;
-- `//` comments and nested `/* ... */` comments;
-- decimal/binary/hex Int literals;
-- decimal Float literals and exponent syntax;
-- locked Text escapes and Unicode scalar escapes;
-- frozen punctuation/operator tokenization and longest-token recognition.
+- the frozen 28-keyword lexical vocabulary;
+- SPACE/TAB/LF/CR whitespace rules, BOM handling, line comments and nested block comments;
+- decimal/binary/hex Int literals and decimal binary64 Float literals;
+- Text literals and the frozen escape vocabulary;
+- Unicode 17 XID identifiers with NFC normalization;
+- `let`, transitive `fixed`, annotations, assignment and lexical no-shadowing;
+- signed checked 64-bit `Int`, `Float`, `Bool`, `Text`, `maybe`, Lists, ordinary user-defined values and managed identities;
+- `if`, `else`, `while`, stable `for`, functions, recursion and completion analysis;
+- compiler-inferred generic relationships and concrete specialization;
+- structural value equality and identity equality;
+- checked errors, typed/catch-all handling and `try` propagation;
+- deterministic `with` resource ownership and cleanup-failure composition;
+- source-root modules/imports, aliases, public/private declarations and circular-import diagnostics.
 
-### Parser / AST — broadly implemented
+### Unicode Text views
 
-The parser represents and accepts the frozen forms needed for:
-
-- imports and public/module declarations;
-- variable declarations and writable assignment paths;
-- functions, parameters, returns and `fails` clauses;
-- types, errors and named-field construction;
-- `if`, `while`, `for`, `with` and blocks;
-- Lists, calls, member/index access;
-- `identity`, `try`, `fail` and `else error` handlers;
-- `maybe`/`none` type/value syntax.
-
-The construction-versus-block ambiguity is resolved using known type/module information without changing source syntax.
-
-### Semantic analysis / inference — broadly implemented
-
-Implemented checks include:
-
-- declaration-before-use, lexical scope, no local shadowing and module declaration ordering;
-- primitive and composite type relationships;
-- checked Int/Float separation and Int-only `%`;
-- Bool-only conditions;
-- function arity/argument checks, inferred/explicit results, no-value use rules, recursion and completion analysis;
-- compiler-inferred generic parameter relationships with symbolic body constraints and per-call specialization;
-- List element inference, unresolved/conflicting empty List diagnostics, checked indexes, fixed mutation rules and equality;
-- ordinary user-value construction, field mutability, structural equality and deep-fixable analysis;
-- maybe presence requirements and common flow-narrowing cases;
-- identity creation/equality and value/identity separation;
-- checked error contracts, local exhaustive handling and propagation;
-- deterministic resource ownership constraints and cleanup-error contract checking;
-- project/module imports, aliases, public/private access, circular dependencies and declaration-only reusable modules.
-
-### AST execution runtime — broadly implemented
-
-The bootstrap runtime executes the corresponding source features, including value-copy semantics, identity alias semantics, stable List iteration, checked failures and handlers, and `std.files` resource cleanup. Checked cleanup failures preserve an already-active body failure as primary and attach cleanup failures as secondary diagnostic context.
-
-## 3. Module and project implementation
-
-`project.py` provides source-root-relative module loading. It:
-
-- maps dotted imports to `.eri` files;
-- compiles imports recursively;
-- detects circular imports;
-- enforces declaration-only imported modules;
-- exposes only public declarations to importing modules;
-- supports aliases;
-- carries imported type/error/function information into semantic analysis and runtime execution.
-
-This is sufficient for bootstrap project work. Serialized module metadata, package resolution, versioning and registry behavior remain intentionally beyond pre-0.1.
-
-## 4. Generic inference implementation
-
-Untyped function parameters are no longer rejected wholesale. The bootstrap now supports useful inferred relationships such as:
-
-```eri
-function identity(value) {
-    return value;
-}
-```
-
-and List-element relationships such as a generic first-element function.
-
-The compiler symbolically checks generic bodies, records operation constraints, and specializes relationships at concrete calls. It rejects incompatible specializations rather than falling back to dynamic typing.
-
-This is an implementation of the frozen inferred-generic philosophy, not a complete future constraint/type-system engine. More stress testing is required as the standard library grows.
-
-## 5. Typed Eristavi IR — first implementation
-
-`ir.py` introduces a typed, machine-independent structured IR with:
-
-- typed constants and variables;
-- unary/binary expressions;
-- named calls;
-- bindings and assignment;
-- conditional and loop nodes;
-- returns;
-- function and entry bodies.
-
-This establishes the required source → semantic analysis → Eristavi IR boundary.
-
-The current IR is deliberately source-close. It is not yet the final universal low-level instruction set. Future work may introduce explicit basic blocks, control-flow edges, ownership/value operations, checked-failure edges, runtime intrinsics and backend-oriented lowering passes while keeping the source semantics unchanged.
-
-## 6. C/native backend — working first slice
-
-The first backend emits C11 from typed IR and can produce a native executable through the system C compiler.
-
-The supported compiled subset includes:
-
-- `Int`, `Float`, `Bool`, and literal Text values;
-- checked signed-64-bit Int arithmetic;
-- Int division/remainder faults and overflow checks;
-- scalar comparisons including content-based Text equality;
-- Bool logic;
-- local variables and direct assignment;
-- `if` / `else` and `while`;
-- concrete functions, calls, returns and recursion;
-- scalar `output`;
-- Unicode source identifiers through ASCII-safe C name mangling.
-
-Generated Text literals preserve escapes correctly. Native backend tests compile and execute generated programs rather than checking emitted source only.
-
-`erist build` currently means Eristavi IR → generated C → system C compiler. A direct machine-code backend remains future architecture work.
-
-## 7. Confirmed remaining implementation gaps
-
-The following are **implementation gaps**, not reopened language-design questions.
-
-### A. Explicit Unicode Text views
-
-The frozen language distinguishes:
+The previously audited Text-view gap is now closed in the frontend/bootstrap runtime:
 
 ```eri
 text.characters
@@ -152,112 +51,194 @@ text.scalars
 text.bytes
 ```
 
-and their indexing/count operations. The current frontend/runtime does not yet implement these views.
+The compiler uses internal semantic view types rather than inventing public `Character`, `Scalar`, or `Byte` source types.
 
-Additionally, the specification names the semantic views but does not currently expose dedicated programmer-visible `Character`, `Scalar`, or `Byte` source types. Before implementing indexed results, the existing specifications should be checked for enough type-level precision; implementation must not invent new public type names silently.
+The pre-0.1 clarification is:
 
-### B. Unicode version pinning
+- `text.characters[i]` returns `Text` containing one Unicode extended grapheme cluster;
+- `text.scalars[i]` returns `Text` containing one Unicode scalar;
+- `text.bytes[i]` returns `Int` in `0..255`;
+- all three views expose `.count`;
+- indexes are zero-based `Int` values with checked bounds;
+- views are read-only;
+- direct `text[i]` remains invalid.
 
-The lexical implementation currently uses the host Python Unicode tables for identifier classification/NFC behavior. The language direction requires a toolchain-pinned Unicode version. A reproducible Unicode data strategy is still required.
+These rules are recorded in `TEXT_VIEWS.md`.
 
-### C. Full typed-IR/backend parity
+## 3. Unicode reproducibility
 
-The AST frontend/runtime supports substantially more than the first IR/C backend. IR/backend lowering is still required for:
+The previous host-Unicode dependency has been removed from the bootstrap lexical/text-view path.
 
-- Lists and stable iteration;
-- user-defined values and nested mutation;
-- maybe/none;
-- checked errors, handlers and propagation;
-- identities;
-- deterministic resources/cleanup;
-- imported modules;
-- inferred-generic specializations;
-- Text concatenation and richer Text operations.
+The toolchain now pins Unicode **17.0.0** using pinned `unicodedata2` data and a pinned Unicode-aware regex implementation for XID and extended grapheme clusters.
 
-The C backend correctly rejects unsupported lowering instead of silently changing semantics.
+Tests cover:
 
-### D. Float conformance hardening
+- Unicode version pinning;
+- XID identifier behavior;
+- NFC identifier identity;
+- extended grapheme clusters, including combining sequences and ZWJ emoji;
+- scalar versus UTF-8 byte views.
 
-The C runtime sets round-to-nearest and uses explicit helper calls/volatile results to avoid obvious contraction/excess-precision drift, but full cross-platform proof of the frozen binary64 contract still requires conformance testing for:
+This closes the original Unicode-version audit gap for the Python bootstrap. A future non-Python runtime/backend must carry equivalent pinned tables/logic rather than delegating to platform-specific character APIs.
 
-- subnormal/FTZ behavior;
-- NaN behavior/canonicalization expectations;
-- signed zero;
-- compiler optimization modes;
-- target-specific floating-point environment behavior.
+## 4. Typed IR and C/native backend
 
-The backend must not claim full deterministic Float conformance until these tests exist across target toolchains.
+The typed IR remains source-close but now represents substantially more than the original scalar/control subset.
 
-### E. Direct native backend
+Native executable tests cover:
 
-No direct ARM64/x86-64/RISC-V machine-code backend exists yet. The current native path is intentionally via C. The first direct CPU backend and exact low-level Eristavi IR remain architectural work.
+- `Int`, `Float`, `Bool`, and `Text`;
+- checked Int arithmetic and division/remainder faults;
+- Text concatenation and content equality;
+- functions, recursion, conditions and loops;
+- Lists, checked indexing, mutation, equality, value copying and stable iteration;
+- ordinary user-defined values, nested fields, copying and structural equality;
+- `maybe` / `none` and narrowed optional values;
+- managed identities, aliasing and identity equality;
+- checked errors, typed/catch-all handlers and propagation;
+- inferred-generic concrete specializations;
+- imported public functions/types and aliases;
+- deterministic `std.files` read/write resources and cleanup unwinding.
 
-### F. Serialized module interfaces
+This means the old audit statement that Lists, values, maybe, errors, identity, resources, modules and generic specializations were still backend gaps is no longer correct.
 
-Imported modules currently share in-memory semantic metadata in the Python bootstrap. A production compiler will need stable compiled module/interface metadata so importers can type-check without relying on another module's live analyzer object.
+## 5. Resource semantics
 
-### G. Standard library breadth
+Both bootstrap execution and compiled execution now test deterministic resource behavior.
 
-Only the bootstrap pieces required for current tests exist, notably `output` and a small `std.files` model. JSON, networking, time, processes, richer Text operations and similar library domains remain future library implementation work rather than grammar work.
+Confirmed behavior includes:
 
-## 8. Deliberately postponed items — not defects
+- `with` owns a resource and cleanup occurs on normal exit and return;
+- nested resources unwind in reverse order;
+- file open/read/write failures remain checked failures;
+- if a body failure is already propagating, it remains primary when cleanup also fails;
+- cleanup failure is not silently discarded.
 
-The audit does **not** classify the following as implementation defects because the frozen roadmap deliberately postpones them:
+No manual lifetime/free syntax was introduced.
 
-- explicit generic syntax and generic constraints;
-- traits/interfaces for generic bounds;
-- pattern matching;
-- async/await and advanced concurrency;
-- reflection/macros;
-- identity-to-value snapshot API;
-- advanced resource transfer/borrowing/lifetime syntax;
-- third-party package registry/version/lockfile design;
-- advanced garbage collectors;
-- stable portable bytecode/JIT;
-- self-hosting;
-- multiple direct native CPU backends.
+## 6. Float conformance status
 
-## 9. Quality findings
+Float conformance has materially improved.
 
-During this implementation pass, several issues were caught before the audit was closed:
+Compiled tests now cover:
 
-- function parameters were corrected to be mutable local values rather than implicitly fixed;
-- generated C newline escaping was corrected so output emits real line breaks rather than literal `\\n` text;
-- C Text equality was corrected to content comparison instead of pointer comparison;
-- Unicode Eristavi identifiers are mangled to portable ASCII C identifiers;
-- ordered comparison on `Text` was removed from the bootstrap semantic checker because the frozen specifications define Text equality but do not define a Text ordering relation.
+- NaN equality behavior;
+- positive/negative infinity from IEEE division;
+- signed zero preservation;
+- smallest subnormal survival rather than flush-to-zero;
+- overflow to infinity.
 
-These corrections reinforce the rule that target behavior must follow Eristavi semantics rather than host-language accidents.
+CI now runs the full 144-test suite under:
 
-## 10. Test status
+- GCC on Ubuntu;
+- Clang on Ubuntu;
+- Clang on macOS;
 
-Audit command:
+with native compilation at `-O2`.
+
+All three configurations pass.
+
+This is strong bootstrap evidence against obvious host/compiler leakage, but it is not yet a proof across all CPUs, compiler versions and floating-point environments. ARM/RISC-V and additional optimization/toolchain configurations remain future conformance work.
+
+## 7. Test status
+
+The verified suite contains:
+
+```text
+144 tests
+```
+
+The suite includes positive execution, negative semantic diagnostics, interpreter/runtime behavior and real generated-C/native execution.
+
+The CI matrix executes that suite on three host/compiler configurations, so the current matrix represents **432 successful test executions per full run**.
+
+The current automated commands include:
 
 ```text
 python -m compileall -q compiler tests
 python -m unittest discover -s tests -v
 ```
 
-Result at audit close:
+The native builder honors both `CC` and `CFLAGS`, allowing conformance runs to vary host compiler and optimization mode without changing Eristavi source.
 
-```text
-80 tests passed
-```
+## 8. Remaining implementation gaps
 
-The suite includes negative semantic tests as well as executable behavior and native compiled-backend tests.
+The remaining gaps are now narrower and principally architectural/engineering rather than source-language design questions.
+
+### A. Compiled Unicode Text views
+
+`characters`, `scalars`, and `bytes` are implemented in the frontend/bootstrap runtime, but are not yet lowered through the C/native backend.
+
+`bytes` and scalar traversal are straightforward runtime engineering. Extended grapheme clusters require a pinned Unicode segmentation implementation in the compiled runtime; Eristavi must not silently substitute locale/platform character APIs.
+
+### B. Direct native backend
+
+There is still no direct ARM64, x86-64 or RISC-V machine-code backend. The current native path deliberately uses generated C.
+
+The eventual first direct backend should consume a lower-level form of Eristavi's own IR rather than making C semantics part of the language contract.
+
+### C. Stable compiled module interfaces
+
+The Python bootstrap project compiler still shares live analyzer/module objects between imported modules.
+
+A production compiler needs serialized interface metadata containing public types, function contracts, checked errors and generic specialization information so importers can type-check without another source module's live Python analyzer state.
+
+### D. Runtime/standard-library breadth
+
+The implemented standard surface is intentionally small, principally `output` and `std.files` plus intrinsic language/runtime operations.
+
+JSON, networking, time, process control and broader library domains remain future library work, not missing grammar.
+
+### E. Broader platform conformance
+
+The C path is now exercised on Linux/macOS and GCC/Clang, but Windows/MSVC, ARM64 and RISC-V environments are not yet part of the automated matrix.
+
+## 9. Deliberately postponed — not defects
+
+The audit does not classify these as pre-0.1 implementation defects:
+
+- explicit generic syntax/constraints;
+- traits/interfaces;
+- pattern matching;
+- async/await and advanced concurrency;
+- reflection/macros;
+- identity-to-value snapshot API;
+- advanced resource transfer/borrowing/lifetime syntax;
+- package registry/version/lockfile design;
+- advanced garbage collectors;
+- stable portable bytecode/JIT;
+- self-hosting;
+- multiple direct native CPU backends.
+
+## 10. Quality findings
+
+The implementation process has caught several host-language leakage risks and corrected them:
+
+- function parameters are mutable local values rather than implicitly fixed;
+- generated Text output uses real newlines;
+- compiled Text equality is content-based rather than pointer-based;
+- Unicode source identifiers are mangled to portable ASCII C identifiers;
+- Text ordering is rejected because it is not part of the frozen contract;
+- `%` remains Int-only;
+- Unicode identifier/grapheme behavior is pinned rather than host-dependent;
+- native tests now run with multiple host compilers and optimization enabled.
+
+The new Text-view implementation also avoided introducing public one-character/byte types that were not present in the frozen language.
 
 ## 11. Audit conclusion
 
-The planned implementation sequence through Lists, user-defined values, maybe, checked errors, identity, resources, modules, inferred generic relationships, and a first typed-IR/native compilation path has been completed for the bootstrap milestone.
+The implementation has now closed most of the gaps identified by the previous audit.
 
-The project is **not yet a feature-complete pre-0.1 native compiler**. The broad source frontend/runtime is substantially implemented, while the typed IR/backend still needs feature parity and the explicit Unicode Text-view gap remains.
+The most important change in project status is that the C/native backend is no longer merely a scalar prototype: it executes tests across Lists, values, optionals, identities, checked errors, resources, modules and inferred-generic specializations.
 
-The correct next engineering phase is no longer broad language design. It is:
+The frontend/bootstrap runtime is now also Unicode-version-pinned and implements the explicit Text-view model.
 
-1. close the audited frontend gaps without changing the frozen surface;
-2. extend typed IR to represent the remaining already-implemented semantic features;
-3. bring the C/native path to frontend parity with cross-backend conformance tests;
-4. harden Unicode/Float reproducibility;
-5. only then choose and implement the first direct native CPU backend.
+The next engineering priorities are therefore:
 
-> **Audit verdict:** the frozen design survived implementation, the bootstrap frontend/runtime is broadly functional, and the compiler architecture now has a real IR/backend boundary. Remaining work is principally implementation depth and backend parity, not a need to redesign the language.
+1. implement compiled Unicode Text views with a pinned runtime segmentation strategy;
+2. introduce stable compiled module/interface metadata;
+3. continue cross-platform/backend conformance work;
+4. define the lower-level universal IR needed by the first direct CPU backend;
+5. implement the first direct native backend only after those boundaries are stable.
+
+> **Audit verdict:** Eristavi is a functioning pre-0.1 bootstrap compiler with a frozen language surface, broad frontend/runtime coverage, a substantially capable typed IR/C native path, pinned Unicode semantics, and multi-toolchain conformance testing. The remaining work is concentrated in runtime portability, compiled Text-view parity, module artifacts and the eventual direct native backend—not in redesigning the language.
