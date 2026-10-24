@@ -55,6 +55,16 @@ class BackendTests(unittest.TestCase):
         p=self.compile_run('type Counter { value Int; } function bump(counter identity Counter) { counter.value=counter.value+1; } let c be identity Counter { value=4; }; bump(c); output(c.value);'); self.assertEqual(p.stdout,'5\n')
     def test_native_structural_equality_uses_identity_fields(self):
         p=self.compile_run('type Counter { value Int; } type Session { counter identity Counter; } let c be identity Counter { value=0; }; let a be Session { counter=c; }; let b be Session { counter=c; }; let d be Session { counter=identity Counter { value=0; }; }; output(a==b); output(a==d);'); self.assertEqual(p.stdout,'true\nfalse\n')
+    def test_native_maybe_none_and_present_equality(self):
+        p=self.compile_run('let x maybe Int be none; output(x==none); x=3; output(x==3); output(x==none);'); self.assertEqual(p.stdout,'true\ntrue\nfalse\n')
+    def test_native_maybe_user_narrowing(self):
+        p=self.compile_run('type User { name Text; } let u maybe User be User { name="Anna"; }; if u != none { output(u.name); }'); self.assertEqual(p.stdout,'Anna\n')
+    def test_native_maybe_assignment_narrows(self):
+        p=self.compile_run('type User { name Text; } let u maybe User be none; u=User { name="Anna"; }; output(u.name);'); self.assertEqual(p.stdout,'Anna\n')
+    def test_native_maybe_parameter_and_return(self):
+        p=self.compile_run('function value(x maybe Int) returns Int { if x==none { return 0; } return x; } function find(ok Bool) returns maybe Int { if ok { return 7; } return none; } output(value(find(true))); output(value(find(false)));'); self.assertEqual(p.stdout,'7\n0\n')
+    def test_native_maybe_identity(self):
+        p=self.compile_run('type C { x Int; } let selected maybe identity C be none; let c be identity C { x=1; }; selected=c; output(selected==c); output(selected==none);'); self.assertEqual(p.stdout,'true\nfalse\n')
     def test_build_c_emits_source(self):
         with tempfile.TemporaryDirectory() as td:
             r=Path(td); src=r/'app.eri'; out=r/'app.c'; src.write_text('output(42);',encoding='utf-8'); self.assertEqual(build_c_file(src,out,r),0); self.assertIn('int main',out.read_text())
