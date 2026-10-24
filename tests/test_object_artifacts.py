@@ -65,7 +65,10 @@ class ObjectArtifactTests(unittest.TestCase):
             self.assertEqual(emit_interface(module, None, root), 0)
             self.assertEqual(emit_object(module, None, root), 0)
             interface = root / "lib.eri-interface.json"
-            text = interface.read_text(encoding="utf-8").replace('"double"', '"twice"')
+            # Change metadata that preserves the callable public contract from the
+            # importer's point of view, so validation reaches the object/interface
+            # digest check instead of failing name resolution earlier.
+            text = interface.read_text(encoding="utf-8").replace('"name":"value"', '"name":"renamed"')
             interface.write_text(text, encoding="utf-8")
             module.unlink()
             with self.assertRaises(ValueError):
