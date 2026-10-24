@@ -6,7 +6,12 @@ Run the full suite from the repository root:
 python -m unittest discover -s tests -v
 ```
 
-The current suite contains **322 tests**.
+The current suite contains **333 tests**.
+
+The semantic corpus freezes 175 projects (67 accepted, 108 rejected). Acceptance
+and inferred contracts are compared independently with Stage-0; 10 documented
+diagnostic-location differences have explicit expectations. The candidate also
+checks its own frontend module graph offline.
 
 Coverage spans frontend/reference semantics and multiple compiler/runtime layers, including:
 

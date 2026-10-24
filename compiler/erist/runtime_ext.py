@@ -93,9 +93,11 @@ class Interpreter(BaseInterpreter):
 
         if (isinstance(e.callee, MemberExpr) and isinstance(e.callee.base, NameExpr)
                 and self.imports.get(e.callee.base.name) == ("std", "files")
-                and e.callee.name in ("openRead", "create")):
+                and e.callee.name in ("openRead", "create", "canonicalPath")):
             path = self._expr(e.arguments[0])
             try:
+                if e.callee.name == "canonicalPath":
+                    return os.path.realpath(path, strict=True)
                 mode = "r" if e.callee.name == "openRead" else "x+"
                 resource = FileResource(path, open(path, mode, encoding="utf-8", newline=""))
                 resource.writable = e.callee.name == "create"

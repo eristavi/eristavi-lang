@@ -1,0 +1,107 @@
+import std.files;
+import compiler.ast;
+import compiler.token;
+import compiler.lexer;
+import compiler.parser;
+import compiler.diagnostic;
+import compiler.semantic_model as m;
+import compiler.semantic;
+
+type Segment { text Text; next maybe identity Segment; }
+type Project { root Text; modules maybe identity m.Module; }
+
+function normalize(path Text) returns Text {
+    let stack maybe identity Segment be none; let current be ""; let index be 0;
+    let absolute be path.scalars.count > 0 and path.scalars[0] == "/";
+    while index <= path.scalars.count {
+        let ch be "/"; if index < path.scalars.count { ch=path.scalars[index]; }
+        if ch == "/" {
+            if current != "" and current != "." {
+                if current == ".." {
+                    if stack != none { let top be stack; if top.text != ".." { stack=top.next; } else { stack=identity Segment { text=current; next=stack; }; } }
+                    else { if not absolute { stack=identity Segment { text=current; next=stack; }; } }
+                } else { stack=identity Segment { text=current; next=stack; }; }
+            }
+            current="";
+        } else { current=current+ch; }
+        index=index+1;
+    }
+    let result be ""; let cursor be stack;
+    while cursor != none { if result == "" { result=cursor.text; } else { result=cursor.text + "/" + result; } cursor=cursor.next; }
+    if absolute { return "/" + result; } if result == "" { return "."; } return result;
+}
+public function parent(path Text) returns Text {
+    let normalized be normalize(path); let result be ""; let last be -1; let index be 0;
+    while index < normalized.scalars.count { if normalized.scalars[index] == "/" { last=index; } index=index+1; }
+    if last == -1 { return "."; } if last == 0 { return "/"; }
+    index=0; while index < last { result=result+normalized.scalars[index]; index=index+1; } return result;
+}
+function lastName(path Text) returns Text {
+    let result be ""; let index be 0;
+    while index < path.scalars.count { let ch be path.scalars[index]; if ch == "." { result=""; } else { result=result+ch; } index=index+1; } return result;
+}
+function modulePath(root Text, name Text) returns Text {
+    let result be root + "/"; let index be 0;
+    while index < name.scalars.count { let ch be name.scalars[index]; if ch == "." { ch="/"; } result=result+ch; index=index+1; }
+    return normalize(result + ".eri");
+}
+function tokenAt(tokens, index Int) returns token.Token { return tokens[index]; }
+function makeModule(tree identity ast.Node, tokens, name Text, path Text, entry Bool, project identity Project) returns identity m.Module {
+    let locations maybe identity m.Location be none; let index be tokens.count-1;
+    while index >= 0 { let item be tokenAt(tokens,index); locations=identity m.Location { path=path; line=item.line; column=item.column; next=locations; }; index=index-1; }
+    let result be identity m.Module { name=name; path=path; root=tree; locations=locations; imports=none; declarations=none; facts=none; state=1; entry=entry; next=project.modules; };
+    project.modules=result; return result;
+}
+function read(path Text) returns Text fails files.FileError {
+    with file be try files.openRead(path) { return try file.readText(); }
+}
+function load(project identity Project, name Text, importer identity m.Module, node identity ast.Node) returns identity m.Module fails m.SemanticError {
+    let path be modulePath(project.root,name); let cursor be project.modules;
+    while cursor != none {
+        if cursor.path == path {
+            if cursor.state == 1 { try m.reject(m.at(importer,node.token),"module","circular module dependency: " + name); }
+            return cursor;
+        }
+        cursor=cursor.next;
+    }
+    let source be read(path) else error files.FileError { fail m.SemanticError { message="cannot resolve module " + name + ": " + error.message; category="module"; path=importer.path; line=m.at(importer,node.token).line; column=m.at(importer,node.token).column; }; };
+    let tokens be lexer.lex(source) else error diagnostic.LexError { fail m.SemanticError { message=error.message; category="lex"; path=path; line=error.line; column=error.column; }; };
+    let tree be parser.parse(tokens) else error diagnostic.ParseError { fail m.SemanticError { message=error.message; category="parse"; path=path; line=error.line; column=error.column; }; };
+    let owner be makeModule(tree,tokens,name,path,false,project);
+    try analyzeModule(project,owner); return owner;
+}
+function analyzeModule(project identity Project, owner identity m.Module) returns Bool fails m.SemanticError {
+    let cursor be owner.root.first;
+    while cursor != none {
+        if cursor.kind == ast.importDecl() {
+            let alias be lastName(cursor.text); let explicit be cursor.first; if explicit != none { alias=explicit.text; }
+            if m.imported(owner,alias) != none { try m.reject(m.at(owner,cursor.token),"module","duplicate import qualifier: " + alias); }
+            let target maybe identity m.Module be none;
+            if cursor.text != "std.files" and cursor.text != "std.unicode" and cursor.text != "std.process" { target=try load(project,cursor.text,owner,cursor); }
+            owner.imports=identity m.Import { alias=alias; path=cursor.text; target=target; next=owner.imports; };
+        }
+        cursor=cursor.next;
+    }
+    try semantic.analyze(owner); owner.state=2; return true;
+}
+function inside(root Text, path Text) returns Bool {
+    if root == "/" { return true; }
+    if path.scalars.count <= root.scalars.count { return false; }
+    let index be 0;
+    while index < root.scalars.count { if root.scalars[index] != path.scalars[index] { return false; } index=index+1; }
+    return path.scalars[index] == "/";
+}
+public function analyze(tree identity ast.Node, tokens, path Text, root Text) returns identity m.Module fails m.SemanticError {
+    let canonicalPath be files.canonicalPath(path) else error files.FileError { fail m.SemanticError { message=error.message; category="module"; path=path; line=1; column=1; }; };
+    let canonicalRoot be files.canonicalPath(root) else error files.FileError { fail m.SemanticError { message=error.message; category="module"; path=path; line=1; column=1; }; };
+    if not inside(canonicalRoot,canonicalPath) { fail m.SemanticError { message="entry file must be inside the configured source root"; category="module"; path=path; line=1; column=1; }; }
+    let project be identity Project { root=canonicalRoot; modules=none; };
+    let name be ""; let index be canonicalRoot.scalars.count+1;
+    if canonicalRoot == "/" { index=1; }
+    let end be canonicalPath.scalars.count; let lastDot be -1; let scan be index;
+    while scan < end { if canonicalPath.scalars[scan] == "/" { lastDot=-1; } if canonicalPath.scalars[scan] == "." { lastDot=scan; } scan=scan+1; }
+    if lastDot >= 0 { end=lastDot; }
+    while index < end { let scalar be canonicalPath.scalars[index]; if scalar == "/" { scalar="."; } name=name+scalar; index=index+1; }
+    let owner be makeModule(tree,tokens,name,canonicalPath,true,project);
+    try analyzeModule(project,owner); return owner;
+}

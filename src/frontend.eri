@@ -5,6 +5,9 @@ import compiler.parser;
 import compiler.diagnostic;
 import compiler.format;
 import compiler.report;
+import compiler.semantic_project;
+import compiler.semantic_model;
+import compiler.semantic_report;
 
 function read(path Text) returns Text fails files.FileError {
     with file be try files.openRead(path) { return try file.readText(); }
@@ -16,7 +19,8 @@ function write(path Text, text Text) fails files.FileError {
 
 function usage() {
     process.writeError("Usage: erist-frontend check|ast|tokens SOURCE.eri [--output REPORT.json]");
-    process.writeError("Syntax frontend only. --output creates a new file; existing files are preserved.");
+    process.writeError("       erist-frontend analyze|analyze-report SOURCE.eri [--source-root DIRECTORY]");
+    process.writeError("check is syntax-only; analyze is experimental. --output preserves existing files.");
     process.setExitCode(2);
 }
 
@@ -25,15 +29,17 @@ function run() {
     if arguments.count == 1 {
         if arguments[0] == "--help" {
             output("Usage: erist-frontend check|ast|tokens SOURCE.eri [--output REPORT.json]");
-            output("Checks syntax only; semantic analysis and code generation remain Stage-0.");
+            output("       erist-frontend analyze|analyze-report SOURCE.eri [--source-root DIRECTORY]");
+            output("check checks syntax only. analyze runs experimental Eristavi semantic analysis; code generation remains Stage-0.");
             return;
         }
     }
     if arguments.count != 2 and arguments.count != 4 { usage(); return; }
     let command be arguments[0];
-    if command != "check" and command != "ast" and command != "tokens" { usage(); return; }
+    if command != "check" and command != "ast" and command != "tokens" and command != "analyze" and command != "analyze-report" { usage(); return; }
     if arguments.count == 4 {
-        if arguments[2] != "--output" or command == "check" { usage(); return; }
+        if command == "analyze" or command == "analyze-report" { if arguments[2] != "--source-root" { usage(); return; } }
+        else { if arguments[2] != "--output" or command == "check" { usage(); return; } }
     }
     let path be arguments[1];
     let source be read(path) else error files.FileError {
@@ -52,6 +58,18 @@ function run() {
             process.setExitCode(1); return;
         };
         if command == "check" { return; }
+        if command == "analyze" or command == "analyze-report" {
+            let root be semantic_project.parent(path);
+            if arguments.count == 4 { root=arguments[3]; }
+            let analyzed be semantic_project.analyze(tree,tokens,path,root) else error semantic_model.SemanticError {
+                let prefix be error.path + ":" + format.integer(error.line) + ":" + format.integer(error.column);
+                if error.category == "lex" or error.category == "parse" { process.writeError(prefix + ": " + error.category + " error: " + error.message); }
+                else { process.writeError(prefix + ": semantic error [" + error.category + "]: " + error.message); }
+                process.setExitCode(1); return;
+            };
+            if command == "analyze-report" { output(semantic_report.report(analyzed)); }
+            return;
+        }
         text = report.tree(tree, tokens);
     }
     if arguments.count == 4 {

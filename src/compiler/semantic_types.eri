@@ -1,0 +1,100 @@
+import compiler.semantic_model as m;
+
+// Kinds: variable, Int, Float, Bool, Text, no-value, nominal, List,
+// maybe, identity, resource, catch-all error, Text view.
+public function resolve(value identity m.Type) returns identity m.Type {
+    let cursor be value; let link be cursor.link;
+    while link != none { cursor=link; link=cursor.link; }
+    return cursor;
+}
+public function inner(value identity m.Type) returns identity m.Type {
+    let child be resolve(value).inner;
+    if child != none { return resolve(child); }
+    return m.makeType(5, "");
+}
+public function occurs(variable identity m.Type, value identity m.Type) returns Bool {
+    let actual be resolve(value);
+    if variable == actual { return true; }
+    let child be actual.inner;
+    if child != none { return occurs(variable, child); }
+    return false;
+}
+function mask(kind Int) returns Int { if kind == 1 { return 1; } if kind == 2 { return 2; } if kind == 4 { return 4; } return 0; }
+function intersection(first Int, second Int) returns Int {
+    if first == 0 { return second; } if second == 0 { return first; }
+    let result be 0; let bit be 1;
+    while bit <= 4 { if (first / bit) % 2 == 1 and (second / bit) % 2 == 1 { result=result+bit; } bit=bit*2; }
+    return result;
+}
+public function constrain(value identity m.Type, allowed Int, location identity m.Location) returns Bool fails m.SemanticError {
+    let actual be resolve(value);
+    if actual.kind == 0 {
+        let combined be intersection(actual.allowed,allowed);
+        if combined == 0 { return try m.reject(location,"type","incompatible inferred operation constraints"); }
+        actual.allowed=combined; return true;
+    }
+    let bit be mask(actual.kind);
+    if bit == 0 { return try m.reject(location,"type","operation is not defined for this type"); }
+    if (allowed / bit) % 2 == 0 { return try m.reject(location,"type","operation is not defined for this type"); }
+    return true;
+}
+public function unify(first identity m.Type, second identity m.Type, location identity m.Location) returns identity m.Type fails m.SemanticError {
+    let left be resolve(first); let right be resolve(second);
+    if left == right { return left; }
+    if right.kind == 0 and left.kind != 0 { return try unify(right,left,location); }
+    if left.kind == 0 {
+        if occurs(left,right) { try m.reject(location,"inference","recursive type inference"); }
+        if right.kind == 0 {
+            let combined be intersection(left.allowed,right.allowed);
+            if left.allowed != 0 and right.allowed != 0 and combined == 0 { try m.reject(location,"type","incompatible inferred constraints"); }
+            left.allowed=combined; left.mustFixed=left.mustFixed or right.mustFixed; left.mustEqual=left.mustEqual or right.mustEqual; right.link=left; return left;
+        }
+        if left.allowed != 0 { try constrain(right,left.allowed,location); }
+        left.link=right; return right;
+    }
+    if left.kind != right.kind or left.name != right.name { try m.reject(location,"type","incompatible static types; explicit conversion is required"); }
+    let leftChild be left.inner; let rightChild be right.inner;
+    if leftChild != none { if rightChild != none { try unify(leftChild,rightChild,location); } }
+    return left;
+}
+public function assign(expected identity m.Type, actual identity m.Type, location identity m.Location) returns identity m.Type fails m.SemanticError {
+    let wanted be resolve(expected); let got be resolve(actual);
+    if wanted.kind == 8 and got.kind != 8 { try unify(inner(wanted),got,location); return wanted; }
+    return try unify(wanted,got,location);
+}
+public function join(first identity m.Type, second identity m.Type, location identity m.Location) returns identity m.Type fails m.SemanticError {
+    let left be resolve(first); let right be resolve(second);
+    if left.kind == 8 { return try assign(left,right,location); }
+    if right.kind == 8 { return try assign(right,left,location); }
+    return try unify(left,right,location);
+}
+public function clone(value identity m.Type, map identity m.Clone) returns identity m.Type {
+    let actual be resolve(value);
+    if actual.kind == 0 {
+        let cursor be map.head;
+        while cursor != none { if cursor.source == actual { return cursor.target; } cursor=cursor.next; }
+        let fresh be m.makeType(0,""); fresh.allowed=actual.allowed; fresh.mustFixed=actual.mustFixed; fresh.mustEqual=actual.mustEqual;
+        map.head=identity m.Pair { source=actual; target=fresh; next=map.head; }; return fresh;
+    }
+    let child be actual.inner;
+    if child != none { return m.wrap(actual.kind,clone(child,map)); }
+    return actual;
+}
+public function unresolved(value identity m.Type) returns Bool {
+    let actual be resolve(value);
+    if actual.kind == 0 { return true; }
+    let child be actual.inner;
+    if child != none { return unresolved(child); }
+    return false;
+}
+public function variablesWithin(value identity m.Type, parameters maybe identity m.Binding) returns Bool {
+    let actual be resolve(value);
+    if actual.kind == 0 {
+        let cursor be parameters;
+        while cursor != none { if occurs(actual,cursor.value) { return true; } cursor=cursor.next; }
+        return false;
+    }
+    let child be actual.inner;
+    if child != none { return variablesWithin(child,parameters); }
+    return true;
+}

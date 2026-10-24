@@ -59,9 +59,16 @@ Python parses, analyses and lowers Eristavi. It already produces native x86-64/A
 
 The parser is written in Eristavi using `maybe identity Node` child/sibling links and explicit identity cursor state. Recursive helpers declare their result contracts. Optional child handles are copied into local bindings before presence checks, using the existing narrowing rules instead of adding mutable-field narrowing for compiler convenience.
 
-### Stage 3 — semantic analysis
+### Stage 3 — experimental semantic analysis
 
-Name resolution, type relationships, scope checking, fixed/value/identity semantics and checked failures move to Eristavi. Differential tests compare accepted/rejected programs and diagnostics with Stage-0.
+Name resolution, source module loading/visibility, type relationships, scopes,
+fixed/value/identity semantics, checked failures and resource checks are written in
+Eristavi. `analyze` and `analyze-report` expose the candidate without replacing
+Stage-0. The shared 175-case corpus compares acceptance and inferred contracts;
+location differences are recorded explicitly. The candidate analyzes the frontend's
+own module graph offline. Expression type/effect facts are retained for Stage 4.
+See [`SEMANTIC_ANALYSIS.md`](SEMANTIC_ANALYSIS.md). Complete equivalence and promotion
+require continued differential coverage; this is not full self-building.
 
 ### Stage 4 — IR and verification
 
@@ -123,7 +130,8 @@ versioned JSON token/AST reports. New report files use exclusive creation so a
 source or existing report is not overwritten. Process arguments, stderr and exit
 status are standard-library operations; no magic entry function or keywords were
 introduced. Relative paths are handled by the existing file boundary; this stage
-does not yet resolve imports and does not need speculative path APIs.
+keeps syntax commands independent of import resolution. The semantic commands
+now add a source loader and use the required canonical-path library operation.
 
 The compiled C executable is tested with an empty `PATH`; it needs no Python or
 C compiler at runtime. Build-time Python/C requirements remain until later
@@ -131,7 +139,8 @@ self-hosting stages. The reference and compiled frontends share a corpus coverin
 accepted syntax, rejected syntax, complete AST structure and locations. Every
 repository `.eri` source is also parsed and compared to Stage-0.
 
-Semantic analysis remains Stage-0. See [`FRONTEND_TOOL.md`](FRONTEND_TOOL.md).
+The normal compiler still uses Stage-0; experimental Eristavi analysis is available
+through the separate semantic commands. See [`FRONTEND_TOOL.md`](FRONTEND_TOOL.md).
 The final standalone offline compiler also needs bundled or Eristavi-owned
 assembler/linker functionality; a self-hosted frontend alone does not satisfy that
 native-toolchain goal.

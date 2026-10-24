@@ -124,6 +124,25 @@ class FrontendLibraryTests(unittest.TestCase):
             finally:
                 os.chdir(previous)
 
+    def test_canonical_paths_resolve_existing_unicode_paths_and_symlinks(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);folder=root/'folder';folder.mkdir();target=root/'λ.txt';target.write_text('content')
+            alias=root/'alias.txt';alias.symlink_to(target)
+            source=('import std.files; function probe(path Text) { '
+                    'let value be files.canonicalPath(path) else error { output(error.message); return; }; '
+                    'output(value); } '+f'probe({literal(str(folder/".."/"alias.txt"))});')
+            result=self.both(root,source)
+            self.assertEqual(result.stdout,str(target.resolve())+'\n')
+
+    def test_canonical_path_failures_use_checked_file_error(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td)
+            source=('import std.files; function probe(path Text) { '
+                    'let value be files.canonicalPath(path) else error files.FileError { output("caught"); return; }; '
+                    'output(value); } '
+                    f'probe({literal(str(root/"missing"))}); probe("bad\\0path");')
+            self.assertEqual(self.both(root,source).stdout,'caught\ncaught\n')
+
     def test_process_contracts_reject_invalid_types_and_exit_ranges(self):
         for call in ['process.arguments(1)', 'process.setExitCode("x")', 'process.writeError(1)',
                      'process.unknown()', 'output(process.setExitCode(1))']:

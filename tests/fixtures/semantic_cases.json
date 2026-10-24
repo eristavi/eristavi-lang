@@ -1,0 +1,2725 @@
+[
+  {
+    "name": "hello",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "let x be 40; let y be 2; output(x+y);"
+    },
+    "accept": true
+  },
+  {
+    "name": "fixed",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "let fixed x be 1; x=2;"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 19,
+      "path": "app.eri",
+      "category": "fixed"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 19
+    }
+  },
+  {
+    "name": "annotations",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "let x Int be 3; output(x);"
+    },
+    "accept": true
+  },
+  {
+    "name": "annotation_mismatch",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "let x Float be 3;"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 1,
+      "path": "app.eri",
+      "category": "type"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 1
+    }
+  },
+  {
+    "name": "if_bool",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "let a be true; if a { output(\"yes\"); } else { output(\"no\"); }"
+    },
+    "accept": true
+  },
+  {
+    "name": "if_nonbool",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "if 1 { output(1); }"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 4,
+      "path": "app.eri",
+      "category": "type"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 4
+    }
+  },
+  {
+    "name": "scope_no_leak",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "if true { let x be 1; } output(x);"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 32,
+      "path": "app.eri",
+      "category": "name"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 32
+    }
+  },
+  {
+    "name": "no_shadow",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "let x be 1; if true { let x be 2; }"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 23,
+      "path": "app.eri",
+      "category": "scope"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 23
+    }
+  },
+  {
+    "name": "while",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "let i be 0; while i<3 { output(i); i=i+1; }"
+    },
+    "accept": true
+  },
+  {
+    "name": "function_infer",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "function d(x Int){ return x*2; } output(d(4));"
+    },
+    "accept": true
+  },
+  {
+    "name": "function_explicit",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "function d(x Int) returns Int { return x*2; } output(d(4));"
+    },
+    "accept": true
+  },
+  {
+    "name": "recursive",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "function f(n Int) returns Int { if n<=1 { return 1; } return n*f(n-1); } output(f(5));"
+    },
+    "accept": true
+  },
+  {
+    "name": "recursive_infer_bad",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "function f(n Int){ if n<=1 { return 1; } return n*f(n-1); } output(f(3));"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 1,
+      "path": "app.eri",
+      "category": "inference"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 1
+    }
+  },
+  {
+    "name": "generic_identity",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "function same(x){ return x; } output(same(3)); output(same(\"a\"));"
+    },
+    "accept": true
+  },
+  {
+    "name": "generic_choose",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "function choose(a,b,use Bool){ if use { return a; } return b; } output(choose(1,2,true)); output(choose(\"a\",\"b\",false));"
+    },
+    "accept": true
+  },
+  {
+    "name": "generic_choose_mismatch",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "function choose(a,b,use Bool){ if use { return a; } return b; } output(choose(1,\"b\",true));"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 81,
+      "path": "app.eri",
+      "category": "type"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 53
+    },
+    "diagnosticReason": "Diagnose the generic contract instantiation at its call site rather than reanalyzing the function body."
+  },
+  {
+    "name": "parameter_value_semantics",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "function inc(x Int) returns Int { x=x+1; return x; } let a be 1; output(inc(a)); output(a);"
+    },
+    "accept": true
+  },
+  {
+    "name": "list_literal",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "let a be [1,2,3]; output(a.count); output(a[1]);"
+    },
+    "accept": true
+  },
+  {
+    "name": "list_add",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "let a be [1]; a.add(2); output(a.count); output(a[1]);"
+    },
+    "accept": true
+  },
+  {
+    "name": "empty_list_inference",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "let a be []; a.add(\"x\"); output(a[0]);"
+    },
+    "accept": true
+  },
+  {
+    "name": "empty_list_unresolved",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "let a be []; output(1);"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 1,
+      "path": "app.eri",
+      "category": "inference"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 1
+    }
+  },
+  {
+    "name": "mixed_list",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "let a be [1,\"x\"];"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 13,
+      "path": "app.eri",
+      "category": "type"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 13
+    }
+  },
+  {
+    "name": "index_type",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "let a be [1]; output(a[0.0]);"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 24,
+      "path": "app.eri",
+      "category": "type"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 24
+    }
+  },
+  {
+    "name": "index_bounds_literal",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "output([1,2][2]);"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 14,
+      "path": "app.eri",
+      "category": "bounds"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 14
+    }
+  },
+  {
+    "name": "index_bounds_runtime",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "let a be [1]; let i be 2; output(a[i]);"
+    },
+    "accept": true
+  },
+  {
+    "name": "index_assign",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "let a be [1,2]; a[1]=5; output(a[1]);"
+    },
+    "accept": true
+  },
+  {
+    "name": "list_value_semantics",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "let a be [1,2]; let b be a; b.add(3); output(a.count); output(b.count);"
+    },
+    "accept": true
+  },
+  {
+    "name": "fixed_list",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "let fixed a be [1]; a.add(2);"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 21,
+      "path": "app.eri",
+      "category": "fixed"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 21
+    }
+  },
+  {
+    "name": "list_equality",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "output([1,2]==[1,2]); output([1,2]==[2,1]);"
+    },
+    "accept": true
+  },
+  {
+    "name": "for",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "for x in [1,2,3] { output(x); }"
+    },
+    "accept": true
+  },
+  {
+    "name": "for_stable_snapshot",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "let a be [1,2]; for x in a { output(x); a.add(9); } output(a.count);"
+    },
+    "accept": true
+  },
+  {
+    "name": "list_parameter_value",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "function addx(a){ a.add(9); output(a.count); } let a be [1]; addx(a); output(a.count);"
+    },
+    "accept": true
+  },
+  {
+    "name": "construct",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "type User { fixed id Int; name Text; } let u be User { id=1; name=\"A\"; }; output(u.name);"
+    },
+    "accept": true
+  },
+  {
+    "name": "missing_field",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "type User { fixed id Int; name Text; } let u be User { id=1; };"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 49,
+      "path": "app.eri",
+      "category": "type"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 49
+    }
+  },
+  {
+    "name": "unknown_field",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "type User { fixed id Int; name Text; } let u be User { id=1; name=\"A\"; x=2; };"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 72,
+      "path": "app.eri",
+      "category": "type"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 72
+    }
+  },
+  {
+    "name": "duplicate_field",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "type User { fixed id Int; name Text; } let u be User { id=1; id=2; name=\"A\"; };"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 62,
+      "path": "app.eri",
+      "category": "type"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 62
+    }
+  },
+  {
+    "name": "fixed_field",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "type User { fixed id Int; name Text; } let u be User { id=1; name=\"A\"; }; u.id=2;"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 77,
+      "path": "app.eri",
+      "category": "fixed"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 77
+    }
+  },
+  {
+    "name": "mutable_field",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "type User { fixed id Int; name Text; } let u be User { id=1; name=\"A\"; }; u.name=\"B\"; output(u.name);"
+    },
+    "accept": true
+  },
+  {
+    "name": "user_value_semantics",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "type User { fixed id Int; name Text; } let a be User { id=1; name=\"A\"; }; let b be a; b.name=\"B\"; output(a.name); output(b.name);"
+    },
+    "accept": true
+  },
+  {
+    "name": "user_equality",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "type User { fixed id Int; name Text; } let a be User { id=1; name=\"A\"; }; let b be User { id=1; name=\"A\"; }; output(a==b);"
+    },
+    "accept": true
+  },
+  {
+    "name": "nested_mutation",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "type Address { city Text; } type User { address Address; } let u be User { address=Address { city=\"P\"; }; }; u.address.city=\"L\"; output(u.address.city);"
+    },
+    "accept": true
+  },
+  {
+    "name": "maybe_none",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "let x maybe Int be none; output(x==none);"
+    },
+    "accept": true
+  },
+  {
+    "name": "maybe_narrow_if",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "type User { fixed id Int; name Text; } let u maybe User be User { id=1; name=\"A\"; }; if u != none { output(u.name); }"
+    },
+    "accept": true
+  },
+  {
+    "name": "maybe_no_narrow",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "type User { fixed id Int; name Text; } let u maybe User be none; output(u.name);"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 75,
+      "path": "app.eri",
+      "category": "maybe"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 75
+    }
+  },
+  {
+    "name": "maybe_early_return",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "type User { fixed id Int; name Text; } function name(u maybe User) returns Text { if u==none { return \"none\"; } return u.name; } output(name(User { id=1; name=\"A\"; }));"
+    },
+    "accept": true
+  },
+  {
+    "name": "maybe_assignment_narrows",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "type User { fixed id Int; name Text; } let u maybe User be none; u=User { id=1; name=\"A\"; }; output(u.name);"
+    },
+    "accept": true
+  },
+  {
+    "name": "identity_alias",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "type Counter { value Int; } let a be identity Counter { value=0; }; let b be a; b.value=5; output(a.value); output(a==b);"
+    },
+    "accept": true
+  },
+  {
+    "name": "identity_distinct",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "type Counter { value Int; } let a be identity Counter { value=0; }; let b be identity Counter { value=0; }; output(a==b);"
+    },
+    "accept": true
+  },
+  {
+    "name": "value_identity_compare_bad",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "type C { x Int; } let a be C { x=1; }; let b be identity C { x=1; }; output(a==b);"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 78,
+      "path": "app.eri",
+      "category": "type"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 78
+    }
+  },
+  {
+    "name": "fixed_identity_bad",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "type C { x Int; } let fixed a be identity C { x=1; };"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 19,
+      "path": "app.eri",
+      "category": "fixed"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 19
+    }
+  },
+  {
+    "name": "fixed_nested_identity_bad",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "type C { x Int; } type M { c identity C; } let c be identity C { x=1; }; let fixed m be M { c=c; };"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 74,
+      "path": "app.eri",
+      "category": "fixed"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 74
+    }
+  },
+  {
+    "name": "maybe_identity_assignment_compare",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "type C { x Int; } let selected maybe identity C be none; let c be identity C { x=1; }; selected=c; output(selected==c);"
+    },
+    "accept": true
+  },
+  {
+    "name": "error_message_required",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "error E { code Int; }"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 1,
+      "path": "app.eri",
+      "category": "type"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 1
+    }
+  },
+  {
+    "name": "checked_handler",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "error E { message Text; code Int; } function risky() returns Int fails E { fail E { message=\"bad\"; code=1; }; } function run(){ let x be risky() else error { output(error.message); return; }; output(x); } run();"
+    },
+    "accept": true
+  },
+  {
+    "name": "typed_handler",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "error E { message Text; } function risky() returns Int fails E { fail E { message=\"bad\"; }; } risky() else error E { output(error.message); };"
+    },
+    "accept": true
+  },
+  {
+    "name": "unhandled_checked_bad",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "error E { message Text; } function risky() fails E { fail E { message=\"bad\"; }; } risky();"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 88,
+      "path": "app.eri",
+      "category": "failure"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 88
+    }
+  },
+  {
+    "name": "try_propagation",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "error E { message Text; } function risky() returns Int fails E { fail E { message=\"bad\"; }; } function outer() returns Int fails E { return try risky(); } outer() else error { output(error.message); };"
+    },
+    "accept": true
+  },
+  {
+    "name": "try_missing_contract",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "error E { message Text; } function risky() returns Int fails E { fail E { message=\"bad\"; }; } function outer() returns Int { return try risky(); }"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 133,
+      "path": "app.eri",
+      "category": "failure"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 133
+    }
+  },
+  {
+    "name": "incomplete_handler",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "error A { message Text; } error B { message Text; } function f() returns Int fails A,B { fail A { message=\"a\"; }; } function g(){ let x be f() else error A { return; }; }"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 141,
+      "path": "app.eri",
+      "category": "failure"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 141
+    }
+  },
+  {
+    "name": "resource_let_bad",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "import std.files; function f() fails files.FileError { let x be try files.open(\"x\"); }"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 56,
+      "path": "app.eri",
+      "category": "resource"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 56
+    }
+  },
+  {
+    "name": "uncalled_generic_body_is_checked",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "function bad(x){ return x + true; } output(1);"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 27,
+      "path": "app.eri",
+      "category": "type"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 27
+    }
+  },
+  {
+    "name": "generic_list_index_relationship",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "function first(items){ return items[0]; } output(first([7,8])); output(first([\"a\",\"b\"]));"
+    },
+    "accept": true
+  },
+  {
+    "name": "text_ordering_is_not_defined",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "output(\"a\" < \"b\");"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 12,
+      "path": "app.eri",
+      "category": "type"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 12
+    }
+  },
+  {
+    "name": "generic_operation_constraint",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "type U { x Int; } function double(x){ return x+x; } let u be U { x=1; }; output(double(u));"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 88,
+      "path": "app.eri",
+      "category": "type"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 47
+    },
+    "diagnosticReason": "Diagnose the generic contract instantiation at its call site rather than reanalyzing the function body."
+  },
+  {
+    "name": "generic_operation_constraint_2",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "function double(x){ return x+x; } output(double(2)); output(double(\"a\"));"
+    },
+    "accept": true
+  },
+  {
+    "name": "nested_scope_ok",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "let x be 1; if true { let y be x + 1; output(y); }"
+    },
+    "accept": true
+  },
+  {
+    "name": "shadow_parameter",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "function f(x Int) { let x be 1; }"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 21,
+      "path": "app.eri",
+      "category": "scope"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 21
+    }
+  },
+  {
+    "name": "duplicate_parameters",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "function f(x Int, x Text) {}"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 19,
+      "path": "app.eri",
+      "category": "scope"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 19
+    }
+  },
+  {
+    "name": "nested_shadow",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "let x be 1; if true { let x be 2; }"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 23,
+      "path": "app.eri",
+      "category": "scope"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 23
+    }
+  },
+  {
+    "name": "use_before_declaration",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "output(x); let x be 1;"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 8,
+      "path": "app.eri",
+      "category": "name"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 8
+    }
+  },
+  {
+    "name": "function_cannot_capture_entry",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "function f() { output(x); } let x be 1;"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 23,
+      "path": "app.eri",
+      "category": "name"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 23
+    }
+  },
+  {
+    "name": "local_does_not_escape",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "if true { let x be 1; } output(x);"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 32,
+      "path": "app.eri",
+      "category": "name"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 32
+    }
+  },
+  {
+    "name": "forward_function",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "function f() returns Int { return g(); } function g() returns Int { return 1; } output(f());"
+    },
+    "accept": true
+  },
+  {
+    "name": "module_phase",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "let x be 1; function f() {}"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 13,
+      "path": "app.eri",
+      "category": "module"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 13
+    }
+  },
+  {
+    "name": "nested_declaration",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "function f() { function g() {} }"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 16,
+      "path": "app.eri",
+      "category": "scope"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 16
+    }
+  },
+  {
+    "name": "duplicate_declaration",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "type A { value Int; } function A() {}"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 23,
+      "path": "app.eri",
+      "category": "scope"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 23
+    }
+  },
+  {
+    "name": "reserved_output",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "function output() {}"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 1,
+      "path": "app.eri",
+      "category": "scope"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 1
+    }
+  },
+  {
+    "name": "wrong_condition",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "if 1 { output(1); }"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 4,
+      "path": "app.eri",
+      "category": "type"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 4
+    }
+  },
+  {
+    "name": "wrong_loop",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "for value in 1 { output(value); }"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 14,
+      "path": "app.eri",
+      "category": "type"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 14
+    }
+  },
+  {
+    "name": "mixed_numeric",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "output(1 + 1.5);"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 10,
+      "path": "app.eri",
+      "category": "type"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 10
+    }
+  },
+  {
+    "name": "float_remainder",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "output(1.0 % 2.0);"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 12,
+      "path": "app.eri",
+      "category": "type"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 12
+    }
+  },
+  {
+    "name": "text_ordering",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "output(\"a\" < \"b\");"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 12,
+      "path": "app.eri",
+      "category": "type"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 12
+    }
+  },
+  {
+    "name": "bool_arithmetic",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "output(true + false);"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 13,
+      "path": "app.eri",
+      "category": "type"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 13
+    }
+  },
+  {
+    "name": "static_list_bounds",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "output([1,2][2]);"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 14,
+      "path": "app.eri",
+      "category": "bounds"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 14
+    }
+  },
+  {
+    "name": "readonly_text_view",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "let text be \"abc\"; text.bytes[0] = 5;"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 30,
+      "path": "app.eri",
+      "category": "type"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 30
+    }
+  },
+  {
+    "name": "three_text_views",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "let text be \"A\\u{301}\"; output(text.characters.count); output(text.scalars[0]); output(text.bytes[0]);"
+    },
+    "accept": true
+  },
+  {
+    "name": "unresolved_empty_list",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "let values be [];"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 1,
+      "path": "app.eri",
+      "category": "inference"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 1
+    }
+  },
+  {
+    "name": "empty_list_context",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "let values be []; values.add(1); output(values[0]);"
+    },
+    "accept": true
+  },
+  {
+    "name": "generic_replace",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "function replace(values, index Int, value) { values[index]=value; return values; } let a be replace([1],0,2); let b be replace([\"A\"],0,\"B\");"
+    },
+    "accept": true
+  },
+  {
+    "name": "generic_operation_rejected",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "type User { fixed id Int; name Text; parent maybe identity User; } function twice(value) { return value+value; } let u be User { id=1; name=\"A\"; parent=none; }; twice(u);"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 168,
+      "path": "app.eri",
+      "category": "type"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 104
+    },
+    "diagnosticReason": "Diagnose the generic contract instantiation at its call site rather than reanalyzing the function body."
+  },
+  {
+    "name": "generic_same_relation",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "function choose(a,b,pick Bool) { if pick { return a; } return b; } choose(1,\"a\",true);"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 77,
+      "path": "app.eri",
+      "category": "type"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 56
+    },
+    "diagnosticReason": "Diagnose the generic contract instantiation at its call site rather than reanalyzing the function body."
+  },
+  {
+    "name": "recursive_explicit",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "function depth(value,n Int) returns Int { if n == 0 { return 0; } return depth(value,n-1)+1; } output(depth(\"A\",3));"
+    },
+    "accept": true
+  },
+  {
+    "name": "recursive_inferred",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "function loop(value) { return loop(value); }"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 1,
+      "path": "app.eri",
+      "category": "inference"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 1
+    }
+  },
+  {
+    "name": "mutual_recursion",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "function even(n Int) returns Bool { if n == 0 { return true; } return odd(n-1); } function odd(n Int) returns Bool { if n == 0 { return false; } return even(n-1); } output(even(4));"
+    },
+    "accept": true
+  },
+  {
+    "name": "incomplete_return",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "function f(x Bool) returns Int { if x { return 1; } }"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 1,
+      "path": "app.eri",
+      "category": "return"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 1
+    }
+  },
+  {
+    "name": "mixed_return",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "function f(x Bool) { if x { return; } return 1; }"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 39,
+      "path": "app.eri",
+      "category": "return"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 39
+    }
+  },
+  {
+    "name": "return_mismatch",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "function f() returns Int { return \"a\"; }"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 28,
+      "path": "app.eri",
+      "category": "type"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 28
+    }
+  },
+  {
+    "name": "entry_return",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "return;"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 1,
+      "path": "app.eri",
+      "category": "return"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 1
+    }
+  },
+  {
+    "name": "maybe_before_presence",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "type User { fixed id Int; name Text; parent maybe identity User; } let user maybe User be none; output(user.name);"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 109,
+      "path": "app.eri",
+      "category": "maybe"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 109
+    }
+  },
+  {
+    "name": "maybe_presence",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "type User { fixed id Int; name Text; parent maybe identity User; } function label(user maybe User) returns Text { if user == none { return \"\"; } return user.name; }"
+    },
+    "accept": true
+  },
+  {
+    "name": "maybe_assignment_narrow",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "type User { fixed id Int; name Text; parent maybe identity User; } let user maybe User be none; user=User { id=1; name=\"A\"; parent=none; }; output(user.name);"
+    },
+    "accept": true
+  },
+  {
+    "name": "maybe_assignment_clears",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "type User { fixed id Int; name Text; parent maybe identity User; } let user maybe User be none; if user != none { user=none; output(user.name); }"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 138,
+      "path": "app.eri",
+      "category": "maybe"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 138
+    }
+  },
+  {
+    "name": "identity_not_implicitly_value",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "type User { fixed id Int; name Text; parent maybe identity User; } let u be identity User { id=1; name=\"A\"; parent=none; }; let ordinary User be u;"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 125,
+      "path": "app.eri",
+      "category": "type"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 125
+    }
+  },
+  {
+    "name": "fixed_identity",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "type User { fixed id Int; name Text; parent maybe identity User; } let fixed u be identity User { id=1; name=\"A\"; parent=none; };"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 68,
+      "path": "app.eri",
+      "category": "fixed"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 68
+    }
+  },
+  {
+    "name": "fixed_nested_identity",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "type User { fixed id Int; name Text; parent maybe identity User; } let fixed users be [identity User { id=1; name=\"A\"; parent=none; }];"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 68,
+      "path": "app.eri",
+      "category": "fixed"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 68
+    }
+  },
+  {
+    "name": "fixed_field_mutation",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "type User { fixed id Int; name Text; parent maybe identity User; } let u be User { id=1; name=\"A\"; parent=none; }; u.id=2;"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 118,
+      "path": "app.eri",
+      "category": "fixed"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 118
+    }
+  },
+  {
+    "name": "fixed_binding_deep",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "type Item { name Text; } let fixed items be [Item { name=\"A\"; }]; items[0].name=\"B\";"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 72,
+      "path": "app.eri",
+      "category": "fixed"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 72
+    }
+  },
+  {
+    "name": "ordinary_fixed_ok",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "type Item { fixed id Int; name Text; } let fixed item be Item { id=1; name=\"A\"; }; output(item.name);"
+    },
+    "accept": true
+  },
+  {
+    "name": "checked_unhandled",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "error E { message Text; } function f() fails E { fail E { message=\"x\"; }; } f();"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 78,
+      "path": "app.eri",
+      "category": "failure"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 78
+    }
+  },
+  {
+    "name": "checked_try_missing",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "error E { message Text; } function f() fails E { fail E { message=\"x\"; }; } function g() { try f(); }"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 92,
+      "path": "app.eri",
+      "category": "failure"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 92
+    }
+  },
+  {
+    "name": "checked_try_ok",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "error E { message Text; } function f() fails E { fail E { message=\"x\"; }; } function g() fails E { try f(); } g() else error E { output(error.message); };"
+    },
+    "accept": true
+  },
+  {
+    "name": "handler_value_path",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "error E { message Text; } function f() returns Int fails E { fail E { message=\"x\"; }; } function g() { let x be f() else error { output(error.message); }; }"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 117,
+      "path": "app.eri",
+      "category": "failure"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 117
+    }
+  },
+  {
+    "name": "handler_incomplete",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "error A { message Text; } error B { message Text; } function f() fails A,B { fail A { message=\"a\"; }; } f() else error A { output(error.message); };"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 106,
+      "path": "app.eri",
+      "category": "failure"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 106
+    }
+  },
+  {
+    "name": "handler_duplicate",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "error E { message Text; } function f() fails E { fail E { message=\"x\"; }; } f() else error E {} else error E {};"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 97,
+      "path": "app.eri",
+      "category": "failure"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 97
+    }
+  },
+  {
+    "name": "handler_catchall_last",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "error E { message Text; } function f() fails E { fail E { message=\"x\"; }; } f() else error {} else error E {};"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 95,
+      "path": "app.eri",
+      "category": "failure"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 95
+    }
+  },
+  {
+    "name": "handler_only_message",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "error E { message Text; } function f() fails E { fail E { message=\"x\"; }; } f() else error { output(error.code); };"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 107,
+      "path": "app.eri",
+      "category": "type"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 107
+    }
+  },
+  {
+    "name": "invalid_error_record",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "error E { code Int; }"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 1,
+      "path": "app.eri",
+      "category": "type"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 1
+    }
+  },
+  {
+    "name": "with_cleanup_ok",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "import std.files; function read(path Text) returns Text fails files.FileError { with file be try files.openRead(path) { return try file.readText(); } }"
+    },
+    "accept": true
+  },
+  {
+    "name": "resource_let",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "import std.files; function f() fails files.FileError { let file be try files.openRead(\"x\"); }"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 56,
+      "path": "app.eri",
+      "category": "resource"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 56
+    }
+  },
+  {
+    "name": "resource_escape",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "import std.files; function f() fails files.FileError { with file be try files.openRead(\"x\") { return file; } }"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 95,
+      "path": "app.eri",
+      "category": "return"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 95
+    }
+  },
+  {
+    "name": "resource_parameter",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "import std.files; function use(file files.File) {} function f() fails files.FileError { with file be try files.openRead(\"x\") { use(file); } }"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 132,
+      "path": "app.eri",
+      "category": "resource"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 132
+    }
+  },
+  {
+    "name": "resource_wrong_with",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "function f() { with value be 1 { output(value); } }"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 30,
+      "path": "app.eri",
+      "category": "resource"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 30
+    }
+  },
+  {
+    "name": "stdlib_contract",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "import std.unicode as u; import std.process as p; output(u.normalizeNfc(\"A\")); let values be p.arguments(); output(values.count); p.setExitCode(0);"
+    },
+    "accept": true
+  },
+  {
+    "name": "stdlib_wrong_type",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "import std.unicode; unicode.fromScalar(\"A\");"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 40,
+      "path": "app.eri",
+      "category": "type"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 40
+    }
+  },
+  {
+    "name": "module_public",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "import models.user as people; let user be people.User { name=\"A\"; }; output(people.label(user));",
+      "models/user.eri": "public type User { name Text; } public function label(user User) returns Text { return user.name; }"
+    },
+    "accept": true
+  },
+  {
+    "name": "module_private",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "import m; m.hidden();",
+      "m.eri": "function hidden() {}"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 19,
+      "path": "app.eri",
+      "category": "name"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 19
+    }
+  },
+  {
+    "name": "module_private_type",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "import m; let u be m.User { name=\"A\"; };",
+      "m.eri": "type User { name Text; }"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 22,
+      "path": "app.eri",
+      "category": "name"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 22
+    }
+  },
+  {
+    "name": "module_entry_forbidden",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "import m;",
+      "m.eri": "output(1);"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 7,
+      "path": "m.eri",
+      "category": "module"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 7
+    }
+  },
+  {
+    "name": "module_cycle",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "import a;",
+      "a.eri": "import b;",
+      "b.eri": "import a;"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 1,
+      "path": "b.eri",
+      "category": "module"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": null,
+      "column": null
+    }
+  },
+  {
+    "name": "module_missing",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "import absent;"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 1,
+      "path": "app.eri",
+      "category": "module"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": null,
+      "column": null
+    }
+  },
+  {
+    "name": "module_duplicate_alias",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "import a as same; import b as same;",
+      "a.eri": "public function a() {}",
+      "b.eri": "public function b() {}"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 19,
+      "path": "app.eri",
+      "category": "module"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 1
+    },
+    "diagnosticReason": "Diagnose the conflicting import instead of the reference loader alias-table failure at the first import."
+  },
+  {
+    "name": "module_generic",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "import util; output(util.same(1)); output(util.same(\"A\"));",
+      "util.eri": "public function same(value) { return value; }"
+    },
+    "accept": true
+  },
+  {
+    "name": "module_checked",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "import errors; errors.failNow() else error errors.E { output(error.message); };",
+      "errors.eri": "public error E { message Text; } public function failNow() fails E { fail E { message=\"x\"; }; }"
+    },
+    "accept": true
+  },
+  {
+    "name": "module_public_dependency",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "import api; let value be api.make(); output(value.name);",
+      "api.eri": "import models.user; public function make() returns user.User { return user.User { name=\"A\"; }; }",
+      "models/user.eri": "public type User { name Text; }"
+    },
+    "accept": true
+  },
+  {
+    "name": "module_generic_wrong",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "import util; util.add(1,\"A\");",
+      "util.eri": "public function add(first,second) { return first+second; }"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 25,
+      "path": "app.eri",
+      "category": "type"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 49
+    },
+    "diagnosticReason": "Diagnose the generic contract instantiation at its call site rather than reanalyzing the function body."
+  },
+  {
+    "name": "generic_twice_0",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "function twice(value) { return value+value; } output(twice(1));"
+    },
+    "accept": true
+  },
+  {
+    "name": "generic_nested_list_0",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "function first(values) { return values[0]; } let values be first([[1]]); output(values[0]);"
+    },
+    "accept": true
+  },
+  {
+    "name": "generic_twice_1",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "function twice(value) { return value+value; } output(twice(1.5));"
+    },
+    "accept": true
+  },
+  {
+    "name": "generic_nested_list_1",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "function first(values) { return values[0]; } let values be first([[1.5]]); output(values[0]);"
+    },
+    "accept": true
+  },
+  {
+    "name": "generic_twice_2",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "function twice(value) { return value+value; } output(twice(\"A\"));"
+    },
+    "accept": true
+  },
+  {
+    "name": "generic_nested_list_2",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "function first(values) { return values[0]; } let values be first([[\"A\"]]); output(values[0]);"
+    },
+    "accept": true
+  },
+  {
+    "name": "generic_fixed_identity",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "type User { name Text; } function preserve(value) { let fixed copy be value; return copy; } preserve(identity User { name=\"A\"; });"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 101,
+      "path": "app.eri",
+      "category": "fixed"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 53
+    },
+    "diagnosticReason": "Diagnose the generic contract instantiation at its call site rather than reanalyzing the function body."
+  },
+  {
+    "name": "generic_fixed_ordinary",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "type User { name Text; } function preserve(value) { let fixed copy be value; return copy; } preserve(User { name=\"A\"; });"
+    },
+    "accept": true
+  },
+  {
+    "name": "generic_fixed_nested",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "type User { name Text; } function preserve(value) { let fixed copy be value; return copy; } preserve([identity User { name=\"A\"; }]);"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 101,
+      "path": "app.eri",
+      "category": "fixed"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 53
+    },
+    "diagnosticReason": "Diagnose the generic contract instantiation at its call site rather than reanalyzing the function body."
+  },
+  {
+    "name": "generic_incompatible_ops",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "function f(value) { let x be value + value; return value % value; } output(f(\"A\"));"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 78,
+      "path": "app.eri",
+      "category": "type"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 58
+    },
+    "diagnosticReason": "Diagnose the generic contract instantiation at its call site rather than reanalyzing the function body."
+  },
+  {
+    "name": "generic_bad_uncalled",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "function f(value) { return value + true; }"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 34,
+      "path": "app.eri",
+      "category": "type"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 34
+    }
+  },
+  {
+    "name": "duplicate_normalized_parameter",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "function f(café Int, café Text) {}"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 22,
+      "path": "app.eri",
+      "category": "scope"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 22
+    }
+  },
+  {
+    "name": "unknown_type",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "let item Missing be 1;"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 10,
+      "path": "app.eri",
+      "category": "name"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 10
+    }
+  },
+  {
+    "name": "duplicate_field_2",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "type User { name Text; name Int; }"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 24,
+      "path": "app.eri",
+      "category": "scope"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 24
+    }
+  },
+  {
+    "name": "missing_construction_field",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "type User { name Text; id Int; } let u be User { name=\"A\"; };"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 43,
+      "path": "app.eri",
+      "category": "type"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 43
+    }
+  },
+  {
+    "name": "unknown_construction_field",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "type User { name Text; } let u be User { name=\"A\"; age=1; };"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 52,
+      "path": "app.eri",
+      "category": "type"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 52
+    }
+  },
+  {
+    "name": "double_construction_field",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "type User { name Text; } let u be User { name=\"A\"; name=\"B\"; };"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 52,
+      "path": "app.eri",
+      "category": "type"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 52
+    }
+  },
+  {
+    "name": "maybe_flow_else",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "type User { name Text; } function f(user maybe User) returns Text { if user != none { return user.name; } else { return \"\"; } }"
+    },
+    "accept": true
+  },
+  {
+    "name": "maybe_flow_while",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "type User { name Text; } function f(user maybe User) { while user != none { output(user.name); user=none; } }"
+    },
+    "accept": true
+  },
+  {
+    "name": "maybe_flow_after_else",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "type User { name Text; } function f(user maybe User) returns Text { if user == none { return \"\"; } else { output(user.name); } return user.name; }"
+    },
+    "accept": true
+  },
+  {
+    "name": "module_missing_fails_contract",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "import err; function f() { try err.f(); }",
+      "err.eri": "public error E { message Text; } public function f() fails E { fail E { message=\"x\"; }; }"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 28,
+      "path": "app.eri",
+      "category": "failure"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 28
+    }
+  },
+  {
+    "name": "module_private_error",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "import err; function f() fails err.E {}",
+      "err.eri": "error E { message Text; }"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 32,
+      "path": "app.eri",
+      "category": "name"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 32
+    }
+  },
+  {
+    "name": "module_duplicate_paths",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "import helpers.a; import helpers.a as again; output(a.f()); output(again.f());",
+      "helpers/a.eri": "public function f() returns Int { return 1; }"
+    },
+    "accept": true
+  },
+  {
+    "name": "module_nested_generic",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "import api; output(api.get([1]));",
+      "api.eri": "import util; public function get(values) { return util.first(values); }",
+      "util.eri": "public function first(values) { return values[0]; }"
+    },
+    "accept": true
+  },
+  {
+    "name": "import_after_decl",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "function f() {} import std.files;"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 17,
+      "path": "app.eri",
+      "category": "module"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 17
+    }
+  },
+  {
+    "name": "unhandled_resource_cleanup",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "import std.files; function f() { with file be files.openRead(\"x\") else error { return; } { return; } }"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "parse",
+      "line": 1,
+      "column": 67,
+      "path": "app.eri"
+    },
+    "referenceDiagnostic": {
+      "phase": "parse",
+      "line": 1,
+      "column": 67
+    }
+  },
+  {
+    "name": "entry_try",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "import std.files; try files.remove(\"x\");"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 19,
+      "path": "app.eri",
+      "category": "failure"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 19
+    }
+  },
+  {
+    "name": "unnecessary_handler",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "output(1) else error {};"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 7,
+      "path": "app.eri",
+      "category": "failure"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 7
+    }
+  },
+  {
+    "name": "fails_not_error",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "type User { name Text; } function f() fails User {}"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 45,
+      "path": "app.eri",
+      "category": "failure"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 45
+    }
+  },
+  {
+    "name": "duplicate_fails",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "error E { message Text; } function f() fails E,E {}"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 48,
+      "path": "app.eri",
+      "category": "failure"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 48
+    }
+  },
+  {
+    "name": "handler_not_error",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "error E { message Text; } type U { name Text; } function f() fails E { fail E { message=\"x\"; }; } f() else error U {};"
+    },
+    "accept": false,
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 103,
+      "path": "app.eri",
+      "category": "failure"
+    },
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 103
+    }
+  },
+  {
+    "name": "generic_fixed_through_helper",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "type U { name Text; } function same(value) { return value; } function keep(value) { let fixed copy be value; return same(value); } keep(identity U { name=\"A\"; });"
+    },
+    "accept": false,
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 85
+    },
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 136,
+      "path": "app.eri",
+      "category": "fixed"
+    },
+    "diagnosticReason": "Diagnose the generic contract instantiation at its call site rather than reanalyzing the function body."
+  },
+  {
+    "name": "module_lex_error",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "import broken;",
+      "broken.eri": "let value be 1__2;"
+    },
+    "accept": false,
+    "referenceDiagnostic": {
+      "phase": "lex",
+      "line": 1,
+      "column": 15
+    },
+    "diagnostic": {
+      "phase": "lex",
+      "line": 1,
+      "column": 15,
+      "path": "broken.eri"
+    }
+  },
+  {
+    "name": "module_parse_error",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "import broken;",
+      "broken.eri": "public function f() {"
+    },
+    "accept": false,
+    "referenceDiagnostic": {
+      "phase": "parse",
+      "line": 1,
+      "column": 21
+    },
+    "diagnostic": {
+      "phase": "parse",
+      "line": 1,
+      "column": 21,
+      "path": "broken.eri"
+    }
+  },
+  {
+    "name": "ordinary_count_field_assignment",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "type Counter { count Int; } let counter be Counter { count=1; }; counter.count=2; output(counter.count);"
+    },
+    "accept": true
+  },
+  {
+    "name": "resource_list_escape",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "import std.files; function f() fails files.FileError { with file be try files.openRead(\"x\") { let values be [file]; } }"
+    },
+    "accept": false,
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 110
+    },
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 110,
+      "path": "app.eri",
+      "category": "resource"
+    }
+  },
+  {
+    "name": "resource_list_add_escape",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "import std.files; function f() fails files.FileError { with file be try files.openRead(\"x\") { let values be []; values.add(file); } }"
+    },
+    "accept": false,
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 124
+    },
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 124,
+      "path": "app.eri",
+      "category": "resource"
+    }
+  },
+  {
+    "name": "resource_optional_assignment",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "import std.files; function f() fails files.FileError { with file be try files.openRead(\"x\") { let other maybe files.File be none; other=file; } }"
+    },
+    "accept": false,
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 131
+    },
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 131,
+      "path": "app.eri",
+      "category": "resource"
+    }
+  },
+  {
+    "name": "resource_field_escape",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "import std.files; type Box { handle files.File; } function f() fails files.FileError { with file be try files.openRead(\"x\") { let value be Box { handle=file; }; } }"
+    },
+    "accept": false,
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 146
+    },
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 146,
+      "path": "app.eri",
+      "category": "resource"
+    }
+  },
+  {
+    "name": "list_no_value_element",
+    "entry": "app.eri",
+    "files": {
+      "app.eri": "let values be [output(1)];"
+    },
+    "accept": false,
+    "referenceDiagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 22
+    },
+    "diagnostic": {
+      "phase": "semantic",
+      "line": 1,
+      "column": 22,
+      "path": "app.eri",
+      "category": "type"
+    }
+  }
+]
