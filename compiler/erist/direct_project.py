@@ -38,8 +38,28 @@ def _ordered(root: CompiledModule, *, allow_interfaces: bool) -> tuple[list[Comp
     return source, interface_only
 
 
+def _prepare_interface_lowering(mod: CompiledModule) -> None:
+    """Supply declaration-shape metadata needed by the source-close IR lowerer.
+
+    The serialized interface deliberately does not contain AST objects.  The
+    lowerer only needs to know whether each parameter had an explicit source
+    annotation in order to reproduce the canonical specialization symbol.
+    """
+    if not mod.interface_only:
+        return
+    for symbol in mod.analyzer.functions.values():
+        contract = getattr(symbol, "contract", None)
+        if contract is None:
+            continue
+        for declaration, parameter in zip(symbol.declaration.parameters, contract.parameters):
+            if not hasattr(declaration, "type_annotation"):
+                declaration.type_annotation = object() if parameter.declared else None
+
+
 def typed_source_project(root: CompiledModule, *, allow_interfaces: bool) -> tuple[IRProgram, list[CompiledModule]]:
     source, interfaces = _ordered(root, allow_interfaces=allow_interfaces)
+    for interface in interfaces:
+        _prepare_interface_lowering(interface)
     structs = []
     functions = []
     entry = []
@@ -114,7 +134,7 @@ def lower_direct_entry(path: Path, source_root: Path | None = None) -> UProgram:
     artifacts = [_load_object(mod) for mod in interface_modules]
     object_functions = [fn for artifact in artifacts for fn in artifact.functions]
 
-    # Signature stubs exist only while lowering source calls.  They are removed
+    # Signature stubs exist only while lowering source calls. They are removed
     # immediately and replaced by the serialized implementation functions.
     object_names = {fn.name for fn in object_functions}
     typed_with_contracts = IRProgram(
