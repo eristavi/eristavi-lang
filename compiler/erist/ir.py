@@ -2,7 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from .diagnostics import SemanticError, SourceLocation
 from .syntax import *
-from .typesys import describe, resolve, NoValueType, IdentityType, MaybeType, ListType
+from .typesys import describe, resolve, NoValueType, IdentityType, MaybeType, ListType, NamedType
 
 @dataclass(frozen=True)
 class IRExpr:
@@ -143,8 +143,7 @@ class Lowerer:
             if isinstance(s.target,MemberExpr): return IRMemberAssign(self._member_expr(s.target),value,s.location)
             raise SemanticError("the current C backend does not yet lower this assignment path",s.location)
         if isinstance(s,ExprStmt): return IRExprStmt(self._expr(s.expression))
-        if isinstance(s,IfStmt):
-            return IRIf(self._expr(s.condition),self._lower_block(s.then_branch,True),self._lower_block(s.else_branch,True) if s.else_branch else [],s.location)
+        if isinstance(s,IfStmt): return IRIf(self._expr(s.condition),self._lower_block(s.then_branch,True),self._lower_block(s.else_branch,True) if s.else_branch else [],s.location)
         if isinstance(s,WhileStmt): return IRWhile(self._expr(s.condition),self._lower_block(s.body,True),s.location)
         if isinstance(s,ForStmt):
             it=self._expr(s.iterable); elem=list_inner(it.type_name)
@@ -206,12 +205,10 @@ class Lowerer:
             return IRBinary(semantic_t,e.location,left,e.operator,right)
         if isinstance(e,CallExpr):
             if isinstance(e.callee,NameExpr):
-                fn=self.a.functions.get(e.callee.name)
-                args=[]
+                fn=self.a.functions.get(e.callee.name); args=[]
                 for i,a in enumerate(e.arguments):
                     av=self._expr(a)
-                    if fn is not None and i<len(fn.typed_parameters) and fn.typed_parameters[i] is not None:
-                        av=self._coerce(av,describe(resolve(fn.typed_parameters[i])),a.location)
+                    if fn is not None and i<len(fn.typed_parameters) and fn.typed_parameters[i] is not None: av=self._coerce(av,describe(resolve(fn.typed_parameters[i])),a.location)
                     args.append(av)
                 return IRCall(semantic_t,e.location,e.callee.name,args)
             if isinstance(e.callee,MemberExpr) and e.callee.name=="add" and isinstance(e.callee.base,NameExpr):
@@ -224,11 +221,9 @@ class Lowerer:
         raise SemanticError(f"typed IR cannot coerce {value.type_name} to {target}",loc)
     @staticmethod
     def _type_from_name(t):
-        # Used only to recover structural member/index information from storage declarations.
         if t.startswith("maybe "): return MaybeType(Lowerer._type_from_name(maybe_inner(t)))
         if t.startswith("identity "): return IdentityType(Lowerer._type_from_name(identity_inner(t)))
         if t.startswith("List of "): return ListType(Lowerer._type_from_name(list_inner(t)))
-        from .typesys import BASIC as _unused  # pragma: no cover
         return NamedType(t)
     @staticmethod
     def _supported_type(t,loc):
