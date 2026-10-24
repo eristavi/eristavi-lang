@@ -17,7 +17,7 @@ bootstrap execution runtime    typed/source-close Eristavi IR
                                    ├─→ C11 backend → C toolchain → native
                                    ↓
                          verified + optimized Universal IR
-                                   ├─→ x86-64 Linux → native
+                                   ├─→ x86-64 Linux → allocation/lowering → native
                                    ├─→ ARM64 Linux → native
                                    ├─→ ES2020 JavaScript
                                    └─→ WebAssembly text
@@ -33,7 +33,7 @@ Universal IR is verified before and after bootstrap optimization.
 
 Verification checks symbols, CFG targets, local/value ids, branch types, call contracts and returns. Optimization currently performs safe constant folding and unreachable-block elimination.
 
-Target-neutral analyses now include:
+Target-neutral analyses include:
 
 - CFG-aware live-in/live-out sets;
 - instruction-level liveness at safe points;
@@ -42,7 +42,9 @@ Target-neutral analyses now include:
 - escape classification;
 - scalar register-candidate discovery.
 
-The x86-64 GC backend uses these analyses to root only heap temporaries that cross collection safe points and to reuse noninterfering scalar spill slots. A full machine-register allocator is still future work.
+The x86-64 GC backend uses these analyses to root only heap temporaries that cross collection safe points and to reuse noninterfering scalar spill slots.
+
+The x86-64 backend now also has an initial conservative physical-register allocator. Eligible short-lived scalar values in known call-free lowering regions may remain in a GP or XMM register. Complex lowering operations are treated as clobber regions: their operands and values that must survive them remain stack-backed until explicit machine-level use/clobber contracts are available. This preserves the existing ABI and precise-GC guarantees while establishing a real register-resident path.
 
 ## Direct x86-64 Linux
 
@@ -50,15 +52,29 @@ The direct System V backend executes a broad pre-0.1 surface, including all Text
 
 ### Direct GC
 
-The non-moving mark-and-sweep runtime now combines compiler-described root addresses with static type descriptors.
+The non-moving mark-and-sweep runtime combines compiler-described root addresses with static type descriptors.
 
 Typed traversal covers Text leaves, nominal fields, Lists and their backing arrays, maybe/identity wrappers and file-resource records. Dynamic checked-error state retains a conservative exact-tracked-pointer fallback. Heap temporary spill slots remain pinned/stable when rooted; scalar spill slots may be coalesced.
 
 This is substantially more precise than scanning every payload word, while still remaining a correctness-first bootstrap collector rather than a generational/concurrent production GC.
 
+### Physical register allocation
+
+The first allocator slice is deliberately narrow:
+
+- Int/Bool and Float use separate register classes;
+- CFG interference prevents overlapping values from sharing a physical register;
+- caller-saved residency is allowed only for verified short-lived scalar regions;
+- values crossing helper/PLT/GC clobbers remain spilled;
+- operands of complex clobbering lowerings remain spilled because a helper may run before every operand is consumed;
+- higher-level scalar extraction remains stack-backed until lowering contracts become explicit;
+- stack spill slots remain the correctness fallback.
+
+The next allocator work is to formalize per-lowering use/clobber metadata, expand the safe register pool, improve move/coalescing decisions and compact spill slots that become unnecessary.
+
 ## ARM64 Linux
 
-The AArch64/AAPCS64 backend shares Universal IR and now runs natively in hosted ARM64 Linux CI.
+The AArch64/AAPCS64 backend shares Universal IR and runs natively in hosted ARM64 Linux CI.
 
 Behavioral coverage includes:
 
@@ -75,7 +91,7 @@ Cross-assembly tests remain in addition to native execution. ARM64 automatic mem
 
 `build-js` emits ES2020 JavaScript with checked `BigInt` for Eristavi Int.
 
-The backend now supports ordinary nominal values, Lists, maybe, identity, deep cloning and structural equality in addition to functions, scalars and control flow. Checked errors, resources and explicit Text views are not yet parity-complete.
+The backend supports ordinary nominal values, Lists, maybe, identity, deep cloning and structural equality in addition to functions, scalars and control flow. Checked errors, resources and explicit Text views are not yet parity-complete.
 
 ## WebAssembly
 
@@ -128,7 +144,7 @@ erist build-wat examples/hello.eri -o hello.wat
 python -m unittest discover -s tests -v
 ```
 
-The current suite contains **255 tests** and passes under:
+The current suite contains **262 tests** and passes under:
 
 - GCC / x86-64 Ubuntu / `-O2`;
 - Clang / x86-64 Ubuntu / `-O2`;
@@ -142,7 +158,7 @@ Platform-specific native tests execute on their matching Linux architecture. The
 The principal work is now production hardening:
 
 - ARM64 GC and explicit Text-view parity;
-- real register allocation and additional optimization passes;
+- register-allocation maturation and broader optimization passes;
 - broader JavaScript/WebAssembly failure/resource/Text-view parity;
 - compact production object/linker formats;
 - broader OS/ABI support and later RISC-V;
