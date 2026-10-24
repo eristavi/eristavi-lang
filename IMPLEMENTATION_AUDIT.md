@@ -2,11 +2,11 @@
 
 > **Audit date: 2026-10-24**
 >
-> **Scope:** frozen pre-0.1 source contract, bootstrap/reference runtime, generated-C path, verified Universal IR, direct x86-64 GC/runtime and initial physical register allocation, native ARM64 runtime, module artifacts/caching, JavaScript/WebAssembly consumers, Unicode conformance and hosted CI.
+> **Scope:** frozen pre-0.1 source contract, bootstrap/reference runtime, generated-C path, verified Universal IR, direct x86-64 GC/runtime with contract-driven physical register allocation and spill-frame compaction, native ARM64 runtime, module artifacts/caching, JavaScript/WebAssembly consumers, Unicode conformance and hosted CI.
 
 ## 1. Executive result
 
-Eristavi is now a **broad working pre-0.1 compiler/toolchain with two native CPU backends, a portable C path, JavaScript/WebAssembly consumers, reusable module artifacts, automatic memory reclamation on the primary x86-64 direct runtime and an initial verified physical-register allocation path**.
+Eristavi is now a **broad working pre-0.1 compiler/toolchain with two native CPU backends, a portable C path, JavaScript/WebAssembly consumers, reusable module artifacts, automatic memory reclamation on the primary x86-64 direct runtime and a verified contract-driven physical-register allocation path**.
 
 At this audit point:
 
@@ -15,9 +15,11 @@ At this audit point:
 - the Python bootstrap/reference runtime covers the principal frozen pre-0.1 surface;
 - generated C remains the broad portability/conformance baseline;
 - Universal IR is verified before and after bootstrap optimization;
-- CFG-aware liveness/interference analysis is used by direct x86-64 stack/root planning and conservative physical register allocation;
+- CFG-aware liveness/interference analysis is used by direct x86-64 root planning, spill coloring and physical register allocation;
 - direct x86-64 executes the broad implemented language/runtime slice without generated C;
-- short-lived scalar values in proven call-free x86 regions can execute directly from physical GP/XMM registers while unsafe lowering boundaries retain spill fallback;
+- audited x86 lowering contracts describe machine-level operand/clobber behavior, with unknown lowerings defaulting conservatively;
+- the current x86 allocation pools contain two GP registers (`r10`, `r11`) and two XMM registers (`xmm8`, `xmm9`);
+- register-resident scalar values no longer reserve redundant precise-x86 spill slots, while pinned heap/root slots remain stable;
 - all three explicit Text views execute directly on x86-64 using pinned Unicode-17 behavior;
 - the x86-64 runtime has non-moving mark-and-sweep reclamation with liveness-aware compiler roots and static heap descriptors;
 - module interface/object artifacts support source-independent concrete linkage and downstream inferred-generic specialization;
@@ -26,7 +28,7 @@ At this audit point:
 - ES2020 JavaScript supports ordinary aggregate/value semantics in addition to scalars/functions;
 - WebAssembly text supports the scalar/function/control slice plus Text through an explicit UTF-8/`externref` host ABI;
 - CI runs the complete official Unicode-17 `GraphemeBreakTest` fixture against the pinned reference segmenter;
-- the repository suite contains **262 tests** and passes in all four hosted CI jobs.
+- the repository suite contains **272 tests** and passes in all four hosted CI jobs.
 
 The governing target rule remains:
 
@@ -111,21 +113,35 @@ The compiler computes:
 - escape reasons;
 - scalar register candidates.
 
-### Initial x86 physical register allocation
+### x86 physical register allocation
 
-The x86-64 backend now consumes those analyses through a deliberately conservative allocator.
+The x86-64 backend consumes these analyses through a conservative, machine-contract-driven allocator.
 
 Current verified behavior:
 
-- short-lived Int/Bool candidates may use a caller-saved GP register;
-- short-lived Float candidates may use a caller-saved XMM register;
-- interference coloring prevents overlapping virtual values from sharing the same physical register;
-- values that cross a possible helper/PLT/GC clobber remain spilled;
-- operands consumed inside complex machine-lowering regions also remain spilled, because those lowerings may call helpers before all operands are consumed;
-- scalar values produced by higher-level aggregate/error/List extraction remain stack-backed until those lowerings have explicit machine use/clobber contracts;
-- existing stack slots remain available as the correctness fallback.
+- eligible short-lived Int/Bool values may use `r10` or `r11`;
+- eligible short-lived Float values may use `xmm8` or `xmm9`;
+- interference coloring prevents overlapping virtual values from sharing a physical register;
+- per-lowering contracts describe caller-saved/scratch clobbers and whether operands are consumed before clobber;
+- values live across helper/PLT/GC clobbers remain spilled;
+- dead-after-use operands may remain register-resident when the lowering explicitly consumes them before its clobber point;
+- scalar function-call results may become register-resident after the call returns;
+- audited call-free scalar extraction operations may produce register-resident results;
+- unknown/unaudited lowerings conservatively clobber the full caller-saved register set and cannot produce register-resident scalar results;
+- unaudited physical-register pools are rejected.
 
-This is a real register-resident execution path, but it is not yet a mature whole-function register allocator. Broader register pools, explicit target clobber metadata and dead spill-slot/frame compaction remain future work.
+### Spill-frame compaction
+
+The stack-slot planner now supports values whose entire lifetime is represented by a physical register. Those values receive no spill slot in the precise x86 frame.
+
+Safety rules are explicit:
+
+- pinned values always win over exclusion;
+- heap/rooted values keep stable unique slots when required by GC metadata;
+- unallocated values retain stack storage as the correctness fallback;
+- register-resident scalar values can be removed from the spill frame without affecting GC root addresses.
+
+This is a meaningful physical allocator, but not yet a production whole-function allocator. Move/coalescing improvements, broader audited register use and richer machine-level cost modeling remain open.
 
 ## 5. x86-64 automatic memory management
 
@@ -139,7 +155,7 @@ Compiler root frames contain:
 - only heap-typed Universal-IR temporaries proven live across collection safe points;
 - static type descriptors paired with those root addresses.
 
-Heap-valued temporary spill slots remain unique/stable when rooted. Noninterfering scalar virtual values may reuse spill slots.
+Heap-valued temporary spill slots remain unique/stable when rooted. Register-resident scalar values are absent from the spill frame; remaining scalar temporaries may reuse noninterfering slots.
 
 ### Typed heap traversal
 
@@ -185,9 +201,10 @@ The System V backend executes without generated C:
 - exact UTF-8 Text file boundaries including embedded NUL;
 - source-independent module-object linkage;
 - automatic heap reclamation;
-- conservative physical register residency for eligible scalar regions.
+- contract-driven physical register residency for eligible scalar regions;
+- spill-frame omission for values proven fully register-resident.
 
-The physical allocator is intentionally layered below the existing checked-error/resource/direct/GC composition so those higher-level runtime families inherit the same allocation policy without changing source semantics.
+The allocator is layered below the checked-error/resource/direct/GC composition so higher-level runtime families inherit the same allocation policy without changing source semantics.
 
 ## 7. ARM64 backend and native CI
 
@@ -284,7 +301,7 @@ Remaining Wasm work includes aggregate values, checked failures, resources, Text
 The current suite contains:
 
 ```text
-262 tests
+272 tests
 ```
 
 The audited matrix is:
@@ -294,11 +311,11 @@ The audited matrix is:
 - Clang / ARM64 Ubuntu / `-O2`;
 - Clang / ARM64 macOS / `-O2`.
 
-All four jobs pass on the verified register-allocation change set.
+All four jobs pass on the verified allocator/frame-compaction change set.
 
 On x86-64 Linux, ARM-native tests are skipped because the ABI does not match. The ARM64 Linux job executes those same native cases. The matrix also runs the official Unicode-17 grapheme vectors.
 
-Coverage includes frontend/reference semantics, generated-C execution, module artifacts/cache, Universal-IR verification/analysis, x86 typed GC, direct x86 runtime and register-allocation regressions, native ARM64 runtime, JavaScript aggregate/value semantics, WebAssembly Text contracts and Unicode official conformance.
+Coverage includes frontend/reference semantics, generated-C execution, module artifacts/cache, Universal-IR verification/analysis, x86 typed GC, x86 lowering contracts, physical allocation, spill-frame compaction, direct x86 runtime, native ARM64 runtime, JavaScript aggregate/value semantics, WebAssembly Text contracts and Unicode official conformance.
 
 ## 13. Quality findings corrected during this phase
 
@@ -308,8 +325,11 @@ This implementation phase exposed and corrected several concrete issues:
 - scalar temporaries previously occupied one spill slot each; CFG interference coloring permits safe reuse;
 - conservative heap child scanning has been replaced by typed descriptors for the principal runtime value families;
 - the first x86 allocator model treated complex lowerings as a single clobber point and protected only values live afterward; full CI exposed eight aggregate/error/object regressions where caller-saved scalar operands were destroyed by helper calls before being consumed;
-- the allocator now treats complex lowerings as clobber **regions**, keeping both their operands and surviving values stack-backed unless the lowering is explicitly known call-free;
-- higher-level scalar extraction is also conservatively excluded from register residency until machine-level use/clobber contracts exist;
+- the allocator was corrected to reason about complete lowering clobber regions;
+- explicit x86 lowering contracts now distinguish values that cross clobbers from operands consumed safely before them;
+- unknown future lowerings default to conservative full caller-saved clobber behavior;
+- the audited allocation pools were expanded from one GP/XMM register to two GP and two XMM registers;
+- register-resident scalar values originally still consumed redundant stack spill slots; the stack planner now supports explicit exclusion while guaranteeing pinned GC/root storage takes precedence;
 - ARM64 native CI exposed mixed buffered-scalar/raw-Text output reordering; the composed direct backend now flushes before Text writes;
 - one ARM checked-error test fixture violated the existing requirement that a value-producing handled expression cannot continue without a replacement value; the invalid fixture was corrected rather than weakening semantics;
 - WebAssembly Bool comparison was corrected to use its i32 representation instead of an i64 comparison;
@@ -325,7 +345,7 @@ Bring the x86 collector contract and explicit Text-view runtime to ARM64, or def
 
 ### B. Register allocation maturation
 
-The compiler now has a working conservative x86 physical allocator, but the next steps are explicit machine-level use/clobber contracts, a broader safe physical-register pool, better move/coalescing decisions and removal/compaction of spill slots that are no longer needed.
+The x86 compiler now has explicit lowering clobber contracts, two-register GP/XMM allocation pools and spill-frame omission for fully register-resident scalars. Remaining allocator work includes broader audited physical-register use, move/coalescing improvements, better cost heuristics and eventual richer instruction-selection integration.
 
 A mature allocator must continue to preserve the existing System V ABI, checked-failure paths and precise-GC rooting contract rather than optimizing around them implicitly.
 
@@ -373,13 +393,15 @@ Eristavi now has:
 - verified/optimized Universal IR;
 - CFG-aware liveness, interference and spill-slot analysis;
 - a broad direct x86-64 backend with automatic typed heap reclamation;
-- an initial verified x86 physical-register allocation path with conservative clobber-region safety;
+- explicit x86 machine-lowering use/clobber contracts;
+- audited `r10`/`r11` and `xmm8`/`xmm9` physical allocation pools;
+- spill-frame compaction for values proven fully register-resident;
 - a native-tested ARM64 backend for major runtime families;
 - reusable source-independent module implementations and inferred-generic templates;
 - incremental module caching;
 - expanded JavaScript ordinary-value semantics;
 - an explicit Text-aware WebAssembly host contract;
 - full official Unicode-17 grapheme reference conformance;
-- a **262-test four-platform CI matrix**.
+- a **272-test four-platform CI matrix**.
 
 The project has moved firmly from language-prototype construction into **compiler/runtime maturation and cross-target conformance work**. The remaining gaps are engineering depth and target parity, not evidence that the core source-language contract needs to be reopened.

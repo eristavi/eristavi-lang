@@ -36,7 +36,7 @@ verified + optimized Universal IR
     └─→ WebAssembly text
 ```
 
-Universal IR is verified before/after bootstrap optimization. Current passes include constant folding and unreachable-block elimination. CFG-aware liveness, interference, spill-slot coloring, escape analysis and register-candidate analysis are available to direct backends. The x86-64 backend now consumes those analyses through an initial conservative physical-register allocator for short-lived scalar regions.
+Universal IR is verified before/after bootstrap optimization. Current passes include constant folding and unreachable-block elimination. CFG-aware liveness, interference, spill-slot coloring, escape analysis and register-candidate analysis are available to direct backends. The x86-64 backend consumes those analyses through a contract-driven physical-register allocator for short-lived scalar regions.
 
 ## Direct native backends
 
@@ -44,9 +44,9 @@ Universal IR is verified before/after bootstrap optimization. Current passes inc
 
 The direct x86-64 route executes a broad pre-0.1 implementation without generated C: functions/recursion, Int/Bool/Float/Text, all explicit Text views, Lists, ordinary values, maybe, identity, checked failures, inferred generic specializations, deterministic file resources and module-object linkage.
 
-The runtime includes a non-moving mark-and-sweep collector. Compiler root frames are **liveness-aware** and pair stable heap root addresses with static type descriptors. Typed traversal handles Text leaves, nominal fields, Lists, maybe/identity wrappers and file-resource records; conservative exact-pointer scanning remains only as a fallback for dynamic runtime state. Scalar Universal-IR temporaries also reuse CFG-noninterfering spill slots.
+The runtime includes a non-moving mark-and-sweep collector. Compiler root frames are **liveness-aware** and pair stable heap root addresses with static type descriptors. Typed traversal handles Text leaves, nominal fields, Lists, maybe/identity wrappers and file-resource records; conservative exact-pointer scanning remains only as a fallback for dynamic runtime state.
 
-Physical register allocation has begun on this backend. The first verified allocator slice maps eligible short-lived Int/Bool values to a GP register and eligible Float values to an XMM register using CFG interference information. Complex lowering operations are treated conservatively as clobber regions: their inputs and values that must survive them remain stack-backed. This preserves the existing System V ABI and precise-GC model while establishing a real register-resident execution path. Broader register pools and spill-frame compaction remain future maturation work.
+Physical register allocation now uses CFG interference together with explicit x86 lowering use/clobber contracts. The audited allocation pools currently include two GP registers (`r10`, `r11`) and two XMM registers (`xmm8`, `xmm9`). Values that cross helper/PLT/GC clobbers remain spilled, while audited call-free scalar operations, safe extraction operations and scalar call results may stay register-resident. Unknown lowerings default to conservative full caller-saved clobbers. Register-resident scalars no longer reserve redundant spill slots in the precise x86 frame; pinned heap/root slots remain stable and take precedence over compaction.
 
 ### ARM64 Linux
 
@@ -181,7 +181,7 @@ erist build-wat examples/hello.eri -o hello.wat
 python -m unittest discover -s tests -v
 ```
 
-The current suite contains **262 tests** and passes in all four hosted CI jobs:
+The current suite contains **272 tests** and passes in all four hosted CI jobs:
 
 - GCC / x86-64 Ubuntu / `-O2`;
 - Clang / x86-64 Ubuntu / `-O2`;

@@ -1,6 +1,6 @@
 # Eristavi Compilation Targets
 
-> **Status: broad C and x86-64 paths with initial x86 physical allocation; native-tested ARM64; active JavaScript and WebAssembly consumers**
+> **Status: broad C and x86-64 paths with contract-driven x86 physical allocation; native-tested ARM64; active JavaScript and WebAssembly consumers**
 
 Eristavi is designed around machine-independent compiler IRs. Target backends preserve Eristavi semantics rather than inheriting target-language, operating-system, or CPU behavior accidentally.
 
@@ -34,9 +34,9 @@ verified + optimized Universal IR
 
 The direct System V backend executes a broad pre-0.1 slice without generated C, including scalars, all explicit Text views, functions, ordinary values, Lists, maybe, identity, inferred generics, checked failures, deterministic resources and source-independent module-object linkage.
 
-Its non-moving mark-and-sweep runtime combines CFG-liveness-aware compiler roots with static heap descriptors for Text leaves, nominal fields, Lists, maybe/identity wrappers and current file-resource records. Scalar spill slots are interference-colored and reused where safe. Dynamic error state still has a conservative exact-tracked-pointer fallback.
+Its non-moving mark-and-sweep runtime combines CFG-liveness-aware compiler roots with static heap descriptors for Text leaves, nominal fields, Lists, maybe/identity wrappers and current file-resource records. Heap/root spill storage remains pinned and stable; unallocated scalar spills are interference-colored and reused where safe. Dynamic error state still has a conservative exact-tracked-pointer fallback.
 
-The backend also has an initial conservative physical-register allocator. Short-lived scalar virtual values in known call-free lowering regions may remain in GP/XMM registers, with CFG interference preventing conflicting assignments. Complex lowerings are treated as machine clobber regions, so their operands and values that must survive them remain stack-backed. This preserves the existing System V ABI and precise-GC contract while giving x86 a genuine register-resident path. Broader register pools, explicit per-lowering use/clobber metadata and spill-frame compaction remain maturation work.
+The x86 allocator uses explicit machine-lowering clobber contracts. The current audited physical pools are `r10`/`r11` for Int/Bool and `xmm8`/`xmm9` for Float. Values crossing helper/PLT/GC clobbers remain stack-backed, while audited scalar call results and call-free extraction operations may remain register-resident. Unknown lowerings are conservative by default. Scalars proven fully register-resident are omitted from the precise x86 spill frame, while pinned GC/root storage always takes precedence.
 
 ## Native: ARM64 Linux
 

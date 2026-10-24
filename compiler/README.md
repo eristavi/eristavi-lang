@@ -42,9 +42,9 @@ Target-neutral analyses include:
 - escape classification;
 - scalar register-candidate discovery.
 
-The x86-64 GC backend uses these analyses to root only heap temporaries that cross collection safe points and to reuse noninterfering scalar spill slots.
+The x86-64 GC backend uses these analyses to root only heap temporaries that cross collection safe points. Remaining scalar spills reuse noninterfering slots; scalars proven fully register-resident receive no spill slot in the precise frame.
 
-The x86-64 backend now also has an initial conservative physical-register allocator. Eligible short-lived scalar values in known call-free lowering regions may remain in a GP or XMM register. Complex lowering operations are treated as clobber regions: their operands and values that must survive them remain stack-backed until explicit machine-level use/clobber contracts are available. This preserves the existing ABI and precise-GC guarantees while establishing a real register-resident path.
+The x86-64 physical allocator now consumes explicit machine-lowering use/clobber contracts rather than a hard-coded safe-op boundary. Unknown operations remain conservative by default.
 
 ## Direct x86-64 Linux
 
@@ -54,23 +54,26 @@ The direct System V backend executes a broad pre-0.1 surface, including all Text
 
 The non-moving mark-and-sweep runtime combines compiler-described root addresses with static type descriptors.
 
-Typed traversal covers Text leaves, nominal fields, Lists and their backing arrays, maybe/identity wrappers and file-resource records. Dynamic checked-error state retains a conservative exact-tracked-pointer fallback. Heap temporary spill slots remain pinned/stable when rooted; scalar spill slots may be coalesced.
+Typed traversal covers Text leaves, nominal fields, Lists and their backing arrays, maybe/identity wrappers and file-resource records. Dynamic checked-error state retains a conservative exact-tracked-pointer fallback. Heap temporary spill slots remain pinned/stable when rooted; pinned storage always overrides any frame-compaction exclusion.
 
 This is substantially more precise than scanning every payload word, while still remaining a correctness-first bootstrap collector rather than a generational/concurrent production GC.
 
 ### Physical register allocation
 
-The first allocator slice is deliberately narrow:
+The verified allocator currently has:
 
-- Int/Bool and Float use separate register classes;
-- CFG interference prevents overlapping values from sharing a physical register;
-- caller-saved residency is allowed only for verified short-lived scalar regions;
-- values crossing helper/PLT/GC clobbers remain spilled;
-- operands of complex clobbering lowerings remain spilled because a helper may run before every operand is consumed;
-- higher-level scalar extraction remains stack-backed until lowering contracts become explicit;
-- stack spill slots remain the correctness fallback.
+- separate Int/Bool and Float register classes;
+- audited GP allocation across `r10` and `r11`;
+- audited XMM allocation across `xmm8` and `xmm9`;
+- CFG interference coloring;
+- explicit per-lowering caller-saved/scratch clobber contracts;
+- safe register residency for audited scalar extraction and scalar call results;
+- stack fallback for values crossing helper/PLT/GC clobbers;
+- conservative behavior for unknown lowerings;
+- rejection of unaudited allocation pools;
+- spill-frame omission for values whose complete lifetime is already represented by a physical register.
 
-The next allocator work is to formalize per-lowering use/clobber metadata, expand the safe register pool, improve move/coalescing decisions and compact spill slots that become unnecessary.
+The next allocator work is broader audited register use, improved move/coalescing choices, better cost heuristics and tighter integration with instruction selection.
 
 ## ARM64 Linux
 
@@ -144,7 +147,7 @@ erist build-wat examples/hello.eri -o hello.wat
 python -m unittest discover -s tests -v
 ```
 
-The current suite contains **262 tests** and passes under:
+The current suite contains **272 tests** and passes under:
 
 - GCC / x86-64 Ubuntu / `-O2`;
 - Clang / x86-64 Ubuntu / `-O2`;
