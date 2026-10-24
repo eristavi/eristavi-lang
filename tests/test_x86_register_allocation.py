@@ -98,6 +98,23 @@ class X86RegisterAllocationTests(unittest.TestCase):
         plan = allocate_x86_registers(fn)
         self.assertNotIn(0, plan.registers)
 
+    def test_complex_scalar_extraction_remains_spilled(self):
+        aggregate = UValue(0, "nominal<Record>")
+        field = UValue(1, I64)
+        block = UBlock(
+            "entry",
+            [
+                UInstruction("load_local", aggregate, (), 0, None),
+                UInstruction("get_field", field, (aggregate,), None, {"index": 0}),
+                UInstruction("output_i64", None, (field,), None, None),
+            ],
+            UReturn(),
+        )
+        local = ULocal(0, "record", "nominal<Record>")
+        fn = UFunction("probe", "void", [], [local], [block], 2)
+        plan = allocate_x86_registers(fn)
+        self.assertNotIn(1, plan.registers)
+
     def test_composed_gc_backend_emits_register_resident_scalar(self):
         td, program = self.lower("output(40 + 2);")
         try:
