@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum, auto
-import unicodedata
 
 from .diagnostics import LexError, SourceLocation
+from .unicode_support import is_identifier, is_xid_continue, is_xid_start, normalize_nfc
 
 
 class TokenKind(Enum):
@@ -201,18 +201,11 @@ class Lexer:
 
     @staticmethod
     def _is_identifier_start(ch: str) -> bool:
-        if ch == "_":
-            return True
-        return ch != "\0" and not ch.isdigit() and ch.isidentifier()
+        return ch == "_" or (ch != "\0" and is_xid_start(ch))
 
     @staticmethod
     def _is_identifier_continue(ch: str) -> bool:
-        if ch == "_" or ch.isdigit():
-            return True
-        if ch == "\0":
-            return False
-        category = unicodedata.category(ch)
-        return ch.isidentifier() or category.startswith("M") or category == "Pc"
+        return ch == "_" or (ch != "\0" and is_xid_continue(ch))
 
     def _identifier(self) -> None:
         start_i, start = self.i, self._loc()
@@ -220,8 +213,8 @@ class Lexer:
         while self._is_identifier_continue(self._peek()):
             self._advance()
         raw = self.source[start_i:self.i]
-        name = unicodedata.normalize("NFC", raw)
-        if not name.isidentifier():
+        name = normalize_nfc(raw)
+        if not is_identifier(name):
             raise LexError(f"invalid identifier {raw!r}", start)
         kind = KEYWORDS.get(name, TokenKind.IDENTIFIER)
         self.tokens.append(Token(kind, raw, name if kind is TokenKind.IDENTIFIER else None, start))
