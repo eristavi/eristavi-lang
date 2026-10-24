@@ -21,6 +21,8 @@ class BackendTests(unittest.TestCase):
         p=self.compile_run('output("a"=="a"); output("a"!="b");'); self.assertEqual(p.stdout,'true\ntrue\n')
     def test_native_text_escape(self):
         p=self.compile_run('output("A\\nB");'); self.assertEqual(p.stdout,'A\nB\n')
+    def test_native_text_concatenation(self):
+        p=self.compile_run('let a be "Hello, "; let b be "world"; output(a+b+"!");'); self.assertEqual(p.stdout,'Hello, world!\n')
     def test_native_unicode_identifier(self):
         p=self.compile_run('let τιμή be 42; output(τιμή);'); self.assertEqual(p.stdout,'42\n')
     def test_native_list_literal_index_and_count(self):
@@ -47,6 +49,10 @@ class BackendTests(unittest.TestCase):
         p=self.compile_run('type User { name Text; } function rename(user User) returns User { user.name="Maria"; return user; } let original be User { name="Anna"; }; let changed be rename(original); output(original.name); output(changed.name);'); self.assertEqual(p.stdout,'Anna\nMaria\n')
     def test_native_nested_value_mutation(self):
         p=self.compile_run('type Address { city Text; } type User { address Address; } let u be User { address=Address { city="Paphos"; }; }; u.address.city="Nicosia"; output(u.address.city);'); self.assertEqual(p.stdout,'Nicosia\n')
+    def test_native_list_of_values(self):
+        p=self.compile_run('type User { name Text; } let users be [User { name="Anna"; },User { name="Maria"; }]; output(users.count); output(users[0].name); for user in users { output(user.name); }'); self.assertEqual(p.stdout,'2\nAnna\nAnna\nMaria\n')
+    def test_native_list_of_values_add_copy_and_equality(self):
+        p=self.compile_run('type User { name Text; } let first be [User { name="Anna"; }]; let second be first; second.add(User { name="Maria"; }); second[0]=User { name="Ana"; }; output(first.count); output(first[0].name); output(second.count); output(second[0].name); output(first==[User { name="Anna"; }]);'); self.assertEqual(p.stdout,'1\nAnna\n2\nAna\ntrue\n')
     def test_native_identity_alias_and_equality(self):
         p=self.compile_run('type Counter { value Int; } let first be identity Counter { value=0; }; let second be first; second.value=10; output(first.value); output(first==second);'); self.assertEqual(p.stdout,'10\ntrue\n')
     def test_native_independent_identities_are_not_equal(self):
@@ -65,6 +71,8 @@ class BackendTests(unittest.TestCase):
         p=self.compile_run('function value(x maybe Int) returns Int { if x==none { return 0; } return x; } function find(ok Bool) returns maybe Int { if ok { return 7; } return none; } output(value(find(true))); output(value(find(false)));'); self.assertEqual(p.stdout,'7\n0\n')
     def test_native_maybe_identity(self):
         p=self.compile_run('type C { x Int; } let selected maybe identity C be none; let c be identity C { x=1; }; selected=c; output(selected==c); output(selected==none);'); self.assertEqual(p.stdout,'true\nfalse\n')
+    def test_native_maybe_field(self):
+        p=self.compile_run('type User { nickname maybe Text; } let u be User { nickname=none; }; output(u.nickname==none); u.nickname="Rev"; output(u.nickname=="Rev");'); self.assertEqual(p.stdout,'true\ntrue\n')
     def test_build_c_emits_source(self):
         with tempfile.TemporaryDirectory() as td:
             r=Path(td); src=r/'app.eri'; out=r/'app.c'; src.write_text('output(42);',encoding='utf-8'); self.assertEqual(build_c_file(src,out,r),0); self.assertIn('int main',out.read_text())
