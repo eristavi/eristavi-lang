@@ -50,12 +50,13 @@ def build_c_file(path:Path,output:Path,source_root:Path|None=None)->int:
     except (EristaviError,OSError,ValueError) as e:
         print(e.format() if isinstance(e,EristaviError) else f'error: {e}',file=sys.stderr); return 1
 
-def build_native(path:Path,output:Path,source_root:Path|None=None,cc:str='cc')->int:
+def build_native(path:Path,output:Path,source_root:Path|None=None,cc:str|None=None)->int:
     try:
+        compiler=cc or os.environ.get('CC','cc')
         mod=compile_entry(path,source_root); ir=lower_project(mod); c=CBackend().emit(ir)
         with tempfile.TemporaryDirectory() as td:
             cp=Path(td)/'program.c'; cp.write_text(c,encoding='utf-8')
-            proc=subprocess.run([cc,'-std=c11',str(cp),'-lm','-o',str(output)],capture_output=True,text=True)
+            proc=subprocess.run([compiler,'-std=c11',str(cp),'-lm','-o',str(output)],capture_output=True,text=True)
             if proc.returncode!=0:
                 if proc.stdout: print(proc.stdout,file=sys.stderr,end='')
                 if proc.stderr: print(proc.stderr,file=sys.stderr,end='')
