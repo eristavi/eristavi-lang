@@ -38,6 +38,27 @@ class X86RegisterAllocationTests(unittest.TestCase):
         self.assertEqual(plan.registers[2], "%r10")
         self.assertLessEqual(sum(value_id in plan.registers for value_id in (0, 1)), 1)
 
+    def test_default_gp_pool_colors_two_interfering_values(self):
+        left = UValue(0, I64)
+        right = UValue(1, I64)
+        result = UValue(2, I64)
+        block = UBlock(
+            "entry",
+            [
+                UInstruction("const_i64", left, (), None, 10),
+                UInstruction("const_i64", right, (), None, 20),
+                UInstruction("add_checked", result, (left, right), None, None),
+            ],
+            UReturn(result),
+        )
+        fn = UFunction("probe", I64, [], [], [block], 3)
+        plan = allocate_x86_registers(fn)
+
+        self.assertIn(0, plan.registers)
+        self.assertIn(1, plan.registers)
+        self.assertNotEqual(plan.registers[0], plan.registers[1])
+        self.assertEqual({plan.registers[0], plan.registers[1]}, {"%r10", "%r11"})
+
     def test_float_values_use_xmm_register_class(self):
         left = UValue(0, F64)
         right = UValue(1, F64)
@@ -77,6 +98,17 @@ class X86RegisterAllocationTests(unittest.TestCase):
         plan = allocate_x86_registers(fn)
         self.assertNotIn(0, plan.registers)
 
+    def test_scalar_call_result_can_be_register_resident(self):
+        result = UValue(0, I64)
+        block = UBlock(
+            "entry",
+            [UInstruction("call", result, (), None, "other")],
+            UReturn(result),
+        )
+        fn = UFunction("probe", I64, [], [], [block], 1)
+        plan = allocate_x86_registers(fn)
+        self.assertIn(0, plan.registers)
+
     def test_value_live_across_gc_store_safepoint_remains_spilled(self):
         value = UValue(0, I64)
         one = UValue(1, I64)
@@ -96,6 +128,21 @@ class X86RegisterAllocationTests(unittest.TestCase):
         plan = allocate_x86_registers(fn)
         self.assertNotIn(0, plan.registers)
 
+    def test_dead_after_store_operand_can_remain_register_resident(self):
+        value = UValue(0, I64)
+        local = ULocal(0, "saved", I64)
+        block = UBlock(
+            "entry",
+            [
+                UInstruction("const_i64", value, (), None, 10),
+                UInstruction("store_local", None, (value,), 0, None),
+            ],
+            UReturn(),
+        )
+        fn = UFunction("probe", "void", [], [local], [block], 1)
+        plan = allocate_x86_registers(fn)
+        self.assertIn(0, plan.registers)
+
     def test_operand_of_complex_clobber_region_remains_spilled(self):
         value = UValue(0, I64)
         values = UValue(1, "list<Int>")
@@ -111,7 +158,7 @@ class X86RegisterAllocationTests(unittest.TestCase):
         plan = allocate_x86_registers(fn)
         self.assertNotIn(0, plan.registers)
 
-    def test_complex_scalar_extraction_remains_spilled(self):
+    def test_audited_scalar_extraction_can_be_register_resident(self):
         aggregate = UValue(0, "nominal<Record>")
         field = UValue(1, I64)
         block = UBlock(
@@ -126,7 +173,18 @@ class X86RegisterAllocationTests(unittest.TestCase):
         local = ULocal(0, "record", "nominal<Record>")
         fn = UFunction("probe", "void", [], [local], [block], 2)
         plan = allocate_x86_registers(fn)
-        self.assertNotIn(1, plan.registers)
+        self.assertIn(1, plan.registers)
+
+    def test_unaudited_register_pool_is_rejected(self):
+        value = UValue(0, I64)
+        block = UBlock(
+            "entry",
+            [UInstruction("const_i64", value, (), None, 10)],
+            UReturn(value),
+        )
+        fn = UFunction("probe", I64, [], [], [block], 1)
+        with self.assertRaisesRegex(ValueError, "unaudited register"):
+            allocate_x86_registers(fn, gp_registers=("%rax",), xmm_registers=())
 
     def test_composed_gc_backend_emits_register_resident_scalar_chain(self):
         td, program = self.lower("output((40 + 2) * 3);")
