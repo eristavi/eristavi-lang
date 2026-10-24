@@ -15,15 +15,19 @@ Eristavi is an experimental general-purpose programming language focused on **re
 
 ## Status
 
-The **pre-0.1 source-language/frontend contract is frozen for implementation**. The Python bootstrap now implements the principal frozen language slices through collections, user-defined values, maybe/identity, checked errors, deterministic resources, modules/imports, and compiler-inferred generic relationships.
+The **pre-0.1 source-language/frontend contract is frozen for implementation**.
 
-The project also has its first typed Eristavi IR and working compiled path:
+The Python bootstrap implements the principal frozen language surface through collections, user-defined values, maybe/identity, checked errors, deterministic resources, modules/imports, inferred generic relationships, and explicit Unicode Text views. Unicode identifier and grapheme behavior is pinned to Unicode 17.0.0 rather than inherited from the host interpreter.
+
+The project has a typed Eristavi IR and a working compiled path:
 
 ```text
-Eristavi source → frontend → typed Eristavi IR → C → system C compiler → native executable
+Eristavi source → frontend → typed Eristavi IR → C11 → system C compiler → native executable
 ```
 
-The AST bootstrap runtime currently has broader feature coverage than the typed IR/C backend. See [`IMPLEMENTATION_AUDIT.md`](IMPLEMENTATION_AUDIT.md) for the exact implementation boundary and remaining gaps.
+The C/native path now has executable coverage for Lists, ordinary values, maybe, identity, checked errors, deterministic resources, modules and inferred-generic specializations in addition to scalar/control features. The main remaining frontend/backend parity gap is compiled support for the explicit Unicode Text views.
+
+See [`IMPLEMENTATION_AUDIT.md`](IMPLEMENTATION_AUDIT.md) for the current audited boundary.
 
 ## Design direction
 
@@ -94,26 +98,27 @@ output(identity(10));
 output(identity("Hello"));
 ```
 
-Checked failures remain explicit:
+Text indexing makes the intended Unicode unit explicit:
 
 ```eri
-error LoadError {
-    message Text;
-}
+let text be "A\u{301}";
+output(text.characters.count); // 1 grapheme cluster
+output(text.scalars.count);    // 2 Unicode scalars
+output(text.bytes.count);      // 3 UTF-8 bytes
 ```
 
-and deterministic resources use `with` rather than manual lifetime management.
+Checked failures remain explicit, and deterministic resources use `with` rather than manual lifetime management.
 
 ## Toolchain
 
-Interpreter/runtime path:
+Bootstrap runtime path:
 
 ```text
 python -m compiler.erist run examples/hello.eri
 python -m compiler.erist check examples/hello.eri
 ```
 
-First compiled backend path:
+Compiled backend path:
 
 ```text
 python -m compiler.erist build-c examples/hello.eri -o hello.c
@@ -128,7 +133,7 @@ When installed via `pyproject.toml`, use the `erist` command directly.
 python -m unittest discover -s tests -v
 ```
 
-At the current audit point the suite contains **80 passing tests** covering frontend/runtime behavior, project modules, and the first C/native backend.
+The verified suite contains **144 passing tests**. CI runs the complete suite with GCC and Clang on Ubuntu and Clang on macOS, with native compilation at `-O2`.
 
 ## Documentation
 
@@ -138,6 +143,7 @@ At the current audit point the suite contains **80 passing tests** covering fron
 - [`LANGUAGE_SEMANTICS.md`](LANGUAGE_SEMANTICS.md) — consolidated semantics
 - [`GRAMMAR.md`](GRAMMAR.md) — consolidated surface grammar
 - [`LEXICAL_RULES.md`](LEXICAL_RULES.md) — lexical rules
+- [`TEXT_VIEWS.md`](TEXT_VIEWS.md) — Unicode character/scalar/UTF-8 views
 - [`PRECEDENCE.md`](PRECEDENCE.md) — expression ordering
 - [`FUNCTION_RETURNS.md`](FUNCTION_RETURNS.md) — function completion/result semantics
 - [`COLLECTIONS.md`](COLLECTIONS.md) — `List`
