@@ -310,7 +310,7 @@ function parsePrefix(tokens, state identity parser_state.ParserState, types, ali
     if match(tokens, state, token.identityKeyword()) {
         return ast.make(ast.identityExpr(), start, try parsePrefix(tokens, state, types, aliases), none, none, "", 0, false);
     }
-    return parsePostfix(tokens, state, types, aliases);
+    return try parsePostfix(tokens, state, types, aliases);
 }
 
 function parseMultiplicative(tokens, state identity parser_state.ParserState, types, aliases) returns identity ast.Node fails diagnostic.ParseError {
@@ -360,7 +360,7 @@ function parseNot(tokens, state identity parser_state.ParserState, types, aliase
     if match(tokens, state, token.notKeyword()) {
         return ast.make(ast.unaryExpr(), start, try parseNot(tokens, state, types, aliases), none, none, "not", 0, false);
     }
-    return parseComparison(tokens, state, types, aliases);
+    return try parseComparison(tokens, state, types, aliases);
 }
 
 function parseAnd(tokens, state identity parser_state.ParserState, types, aliases) returns identity ast.Node fails diagnostic.ParseError {
@@ -382,7 +382,7 @@ function parseOr(tokens, state identity parser_state.ParserState, types, aliases
 }
 
 function parseExpression(tokens, state identity parser_state.ParserState, types, aliases) returns identity ast.Node fails diagnostic.ParseError {
-    return parseOr(tokens, state, types, aliases);
+    return try parseOr(tokens, state, types, aliases);
 }
 
 function parseBlockAfterOpen(tokens, state identity parser_state.ParserState, types, aliases, start Int) returns identity ast.Node fails diagnostic.ParseError {
@@ -425,7 +425,7 @@ function parseHandledTail(tokens, state identity parser_state.ParserState, types
 
 function parseValueExpression(tokens, state identity parser_state.ParserState, types, aliases) returns identity ast.Node fails diagnostic.ParseError {
     let expression be try parseExpression(tokens, state, types, aliases);
-    return parseHandledTail(tokens, state, types, aliases, expression);
+    return try parseHandledTail(tokens, state, types, aliases, expression);
 }
 
 function parseImport(tokens, state identity parser_state.ParserState, start Int) returns identity ast.Node fails diagnostic.ParseError {
@@ -603,18 +603,18 @@ function parseStatement(tokens, state identity parser_state.ParserState, types, 
     let start be state.index;
 
     if match(tokens, state, token.importKeyword()) {
-        return parseImport(tokens, state, start);
+        return try parseImport(tokens, state, start);
     }
 
     if match(tokens, state, token.publicKeyword()) {
         if match(tokens, state, token.functionKeyword()) {
-            return parseFunctionDeclaration(tokens, state, types, aliases, start, true);
+            return try parseFunctionDeclaration(tokens, state, types, aliases, start, true);
         }
         if match(tokens, state, token.typeKeyword()) {
-            return parseTypeDeclaration(tokens, state, start, true);
+            return try parseTypeDeclaration(tokens, state, start, true);
         }
         if match(tokens, state, token.errorKeyword()) {
-            return parseErrorDeclaration(tokens, state, start, true);
+            return try parseErrorDeclaration(tokens, state, start, true);
         }
         let found be current(tokens, state);
         fail diagnostic.ParseError {
@@ -625,34 +625,34 @@ function parseStatement(tokens, state identity parser_state.ParserState, types, 
     }
 
     if match(tokens, state, token.functionKeyword()) {
-        return parseFunctionDeclaration(tokens, state, types, aliases, start, false);
+        return try parseFunctionDeclaration(tokens, state, types, aliases, start, false);
     }
     if match(tokens, state, token.typeKeyword()) {
-        return parseTypeDeclaration(tokens, state, start, false);
+        return try parseTypeDeclaration(tokens, state, start, false);
     }
     if match(tokens, state, token.errorKeyword()) {
-        return parseErrorDeclaration(tokens, state, start, false);
+        return try parseErrorDeclaration(tokens, state, start, false);
     }
     if match(tokens, state, token.returnKeyword()) {
-        return parseReturn(tokens, state, types, aliases, start);
+        return try parseReturn(tokens, state, types, aliases, start);
     }
     if match(tokens, state, token.failKeyword()) {
-        return parseFail(tokens, state, types, aliases, start);
+        return try parseFail(tokens, state, types, aliases, start);
     }
     if match(tokens, state, token.letKeyword()) {
-        return parseLet(tokens, state, types, aliases, start);
+        return try parseLet(tokens, state, types, aliases, start);
     }
     if match(tokens, state, token.ifKeyword()) {
-        return parseIf(tokens, state, types, aliases, start);
+        return try parseIf(tokens, state, types, aliases, start);
     }
     if match(tokens, state, token.whileKeyword()) {
-        return parseWhile(tokens, state, types, aliases, start);
+        return try parseWhile(tokens, state, types, aliases, start);
     }
     if match(tokens, state, token.forKeyword()) {
-        return parseFor(tokens, state, types, aliases, start);
+        return try parseFor(tokens, state, types, aliases, start);
     }
     if match(tokens, state, token.withKeyword()) {
-        return parseWith(tokens, state, types, aliases, start);
+        return try parseWith(tokens, state, types, aliases, start);
     }
 
     let expression be try parseExpression(tokens, state, types, aliases);
