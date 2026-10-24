@@ -26,7 +26,8 @@ class ARM64RuntimeBackendTests(unittest.TestCase):
             'let users be [original]; users.add(copy); '
             'let optional maybe User be original; '
             'let shared be identity User { name="Shared"; score=1; }; '
-            'output(original.name + "!"); output(users.count); output(optional.name); output(shared.name);'
+            'output(original.name + "!"); output(users.count); '
+            'if optional != none { output(optional.name); } output(shared.name);'
         )
         try:
             self.assertIn("bl malloc", asm)
