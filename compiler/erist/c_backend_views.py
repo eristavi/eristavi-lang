@@ -3,6 +3,7 @@ from __future__ import annotations
 from . import c_backend as base
 from .c_backend_text import CBackend as TextBackend, TEXT_RUNTIME, _BASE_CTYPE
 from .ir_text import IRTextView, IRTextViewCount, IRTextViewIndex
+from .unicode_c import grapheme_runtime_c
 
 
 def _view_ctype(t: str) -> str:
@@ -13,7 +14,7 @@ def _view_ctype(t: str) -> str:
     return _BASE_CTYPE(t)
 
 
-VIEW_RUNTIME = TEXT_RUNTIME + r'''
+_VIEW_PREFIX = r'''
 
 typedef struct { eri_text text; int kind; } eri_text_view;
 enum { ERI_TEXT_VIEW_BYTES=1, ERI_TEXT_VIEW_SCALARS=2, ERI_TEXT_VIEW_CHARACTERS=3 };
@@ -51,11 +52,14 @@ static int64_t eri_text_byte_get(eri_text text,int64_t index){
     if(index<0||(uint64_t)index>=text.len)eri_fault("Text view index out of bounds");
     return (int64_t)text.data[index];
 }
+'''
 
+_VIEW_SUFFIX = r'''
 static int64_t eri_text_view_count(eri_text_view view){
     if(view.kind==ERI_TEXT_VIEW_BYTES)return (int64_t)view.text.len;
     if(view.kind==ERI_TEXT_VIEW_SCALARS)return (int64_t)eri_text_scalar_count(view.text);
-    eri_fault("compiled text.characters requires the pinned Unicode grapheme runtime");
+    if(view.kind==ERI_TEXT_VIEW_CHARACTERS)return eri_text_character_count(view.text);
+    eri_fault("internal Text view kind mismatch");
     return 0;
 }
 
@@ -64,22 +68,26 @@ static int64_t eri_text_view_byte_get(eri_text_view view,int64_t index){
     return eri_text_byte_get(view.text,index);
 }
 
-static eri_text eri_text_view_scalar_get(eri_text_view view,int64_t index){
-    if(view.kind!=ERI_TEXT_VIEW_SCALARS)eri_fault("internal Text view kind mismatch");
-    return eri_text_scalar_get(view.text,index);
+static eri_text eri_text_view_text_get(eri_text_view view,int64_t index){
+    if(view.kind==ERI_TEXT_VIEW_SCALARS)return eri_text_scalar_get(view.text,index);
+    if(view.kind==ERI_TEXT_VIEW_CHARACTERS)return eri_text_character_get(view.text,index);
+    eri_fault("internal Text view kind mismatch");
+    return eri_text_from_bytes(NULL,0);
 }
 '''
 
+VIEW_RUNTIME = TEXT_RUNTIME + _VIEW_PREFIX + grapheme_runtime_c() + _VIEW_SUFFIX
+
 
 class CBackend(TextBackend):
-    """Length-aware C backend plus compiled UTF-8 byte/scalar Text views."""
+    """Length-aware C backend with all three pinned Unicode Text views."""
 
     def emit(self, program):
         old_runtime, old_ctype = base.RUNTIME, base.ctype
         base.RUNTIME, base.ctype = VIEW_RUNTIME, _view_ctype
         try:
             # Bypass TextBackend.emit because it would replace the runtime/ctype
-            # with its narrower Text-only pair.  base.CBackend.emit still
+            # with its narrower Text-only pair. base.CBackend.emit still
             # dispatches expression/equality methods on this subclass.
             return base.CBackend.emit(self, program)
         finally:
@@ -87,16 +95,16 @@ class CBackend(TextBackend):
 
     def _expr(self, e):
         if isinstance(e, IRTextView):
-            if e.kind == "characters":
-                raise ValueError(
-                    "compiled text.characters is not available until the pinned Unicode 17 grapheme runtime is embedded"
-                )
-            kind = "ERI_TEXT_VIEW_BYTES" if e.kind == "bytes" else "ERI_TEXT_VIEW_SCALARS"
-            return f"eri_text_view_make({self._expr(e.base)}, {kind})"
+            kinds = {
+                "bytes": "ERI_TEXT_VIEW_BYTES",
+                "scalars": "ERI_TEXT_VIEW_SCALARS",
+                "characters": "ERI_TEXT_VIEW_CHARACTERS",
+            }
+            return f"eri_text_view_make({self._expr(e.base)}, {kinds[e.kind]})"
         if isinstance(e, IRTextViewCount):
             return f"eri_text_view_count({self._expr(e.view)})"
         if isinstance(e, IRTextViewIndex):
             if e.type_name == "Int":
                 return f"eri_text_view_byte_get({self._expr(e.view)}, {self._expr(e.index)})"
-            return f"eri_text_view_scalar_get({self._expr(e.view)}, {self._expr(e.index)})"
+            return f"eri_text_view_text_get({self._expr(e.view)}, {self._expr(e.index)})"
         return super()._expr(e)
