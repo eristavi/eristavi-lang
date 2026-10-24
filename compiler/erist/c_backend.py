@@ -2,13 +2,42 @@ from __future__ import annotations
 from .ir import *
 
 class CBackend:
-    def __init__(self): self.indent=0; self.temp=0
+    def __init__(self): self.indent=0; self.temp=0; self.struct_names=set()
     def emit(self,p:IRProgram)->str:
+        self.struct_names={s.name for s in p.structs}
         parts=[RUNTIME]
+        ordered=self._order_structs(p.structs)
+        if ordered:
+            parts.append('\n'.join(f'typedef struct {struct_tag(s.name)} {ctype(s.name)};' for s in ordered))
+            for s in ordered: parts.append(self._struct_definition(s))
+            for s in ordered: parts.append(self._struct_equality(s))
         for f in p.functions: parts.append(self._function(f))
         body=self._stmts(p.entry)
         parts.append('int main(void) {\n    fesetround(FE_TONEAREST);\n'+self._indent_text(body,1)+'    return 0;\n}\n')
         return '\n'.join(parts)
+    def _order_structs(self,structs):
+        by={s.name:s for s in structs}; out=[]; visiting=set(); done=set()
+        def visit(s):
+            if s.name in done: return
+            if s.name in visiting: raise ValueError(f'recursive by-value struct layout is not supported: {s.name}')
+            visiting.add(s.name)
+            for f in s.fields:
+                if f.type_name in by: visit(by[f.type_name])
+            visiting.remove(s.name); done.add(s.name); out.append(s)
+        for s in structs: visit(s)
+        return out
+    def _struct_definition(self,s):
+        fields=''.join(f'    {ctype(f.type_name)} {field_name(f.name)};\n' for f in s.fields)
+        return f'struct {struct_tag(s.name)} {{\n{fields}}};\n'
+    def _struct_equality(self,s):
+        checks=[self._eq_component(f.type_name,f'a.{field_name(f.name)}',f'b.{field_name(f.name)}') for f in s.fields]
+        expr=' && '.join(checks) if checks else 'true'
+        return f'static bool {eq_helper(s.name)}({ctype(s.name)} a, {ctype(s.name)} b) {{ return {expr}; }}\n'
+    def _eq_component(self,t,a,b):
+        if t=='Text': return f'(strcmp({a}, {b}) == 0)'
+        if t in ('Int','Float','Bool'): return f'({a} == {b})'
+        if t.startswith('List of '): return f'{list_helper(t)}_eq({a}, {b})'
+        return f'{eq_helper(t)}({a}, {b})'
     def _function(self,f):
         ret='void' if f.return_type is None else ctype(f.return_type)
         params=', '.join(f'{ctype(x.type_name)} {cname(x.name)}' for x in f.parameters) or 'void'
@@ -18,10 +47,9 @@ class CBackend:
         if isinstance(s,IRLet): return f'{ctype(s.type_name)} {cname(s.name)} = {self._expr(s.value)};\n'
         if isinstance(s,IRAssign): return f'{cname(s.name)} = {self._expr(s.value)};\n'
         if isinstance(s,IRIndexAssign):
-            lt=list_element_name_from_value(s.value, None)
-            # The target List type is not stored on the statement; the value type is its element type.
             helper=list_helper_from_element(s.value.type_name)
             return f'{helper}_set(&{cname(s.name)}, {self._expr(s.index)}, {self._expr(s.value)});\n'
+        if isinstance(s,IRMemberAssign): return f'{self._lvalue(s.target)} = {self._expr(s.value)};\n'
         if isinstance(s,IRExprStmt): return f'{self._expr(s.expression)};\n'
         if isinstance(s,IRReturn): return 'return;\n' if s.value is None else f'return {self._expr(s.value)};\n'
         if isinstance(s,IRIf):
@@ -37,6 +65,10 @@ class CBackend:
             binding=f'{ctype(elem)} {cname(s.name)} = {helper}_get({snap}, {idx});\n'
             return head+self._indent_text(binding+self._stmts(s.body),1)+'}\n'
         raise TypeError(s)
+    def _lvalue(self,e):
+        if isinstance(e,IRVar): return cname(e.name)
+        if isinstance(e,IRMember): return f'({self._lvalue(e.base)}).{field_name(e.name)}'
+        raise TypeError(f'unsupported C lvalue {e!r}')
     def _expr(self,e):
         if isinstance(e,IRConst):
             if e.type_name=='Text': return c_string(str(e.value))
@@ -47,6 +79,10 @@ class CBackend:
                 return repr(v)
             return str(e.value)
         if isinstance(e,IRVar): return cname(e.name)
+        if isinstance(e,IRConstruct):
+            fields=', '.join(f'.{field_name(x.name)} = {self._expr(x.value)}' for x in e.fields)
+            return f'({ctype(e.type_name)}){{{fields}}}'
+        if isinstance(e,IRMember): return f'({self._expr(e.base)}).{field_name(e.name)}'
         if isinstance(e,IRList):
             helper=list_helper(e.type_name); elem=list_element(e.type_name)
             if not e.elements: return f'{helper}_make(0, NULL)'
@@ -63,6 +99,9 @@ class CBackend:
             a=self._expr(e.left); b=self._expr(e.right); op=e.operator
             if e.left.type_name.startswith('List of ') and op in ('==','!='):
                 cmp=f'{list_helper(e.left.type_name)}_eq({a}, {b})'
+                return cmp if op=='==' else f'(!{cmp})'
+            if e.left.type_name not in ('Int','Float','Bool','Text') and op in ('==','!='):
+                cmp=f'{eq_helper(e.left.type_name)}({a}, {b})'
                 return cmp if op=='==' else f'(!{cmp})'
             if e.left.type_name=='Int' and op in '+-*/%': return f'eri_i{OPNAME[op]}({a}, {b})'
             if e.left.type_name=='Float' and op in '+-*/': return f'eri_f{OPNAME[op]}({a}, {b})'
@@ -95,17 +134,21 @@ def mangle(n):
         else: parts.append(f'_u{ord(c):04x}_')
     return ''.join(parts)
 def cname(n): return 'v_'+mangle(n)
+def field_name(n): return 'f_'+mangle(n)
+def struct_tag(t): return 'eri_struct_tag_'+mangle(t)
+def eq_helper(t): return 'eri_eq_'+mangle(t)
 def list_element(t):
     if not t.startswith('List of '): raise KeyError(t)
     return t[8:]
 def list_helper(t): return list_helper_from_element(list_element(t))
-def list_helper_from_element(t): return {'Int':'eri_list_int','Float':'eri_list_float','Bool':'eri_list_bool','Text':'eri_list_text'}[t]
-def list_element_name_from_value(value, default): return value.type_name if value.type_name in ('Int','Float','Bool','Text') else default
+def list_helper_from_element(t):
+    if t in ('Int','Float','Bool','Text'): return {'Int':'eri_list_int','Float':'eri_list_float','Bool':'eri_list_bool','Text':'eri_list_text'}[t]
+    raise KeyError(f'compiled Lists of {t} are not implemented yet')
 def ctype(t):
     scalars={'Int':'int64_t','Float':'double','Bool':'bool','Text':'const char *'}
     if t in scalars: return scalars[t]
     if t.startswith('List of '): return list_helper(t)
-    raise KeyError(t)
+    return 'eri_struct_'+mangle(t)
 def c_string(s):
     return '"'+s.replace('\\','\\\\').replace('"','\\"').replace('\n','\\n').replace('\r','\\r').replace('\t','\\t').replace('\0','\\0')+'"'
 
