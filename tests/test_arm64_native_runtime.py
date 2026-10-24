@@ -52,8 +52,9 @@ class ARM64NativeRuntimeTests(unittest.TestCase):
             'error E { message Text; code Int; } '
             'function risky(flag Bool) returns Int fails E { '
             'if flag { fail E { message="bad"; code=9; }; } return 2; } '
-            'risky(true) else error E { output(error.message); output(error.code); }; '
-            'let good be risky(false) else error { output(error.message); }; output(good);'
+            'function showGood() { '
+            'let good be risky(false) else error { output(error.message); return; }; output(good); } '
+            'risky(true) else error E { output(error.message); output(error.code); }; showGood();'
         )
         self.assertEqual(p.returncode, 0, p.stderr)
         self.assertEqual(p.stdout, b"bad\n9\n2\n")
