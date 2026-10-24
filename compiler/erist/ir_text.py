@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from .diagnostics import SemanticError
 from .ir import IRExpr, IRIndex, Lowerer as BaseLowerer, STD_FILE, STD_FILE_ERROR
-from .syntax import IndexExpr, MemberExpr, NameExpr
+from .syntax import CallExpr, IndexExpr, MemberExpr, NameExpr
 from .typesys import (
     AnyErrorType,
     BOOL,
@@ -39,13 +39,18 @@ class IRTextViewIndex(IRExpr):
     index: IRExpr
 
 
-class Lowerer(BaseLowerer):
-    """Typed-IR extension for explicit Unicode Text views.
+@dataclass(frozen=True)
+class IRFileExists(IRExpr):
+    path: IRExpr
 
-    The IR can represent all three frozen view kinds.  The active C bootstrap
-    backend currently executes byte/scalar views and deliberately rejects
-    grapheme-cluster views until it has pinned Unicode 17 segmentation tables.
-    """
+
+@dataclass(frozen=True)
+class IRFileRemove(IRExpr):
+    path: IRExpr
+
+
+class Lowerer(BaseLowerer):
+    """Typed-IR extension for Unicode Text views and small stdlib operations."""
 
     @staticmethod
     def _supported_type(t, loc):
@@ -94,6 +99,17 @@ class Lowerer(BaseLowerer):
                 return TextViewType(e.name)
             if isinstance(bt, TextViewType) and e.name == "count":
                 return INT
+        if (
+            isinstance(e, CallExpr)
+            and isinstance(e.callee, MemberExpr)
+            and isinstance(e.callee.base, NameExpr)
+            and e.callee.base.name in self.a.imports
+            and self.a.imports[e.callee.base.name] == ("std", "files")
+        ):
+            if e.callee.name == "exists":
+                return BOOL
+            if e.callee.name == "remove":
+                return NO_VALUE
         return super()._expr_type(e)
 
     def _ast_type(self, e):
@@ -123,4 +139,16 @@ class Lowerer(BaseLowerer):
             if isinstance(bt, TextViewType):
                 result = "Int" if bt.kind == "bytes" else "Text"
                 return IRTextViewIndex(result, e.location, self._expr(e.base), self._expr(e.index))
+        if (
+            isinstance(e, CallExpr)
+            and isinstance(e.callee, MemberExpr)
+            and isinstance(e.callee.base, NameExpr)
+            and e.callee.base.name in self.a.imports
+            and self.a.imports[e.callee.base.name] == ("std", "files")
+            and e.callee.name in ("exists", "remove")
+        ):
+            path = self._expr(e.arguments[0])
+            if e.callee.name == "exists":
+                return IRFileExists("Bool", e.location, path)
+            return IRFileRemove("no-value", e.location, path)
         return super()._expr(e)
