@@ -26,7 +26,8 @@ class ARM64BackendTests(unittest.TestCase):
             "function factorial(value Int) returns Int { "
             "if value <= 1 { return 1; } return value * factorial(value - 1); } "
             "function average(a Float, b Float) returns Float { return (a + b) / 2.0; } "
-            "output(factorial(5)); output(average(3.0, 4.0));"
+            "function quotient(a Int, b Int) returns Int { return a / b; } "
+            "output(factorial(5)); output(average(3.0, 4.0)); output(quotient(10, 2));"
         )
         try:
             program = lower_universal_file(src, root)
