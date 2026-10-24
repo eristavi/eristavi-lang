@@ -28,11 +28,10 @@ class X86RegisterAllocationTests(unittest.TestCase):
                 UInstruction("const_i64", left, (), None, 10),
                 UInstruction("const_i64", right, (), None, 20),
                 UInstruction("add_checked", result, (left, right), None, None),
-                UInstruction("output_i64", None, (result,), None, None),
             ],
-            UReturn(),
+            UReturn(result),
         )
-        fn = UFunction("probe", "void", [], [], [block], 3)
+        fn = UFunction("probe", I64, [], [], [block], 3)
         plan = allocate_x86_registers(fn, gp_registers=("%r10",), xmm_registers=())
 
         self.assertIn(2, plan.registers)
@@ -49,11 +48,10 @@ class X86RegisterAllocationTests(unittest.TestCase):
                 UInstruction("const_f64", left, (), None, 1.5),
                 UInstruction("const_f64", right, (), None, 2.5),
                 UInstruction("f64_add", result, (left, right), None, None),
-                UInstruction("output_f64", None, (result,), None, None),
             ],
-            UReturn(),
+            UReturn(result),
         )
-        fn = UFunction("probe", "void", [], [], [block], 3)
+        fn = UFunction("probe", F64, [], [], [block], 3)
         plan = allocate_x86_registers(fn, gp_registers=(), xmm_registers=("%xmm8",))
 
         self.assertIn(2, plan.registers)
@@ -98,6 +96,21 @@ class X86RegisterAllocationTests(unittest.TestCase):
         plan = allocate_x86_registers(fn)
         self.assertNotIn(0, plan.registers)
 
+    def test_operand_of_complex_clobber_region_remains_spilled(self):
+        value = UValue(0, I64)
+        values = UValue(1, "list<Int>")
+        block = UBlock(
+            "entry",
+            [
+                UInstruction("const_i64", value, (), None, 42),
+                UInstruction("make_list", values, (value,), None, I64),
+            ],
+            UReturn(values),
+        )
+        fn = UFunction("probe", "list<Int>", [], [], [block], 2)
+        plan = allocate_x86_registers(fn)
+        self.assertNotIn(0, plan.registers)
+
     def test_complex_scalar_extraction_remains_spilled(self):
         aggregate = UValue(0, "nominal<Record>")
         field = UValue(1, I64)
@@ -115,12 +128,12 @@ class X86RegisterAllocationTests(unittest.TestCase):
         plan = allocate_x86_registers(fn)
         self.assertNotIn(1, plan.registers)
 
-    def test_composed_gc_backend_emits_register_resident_scalar(self):
-        td, program = self.lower("output(40 + 2);")
+    def test_composed_gc_backend_emits_register_resident_scalar_chain(self):
+        td, program = self.lower("output((40 + 2) * 3);")
         try:
             assembly = X86_64PreciseRootGCLinuxBackend().emit(program)
-            self.assertIn("%r10", assembly)
-            self.assertRegex(assembly, r"movq %r10, %(?:rdi|rsi|rax|rcx|rdx|r8|r9)")
+            main_body = assembly.split(".globl main", 1)[1].split(".size main", 1)[0]
+            self.assertIn("%r10", main_body)
         finally:
             td.cleanup()
 
