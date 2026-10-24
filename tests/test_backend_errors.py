@@ -28,7 +28,7 @@ class BackendErrorTests(unittest.TestCase):
         p=self.compile_run(src); self.assertEqual(p.returncode,0); self.assertEqual(p.stdout,'caught A\nB\n9\n')
 
     def test_native_success_bypasses_handler(self):
-        src='error E { message Text; } function value(ok Bool) returns Int fails E { if ok { return 7; } fail E { message="no"; }; } let x be value(true) else error { output("failure"); }; output(x);'
+        src='error E { message Text; } function value(ok Bool) returns Int fails E { if ok { return 7; } fail E { message="no"; }; } function run(){ let x be value(true) else error { output("failure"); return; }; output(x); } run();'
         p=self.compile_run(src); self.assertEqual(p.returncode,0); self.assertEqual(p.stdout,'7\n')
 
     def test_native_nested_handler_propagates_from_handler(self):
