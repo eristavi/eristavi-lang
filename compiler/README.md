@@ -26,7 +26,7 @@ bootstrap execution runtime    typed Eristavi IR
 
 ## Frontend/runtime surface
 
-The bootstrap frontend and execution runtime now cover the principal frozen pre-0.1 language surface:
+The bootstrap frontend and execution runtime cover the principal frozen pre-0.1 language surface:
 
 - exact 28-keyword lexical vocabulary, nested comments, numeric/Text literals and locked whitespace rules;
 - Unicode 17.0.0-pinned XID identifiers and NFC normalization;
@@ -44,15 +44,15 @@ The bootstrap frontend and execution runtime now cover the principal frozen pre-
 - deterministic `with` ownership for `std.files`, including cleanup-failure composition;
 - modules/imports, aliases, public/private declarations, circular-import diagnostics and source-root loading.
 
-The Unicode Text-view implementation deliberately uses compiler-internal view types. In pre-0.1, character/scalar indexing yields `Text`, byte indexing yields `Int`, and no public `Character`, `Scalar`, or `Byte` type has been invented.
+The Unicode Text-view implementation deliberately uses compiler-internal view types. Character/scalar indexing yields `Text`; byte indexing yields `Int`; no public `Character`, `Scalar`, or `Byte` type has been introduced.
 
 ## Typed IR and C/native backend
 
-`ir.py` defines the first machine-independent typed Eristavi IR. The C/native path has grown well beyond the original scalar slice and currently has executable tests for:
+The C/native path now has executable coverage for:
 
-- `Int`, `Float`, `Bool`, and `Text`;
+- `Int`, `Float`, `Bool`, and length-aware UTF-8 `Text`;
+- embedded-NUL-safe Text output, concatenation and equality;
 - checked signed-64-bit arithmetic and Int division/remainder faults;
-- Text concatenation and content equality;
 - `if` / `else`, `while`, functions, recursion and output;
 - Lists, checked indexing, mutation, equality, value copying and stable iteration;
 - ordinary user-defined values, nested fields, structural equality and value semantics;
@@ -61,11 +61,16 @@ The Unicode Text-view implementation deliberately uses compiler-internal view ty
 - checked errors, typed/catch-all handlers and propagation;
 - inferred-generic concrete specializations;
 - imported public functions/types and aliases;
-- deterministic `std.files` resources, read/write operations and cleanup unwinding.
+- deterministic `std.files` resources, exact-length Text I/O and cleanup unwinding;
+- UTF-8 validation for `readText()` with invalid input reported as checked `FileError`;
+- `text.bytes` count/index operations;
+- `text.scalars` count/index operations.
 
-`c_backend.py` emits C11 and `erist build` invokes a system C compiler. This is a real native compilation route, but it remains a bootstrap portability backend rather than Eristavi's eventual direct CPU backend.
+Compiled `Text` is represented as explicit bytes plus length rather than `const char *`, so C-string termination cannot redefine Eristavi semantics.
 
-Explicit Unicode Text views are currently implemented in the frontend/bootstrap runtime but are not yet lowered through the C backend. A compiled grapheme-cluster implementation requires a pinned Unicode runtime strategy rather than delegating silently to platform character APIs.
+`text.characters` remains the one explicit Text-view backend gap. The C backend rejects it deliberately until a pinned Unicode 17 extended-grapheme segmentation runtime is embedded. It is not approximated with code points or platform locale APIs.
+
+The generated-C route is a real native compilation path but remains a bootstrap portability backend rather than Eristavi's eventual direct CPU backend.
 
 ## Commands
 
@@ -80,7 +85,7 @@ When installed through `pyproject.toml`, the same commands are available through
 
 For multi-file programs, pass `--source-root` when the entry file's parent is not the intended project source root.
 
-The native builder honors `CC`, allowing the conformance suite to exercise more than one host C compiler.
+The native builder honors both `CC` and `CFLAGS`, allowing the conformance suite to vary the host C compiler and optimization mode.
 
 ## Tests
 
@@ -90,18 +95,18 @@ Run:
 python -m unittest discover -s tests -v
 ```
 
-The verified suite currently contains **144 passing tests**. It covers frontend/runtime semantics, project loading, generated C/native execution, Lists, values, maybe, identity, errors, resources, generics, modules, Unicode 17 identifiers/graphemes/Text views, and focused binary64 edge cases including NaN, infinities, signed zero and subnormals.
+The verified suite contains **155 passing tests**. It covers frontend/runtime semantics, project loading, generated C/native execution, Lists, values, maybe, identity, errors, resources, generics, modules, Unicode 17 identifiers/graphemes/Text views, length-aware native Text including embedded NUL and invalid UTF-8 handling, compiled byte/scalar Text views, and binary64 edge cases.
 
-CI is configured to exercise the native path with GCC and Clang on Ubuntu and Clang on macOS, increasing the chance of catching host-toolchain leakage.
+CI executes the full suite with GCC and Clang on Ubuntu and Clang on macOS at `-O2`. All three configurations pass.
 
 ## Remaining engineering boundary
 
-The source language is no longer waiting on broad semantic design. Remaining implementation work is concentrated in:
+The source language is no longer waiting on broad semantic design. Remaining work is concentrated in:
 
-- compiled/native parity for the explicit Unicode Text views;
-- stronger cross-platform Float conformance evidence and optimization-mode testing;
+- a pinned Unicode 17 grapheme-segmentation runtime for compiled `text.characters`;
 - stable serialized module/interface metadata instead of live Python analyzer sharing;
+- broader architecture/platform conformance;
 - broader standard-library/runtime facilities;
-- the eventual lower-level universal IR and first direct CPU backend.
+- the lower-level universal IR and first direct CPU backend.
 
 Implementation should continue to follow the frozen specifications rather than changing Eristavi semantics for backend convenience.
