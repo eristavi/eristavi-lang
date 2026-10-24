@@ -8,17 +8,22 @@ class X86_64GCLinuxBackend(X86_64DirectLinuxBackend):
     """Direct backend with bootstrap automatic memory reclamation.
 
     All compiler/runtime malloc/free/realloc calls are routed through a tracked,
-    non-moving mark-and-sweep heap. Each compiled function links a root frame
-    containing the addresses of its heap-typed Eristavi locals. Collection is
-    performed only after `store_local`, a compiler-known statement boundary at
-    which newly produced heap values have reached a rooted local and transient
-    Universal-IR values are no longer required by the completed store.
+    non-moving mark-and-sweep heap. Each compiled function links a compiler root
+    frame containing the addresses of every heap-typed declared local *and* every
+    heap-typed Universal-IR temporary spill slot.
 
-    Root discovery is therefore compiler-described rather than a blind machine
-    stack scan. Heap payload traversal still recognizes child allocations by
-    exact tracked pointer identity while scanning payload words; typed heap
-    descriptor masks remain a later production refinement. Deterministic
-    external resources remain separate from GC ownership.
+    Collection is performed only after `store_local`, a compiler-known statement
+    boundary. Heap-producing temporaries may still be required by later
+    instructions, so their spill slots remain roots for the lifetime of the
+    function. This is intentionally conservative in liveness, but it prevents a
+    temporary aggregate/Text/List from being reclaimed between construction and
+    its next use.
+
+    Root discovery is compiler-described rather than a blind machine-stack scan.
+    Heap payload traversal still recognizes child allocations by exact tracked
+    pointer identity while scanning payload words; typed heap descriptor masks
+    remain a later production refinement. Deterministic external resources stay
+    separate from GC ownership.
     """
 
     def __init__(self):
@@ -30,14 +35,25 @@ class X86_64GCLinuxBackend(X86_64DirectLinuxBackend):
         return type_name not in (I64, F64, BOOL, "void")
 
     def _function(self, fn: UFunction) -> None:
-        # This mirrors the base System-V frame layout and extends it with a
-        # linked compiler root frame: [prev, count, &root0, &root1, ...].
+        # Mirror the base System-V frame and extend it with a linked compiler
+        # root frame: [prev, count, &root0, &root1, ...].  UValue ids map
+        # directly to the backend's spill-slot numbering, so result values can
+        # be rooted without introducing a second storage representation.
         self.fn = fn
         symbol = self._symbol(fn.name)
         total_slots = len(fn.locals) + fn.value_count
         save_count = len(self.CALLEE_SAVED)
         root_locals = [local for local in fn.locals if self._heap_type(local.type_name)]
-        root_words = 2 + len(root_locals)
+
+        heap_values = {}
+        for block in fn.blocks:
+            for instruction in block.instructions:
+                value = instruction.result
+                if value is not None and self._heap_type(value.type_name):
+                    heap_values[value.id] = value
+        root_values = [heap_values[key] for key in sorted(heap_values)]
+
+        root_words = 2 + len(root_locals) + len(root_values)
         frame_words = total_slots + save_count + root_words
         frame = ((frame_words * 8 + 15) // 16) * 16
         self.saved_offsets = {
@@ -56,18 +72,33 @@ class X86_64GCLinuxBackend(X86_64DirectLinuxBackend):
             self.lines.append(f"    movq {register}, {self.saved_offsets[register]}(%rbp)")
 
         base = self.gc_root_base_offset
+        root_count = len(root_locals) + len(root_values)
         self.lines.extend([
             "    movq .Leri_gc_root_head(%rip), %rax",
             f"    movq %rax, {base}(%rbp)",
-            f"    movq ${len(root_locals)}, {base + 8}(%rbp)",
+            f"    movq ${root_count}, {base + 8}(%rbp)",
         ])
-        for index, local in enumerate(root_locals):
-            # Zero the root itself before linking the frame so future lexical
-            # locals cannot accidentally retain an allocation before execution
-            # reaches their declaration.
-            self.lines.append(f"    movq $0, {self._local_offset(local.id)}(%rbp)")
-            self.lines.append(f"    leaq {self._local_offset(local.id)}(%rbp), %rax")
-            self.lines.append(f"    movq %rax, {base + 16 + index * 8}(%rbp)")
+
+        root_index = 0
+        for local in root_locals:
+            # Zero a future lexical root before linking the frame so unexecuted
+            # declarations cannot retain arbitrary stack contents.
+            offset = self._local_offset(local.id)
+            self.lines.append(f"    movq $0, {offset}(%rbp)")
+            self.lines.append(f"    leaq {offset}(%rbp), %rax")
+            self.lines.append(f"    movq %rax, {base + 16 + root_index * 8}(%rbp)")
+            root_index += 1
+
+        for value in root_values:
+            # Temporary spill slots are also future roots. They must begin at
+            # null because the frame is linked before the producing instruction
+            # executes.
+            offset = self._value_offset(value)
+            self.lines.append(f"    movq $0, {offset}(%rbp)")
+            self.lines.append(f"    leaq {offset}(%rbp), %rax")
+            self.lines.append(f"    movq %rax, {base + 16 + root_index * 8}(%rbp)")
+            root_index += 1
+
         self.lines.extend([
             f"    leaq {base}(%rbp), %rax",
             "    movq %rax, .Leri_gc_root_head(%rip)",
@@ -92,9 +123,9 @@ class X86_64GCLinuxBackend(X86_64DirectLinuxBackend):
     def _restore_saved(self) -> None:
         if self.gc_root_base_offset is None:
             raise ValueError("GC root frame is not initialized")
-        # `%rax` carries ordinary return values at this exact point. Use the
-        # caller-saved scratch register r11 for GC-frame unlinking so ABI return
-        # state is preserved. XMM return state is unaffected as well.
+        # `%rax` carries ordinary return values at this exact point. Use r11 for
+        # root-frame unlinking so ABI return state is preserved. XMM return state
+        # is unaffected as well.
         self.lines.extend([
             f"    movq {self.gc_root_base_offset}(%rbp), %r11",
             "    movq %r11, .Leri_gc_root_head(%rip)",
@@ -104,8 +135,8 @@ class X86_64GCLinuxBackend(X86_64DirectLinuxBackend):
     def _instruction(self, ins: UInstruction) -> None:
         super()._instruction(ins)
         if ins.op == "store_local":
-            # Safe point: all function root frames are linked and the value just
-            # stored is visible through its declared local slot.
+            # Safe point: root frames include both locals and all heap-typed
+            # temporary spill slots, so any still-live compiler value is visible.
             self.lines.append("    call .Leri_gc_collect")
 
     def emit(self, program) -> str:
