@@ -1,6 +1,6 @@
 # Eristavi Compilation Targets
 
-> **Status: Broad C backend; substantial direct x86-64; expanded ARM64 assembly path; first JavaScript and WebAssembly consumers**
+> **Status: broad C and x86-64 paths; native-tested ARM64; active JavaScript and WebAssembly consumers**
 
 Eristavi is designed around machine-independent compiler IRs. Target backends preserve Eristavi semantics rather than inheriting target-language, operating-system, or CPU behavior accidentally.
 
@@ -25,48 +25,36 @@ typed/source-close Eristavi IR
     ↓
 verified + optimized Universal IR
     ├─→ x86-64 Linux direct backend → assembly → native
-    ├─→ ARM64 Linux backend → assembly/native on matching host
+    ├─→ ARM64 Linux direct backend → assembly → native
     ├─→ ES2020 JavaScript
     └─→ WebAssembly text
 ```
 
 ## Native: x86-64 Linux
 
-The direct System V backend executes a broad pre-0.1 slice without generated C:
+The direct System V backend executes a broad pre-0.1 slice without generated C, including scalars, all explicit Text views, functions, ordinary values, Lists, maybe, identity, inferred generics, checked failures, deterministic resources and source-independent module-object linkage.
 
-- Int, Bool, Float and length-aware Text;
-- `.bytes`, `.scalars`, and Unicode-17 `.characters` Text views;
-- functions, recursion, register and stack arguments;
-- checked Int arithmetic/division/remainder faults;
-- conditions, loops and short-circuit Boolean control flow;
-- ordinary nominal values with deep value semantics;
-- Lists, stable iteration, checked indexing and structural equality;
-- maybe/none;
-- managed identity and identity equality;
-- inferred generic specialization, including reusable module-object templates;
-- checked failures, typed/catch-all handlers and propagation;
-- deterministic `std.files` resources and cleanup;
-- exact-length UTF-8 file I/O plus checked `exists/remove`;
-- serialized module object linkage without dependency source for supported implementations;
-- compiler-rooted non-moving mark-and-sweep bootstrap reclamation.
-
-The current GC precisely identifies compiler root slots (heap locals and Universal-IR temporaries) but still discovers child references inside tracked heap payloads by exact pointer matching rather than typed heap descriptors. Production typed heap maps remain runtime-hardening work.
+Its non-moving mark-and-sweep runtime now combines CFG-liveness-aware compiler roots with static heap descriptors for Text leaves, nominal fields, Lists, maybe/identity wrappers and current file-resource records. Scalar spill slots are interference-colored and reused where safe. Dynamic error state still has a conservative exact-tracked-pointer fallback.
 
 ## Native: ARM64 Linux
 
-The AArch64/AAPCS64 backend consumes the same Universal IR. Assembly-generation coverage now includes:
+The AArch64/AAPCS64 backend consumes the same Universal IR and now executes natively in hosted CI.
+
+Current tested/runtime coverage includes:
 
 - Int/Bool/Float;
 - functions/calls/recursion;
 - register/stack argument placement;
 - checked Int arithmetic/division/remainder;
 - comparisons and control flow;
-- Text and aggregate runtime representation operations;
-- nominal values, Lists, maybe and identity operations;
-- checked-error runtime state/dispatch operations;
-- deterministic `std.files` runtime operations and cleanup state.
+- length-aware Text;
+- nominal values, Lists, maybe and identity;
+- checked-error runtime state and handlers;
+- deterministic `std.files` operations and cleanup.
 
-CI cross-assembles emitted ARM64 code. Native Linux execution remains host-gated, so current evidence for the expanded runtime layers is cross-assembly/structural rather than full behavioral parity with x86-64.
+A native ARM64 Ubuntu CI job executes aggregate/error/resource programs, while cross-assembly tests remain as an independent structural check.
+
+Remaining ARM64 parity work includes automatic memory reclamation and the explicit `.bytes`, `.scalars`, and `.characters` direct runtime views.
 
 ## C
 
@@ -80,17 +68,32 @@ The generated-C backend covers the principal implemented pre-0.1 surface, includ
 
 ## JavaScript
 
-An ES2020 backend now consumes Universal IR for the current scalar/function/control-flow slice.
+The ES2020 backend preserves Eristavi checked signed-64-bit `Int` with `BigInt`, never ordinary JavaScript `Number`.
 
-Key semantic rule: Eristavi `Int` maps to checked JavaScript `BigInt`, never silently to `Number`. Tests execute functions, Float/Text behavior, control flow and overflow protection with an available JavaScript runtime.
+It now executes:
 
-Aggregate values, checked errors, deterministic resources and the full Unicode runtime are not yet JavaScript-parity complete.
+- functions and control flow;
+- Int/Bool/Float/Text;
+- nominal values and field mutation;
+- Lists and checked indexing;
+- maybe/none;
+- identity handles;
+- deep ordinary-value cloning;
+- structural equality.
+
+Checked errors, deterministic resources and explicit Text views remain JavaScript parity work.
 
 ## WebAssembly
 
-A WebAssembly-text backend now consumes Universal IR for the current scalar/function/control-flow slice. It emits direct WAT contracts for checked Int operations, functions/calls and control-flow dispatch.
+The WAT backend consumes the scalar/function/control slice and now supports Text through an explicit semantic host ABI.
 
-Text and higher runtime families are currently rejected explicitly rather than approximated. Binary execution/runtime integration remains later work.
+Text constants are emitted as UTF-8 data segments and materialized as `externref`; concatenation, equality and output are imports rather than pointer/integer approximations. Checked Int arithmetic also remains explicit runtime imports.
+
+Aggregate values, checked errors, resources, Text views and binary/runtime execution integration remain future WebAssembly work.
+
+## Unicode target conformance
+
+Unicode behavior is pinned to Unicode 17.0.0. CI fetches an immutable-revision copy of the official `GraphemeBreakTest-17.0.0.txt` vectors and runs every non-comment case against the pinned reference grapheme implementation.
 
 ## Semantic rule
 
@@ -100,10 +103,10 @@ A program must not change its defined meaning merely because it is compiled to d
 
 ## Next target work
 
-The priority is now:
+Priority is now:
 
-1. typed heap descriptors and stronger direct-GC precision/reclamation policy;
-2. native ARM64 Linux CI and behavioral parity for the expanded assembly layers;
-3. broaden JavaScript/WebAssembly through aggregates, errors, Text views and runtime services;
-4. additional OS/ABI targets, especially Windows and macOS direct-native work;
-5. RISC-V as a later third native architecture once the runtime ABI is stable.
+1. ARM64 GC and explicit Text-view parity;
+2. real register allocation and tighter GC lifetime metadata;
+3. broader JavaScript/WebAssembly checked-error/resource/Text-view support;
+4. additional OS/ABI targets, especially Windows and macOS direct-native paths;
+5. RISC-V as a later third native architecture once the runtime ABI is mature.
