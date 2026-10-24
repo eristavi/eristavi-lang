@@ -17,7 +17,7 @@ Eristavi is an experimental general-purpose programming language focused on **re
 
 The **pre-0.1 source-language/frontend contract is frozen for implementation**. The bootstrap/reference runtime covers the principal frozen surface: functions, collections, ordinary values, maybe/identity, checked errors, deterministic resources, modules/imports, inferred generic relationships and explicit Unicode Text views.
 
-Unicode identifier, normalization and grapheme behavior is pinned to Unicode **17.0.0**. CI now executes the complete official Unicode-17 `GraphemeBreakTest` fixture against the pinned reference segmenter in addition to compiled/direct grapheme tests.
+Unicode identifier, normalization and grapheme behavior is pinned to Unicode **17.0.0**. CI executes the complete official Unicode-17 `GraphemeBreakTest` fixture against the pinned reference segmenter in addition to compiled/direct grapheme tests.
 
 ## Compiler architecture
 
@@ -36,7 +36,7 @@ verified + optimized Universal IR
     └─→ WebAssembly text
 ```
 
-Universal IR is verified before/after bootstrap optimization. Current passes include constant folding and unreachable-block elimination. CFG-aware liveness, interference, spill-slot coloring, escape analysis and register-candidate analysis are also available to direct backends.
+Universal IR is verified before/after bootstrap optimization. Current passes include constant folding and unreachable-block elimination. CFG-aware liveness, interference, spill-slot coloring, escape analysis and register-candidate analysis are available to direct backends. The x86-64 backend now consumes those analyses through an initial conservative physical-register allocator for short-lived scalar regions.
 
 ## Direct native backends
 
@@ -44,11 +44,13 @@ Universal IR is verified before/after bootstrap optimization. Current passes inc
 
 The direct x86-64 route executes a broad pre-0.1 implementation without generated C: functions/recursion, Int/Bool/Float/Text, all explicit Text views, Lists, ordinary values, maybe, identity, checked failures, inferred generic specializations, deterministic file resources and module-object linkage.
 
-The runtime includes a non-moving mark-and-sweep collector. Compiler root frames are now **liveness-aware** and pair stable heap root addresses with static type descriptors. Typed traversal handles Text leaves, nominal fields, Lists, maybe/identity wrappers and file-resource records; conservative exact-pointer scanning remains only as a fallback for dynamic runtime state. Scalar Universal-IR temporaries also reuse CFG-noninterfering spill slots.
+The runtime includes a non-moving mark-and-sweep collector. Compiler root frames are **liveness-aware** and pair stable heap root addresses with static type descriptors. Typed traversal handles Text leaves, nominal fields, Lists, maybe/identity wrappers and file-resource records; conservative exact-pointer scanning remains only as a fallback for dynamic runtime state. Scalar Universal-IR temporaries also reuse CFG-noninterfering spill slots.
+
+Physical register allocation has begun on this backend. The first verified allocator slice maps eligible short-lived Int/Bool values to a GP register and eligible Float values to an XMM register using CFG interference information. Complex lowering operations are treated conservatively as clobber regions: their inputs and values that must survive them remain stack-backed. This preserves the existing System V ABI and precise-GC model while establishing a real register-resident execution path. Broader register pools and spill-frame compaction remain future maturation work.
 
 ### ARM64 Linux
 
-ARM64 consumes the same Universal IR and covers Int/Bool/Float, functions, Text, ordinary values, Lists, maybe, identity, checked failures and deterministic file resources. The hosted CI matrix now includes a native ARM64 Linux runner, so aggregate/error/resource behavior is executed rather than only cross-assembled. Mixed scalar/Text output also preserves source order through the composed ARM64 direct backend.
+ARM64 consumes the same Universal IR and covers Int/Bool/Float, functions, Text, ordinary values, Lists, maybe, identity, checked failures and deterministic file resources. The hosted CI matrix includes a native ARM64 Linux runner, so aggregate/error/resource behavior is executed rather than only cross-assembled. Mixed scalar/Text output also preserves source order through the composed ARM64 direct backend.
 
 ## Module artifacts and incremental compilation
 
@@ -66,7 +68,7 @@ Object format v3 can carry a reusable bootstrap implementation template for publ
 
 ## JavaScript and WebAssembly
 
-The ES2020 backend preserves checked Eristavi `Int` through `BigInt` and now executes ordinary nominal values, Lists, maybe, identity, deep value cloning and structural equality in addition to scalar/function/control-flow behavior.
+The ES2020 backend preserves checked Eristavi `Int` through `BigInt` and executes ordinary nominal values, Lists, maybe, identity, deep value cloning and structural equality in addition to scalar/function/control-flow behavior.
 
 The WebAssembly-text backend supports the current scalar/function/control slice plus Text through an explicit `externref` host ABI. UTF-8 constants are emitted as data segments; Text construction, concatenation, equality and output are explicit host contracts rather than numeric approximations.
 
@@ -179,7 +181,7 @@ erist build-wat examples/hello.eri -o hello.wat
 python -m unittest discover -s tests -v
 ```
 
-The current suite contains **255 tests** and passes in all four hosted CI jobs:
+The current suite contains **262 tests** and passes in all four hosted CI jobs:
 
 - GCC / x86-64 Ubuntu / `-O2`;
 - Clang / x86-64 Ubuntu / `-O2`;
