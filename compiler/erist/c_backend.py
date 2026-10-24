@@ -4,17 +4,17 @@ from .ir import *
 
 class CBackend:
     def __init__(self):
-        self.indent=0; self.temp=0; self.struct_names=set(); self.maybe_types=set(); self.maybe_defined=set(); self.extra_list_types=set()
+        self.indent=0; self.temp=0; self.struct_names=set(); self.maybe_types=set(); self.maybe_defined=set(); self.extra_list_types=set(); self.structs={}
+
     def emit(self,p:IRProgram)->str:
-        self.struct_names={s.name for s in p.structs}
+        self.struct_names={s.name for s in p.structs}; self.structs={s.name:s for s in p.structs}
         self.maybe_types=self._collect_prefixed_types(p,'maybe ')
         all_lists=self._collect_prefixed_types(p,'List of ')
         self.extra_list_types={t for t in all_lists if list_element(t) not in ('Int','Float','Bool','Text')}
         ordered=self._order_structs(p.structs)
         parts=[RUNTIME]
         if ordered: parts.append('\n'.join(f'typedef struct {struct_tag(s.name)} {ctype(s.name)};' for s in ordered))
-        if self.extra_list_types:
-            parts.append('\n'.join(self._list_typedef(t) for t in sorted(self.extra_list_types)))
+        if self.extra_list_types: parts.append('\n'.join(self._list_typedef(t) for t in sorted(self.extra_list_types)))
         for t in sorted(self.maybe_types):
             if self._maybe_ready(t,set()): parts.append(self._maybe_typedef(t)); self.maybe_defined.add(t)
         defined_structs=set()
@@ -27,20 +27,21 @@ class CBackend:
             if t not in self.maybe_defined:
                 if not self._maybe_ready(t,defined_structs): raise ValueError(f'cannot lay out {t}')
                 parts.append(self._maybe_typedef(t)); self.maybe_defined.add(t)
-        if ordered:
-            parts.append('\n'.join(f'static bool {eq_helper(s.name)}({ctype(s.name)} a, {ctype(s.name)} b);' for s in ordered))
-        if self.maybe_types:
-            parts.append('\n'.join(f'static bool {maybe_eq(t)}({ctype(t)} a, {ctype(t)} b);' for t in sorted(self.maybe_types)))
-        if self.extra_list_types:
-            parts.append('\n'.join(f'static bool {list_helper(t)}_eq({ctype(t)} a, {ctype(t)} b);' for t in sorted(self.extra_list_types)))
+        if ordered: parts.append('\n'.join(f'static bool {eq_helper(s.name)}({ctype(s.name)} a, {ctype(s.name)} b);' for s in ordered))
+        if self.maybe_types: parts.append('\n'.join(f'static bool {maybe_eq(t)}({ctype(t)} a, {ctype(t)} b);' for t in sorted(self.maybe_types)))
+        if self.extra_list_types: parts.append('\n'.join(f'static bool {list_helper(t)}_eq({ctype(t)} a, {ctype(t)} b);' for t in sorted(self.extra_list_types)))
         for s in ordered: parts.append(self._identity_helper_for_struct(s.name))
         for s in ordered: parts.append(self._struct_equality(s))
+        for s in ordered:
+            if s.is_error: parts.append(self._error_raise_helper(s))
         for t in sorted(self.maybe_types): parts.append(self._maybe_equality(t))
         for t in sorted(self.extra_list_types): parts.append(self._list_helpers(t))
+        if p.functions: parts.append('\n'.join(self._function_prototype(f) for f in p.functions))
         for f in p.functions: parts.append(self._function(f))
         body=self._stmts(p.entry)
         parts.append('int main(void) {\n    fesetround(FE_TONEAREST);\n'+self._indent_text(body,1)+'    return 0;\n}\n')
         return '\n'.join(x for x in parts if x)
+
     def _collect_prefixed_types(self,p,prefix):
         out=set()
         def add_type(t):
@@ -58,6 +59,7 @@ class CBackend:
                 if isinstance(x,IRFunction) and x.return_type: add_type(x.return_type)
                 for f in dc_fields(x): walk(getattr(x,f.name))
         walk(p); return out
+
     def _maybe_ready(self,t,defined):
         inner=maybe_inner(t)
         if inner.startswith('identity '): return True
@@ -70,8 +72,7 @@ class CBackend:
         inner=maybe_inner(t); comp=self._eq_component(inner,'a.value','b.value')
         return f'static bool {maybe_eq(t)}({ctype(t)} a, {ctype(t)} b) {{ if(a.has!=b.has)return false; if(!a.has)return true; return {comp}; }}\n'
     def _list_typedef(self,t):
-        elem=list_element(t)
-        return f'typedef struct {{ size_t count; {ctype(elem)} *data; }} {list_helper(t)};'
+        elem=list_element(t); return f'typedef struct {{ size_t count; {ctype(elem)} *data; }} {list_helper(t)};'
     def _list_helpers(self,t):
         elem=list_element(t); ct=ctype(elem); h=list_helper(t); eq=self._eq_component(elem,'a.data[i]','b.data[i]')
         return f'''static {h} {h}_make(size_t n,const {ct} *src){{ {h} r={{n,NULL}}; if(n){{r.data=({ct}*)eri_alloc(sizeof({ct})*n); memcpy(r.data,src,sizeof({ct})*n);}} return r; }}
@@ -81,6 +82,7 @@ static void {h}_set({h} *v,int64_t i,{ct} x){{ if(i<0||(uint64_t)i>=v->count)eri
 static void {h}_add({h} *v,{ct} x){{ {h}_detach(v); v->data=({ct}*)eri_realloc(v->data,sizeof({ct})*(v->count+1)); v->data[v->count++]=x; }}
 static bool {h}_eq({h} a,{h} b){{ if(a.count!=b.count)return false; for(size_t i=0;i<a.count;i++){{if(!({eq}))return false;}} return true; }}
 '''
+
     def _order_structs(self,structs):
         by={s.name:s for s in structs}; out=[]; visiting=set(); done=set()
         def dep_type(t):
@@ -101,6 +103,7 @@ static bool {h}_eq({h} a,{h} b){{ if(a.count!=b.count)return false; for(size_t i
             visiting.remove(s.name); done.add(s.name); out.append(s)
         for s in structs: visit(s)
         return out
+
     def _struct_definition(self,s):
         fs=''.join(f'    {ctype(f.type_name)} {field_name(f.name)};\n' for f in s.fields)
         return f'struct {struct_tag(s.name)} {{\n{fs}}};\n'
@@ -111,6 +114,9 @@ static bool {h}_eq({h} a,{h} b){{ if(a.count!=b.count)return false; for(size_t i
         checks=[self._eq_component(f.type_name,f'a.{field_name(f.name)}',f'b.{field_name(f.name)}') for f in s.fields]
         expr=' && '.join(checks) if checks else 'true'
         return f'static bool {eq_helper(s.name)}({ctype(s.name)} a, {ctype(s.name)} b) {{ return {expr}; }}\n'
+    def _error_raise_helper(self,s):
+        msg=field_name('message'); ct=ctype(s.name)
+        return f'static void {fail_helper(s.name)}({ct} v) {{ {ct} *p=({ct}*)eri_alloc(sizeof({ct})); *p=v; eri_raise({c_string(s.name)}, p, v.{msg}); }}\n'
     def _eq_component(self,t,a,b):
         if t.startswith('maybe '): return f'{maybe_eq(t)}({a}, {b})'
         if t.startswith('identity '): return f'({a} == {b})'
@@ -118,10 +124,14 @@ static bool {h}_eq({h} a,{h} b){{ if(a.count!=b.count)return false; for(size_t i
         if t in ('Int','Float','Bool'): return f'({a} == {b})'
         if t.startswith('List of '): return f'{list_helper(t)}_eq({a}, {b})'
         return f'{eq_helper(t)}({a}, {b})'
-    def _function(self,f):
+
+    def _function_signature(self,f,semicolon=False):
         ret='void' if f.return_type is None else ctype(f.return_type)
         params=', '.join(f'{ctype(x.type_name)} {cname(x.name)}' for x in f.parameters) or 'void'
-        return f'static {ret} fn_{mangle(f.name)}({params}) {{\n'+self._indent_text(self._stmts(f.body),1)+'}\n'
+        return f'static {ret} fn_{mangle(f.name)}({params})'+(';' if semicolon else '')
+    def _function_prototype(self,f): return self._function_signature(f,True)
+    def _function(self,f): return self._function_signature(f)+' {\n'+self._indent_text(self._stmts(f.body),1)+'}\n'
+
     def _stmts(self,stmts): return ''.join(self._stmt(s) for s in stmts)
     def _stmt(self,s):
         if isinstance(s,IRLet): return f'{ctype(s.type_name)} {cname(s.name)} = {self._expr(s.value)};\n'
@@ -130,6 +140,11 @@ static bool {h}_eq({h} a,{h} b){{ if(a.count!=b.count)return false; for(size_t i
         if isinstance(s,IRMemberAssign): return f'{self._lvalue(s.target)} = {self._expr(s.value)};\n'
         if isinstance(s,IRExprStmt): return f'{self._expr(s.expression)};\n'
         if isinstance(s,IRReturn): return 'return;\n' if s.value is None else f'return {self._expr(s.value)};\n'
+        if isinstance(s,IRFail): return f'{fail_helper(s.error_type)}({self._expr(s.value)});\n'
+        if isinstance(s,IRHandledLet): return self._handled_let(s)
+        if isinstance(s,IRHandledAssign): return self._handled_assign(s)
+        if isinstance(s,IRHandledReturn): return self._handled_return(s)
+        if isinstance(s,IRHandledExprStmt): return self._handled_expr(s)
         if isinstance(s,IRIf):
             out=f'if ({self._expr(s.condition)}) {{\n'+self._indent_text(self._stmts(s.then_body),1)+'}'
             if s.else_body: out+=' else {\n'+self._indent_text(self._stmts(s.else_body),1)+'}'
@@ -141,6 +156,52 @@ static bool {h}_eq({h} a,{h} b){{ if(a.count!=b.count)return false; for(size_t i
             binding=f'{ctype(elem)} {cname(s.name)} = {helper}_get({snap}, {idx});\n'
             return head+self._indent_text(binding+self._stmts(s.body),1)+'}\n'
         raise TypeError(s)
+
+    def _handled_let(self,s):
+        self.temp+=1; n=self.temp; fr=f'_eri_h_{n}'
+        out=f'{ctype(s.type_name)} {cname(s.name)};\neri_handler_frame {fr}; {fr}.prev=eri_handler_top; eri_handler_top=&{fr};\n'
+        success=f'{cname(s.name)} = {self._expr(s.value)};\neri_handler_top = {fr}.prev;\n'
+        return out+f'if (setjmp({fr}.env)==0) {{\n'+self._indent_text(success,1)+'} else {\n'+self._indent_text(f'eri_handler_top = {fr}.prev;\n'+self._handler_dispatch(s.handlers,True,n),1)+'}\n'
+    def _handled_assign(self,s):
+        self.temp+=1; n=self.temp; fr=f'_eri_h_{n}'; tmp=f'_eri_v_{n}'
+        out=f'{ctype(s.target_type)} {tmp};\neri_handler_frame {fr}; {fr}.prev=eri_handler_top; eri_handler_top=&{fr};\n'
+        assign=self._assign_target(s.target,tmp)
+        success=f'{tmp} = {self._expr(s.value)};\neri_handler_top = {fr}.prev;\n{assign}'
+        return out+f'if (setjmp({fr}.env)==0) {{\n'+self._indent_text(success,1)+'} else {\n'+self._indent_text(f'eri_handler_top = {fr}.prev;\n'+self._handler_dispatch(s.handlers,True,n),1)+'}\n'
+    def _handled_return(self,s):
+        self.temp+=1; n=self.temp; fr=f'_eri_h_{n}'; tmp=f'_eri_v_{n}'
+        out=f'{ctype(s.value.type_name)} {tmp};\neri_handler_frame {fr}; {fr}.prev=eri_handler_top; eri_handler_top=&{fr};\n'
+        success=f'{tmp} = {self._expr(s.value)};\neri_handler_top = {fr}.prev;\nreturn {tmp};\n'
+        return out+f'if (setjmp({fr}.env)==0) {{\n'+self._indent_text(success,1)+'} else {\n'+self._indent_text(f'eri_handler_top = {fr}.prev;\n'+self._handler_dispatch(s.handlers,True,n),1)+'}\n'
+    def _handled_expr(self,s):
+        self.temp+=1; n=self.temp; fr=f'_eri_h_{n}'
+        out=f'eri_handler_frame {fr}; {fr}.prev=eri_handler_top; eri_handler_top=&{fr};\n'
+        success=f'(void)({self._expr(s.value)});\neri_handler_top = {fr}.prev;\n'
+        return out+f'if (setjmp({fr}.env)==0) {{\n'+self._indent_text(success,1)+'} else {\n'+self._indent_text(f'eri_handler_top = {fr}.prev;\n'+self._handler_dispatch(s.handlers,False,n),1)+'}\n'
+    def _handler_dispatch(self,handlers,must_terminate,n):
+        saved=f'_eri_failure_{n}'; out=f'eri_failure_value {saved} = eri_failure;\n'; parts=[]; catchall=None
+        for h in handlers:
+            body=self._stmts(h.body)
+            if h.error_type is None:
+                bind=f'eri_error_view {cname("error")} = {{ {saved}.message }};\n'
+                catchall=bind+body+(('eri_fault("value error handler completed without terminating");\n') if must_terminate else '')
+            else:
+                bind=f'{ctype(h.error_type)} {cname("error")} = *({ctype(h.error_type)}*){saved}.payload;\n'
+                branch=bind+body+(('eri_fault("value error handler completed without terminating");\n') if must_terminate else '')
+                parts.append((h.error_type,branch))
+        for i,(t,b) in enumerate(parts):
+            out+=('if' if i==0 else 'else if')+f' (strcmp({saved}.type, {c_string(t)}) == 0) {{\n'+self._indent_text(b,1)+'}\n'
+        if catchall is not None:
+            out+=('else ' if parts else '')+'{\n'+self._indent_text(catchall,1)+'}\n'
+        else:
+            out+=('else ' if parts else '')+'{ eri_propagate_saved('+saved+'); }\n'
+        return out
+    def _assign_target(self,t,value_name):
+        if isinstance(t,IRVar): return f'{cname(t.name)} = {value_name};\n'
+        if isinstance(t,IRMember): return f'{self._lvalue(t)} = {value_name};\n'
+        if isinstance(t,IRIndex): return f'{list_helper(t.base.type_name)}_set(&{self._lvalue(t.base)}, {self._expr(t.index)}, {value_name});\n'
+        raise TypeError(t)
+
     def _lvalue(self,e):
         if isinstance(e,IRVar): return cname(e.name)
         if isinstance(e,IRMaybeGet): return f'({self._lvalue(e.value)}).value'
@@ -148,6 +209,7 @@ static bool {h}_eq({h} a,{h} b){{ if(a.count!=b.count)return false; for(size_t i
             base=self._lvalue(e.base); op='->' if e.base.type_name.startswith('identity ') else '.'
             return f'({base}){op}{field_name(e.name)}'
         raise TypeError(f'unsupported C lvalue {e!r}')
+
     def _expr(self,e):
         if isinstance(e,IRConst):
             if e.type_name=='Text': return c_string(str(e.value))
@@ -207,6 +269,7 @@ static bool {h}_eq({h} a,{h} b){{ if(a.count!=b.count)return false; for(size_t i
                 if a.type_name=='Text': return f'eri_out_text({self._expr(a)})'
             return f'fn_{mangle(e.name)}({args})'
         raise TypeError(e)
+
     @staticmethod
     def _indent_text(text,n):
         if not text: return ''
@@ -224,6 +287,7 @@ def cname(n): return 'v_'+mangle(n)
 def field_name(n): return 'f_'+mangle(n)
 def struct_tag(t): return 'eri_struct_tag_'+mangle(t)
 def eq_helper(t): return 'eri_eq_'+mangle(t)
+def fail_helper(t): return 'eri_fail_'+mangle(t)
 def maybe_inner(t):
     if not t.startswith('maybe '): raise KeyError(t)
     return t[6:]
@@ -238,17 +302,15 @@ def list_element(t):
     if not t.startswith('List of '): raise KeyError(t)
     return t[8:]
 def list_helper(t): return list_helper_from_element(list_element(t))
-def list_helper_from_element(t):
-    return {'Int':'eri_list_int','Float':'eri_list_float','Bool':'eri_list_bool','Text':'eri_list_text'}.get(t,'eri_list_'+mangle(t))
+def list_helper_from_element(t): return {'Int':'eri_list_int','Float':'eri_list_float','Bool':'eri_list_bool','Text':'eri_list_text'}.get(t,'eri_list_'+mangle(t))
 def ctype(t):
-    scalars={'Int':'int64_t','Float':'double','Bool':'bool','Text':'const char *'}
+    scalars={'Int':'int64_t','Float':'double','Bool':'bool','Text':'const char *','checked error':'eri_error_view'}
     if t in scalars: return scalars[t]
     if t.startswith('maybe '): return maybe_name(t)
     if t.startswith('identity '): return ctype(identity_inner(t))+' *'
     if t.startswith('List of '): return list_helper(t)
     return 'eri_struct_'+mangle(t)
-def c_string(s):
-    return '"'+s.replace('\\','\\\\').replace('"','\\"').replace('\n','\\n').replace('\r','\\r').replace('\t','\\t').replace('\0','\\0')+'"'
+def c_string(s): return '"'+s.replace('\\','\\\\').replace('"','\\"').replace('\n','\\n').replace('\r','\\r').replace('\t','\\t').replace('\0','\\0')+'"'
 
 RUNTIME=r'''#include <stdint.h>
 #include <stdbool.h>
@@ -260,10 +322,19 @@ RUNTIME=r'''#include <stdint.h>
 #include <fenv.h>
 #include <string.h>
 #include <stddef.h>
+#include <setjmp.h>
+
+typedef struct eri_handler_frame { jmp_buf env; struct eri_handler_frame *prev; } eri_handler_frame;
+typedef struct { const char *type; void *payload; const char *message; } eri_failure_value;
+typedef struct { const char *f_message; } eri_error_view;
+static eri_handler_frame *eri_handler_top = NULL;
+static eri_failure_value eri_failure = {NULL,NULL,NULL};
 
 static void eri_fault(const char *m) { fprintf(stderr, "Eristavi runtime fault: %s\n", m); exit(1); }
 static void *eri_alloc(size_t n){ void *p=malloc(n?n:1); if(!p)eri_fault("out of memory"); return p; }
 static void *eri_realloc(void *p,size_t n){ void *q=realloc(p,n?n:1); if(!q)eri_fault("out of memory"); return q; }
+static void eri_raise(const char *type, void *payload, const char *message){ eri_failure=(eri_failure_value){type,payload,message}; if(!eri_handler_top)eri_fault(message?message:"unhandled checked failure"); longjmp(eri_handler_top->env,1); }
+static void eri_propagate_saved(eri_failure_value f){ eri_failure=f; if(!eri_handler_top)eri_fault(f.message?f.message:"unhandled checked failure"); longjmp(eri_handler_top->env,1); }
 static char *eri_text_add(const char *a,const char *b){ size_t na=strlen(a),nb=strlen(b); char *r=(char*)eri_alloc(na+nb+1); memcpy(r,a,na); memcpy(r+na,b,nb+1); return r; }
 static int64_t *eri_identity_Int_new(int64_t v){ int64_t *p=(int64_t*)eri_alloc(sizeof(int64_t)); *p=v; return p; }
 static double *eri_identity_Float_new(double v){ double *p=(double*)eri_alloc(sizeof(double)); *p=v; return p; }
@@ -271,13 +342,7 @@ static bool *eri_identity_Bool_new(bool v){ bool *p=(bool*)eri_alloc(sizeof(bool
 static const char **eri_identity_Text_new(const char *v){ const char **p=(const char**)eri_alloc(sizeof(char*)); *p=v; return p; }
 static int64_t eri_iadd(int64_t a,int64_t b){ if((b>0&&a>INT64_MAX-b)||(b<0&&a<INT64_MIN-b))eri_fault("Int overflow"); return a+b; }
 static int64_t eri_isub(int64_t a,int64_t b){ if((b<0&&a>INT64_MAX+b)||(b>0&&a<INT64_MIN+b))eri_fault("Int overflow"); return a-b; }
-static int64_t eri_imul(int64_t a,int64_t b){
-    if(a==0||b==0)return 0;
-    if((a==INT64_MIN&&b==-1)||(b==INT64_MIN&&a==-1))eri_fault("Int overflow");
-    if(a>0){ if(b>0){if(a>INT64_MAX/b)eri_fault("Int overflow");} else {if(b<INT64_MIN/a)eri_fault("Int overflow");}}
-    else { if(b>0){if(a<INT64_MIN/b)eri_fault("Int overflow");} else {if(a!=0&&b<INT64_MAX/a)eri_fault("Int overflow");}}
-    return a*b;
-}
+static int64_t eri_imul(int64_t a,int64_t b){ if(a==0||b==0)return 0; if((a==INT64_MIN&&b==-1)||(b==INT64_MIN&&a==-1))eri_fault("Int overflow"); if(a>0){ if(b>0){if(a>INT64_MAX/b)eri_fault("Int overflow");} else {if(b<INT64_MIN/a)eri_fault("Int overflow");}} else { if(b>0){if(a<INT64_MIN/b)eri_fault("Int overflow");} else {if(a!=0&&b<INT64_MAX/a)eri_fault("Int overflow");}} return a*b; }
 static int64_t eri_idiv(int64_t a,int64_t b){ if(!b)eri_fault("Int division by zero"); if(a==INT64_MIN&&b==-1)eri_fault("Int overflow"); return a/b; }
 static int64_t eri_irem(int64_t a,int64_t b){ if(!b)eri_fault("Int remainder by zero"); if(a==INT64_MIN&&b==-1)eri_fault("Int overflow"); return a%b; }
 static int64_t eri_ineg(int64_t a){ if(a==INT64_MIN)eri_fault("Int overflow"); return -a; }
