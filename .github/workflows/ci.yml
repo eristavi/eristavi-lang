@@ -7,7 +7,19 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            cc: gcc
+          - os: ubuntu-latest
+            cc: clang
+          - os: macos-latest
+            cc: clang
+    runs-on: ${{ matrix.os }}
+    env:
+      CC: ${{ matrix.cc }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
