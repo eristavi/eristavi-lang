@@ -9,7 +9,7 @@ from .semantic_ext import Analyzer
 from .runtime_ext import Interpreter
 from .project import compile_entry
 from .ir import Lowerer, IRProgram
-from .c_backend import CBackend
+from .c_backend_text import CBackend
 
 def analyze_frontend(source:str):
     program=Parser(Lexer(source).lex()).parse(); analyzer=Analyzer(); analyzer.analyze(program); return program,analyzer
