@@ -13,7 +13,9 @@ from .ir_text import Lowerer
 from .c_backend_views import CBackend
 from .universal_ir import format_program
 from .x86_64_gc_precise import X86_64PreciseRootGCLinuxBackend
-from .arm64_backend import ARM64LinuxBackend
+from .arm64_resource_backend import ARM64ResourceRuntimeLinuxBackend
+from .js_backend import JavaScriptBackend
+from .wasm_backend import WebAssemblyTextBackend
 from .direct_project import compile_module_object, lower_direct_entry, object_path
 from .build_cache import ArtifactBuilder
 
@@ -49,8 +51,7 @@ def lower_project(entry_module):
         if mod is entry_module: entry.extend(part.entry)
     return IRProgram(structs,functions,entry)
 
-def lower_universal_file(path:Path,source_root:Path|None=None):
-    return lower_direct_entry(path,source_root)
+def lower_universal_file(path:Path,source_root:Path|None=None): return lower_direct_entry(path,source_root)
 
 def run_file(path:Path,source_root:Path|None=None)->int:
     try:
@@ -65,42 +66,34 @@ def check_file(path:Path,source_root:Path|None=None)->int:
 
 def emit_interface(path:Path,output:Path|None=None,source_root:Path|None=None)->int:
     try:
-        mod=compile_module(path,source_root)
-        target=output or path.with_suffix('.eri-interface.json')
-        target.write_text(mod.interface.to_json(),encoding='utf-8')
-        return 0
-    except (EristaviError,OSError,ValueError) as e:
-        print(e.format() if isinstance(e,EristaviError) else f'error: {e}',file=sys.stderr); return 1
+        mod=compile_module(path,source_root); (output or path.with_suffix('.eri-interface.json')).write_text(mod.interface.to_json(),encoding='utf-8'); return 0
+    except (EristaviError,OSError,ValueError) as e: print(e.format() if isinstance(e,EristaviError) else f'error: {e}',file=sys.stderr); return 1
 
 def emit_object(path:Path,output:Path|None=None,source_root:Path|None=None)->int:
     try:
-        artifact=compile_module_object(path,source_root)
-        target=output or object_path(path)
-        target.write_text(artifact.to_json(),encoding='utf-8')
-        return 0
-    except (EristaviError,OSError,ValueError) as e:
-        print(e.format() if isinstance(e,EristaviError) else f'error: {e}',file=sys.stderr); return 1
+        artifact=compile_module_object(path,source_root); (output or object_path(path)).write_text(artifact.to_json(),encoding='utf-8'); return 0
+    except (EristaviError,OSError,ValueError) as e: print(e.format() if isinstance(e,EristaviError) else f'error: {e}',file=sys.stderr); return 1
 
 def compile_cached_module(path:Path,source_root:Path|None=None,cache_dir:Path|None=None)->int:
     try:
-        root=(source_root or path.parent).resolve()
-        result=ArtifactBuilder(root,cache_dir).build_module(path)
-        status='cache-hit' if result.cache_hit else 'compiled'
-        print(f"{status} {result.module_id} {result.key}")
-        return 0
-    except (EristaviError,OSError,ValueError) as e:
-        print(e.format() if isinstance(e,EristaviError) else f'error: {e}',file=sys.stderr); return 1
+        root=(source_root or path.parent).resolve(); result=ArtifactBuilder(root,cache_dir).build_module(path); print(f"{'cache-hit' if result.cache_hit else 'compiled'} {result.module_id} {result.key}"); return 0
+    except (EristaviError,OSError,ValueError) as e: print(e.format() if isinstance(e,EristaviError) else f'error: {e}',file=sys.stderr); return 1
 
 def emit_uir(path:Path,output:Path,source_root:Path|None=None)->int:
-    try:
-        output.write_text(format_program(lower_universal_file(path,source_root)),encoding='utf-8')
-        return 0
-    except (EristaviError,OSError,ValueError) as e:
-        print(e.format() if isinstance(e,EristaviError) else f'error: {e}',file=sys.stderr); return 1
+    try: output.write_text(format_program(lower_universal_file(path,source_root)),encoding='utf-8'); return 0
+    except (EristaviError,OSError,ValueError) as e: print(e.format() if isinstance(e,EristaviError) else f'error: {e}',file=sys.stderr); return 1
+
+def emit_js(path:Path,output:Path,source_root:Path|None=None)->int:
+    try: output.write_text(JavaScriptBackend().emit(lower_universal_file(path,source_root)),encoding='utf-8'); return 0
+    except (EristaviError,OSError,ValueError) as e: print(e.format() if isinstance(e,EristaviError) else f'error: {e}',file=sys.stderr); return 1
+
+def emit_wat(path:Path,output:Path,source_root:Path|None=None)->int:
+    try: output.write_text(WebAssemblyTextBackend().emit(lower_universal_file(path,source_root)),encoding='utf-8'); return 0
+    except (EristaviError,OSError,ValueError) as e: print(e.format() if isinstance(e,EristaviError) else f'error: {e}',file=sys.stderr); return 1
 
 def _direct_backend(target:str):
     if target=='x86_64-linux': return X86_64PreciseRootGCLinuxBackend()
-    if target in ('arm64-linux','aarch64-linux'): return ARM64LinuxBackend()
+    if target in ('arm64-linux','aarch64-linux'): return ARM64ResourceRuntimeLinuxBackend()
     raise ValueError(f"unsupported direct backend target {target!r}")
 
 def _native_direct_host(target:str)->bool:
@@ -110,54 +103,38 @@ def _native_direct_host(target:str)->bool:
     return False
 
 def emit_direct_asm(path:Path,output:Path,source_root:Path|None=None,target:str='x86_64-linux')->int:
-    try:
-        program=lower_universal_file(path,source_root)
-        output.write_text(_direct_backend(target).emit(program),encoding='utf-8')
-        return 0
-    except (EristaviError,OSError,ValueError) as e:
-        print(e.format() if isinstance(e,EristaviError) else f'error: {e}',file=sys.stderr); return 1
+    try: output.write_text(_direct_backend(target).emit(lower_universal_file(path,source_root)),encoding='utf-8'); return 0
+    except (EristaviError,OSError,ValueError) as e: print(e.format() if isinstance(e,EristaviError) else f'error: {e}',file=sys.stderr); return 1
 
 def build_direct(path:Path,output:Path,source_root:Path|None=None,target:str='x86_64-linux',cc:str|None=None)->int:
     try:
         backend=_direct_backend(target)
-        if not _native_direct_host(target):
-            raise ValueError(f"{target} direct linking currently requires a matching native Linux host")
-        compiler=cc or os.environ.get('CC','cc')
-        flags=shlex.split(os.environ.get('CFLAGS',''))
-        program=lower_universal_file(path,source_root)
-        assembly=backend.emit(program)
+        if not _native_direct_host(target): raise ValueError(f"{target} direct linking currently requires a matching native Linux host")
+        compiler=cc or os.environ.get('CC','cc'); flags=shlex.split(os.environ.get('CFLAGS','')); assembly=backend.emit(lower_universal_file(path,source_root))
         with tempfile.TemporaryDirectory() as td:
-            asm=Path(td)/'program.s'; asm.write_text(assembly,encoding='utf-8')
-            proc=subprocess.run([compiler,*flags,str(asm),'-o',str(output)],capture_output=True,text=True)
+            asm=Path(td)/'program.s'; asm.write_text(assembly,encoding='utf-8'); proc=subprocess.run([compiler,*flags,str(asm),'-o',str(output)],capture_output=True,text=True)
             if proc.returncode!=0:
                 if proc.stdout: print(proc.stdout,file=sys.stderr,end='')
                 if proc.stderr: print(proc.stderr,file=sys.stderr,end='')
                 return proc.returncode or 1
         return 0
-    except (EristaviError,OSError,ValueError) as e:
-        print(e.format() if isinstance(e,EristaviError) else f'error: {e}',file=sys.stderr); return 1
+    except (EristaviError,OSError,ValueError) as e: print(e.format() if isinstance(e,EristaviError) else f'error: {e}',file=sys.stderr); return 1
 
 def build_c_file(path:Path,output:Path,source_root:Path|None=None)->int:
-    try:
-        mod=compile_entry(path,source_root); ir=lower_project(mod); output.write_text(CBackend().emit(ir),encoding='utf-8'); return 0
-    except (EristaviError,OSError,ValueError) as e:
-        print(e.format() if isinstance(e,EristaviError) else f'error: {e}',file=sys.stderr); return 1
+    try: output.write_text(CBackend().emit(lower_project(compile_entry(path,source_root))),encoding='utf-8'); return 0
+    except (EristaviError,OSError,ValueError) as e: print(e.format() if isinstance(e,EristaviError) else f'error: {e}',file=sys.stderr); return 1
 
 def build_native(path:Path,output:Path,source_root:Path|None=None,cc:str|None=None)->int:
     try:
-        compiler=cc or os.environ.get('CC','cc')
-        cflags=shlex.split(os.environ.get('CFLAGS',''))
-        mod=compile_entry(path,source_root); ir=lower_project(mod); c=CBackend().emit(ir)
+        compiler=cc or os.environ.get('CC','cc'); cflags=shlex.split(os.environ.get('CFLAGS','')); c=CBackend().emit(lower_project(compile_entry(path,source_root)))
         with tempfile.TemporaryDirectory() as td:
-            cp=Path(td)/'program.c'; cp.write_text(c,encoding='utf-8')
-            proc=subprocess.run([compiler,'-std=c11',*cflags,str(cp),'-lm','-o',str(output)],capture_output=True,text=True)
+            cp=Path(td)/'program.c'; cp.write_text(c,encoding='utf-8'); proc=subprocess.run([compiler,'-std=c11',*cflags,str(cp),'-lm','-o',str(output)],capture_output=True,text=True)
             if proc.returncode!=0:
                 if proc.stdout: print(proc.stdout,file=sys.stderr,end='')
                 if proc.stderr: print(proc.stderr,file=sys.stderr,end='')
                 return proc.returncode or 1
         return 0
-    except (EristaviError,OSError,ValueError) as e:
-        print(e.format() if isinstance(e,EristaviError) else f'error: {e}',file=sys.stderr); return 1
+    except (EristaviError,OSError,ValueError) as e: print(e.format() if isinstance(e,EristaviError) else f'error: {e}',file=sys.stderr); return 1
 
 def build_parser():
     p=argparse.ArgumentParser(prog='erist',description='Eristavi bootstrap toolchain'); sub=p.add_subparsers(dest='command',required=True)
@@ -166,7 +143,8 @@ def build_parser():
     interface=sub.add_parser('interface',help='emit a deterministic versioned module interface artifact'); interface.add_argument('module',type=Path); interface.add_argument('-o','--output',type=Path,default=None); interface.add_argument('--source-root',type=Path,default=None)
     obj=sub.add_parser('object',help='emit a linkable Universal-IR module implementation artifact'); obj.add_argument('module',type=Path); obj.add_argument('-o','--output',type=Path,default=None); obj.add_argument('--source-root',type=Path,default=None)
     cm=sub.add_parser('compile-module',help='compile/cache a reusable module interface and implementation object'); cm.add_argument('module',type=Path); cm.add_argument('--source-root',type=Path,default=None); cm.add_argument('--cache-dir',type=Path,default=None)
-    uir=sub.add_parser('uir',help='lower the direct-backend subset to Universal IR'); uir.add_argument('entry',type=Path); uir.add_argument('-o','--output',type=Path,required=True); uir.add_argument('--source-root',type=Path,default=None)
+    for name,help_text in (('uir','emit verified/optimized Universal IR'),('build-js','emit ES2020 JavaScript from Universal IR'),('build-wat','emit WebAssembly text from Universal IR')):
+        c=sub.add_parser(name,help=help_text); c.add_argument('entry',type=Path); c.add_argument('-o','--output',type=Path,required=True); c.add_argument('--source-root',type=Path,default=None)
     asm=sub.add_parser('build-asm',help='emit direct CPU assembly from Universal IR'); asm.add_argument('entry',type=Path); asm.add_argument('-o','--output',type=Path,required=True); asm.add_argument('--source-root',type=Path,default=None); asm.add_argument('--target',default='x86_64-linux',choices=('x86_64-linux','arm64-linux','aarch64-linux'))
     for name,help_text in (('build-direct','compile without the C backend through a direct CPU backend'),('link-direct','link an entry against source or precompiled module objects through a direct CPU backend')):
         direct=sub.add_parser(name,help=help_text); direct.add_argument('entry',type=Path); direct.add_argument('-o','--output',type=Path,required=True); direct.add_argument('--source-root',type=Path,default=None); direct.add_argument('--target',default='x86_64-linux',choices=('x86_64-linux','arm64-linux','aarch64-linux')); direct.add_argument('--cc',default=os.environ.get('CC','cc'))
@@ -182,6 +160,8 @@ def main(argv=None):
     if a.command=='object': return emit_object(a.module,a.output,a.source_root)
     if a.command=='compile-module': return compile_cached_module(a.module,a.source_root,a.cache_dir)
     if a.command=='uir': return emit_uir(a.entry,a.output,a.source_root)
+    if a.command=='build-js': return emit_js(a.entry,a.output,a.source_root)
+    if a.command=='build-wat': return emit_wat(a.entry,a.output,a.source_root)
     if a.command=='build-asm': return emit_direct_asm(a.entry,a.output,a.source_root,a.target)
     if a.command in ('build-direct','link-direct'): return build_direct(a.entry,a.output,a.source_root,a.target,a.cc)
     if a.command=='build-c': return build_c_file(a.entry,a.output,a.source_root)
