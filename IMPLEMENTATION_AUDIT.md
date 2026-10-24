@@ -451,6 +451,6 @@ Eristavi now has:
 - expanded JavaScript ordinary-value semantics;
 - an explicit Text-aware WebAssembly host contract;
 - full official Unicode-17 grapheme reference conformance;
-- a **300-test four-platform CI matrix**.
+- a **322-test four-platform CI matrix**.
 
 The project has moved firmly from language-prototype construction into **compiler/runtime maturation and cross-target conformance work**. The remaining gaps are engineering depth and target parity, not evidence that the core source-language contract needs to be reopened.
