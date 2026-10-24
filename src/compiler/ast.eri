@@ -59,9 +59,11 @@ public function append(nodes, kind Int, token Int, first Int, second Int, third 
     return nodes;
 }
 
-public function link(nodes, left Int, right Int) {
+public function link(nodes, left Int, right Int, item Node) {
     if left >= 0 {
-        nodes[left].next = right;
+        let updated be item;
+        updated.next = right;
+        nodes[left] = updated;
     }
     return nodes;
 }
