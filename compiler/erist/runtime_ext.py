@@ -12,7 +12,7 @@ from .runtime import (
     copy_value,
     file_error,
 )
-from .syntax import CallExpr, IndexExpr, MemberExpr, NameExpr
+from .syntax import CallExpr, FunctionDecl, IndexExpr, MemberExpr, NameExpr
 from .unicode_support import grapheme_clusters, scalar_texts, utf8_bytes
 
 
@@ -59,6 +59,31 @@ class Interpreter(BaseInterpreter):
         return super()._expr(e)
 
     def _call(self, e: CallExpr):
+        if (
+            isinstance(e.callee, MemberExpr)
+            and isinstance(e.callee.base, NameExpr)
+            and e.callee.base.name in self.imported_modules
+        ):
+            mod = self.imported_modules[e.callee.base.name]
+            fn = next(
+                (
+                    item
+                    for item in mod.program.statements
+                    if isinstance(item, FunctionDecl)
+                    and item.name == e.callee.name
+                    and item.public
+                ),
+                None,
+            )
+            if fn is None:
+                raise RuntimeFault(
+                    f"module {e.callee.base.name!r} has no public function {e.callee.name!r}",
+                    e.location,
+                )
+            child = type(self)(self.output_sink, mod.module_id, mod.imports)
+            child._prepare(mod.program)
+            return child._call_function(fn, [self._expr(argument) for argument in e.arguments])
+
         if (
             isinstance(e.callee, MemberExpr)
             and isinstance(e.callee.base, NameExpr)
