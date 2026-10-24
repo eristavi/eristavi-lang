@@ -13,7 +13,7 @@ A function may become implicitly generic when the compiler can infer a consisten
 Example:
 
 ```eri
-function identity(value) {
+function preserve(value) {
     return value;
 }
 ```
@@ -63,11 +63,11 @@ Generic relationships may be inferred through collection operations when the com
 
 ```eri
 function first(items) {
-    return items.first;
+    return items[0];
 }
 ```
 
-When called with a collection of `User`, the result is inferred as `User`. When called with a collection of `Text`, the result is inferred as `Text`.
+When called with a `List` of `User`, the result is inferred as `User`. When called with a `List` of `Text`, the result is inferred as `Text`.
 
 The programmer does not write forms such as:
 
@@ -129,8 +129,8 @@ Pre-0.1 does not expose those requirements through user-written constraint synta
 At each valid call site, the compiler resolves the inferred generic relationship to concrete types.
 
 ```eri
-let number be identity(10);
-let text be identity("Hello");
+let number be preserve(10);
+let text be preserve("Hello");
 ```
 
 The first call produces `Int`; the second produces `Text`.
@@ -148,7 +148,7 @@ Tooling should be able to display the inferred contract in a readable form even 
 For example, tooling may explain:
 
 ```text
-identity(value) -> same type as value
+preserve(value) -> same type as value
 ```
 
 or, as an internal diagnostic notation:
