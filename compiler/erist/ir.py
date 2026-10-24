@@ -33,6 +33,8 @@ class IRFieldValue:
 class IRConstruct(IRExpr): fields: list[IRFieldValue]
 @dataclass(frozen=True)
 class IRMember(IRExpr): base: IRExpr; name: str
+@dataclass(frozen=True)
+class IRIdentity(IRExpr): value: IRExpr
 
 class IRStmt: pass
 @dataclass(frozen=True)
@@ -133,6 +135,7 @@ class Lowerer:
             if e.name=="count": return IRCount(t,e.location,self._expr(e.base))
             return self._member_expr(e)
         if isinstance(e,ConstructionExpr): return IRConstruct(t,e.location,[IRFieldValue(f.name,self._expr(f.value)) for f in e.fields])
+        if isinstance(e,IdentityExpr): return IRIdentity(t,e.location,self._expr(e.value))
         if isinstance(e,UnaryExpr): return IRUnary(t,e.location,e.operator,self._expr(e.operand))
         if isinstance(e,BinaryExpr):
             if t=="Text" and e.operator=="+": raise SemanticError("Text concatenation is not yet lowered by the current C backend",e.location)
@@ -147,7 +150,10 @@ class Lowerer:
     def _supported_type(t,loc):
         if t in ("Int","Float","Bool","Text","no-value"): return
         if t.startswith("List of "):
-            elem=t[8:]
-            if elem in ("Int","Float","Bool","Text") or (elem and not elem.startswith(("maybe ","identity ","List of "))): return
+            if t[8:] in ("Int","Float","Bool","Text"): return
+            raise SemanticError(f"the current C backend supports Lists of scalar values only, got {t}",loc)
+        if t.startswith("identity "):
+            inner=t[9:]
+            if inner and not inner.startswith(("maybe ","identity ","List of ","<")): return
         if not t.startswith(("maybe ","identity ","<")): return
         raise SemanticError(f"the current C backend does not yet support compiled type {t}",loc)
