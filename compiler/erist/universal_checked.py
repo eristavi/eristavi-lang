@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from .ir import (
-    IRAssign,
     IRCall,
     IRExpr,
     IRFail,
@@ -31,10 +30,8 @@ class CheckedUniversalLowerer(UniversalLowerer):
     """Universal lowering layer for Eristavi checked failures.
 
     Checked failure state is explicit in Universal IR. A target provides a small
-    error-state runtime, while control flow (capture, typed dispatch, propagation)
-    is represented with ordinary IR blocks and branches. This avoids target-local
-    exception semantics and keeps the source `fails` contract visible below the
-    frontend.
+    error-state runtime, while capture, typed dispatch and propagation use normal
+    basic-block control flow rather than target-local exception semantics.
     """
 
     def __init__(self):
@@ -151,6 +148,16 @@ class CheckedUniversalLowerer(UniversalLowerer):
             return
         raise ValueError("unsupported handled assignment target")
 
+    def _finish_handled_merge(self, merge_block, merge_used: bool) -> None:
+        if merge_used:
+            self.current = merge_block
+        else:
+            # A value-return handler may terminate on both success and every
+            # failure branch. In that case a preallocated merge block would be
+            # unreachable and, worse, look like an artificial fallthrough path.
+            self.blocks.remove(merge_block)
+            self.current = None
+
     def _lower_handled(self, expr: IRExpr, handlers, success_action) -> None:
         value = self._capture_expr(expr)
         pending = self._emit("error_pending", BOOL)
@@ -159,13 +166,15 @@ class CheckedUniversalLowerer(UniversalLowerer):
         success_block = self._new_block("error.success")
         dispatch_block = self._new_block("error.dispatch")
         merge_block = self._new_block("error.end")
+        merge_used = False
         assert source is not None
         source.terminator = UBranch(pending, dispatch_block.name, success_block.name)
 
         self.current = success_block
         success_action(value)
-        if self.current.terminator is None:
+        if self.current is not None and self.current.terminator is None:
             self.current.terminator = UJump(merge_block.name)
+            merge_used = True
 
         self.current = dispatch_block
         for index, handler in enumerate(handlers):
@@ -191,19 +200,19 @@ class CheckedUniversalLowerer(UniversalLowerer):
                 self._lower_statements(handler.body, new_scope=False)
             finally:
                 self.scopes.pop()
-            if self.current.terminator is None:
+            if self.current is not None and self.current.terminator is None:
                 self.current.terminator = UJump(merge_block.name)
+                merge_used = True
 
             if next_block is None:
-                self.current = merge_block
+                self._finish_handled_merge(merge_block, merge_used)
                 return
             self.current = next_block
 
-        # Frontend exhaustiveness should make this unreachable. Keeping explicit
-        # propagation here makes malformed/object IR safe rather than swallowing
-        # a checked failure.
+        # Exhaustiveness should make this path unreachable in valid source, but
+        # serialized/malformed IR must still propagate rather than swallow it.
         self._terminate_propagation()
-        self.current = merge_block
+        self._finish_handled_merge(merge_block, merge_used)
 
     def _expr(self, expr: IRExpr) -> UValue | None:
         if isinstance(expr, IRMember) and expr.base.type_name == "checked error":
