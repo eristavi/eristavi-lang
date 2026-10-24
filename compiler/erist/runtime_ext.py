@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 
 from .diagnostics import RuntimeFault
 from .runtime import (
@@ -11,7 +12,7 @@ from .runtime import (
     copy_value,
     file_error,
 )
-from .syntax import CallExpr, IndexExpr, MemberExpr
+from .syntax import CallExpr, IndexExpr, MemberExpr, NameExpr
 from .unicode_support import grapheme_clusters, scalar_texts, utf8_bytes
 
 
@@ -31,7 +32,7 @@ class TextViewValue:
 
 
 class Interpreter(BaseInterpreter):
-    """Bootstrap runtime extensions for pinned Unicode/Text semantics."""
+    """Bootstrap runtime extensions for pinned Unicode/Text and stdlib operations."""
 
     def _member_value(self, e):
         base = self._expr(e.base)
@@ -58,7 +59,28 @@ class Interpreter(BaseInterpreter):
         return super()._expr(e)
 
     def _call(self, e: CallExpr):
-        # The base bootstrap file model uses Python's UTF-8 text decoder.  A
+        if (
+            isinstance(e.callee, MemberExpr)
+            and isinstance(e.callee.base, NameExpr)
+            and self.imports.get(e.callee.base.name) == ("std", "files")
+            and e.callee.name in ("exists", "remove")
+        ):
+            path = self._expr(e.arguments[0])
+            try:
+                if "\0" in path:
+                    raise ValueError("file path contains NUL")
+                if e.callee.name == "exists":
+                    try:
+                        os.stat(path)
+                        return True
+                    except FileNotFoundError:
+                        return False
+                os.remove(path)
+                return NO_RUNTIME
+            except (OSError, ValueError) as ex:
+                raise CheckedFailure(file_error(str(ex), path))
+
+        # The base bootstrap file model uses Python's UTF-8 text decoder. A
         # decode failure is part of files.readText's checked FileError contract,
         # not an uncaught host-language UnicodeDecodeError.
         if isinstance(e.callee, MemberExpr):
