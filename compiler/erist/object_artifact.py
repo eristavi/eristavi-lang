@@ -21,8 +21,8 @@ from .universal_ir import (
 )
 
 OBJECT_SCHEMA = "eristavi.module-object"
-OBJECT_VERSION = 2
-OBJECT_IR = "universal-ir-v2"
+OBJECT_VERSION = 3
+OBJECT_IR = "universal-ir-v3"
 
 
 def _value(v: UValue | None):
@@ -158,13 +158,19 @@ class ModuleObjectArtifact:
     dependencies: tuple[str, ...]
     functions: tuple[UFunction, ...]
     types: tuple[UType, ...] = ()
+    # Bootstrap reusable-generic template. It is stored only for modules that
+    # export inferred-generic functions. The source language still has no
+    # generic syntax: downstream concrete specializations are requested from
+    # the serialized interface contract, then compiled from this implementation
+    # template after the original `.eri` file has been removed.
+    generic_source: str | None = None
     unicode_version: str = UNICODE_VERSION
     schema: str = OBJECT_SCHEMA
     version: int = OBJECT_VERSION
     ir: str = OBJECT_IR
 
     def to_data(self) -> dict[str, Any]:
-        return {
+        data = {
             "schema": self.schema,
             "version": self.version,
             "ir": self.ir,
@@ -175,6 +181,12 @@ class ModuleObjectArtifact:
             "types": [_type(item) for item in self.types],
             "functions": [function_to_data(fn) for fn in self.functions],
         }
+        if self.generic_source is not None:
+            data["generic_template"] = {
+                "kind": "eristavi-source-v1",
+                "source": self.generic_source,
+            }
+        return data
 
     def to_json(self) -> str:
         return json.dumps(self.to_data(), ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n"
@@ -195,12 +207,19 @@ class ModuleObjectArtifact:
             raise ValueError(
                 f"object requires Unicode {data.get('unicode')}, toolchain uses {UNICODE_VERSION}"
             )
+        template = data.get("generic_template")
+        generic_source = None
+        if template is not None:
+            if not isinstance(template, dict) or template.get("kind") != "eristavi-source-v1":
+                raise ValueError("unsupported Eristavi generic object template")
+            generic_source = str(template.get("source", ""))
         return cls(
             str(data["module"]),
             str(data["interface_digest"]),
             tuple(str(x) for x in data.get("dependencies", ())),
             tuple(function_from_data(x) for x in data.get("functions", ())),
             tuple(_type(x) if isinstance(x, UType) else _type_from(x) for x in data.get("types", ())),
+            generic_source,
             str(data["unicode"]),
             str(data["schema"]),
             int(data["version"]),
