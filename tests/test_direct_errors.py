@@ -66,8 +66,10 @@ class DirectCheckedErrorTests(unittest.TestCase):
         p = self.compile_run(
             'error E { message Text; } '
             'function value(ok Bool) returns Int fails E { if ok { return 7; } fail E { message="no"; }; } '
+            'function run() { '
             'value(false) else error { output(error.message); }; '
-            'let x be value(true) else error { output("failure"); }; output(x);'
+            'let x be value(true) else error { output("failure"); return; }; output(x); } '
+            'run();'
         )
         self.assertEqual(p.returncode, 0, p.stderr)
         self.assertEqual(p.stdout, "no\n7\n")
