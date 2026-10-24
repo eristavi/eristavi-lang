@@ -116,7 +116,7 @@ function appendNode(nodes, kind Int, tokenIndex Int, first Int, second Int, thir
 
 function appendSibling(nodes, last Int, child Int) {
     if last >= 0 {
-        return ast.link(nodes, last, child);
+        return ast.link(nodes, last, child, nodes[last]);
     }
     return nodes;
 }
@@ -133,9 +133,9 @@ function qualifiedIdentifier(tokens, state identity parser_state.ParserState, me
 
 function parseTypeRef(tokens, state identity parser_state.ParserState, nodes) fails diagnostic.ParseError {
     let start be state.index;
-    let maybe be match(tokens, state, token.maybeKeyword());
-    let identity be match(tokens, state, token.identityKeyword());
-    if identity and check(tokens, state, token.maybeKeyword()) {
+    let isMaybe be match(tokens, state, token.maybeKeyword());
+    let isIdentity be match(tokens, state, token.identityKeyword());
+    if isIdentity and check(tokens, state, token.maybeKeyword()) {
         let found be current(tokens, state);
         fail diagnostic.ParseError {
             message = "use 'maybe identity T', not 'identity maybe T'";
@@ -145,8 +145,8 @@ function parseTypeRef(tokens, state identity parser_state.ParserState, nodes) fa
     }
     let path be try qualifiedIdentifier(tokens, state, "expected type name");
     let flags be 0;
-    if maybe { flags = flags + 1; }
-    if identity { flags = flags + 2; }
+    if isMaybe { flags = flags + 1; }
+    if isIdentity { flags = flags + 2; }
     return appendNode(nodes, ast.typeRef(), start, -1, -1, -1, path, flags, false);
 }
 
@@ -504,7 +504,7 @@ function parseImport(tokens, state identity parser_state.ParserState, nodes, sta
     return appendNode(nodes, ast.importDecl(), start, aliasNode, -1, -1, path, 0, false);
 }
 
-function parseTypeDeclaration(tokens, state identity parser_state.ParserState, nodes, start Int, public Bool) fails diagnostic.ParseError {
+function parseTypeDeclaration(tokens, state identity parser_state.ParserState, nodes, start Int, exported Bool) fails diagnostic.ParseError {
     let name be try consume(tokens, state, token.identifier(), "expected type name");
     try consume(tokens, state, token.leftBrace(), "expected '{' after type name");
     let first be -1;
@@ -515,22 +515,22 @@ function parseTypeDeclaration(tokens, state identity parser_state.ParserState, n
             fail diagnostic.ParseError { message = "unterminated type declaration"; line = found.line; column = found.column; };
         }
         let fieldStart be state.index;
-        let fixed be match(tokens, state, token.fixedKeyword());
+        let isFixed be match(tokens, state, token.fixedKeyword());
         let field be try consume(tokens, state, token.identifier(), "expected field name");
         nodes = try parseTypeRef(tokens, state, nodes);
         let typeNode be ast.root(nodes);
         try consume(tokens, state, token.semicolon(), "expected ';' after field declaration");
-        nodes = appendNode(nodes, ast.fieldDecl(), fieldStart, typeNode, -1, -1, field.value, 0, fixed);
+        nodes = appendNode(nodes, ast.fieldDecl(), fieldStart, typeNode, -1, -1, field.value, 0, isFixed);
         let fieldNode be ast.root(nodes);
         if first < 0 { first = fieldNode; }
         nodes = appendSibling(nodes, last, fieldNode);
         last = fieldNode;
     }
     advance(tokens, state);
-    return appendNode(nodes, ast.typeDecl(), start, first, -1, -1, name.value, 0, public);
+    return appendNode(nodes, ast.typeDecl(), start, first, -1, -1, name.value, 0, exported);
 }
 
-function parseErrorDeclaration(tokens, state identity parser_state.ParserState, nodes, start Int, public Bool) fails diagnostic.ParseError {
+function parseErrorDeclaration(tokens, state identity parser_state.ParserState, nodes, start Int, exported Bool) fails diagnostic.ParseError {
     let name be try consume(tokens, state, token.identifier(), "expected error name");
     try consume(tokens, state, token.leftBrace(), "expected '{' after error name");
     let first be -1;
@@ -552,10 +552,10 @@ function parseErrorDeclaration(tokens, state identity parser_state.ParserState, 
         last = fieldNode;
     }
     advance(tokens, state);
-    return appendNode(nodes, ast.errorDecl(), start, first, -1, -1, name.value, 0, public);
+    return appendNode(nodes, ast.errorDecl(), start, first, -1, -1, name.value, 0, exported);
 }
 
-function parseFunctionDeclaration(tokens, state identity parser_state.ParserState, nodes, types, aliases, start Int, public Bool) fails diagnostic.ParseError {
+function parseFunctionDeclaration(tokens, state identity parser_state.ParserState, nodes, types, aliases, start Int, exported Bool) fails diagnostic.ParseError {
     let name be try consume(tokens, state, token.identifier(), "expected function name");
     try consume(tokens, state, token.leftParen(), "expected '(' after function name");
     let firstParam be -1;
@@ -606,7 +606,7 @@ function parseFunctionDeclaration(tokens, state identity parser_state.ParserStat
     try consume(tokens, state, token.leftBrace(), "expected '{' before function body");
     nodes = try parseBlockAfterOpen(tokens, state, nodes, types, aliases, bodyStart);
     let body be ast.root(nodes);
-    return appendNode(nodes, ast.functionDecl(), start, firstParam, returnType, body, name.value, firstFailure, public);
+    return appendNode(nodes, ast.functionDecl(), start, firstParam, returnType, body, name.value, firstFailure, exported);
 }
 
 function parseReturn(tokens, state identity parser_state.ParserState, nodes, types, aliases, start Int) fails diagnostic.ParseError {
@@ -627,7 +627,7 @@ function parseFail(tokens, state identity parser_state.ParserState, nodes, types
 }
 
 function parseLet(tokens, state identity parser_state.ParserState, nodes, types, aliases, start Int) fails diagnostic.ParseError {
-    let fixed be match(tokens, state, token.fixedKeyword());
+    let isFixed be match(tokens, state, token.fixedKeyword());
     let name be try consume(tokens, state, token.identifier(), "expected binding name after 'let'");
     let typeNode be -1;
     if not check(tokens, state, token.beKeyword()) {
@@ -638,7 +638,7 @@ function parseLet(tokens, state identity parser_state.ParserState, nodes, types,
     nodes = try parseValueExpression(tokens, state, nodes, types, aliases);
     let value be ast.root(nodes);
     try consume(tokens, state, token.semicolon(), "expected ';' after binding declaration");
-    return appendNode(nodes, ast.letStmt(), start, typeNode, value, -1, name.value, 0, fixed);
+    return appendNode(nodes, ast.letStmt(), start, typeNode, value, -1, name.value, 0, isFixed);
 }
 
 function parseIf(tokens, state identity parser_state.ParserState, nodes, types, aliases, start Int) fails diagnostic.ParseError {
