@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from .diagnostics import SemanticError
-from .semantic import Analyzer as BaseAnalyzer
-from .syntax import IndexExpr, MemberExpr
+from .semantic import Analyzer as BaseAnalyzer, STD_FILE_ERROR
+from .syntax import CallExpr, IndexExpr, MemberExpr, NameExpr
 from .typesys import (
+    BOOL,
     INT,
+    NO_VALUE,
     TEXT,
     TEXT_BYTES,
     TEXT_CHARACTERS,
@@ -15,13 +17,7 @@ from .typesys import (
 
 
 class Analyzer(BaseAnalyzer):
-    """Frontend analyzer extensions for the frozen Unicode Text-view model.
-
-    The public language still exposes only Text and Int.  The three view types
-    below are compiler-internal semantic markers used to make
-    text.characters/scalars/bytes explicit without inventing new source-level
-    Character, Scalar, or Byte type names.
-    """
+    """Frontend extensions for pinned Unicode/Text and small stdlib additions."""
 
     def _member(self, expr, allow_checked):
         bt = resolve(self._expr(expr.base, True, allow_checked))
@@ -44,6 +40,27 @@ class Analyzer(BaseAnalyzer):
             )
 
         return super()._member(expr, allow_checked)
+
+    def _call(self, expr: CallExpr, value_required, allow_checked):
+        if (
+            isinstance(expr.callee, MemberExpr)
+            and isinstance(expr.callee.base, NameExpr)
+            and expr.callee.base.name in self.imports
+            and self.imports[expr.callee.base.name] == ("std", "files")
+            and expr.callee.name in ("exists", "remove")
+        ):
+            if len(expr.arguments) != 1:
+                raise SemanticError(f"files.{expr.callee.name}(path) takes one Text argument", expr.location)
+            path_type = self._expr(expr.arguments[0], True, allow_checked)
+            self._require_type(path_type, TEXT, expr.arguments[0].location, f"files.{expr.callee.name}(path) requires Text")
+            failures = {STD_FILE_ERROR}
+            if not allow_checked:
+                raise SemanticError(
+                    f"files.{expr.callee.name}(path) may fail with std.files.FileError; handle it with 'else error' or propagate it with 'try'",
+                    expr.location,
+                )
+            return self._record(expr, BOOL if expr.callee.name == "exists" else NO_VALUE, failures)
+        return super()._call(expr, value_required, allow_checked)
 
     def _expr(self, expr, value_required=True, allow_checked=False):
         if isinstance(expr, IndexExpr):
