@@ -1,37 +1,109 @@
 from __future__ import annotations
 
-from .universal_ir import BOOL, F64, I64, UInstruction
+from .universal_ir import BOOL, F64, I64, UFunction, UInstruction
 from .x86_64_direct_backend import X86_64DirectLinuxBackend
 
 
 class X86_64GCLinuxBackend(X86_64DirectLinuxBackend):
     """Direct backend with bootstrap automatic memory reclamation.
 
-    All compiler/runtime malloc/free/realloc calls are routed through a tracked
-    non-moving heap. Collection happens only at compiler-known safe points after
-    a heap-producing Universal-IR result has been spilled to its stack slot, so
-    helper routines can freely construct nested graphs without exposing
-    half-built objects to a collector.
+    All compiler/runtime malloc/free/realloc calls are routed through a tracked,
+    non-moving mark-and-sweep heap. Each compiled function links a root frame
+    containing the addresses of its heap-typed Eristavi locals. Collection is
+    performed only after `store_local`, a compiler-known statement boundary at
+    which newly produced heap values have reached a rooted local and transient
+    Universal-IR values are no longer required by the completed store.
 
-    The current collector has precise allocation boundaries and exact pointer
-    identity, while root/heap discovery scans machine words conservatively. This
-    is safe and already reclaims unreachable graphs, but it intentionally leaves
-    fully typed/precise root maps as the next production-hardening step.
-    Deterministic external resources remain outside GC ownership.
+    Root discovery is therefore compiler-described rather than a blind machine
+    stack scan. Heap payload traversal still recognizes child allocations by
+    exact tracked pointer identity while scanning payload words; typed heap
+    descriptor masks remain a later production refinement. Deterministic
+    external resources remain separate from GC ownership.
     """
+
+    def __init__(self):
+        super().__init__()
+        self.gc_root_base_offset: int | None = None
 
     @staticmethod
     def _heap_type(type_name: str) -> bool:
         return type_name not in (I64, F64, BOOL, "void")
 
-    def _store_result(self, instruction: UInstruction, register: str = "%rax") -> None:
-        super()._store_result(instruction, register)
-        if instruction.result is not None and self._heap_type(instruction.result.type_name):
-            self.lines.append("    call .Leri_gc_collect")
+    def _function(self, fn: UFunction) -> None:
+        # This mirrors the base System-V frame layout and extends it with a
+        # linked compiler root frame: [prev, count, &root0, &root1, ...].
+        self.fn = fn
+        symbol = self._symbol(fn.name)
+        total_slots = len(fn.locals) + fn.value_count
+        save_count = len(self.CALLEE_SAVED)
+        root_locals = [local for local in fn.locals if self._heap_type(local.type_name)]
+        root_words = 2 + len(root_locals)
+        frame_words = total_slots + save_count + root_words
+        frame = ((frame_words * 8 + 15) // 16) * 16
+        self.saved_offsets = {
+            register: -8 * (total_slots + index + 1)
+            for index, register in enumerate(self.CALLEE_SAVED)
+        }
+        self.gc_root_base_offset = -8 * frame_words
 
-    def _store_result_f64(self, instruction: UInstruction, register: str = "%xmm0") -> None:
-        # Floating-point values are never heap roots.
-        super()._store_result_f64(instruction, register)
+        self.lines.extend([
+            f".globl {symbol}", f".type {symbol},@function", f"{symbol}:",
+            "    pushq %rbp", "    movq %rsp, %rbp",
+        ])
+        if frame:
+            self.lines.append(f"    subq ${frame}, %rsp")
+        for register in self.CALLEE_SAVED:
+            self.lines.append(f"    movq {register}, {self.saved_offsets[register]}(%rbp)")
+
+        base = self.gc_root_base_offset
+        self.lines.extend([
+            "    movq .Leri_gc_root_head(%rip), %rax",
+            f"    movq %rax, {base}(%rbp)",
+            f"    movq ${len(root_locals)}, {base + 8}(%rbp)",
+        ])
+        for index, local in enumerate(root_locals):
+            # Zero the root itself before linking the frame so future lexical
+            # locals cannot accidentally retain an allocation before execution
+            # reaches their declaration.
+            self.lines.append(f"    movq $0, {self._local_offset(local.id)}(%rbp)")
+            self.lines.append(f"    leaq {self._local_offset(local.id)}(%rbp), %rax")
+            self.lines.append(f"    movq %rax, {base + 16 + index * 8}(%rbp)")
+        self.lines.extend([
+            f"    leaq {base}(%rbp), %rax",
+            "    movq %rax, .Leri_gc_root_head(%rip)",
+        ])
+
+        locations, _ = self._arg_locations([p.type_name for p in fn.parameters])
+        for param, (kind, index) in zip(fn.parameters, locations):
+            dst = self._local_offset(param.id)
+            if kind == "gp":
+                self.lines.append(f"    movq {self.GP_ARGS[index]}, {dst}(%rbp)")
+            elif kind == "xmm":
+                self.lines.append(f"    movsd {self.XMM_ARGS[index]}, {dst}(%rbp)")
+            else:
+                src = 16 + index * 8
+                self.lines.append(f"    movq {src}(%rbp), %rax")
+                self.lines.append(f"    movq %rax, {dst}(%rbp)")
+
+        for block in fn.blocks:
+            self._block(block)
+        self.lines.append(f".size {symbol},.-{symbol}")
+
+    def _restore_saved(self) -> None:
+        if self.gc_root_base_offset is None:
+            raise ValueError("GC root frame is not initialized")
+        self.lines.extend([
+            f"    movq {self.gc_root_base_offset}(%rbp), %rax",
+            "    movq %rax, .Leri_gc_root_head(%rip)",
+        ])
+        super()._restore_saved()
+
+    def _instruction(self, ins: UInstruction) -> None:
+        super()._instruction(ins)
+        if ins.op == "store_local":
+            # Safe point: all function root frames are linked and the value just
+            # stored is visible through its declared local slot.
+            self.lines.append("    call .Leri_gc_collect")
 
     def emit(self, program) -> str:
         assembly = super().emit(program)
@@ -42,16 +114,6 @@ class X86_64GCLinuxBackend(X86_64DirectLinuxBackend):
         assembly = assembly.replace("call malloc@PLT", "call .Leri_gc_alloc")
         assembly = assembly.replace("call free@PLT", "call .Leri_gc_free")
         assembly = assembly.replace("call realloc@PLT", "call .Leri_gc_realloc")
-
-        main_prologue = "main:\n    pushq %rbp\n    movq %rsp, %rbp"
-        if main_prologue in assembly:
-            assembly = assembly.replace(
-                main_prologue,
-                main_prologue + "\n    movq %rbp, .Leri_gc_stack_bottom(%rip)",
-                1,
-            )
-        else:
-            raise ValueError("direct GC backend could not locate entry stack frame")
 
         marker = '.section .note.GNU-stack,"",@progbits'
         runtime = self._gc_runtime()
@@ -66,7 +128,7 @@ class X86_64GCLinuxBackend(X86_64DirectLinuxBackend):
 .align 8
 .Leri_gc_head:
     .quad 0
-.Leri_gc_stack_bottom:
+.Leri_gc_root_head:
     .quad 0
 .Leri_gc_allocations:
     .quad 0
@@ -187,7 +249,7 @@ class X86_64GCLinuxBackend(X86_64DirectLinuxBackend):
     ret
 .Leri_gc_free_unknown:
     # Runtime code should never ask the tracked allocator to free an unknown
-    # payload. Ignore it rather than risking freeing a static/foreign pointer.
+    # payload. Ignore it rather than risking a static/foreign pointer.
     leave
     ret
 
@@ -227,28 +289,39 @@ class X86_64GCLinuxBackend(X86_64DirectLinuxBackend):
     leave
     ret
 
-# Mark roots by scanning active machine stack words for exact tracked payload
-# pointers, then sweep unmarked headers. Collection occurs only at explicit
-# compiler safe points after heap results have been spilled.
+# Walk compiler-emitted root frames, mark checked-error globals, then sweep.
 .Leri_gc_collect:
     pushq %rbp
     movq %rsp, %rbp
-    subq $64, %rsp
+    subq $80, %rsp
     incq .Leri_gc_collections(%rip)
-    leaq 16(%rbp), %rax
+    movq .Leri_gc_root_head(%rip), %rax
     movq %rax, -8(%rbp)
-    movq .Leri_gc_stack_bottom(%rip), %rax
-    movq %rax, -16(%rbp)
-.Leri_gc_root_loop:
+.Leri_gc_frame_loop:
     movq -8(%rbp), %rax
+    testq %rax, %rax
+    je .Leri_gc_globals
+    movq 8(%rax), %rcx
+    movq %rcx, -16(%rbp)
+    movq $0, -24(%rbp)
+.Leri_gc_frame_roots:
+    movq -24(%rbp), %rax
     cmpq -16(%rbp), %rax
-    ja .Leri_gc_roots_done
-    movq (%rax), %rdi
+    jae .Leri_gc_next_frame
+    movq -8(%rbp), %rcx
+    movq 16(%rcx,%rax,8), %rdx
+    movq (%rdx), %rdi
     call .Leri_gc_mark
-    addq $8, -8(%rbp)
-    jmp .Leri_gc_root_loop
-.Leri_gc_roots_done:
-    # Checked-error globals are roots outside the ordinary stack.
+    incq -24(%rbp)
+    jmp .Leri_gc_frame_roots
+.Leri_gc_next_frame:
+    movq -8(%rbp), %rax
+    movq 0(%rax), %rax
+    movq %rax, -8(%rbp)
+    jmp .Leri_gc_frame_loop
+
+.Leri_gc_globals:
+    # Checked-error globals are roots outside ordinary function locals.
     movq .Leri_error_value(%rip), %rdi
     call .Leri_gc_mark
     movq .Leri_error_message(%rip), %rdi
@@ -263,9 +336,9 @@ class X86_64GCLinuxBackend(X86_64DirectLinuxBackend):
     je .Leri_gc_sweep_done
     cmpq $0, 16(%rax)
     jne .Leri_gc_keep
-    movq %rax, -24(%rbp)
+    movq %rax, -32(%rbp)
     movq 0(%rax), %rdx
-    movq %rdx, -32(%rbp)
+    movq %rdx, -40(%rbp)
     testq %rcx, %rcx
     je .Leri_gc_sweep_head
     movq %rdx, 0(%rcx)
@@ -273,10 +346,10 @@ class X86_64GCLinuxBackend(X86_64DirectLinuxBackend):
 .Leri_gc_sweep_head:
     movq %rdx, .Leri_gc_head(%rip)
 .Leri_gc_sweep_free:
-    movq -24(%rbp), %rdi
+    movq -32(%rbp), %rdi
     call free@PLT
     incq .Leri_gc_reclaimed(%rip)
-    movq -32(%rbp), %rax
+    movq -40(%rbp), %rax
     jmp .Leri_gc_sweep_loop
 .Leri_gc_keep:
     movq $0, 16(%rax)
