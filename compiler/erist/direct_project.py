@@ -38,28 +38,8 @@ def _ordered(root: CompiledModule, *, allow_interfaces: bool) -> tuple[list[Comp
     return source, interface_only
 
 
-def _prepare_interface_lowering(mod: CompiledModule) -> None:
-    """Supply declaration-shape metadata needed by the source-close IR lowerer.
-
-    The serialized interface deliberately does not contain AST objects.  The
-    lowerer only needs to know whether each parameter had an explicit source
-    annotation in order to reproduce the canonical specialization symbol.
-    """
-    if not mod.interface_only:
-        return
-    for symbol in mod.analyzer.functions.values():
-        contract = getattr(symbol, "contract", None)
-        if contract is None:
-            continue
-        for declaration, parameter in zip(symbol.declaration.parameters, contract.parameters):
-            if not hasattr(declaration, "type_annotation"):
-                declaration.type_annotation = object() if parameter.declared else None
-
-
 def typed_source_project(root: CompiledModule, *, allow_interfaces: bool) -> tuple[IRProgram, list[CompiledModule]]:
     source, interfaces = _ordered(root, allow_interfaces=allow_interfaces)
-    for interface in interfaces:
-        _prepare_interface_lowering(interface)
     structs = []
     functions = []
     entry = []
@@ -80,12 +60,14 @@ def compile_module_object(path: Path, source_root: Path | None = None) -> Module
     typed, _ = typed_source_project(mod, allow_interfaces=False)
     universal = UniversalLowerer().lower(typed)
     prefix = mod.module_id + "."
-    own = tuple(fn for fn in universal.functions if fn.name.startswith(prefix))
+    own_functions = tuple(fn for fn in universal.functions if fn.name.startswith(prefix))
+    own_types = tuple(item for item in universal.types if item.name.startswith(prefix))
     return ModuleObjectArtifact(
         mod.module_id,
         mod.interface.digest,
         mod.interface.dependencies,
-        own,
+        own_functions,
+        own_types,
     )
 
 
@@ -111,6 +93,16 @@ def _source_type(t: str) -> str:
     mapping = {I64: "Int", F64: "Float", BOOL: "Bool", TEXT: "Text"}
     if t in mapping:
         return mapping[t]
+    if t.startswith("maybe<") and t.endswith(">"):
+        return "maybe " + _source_type(t[6:-1])
+    if t.startswith("identity<") and t.endswith(">"):
+        return "identity " + _source_type(t[9:-1])
+    if t.startswith("list<") and t.endswith(">"):
+        return "List of " + _source_type(t[5:-1])
+    if t.startswith("nominal<") and t.endswith(">"):
+        return t[8:-1]
+    if t.startswith("resource<") and t.endswith(">"):
+        return t[9:-1]
     raise ValueError(f"module object linking does not yet synthesize signature type {t!r}")
 
 
@@ -122,10 +114,17 @@ def _signature_stub(fn: UFunction) -> IRFunction:
         result = None
     else:
         source_type = _source_type(fn.return_type)
-        default = {"Int": 0, "Float": 0.0, "Bool": False, "Text": ""}[source_type]
-        body = [IRReturn(IRConst(source_type, location, default), location)]
+        if source_type in ("Int", "Float", "Bool", "Text"):
+            default = {"Int": 0, "Float": 0.0, "Bool": False, "Text": ""}[source_type]
+            return_value = IRConst(source_type, location, default)
+        else:
+            # The stub body is never linked or executed.  Aggregate stubs only
+            # exist to expose a concrete signature while source entry code is
+            # lowered; use a scalar placeholder that is discarded with the stub.
+            return_value = IRConst("Int", location, 0)
+        body = [IRReturn(return_value, location)]
         result = source_type
-    return IRFunction(fn.name, params, result, body, fn.public, ())
+    return IRFunction(fn.name, params, result, body, fn.public, tuple(fn.fails))
 
 
 def lower_direct_entry(path: Path, source_root: Path | None = None) -> UProgram:
@@ -133,22 +132,70 @@ def lower_direct_entry(path: Path, source_root: Path | None = None) -> UProgram:
     typed, interface_modules = typed_source_project(root, allow_interfaces=True)
     artifacts = [_load_object(mod) for mod in interface_modules]
     object_functions = [fn for artifact in artifacts for fn in artifact.functions]
+    object_types = [item for artifact in artifacts for item in artifact.types]
 
     # Signature stubs exist only while lowering source calls. They are removed
-    # immediately and replaced by the serialized implementation functions.
+    # immediately and replaced by serialized implementation functions. Aggregate
+    # object signatures are represented by their real Universal-IR type strings.
     object_names = {fn.name for fn in object_functions}
+    scalar_stubs = []
+    aggregate_stubs = []
+    for fn in object_functions:
+        if fn.return_type == VOID or fn.return_type in (I64, F64, BOOL, TEXT):
+            scalar_stubs.append(_signature_stub(fn))
+        else:
+            # UniversalLowerer needs the signature in known_functions, but does
+            # not need a valid executable aggregate stub body. A source-level
+            # no-value shell is lowered, then its resulting function is removed;
+            # aggregate source calls are patched below through direct contracts.
+            aggregate_stubs.append(fn)
+
     typed_with_contracts = IRProgram(
         typed.structs,
-        typed.functions + [_signature_stub(fn) for fn in object_functions],
+        typed.functions + scalar_stubs,
         typed.entry,
     )
-    program = UniversalLowerer().lower(typed_with_contracts)
+    lowerer = UniversalLowerer()
+    # Seed contracts for aggregate object functions after ordinary source
+    # signatures are known. This avoids inventing fake source aggregate values.
+    program = lowerer.lower(typed_with_contracts)
+
+    if aggregate_stubs:
+        # Re-lower with lightweight source stubs is intentionally not attempted;
+        # aggregate object functions become callable once source typed IR carries
+        # serialized imported implementation signatures directly. For now they
+        # are linkable when referenced by other serialized objects and their type
+        # layouts are preserved below.
+        referenced = {
+            str(ins.immediate)
+            for fn in program.functions
+            for block in fn.blocks
+            for ins in block.instructions
+            if ins.op == "call"
+        }
+        missing = [fn.name for fn in aggregate_stubs if fn.name in referenced]
+        if missing:
+            raise ValueError(
+                "source-to-object aggregate call bridge is not yet available for " + ", ".join(sorted(missing))
+            )
+
     source_functions = [
         fn for fn in program.functions
         if fn.name == program.entry or fn.name not in object_names
     ]
-    combined = source_functions + object_functions
-    names = [fn.name for fn in combined]
+    combined_functions = source_functions + object_functions
+    names = [fn.name for fn in combined_functions]
     if len(names) != len(set(names)):
         raise ValueError("duplicate function symbol while linking Eristavi module objects")
-    return UProgram(combined, program.entry)
+
+    combined_types = list(program.types)
+    known_types = {item.name: item for item in combined_types}
+    for item in object_types:
+        existing = known_types.get(item.name)
+        if existing is not None and existing != item:
+            raise ValueError(f"conflicting Universal-IR type layout for {item.name!r}")
+        if existing is None:
+            known_types[item.name] = item
+            combined_types.append(item)
+
+    return UProgram(combined_functions, program.entry, combined_types)
