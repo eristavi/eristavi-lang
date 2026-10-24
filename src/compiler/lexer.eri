@@ -1,0 +1,238 @@
+import compiler.source;
+import compiler.token;
+import compiler.diagnostic;
+
+function failLex(message Text, line Int, column Int) fails diagnostic.LexError {
+    fail diagnostic.LexError {
+        message = message;
+        line = line;
+        column = column;
+    };
+}
+
+function isNonAsciiScalar(scalar Text) returns Bool {
+    return scalar.bytes.count > 1;
+}
+
+public function lex(input Text) fails diagnostic.LexError {
+    let tokens be [];
+    let i be 0;
+    let line be 1;
+    let column be 1;
+    let count be input.scalars.count;
+
+    while i < count {
+        let ch be source.scalarAt(input, i);
+
+        if source.isSourceWhitespace(ch) {
+            if ch == "\n" {
+                line = line + 1;
+                column = 1;
+            } else {
+                column = column + 1;
+            }
+            i = i + 1;
+        } else if ch == "/" and source.scalarAt(input, i + 1) == "/" {
+            i = i + 2;
+            column = column + 2;
+            while i < count and source.scalarAt(input, i) != "\n" {
+                i = i + 1;
+                column = column + 1;
+            }
+        } else if ch == "/" and source.scalarAt(input, i + 1) == "*" {
+            let startLine be line;
+            let startColumn be column;
+            let depth be 1;
+            i = i + 2;
+            column = column + 2;
+            while depth > 0 {
+                if i >= count {
+                    try failLex("unterminated block comment", startLine, startColumn);
+                }
+                let current be source.scalarAt(input, i);
+                let next be source.scalarAt(input, i + 1);
+                if current == "/" and next == "*" {
+                    depth = depth + 1;
+                    i = i + 2;
+                    column = column + 2;
+                } else if current == "*" and next == "/" {
+                    depth = depth - 1;
+                    i = i + 2;
+                    column = column + 2;
+                } else {
+                    if current == "\n" {
+                        line = line + 1;
+                        column = 1;
+                    } else {
+                        column = column + 1;
+                    }
+                    i = i + 1;
+                }
+            }
+        } else if ch == "\"" {
+            let startLine be line;
+            let startColumn be column;
+            let lexeme be "\"";
+            let value be "";
+            i = i + 1;
+            column = column + 1;
+            let closed be false;
+            while i < count and not closed {
+                let current be source.scalarAt(input, i);
+                if current == "\"" {
+                    lexeme = lexeme + current;
+                    i = i + 1;
+                    column = column + 1;
+                    closed = true;
+                } else if current == "\n" or current == "\r" {
+                    try failLex("Text literals may not contain a raw newline", startLine, startColumn);
+                } else if current == "\\" {
+                    let next be source.scalarAt(input, i + 1);
+                    if next == "\0" {
+                        try failLex("unterminated Text escape", startLine, startColumn);
+                    }
+                    lexeme = lexeme + current + next;
+                    if next == "n" { value = value + "\n"; }
+                    else if next == "r" { value = value + "\r"; }
+                    else if next == "t" { value = value + "\t"; }
+                    else if next == "0" { value = value + "\0"; }
+                    else if next == "\"" { value = value + "\""; }
+                    else if next == "\\" { value = value + "\\"; }
+                    else {
+                        try failLex("Stage-1 lexer does not yet decode this Text escape", line, column);
+                    }
+                    i = i + 2;
+                    column = column + 2;
+                } else {
+                    lexeme = lexeme + current;
+                    value = value + current;
+                    i = i + 1;
+                    column = column + 1;
+                }
+            }
+            if not closed {
+                try failLex("unterminated Text literal", startLine, startColumn);
+            }
+            tokens.add(token.make(token.text(), lexeme, value, startLine, startColumn));
+        } else if source.isAsciiDigit(ch) {
+            let startLine be line;
+            let startColumn be column;
+            let lexeme be "";
+            let kind be token.integer();
+
+            if ch == "0" and (source.scalarAt(input, i + 1) == "b" or source.scalarAt(input, i + 1) == "B") {
+                lexeme = "0" + source.scalarAt(input, i + 1);
+                i = i + 2;
+                column = column + 2;
+                if source.scalarAt(input, i) != "0" and source.scalarAt(input, i) != "1" {
+                    try failLex("binary literal requires digits", startLine, startColumn);
+                }
+                while source.scalarAt(input, i) == "0" or source.scalarAt(input, i) == "1" or source.scalarAt(input, i) == "_" {
+                    lexeme = lexeme + source.scalarAt(input, i);
+                    i = i + 1;
+                    column = column + 1;
+                }
+            } else if ch == "0" and (source.scalarAt(input, i + 1) == "x" or source.scalarAt(input, i + 1) == "X") {
+                lexeme = "0" + source.scalarAt(input, i + 1);
+                i = i + 2;
+                column = column + 2;
+                if not source.isAsciiHexDigit(source.scalarAt(input, i)) {
+                    try failLex("hexadecimal literal requires digits", startLine, startColumn);
+                }
+                while source.isAsciiHexDigit(source.scalarAt(input, i)) or source.scalarAt(input, i) == "_" {
+                    lexeme = lexeme + source.scalarAt(input, i);
+                    i = i + 1;
+                    column = column + 1;
+                }
+            } else {
+                while source.isAsciiDigit(source.scalarAt(input, i)) or source.scalarAt(input, i) == "_" {
+                    lexeme = lexeme + source.scalarAt(input, i);
+                    i = i + 1;
+                    column = column + 1;
+                }
+                if source.scalarAt(input, i) == "." and source.isAsciiDigit(source.scalarAt(input, i + 1)) {
+                    kind = token.float();
+                    lexeme = lexeme + ".";
+                    i = i + 1;
+                    column = column + 1;
+                    while source.isAsciiDigit(source.scalarAt(input, i)) or source.scalarAt(input, i) == "_" {
+                        lexeme = lexeme + source.scalarAt(input, i);
+                        i = i + 1;
+                        column = column + 1;
+                    }
+                }
+                if source.scalarAt(input, i) == "e" or source.scalarAt(input, i) == "E" {
+                    kind = token.float();
+                    lexeme = lexeme + source.scalarAt(input, i);
+                    i = i + 1;
+                    column = column + 1;
+                    if source.scalarAt(input, i) == "+" or source.scalarAt(input, i) == "-" {
+                        lexeme = lexeme + source.scalarAt(input, i);
+                        i = i + 1;
+                        column = column + 1;
+                    }
+                    if not source.isAsciiDigit(source.scalarAt(input, i)) {
+                        try failLex("Float exponent requires decimal digits", line, column);
+                    }
+                    while source.isAsciiDigit(source.scalarAt(input, i)) or source.scalarAt(input, i) == "_" {
+                        lexeme = lexeme + source.scalarAt(input, i);
+                        i = i + 1;
+                        column = column + 1;
+                    }
+                }
+            }
+            tokens.add(token.make(kind, lexeme, lexeme, startLine, startColumn));
+        } else if source.isAsciiIdentifierStart(ch) {
+            let startLine be line;
+            let startColumn be column;
+            let name be "";
+            while source.isAsciiIdentifierContinue(source.scalarAt(input, i)) {
+                name = name + source.scalarAt(input, i);
+                i = i + 1;
+                column = column + 1;
+            }
+            tokens.add(token.make(token.keywordKind(name), name, name, startLine, startColumn));
+        } else if isNonAsciiScalar(ch) {
+            try failLex("Stage-1 self-host lexer requires the frozen Unicode identifier service for non-ASCII source", line, column);
+        } else {
+            let startLine be line;
+            let startColumn be column;
+            let next be source.scalarAt(input, i + 1);
+            let pair be ch + next;
+            let kind be -1;
+            let width be 1;
+            if pair == "==" { kind = token.equalEqual(); width = 2; }
+            else if pair == "!=" { kind = token.bangEqual(); width = 2; }
+            else if pair == "<=" { kind = token.lessEqual(); width = 2; }
+            else if pair == ">=" { kind = token.greaterEqual(); width = 2; }
+            else if ch == ";" { kind = token.semicolon(); }
+            else if ch == "," { kind = token.comma(); }
+            else if ch == "." { kind = token.dot(); }
+            else if ch == "(" { kind = token.leftParen(); }
+            else if ch == ")" { kind = token.rightParen(); }
+            else if ch == "{" { kind = token.leftBrace(); }
+            else if ch == "}" { kind = token.rightBrace(); }
+            else if ch == "[" { kind = token.leftBracket(); }
+            else if ch == "]" { kind = token.rightBracket(); }
+            else if ch == "=" { kind = token.equal(); }
+            else if ch == "+" { kind = token.plus(); }
+            else if ch == "-" { kind = token.minus(); }
+            else if ch == "*" { kind = token.star(); }
+            else if ch == "/" { kind = token.slash(); }
+            else if ch == "%" { kind = token.percent(); }
+            else if ch == "<" { kind = token.less(); }
+            else if ch == ">" { kind = token.greater(); }
+            else {
+                try failLex("unexpected source character", line, column);
+            }
+            let spelling be ch;
+            if width == 2 { spelling = pair; }
+            tokens.add(token.make(kind, spelling, spelling, startLine, startColumn));
+            i = i + width;
+            column = column + width;
+        }
+    }
+
+    tokens.add(token.make(token.eof(), "", "", line, column));
+    return tokens;
+}

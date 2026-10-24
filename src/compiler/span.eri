@@ -1,0 +1,13 @@
+import compiler.source;
+
+public type SourceSpan {
+    start source.SourceLocation;
+    end source.SourceLocation;
+}
+
+public function make(start source.SourceLocation, end source.SourceLocation) returns SourceSpan {
+    return SourceSpan {
+        start = start;
+        end = end;
+    };
+}
