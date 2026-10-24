@@ -197,7 +197,6 @@ class Lowerer:
         if isinstance(e,IdentityExpr): return IRIdentity(semantic_t,e.location,self._expr(e.value))
         if isinstance(e,UnaryExpr): return IRUnary(semantic_t,e.location,e.operator,self._expr(e.operand))
         if isinstance(e,BinaryExpr):
-            if semantic_t=="Text" and e.operator=="+": raise SemanticError("Text concatenation is not yet lowered by the current C backend",e.location)
             left=self._expr(e.left); right=self._expr(e.right)
             if e.operator in ("==","!="):
                 if left.type_name.startswith("maybe ") and right.type_name==maybe_inner(left.type_name): right=self._coerce(right,left.type_name,e.location)
@@ -229,8 +228,9 @@ class Lowerer:
     def _supported_type(t,loc):
         if t in ("Int","Float","Bool","Text","no-value"): return
         if t.startswith("List of "):
-            if list_inner(t) in ("Int","Float","Bool","Text"): return
-            raise SemanticError(f"the current C backend supports Lists of scalar values only, got {t}",loc)
+            inner=list_inner(t)
+            if inner.startswith("maybe "): raise SemanticError(f"the current C backend does not yet compile Lists of optional values: {t}",loc)
+            Lowerer._supported_type(inner,loc); return
         if t.startswith("maybe "):
             inner=maybe_inner(t)
             if inner.startswith("List of "): raise SemanticError(f"the current C backend does not yet compile optional Lists: {t}",loc)
