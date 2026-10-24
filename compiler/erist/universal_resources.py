@@ -9,9 +9,9 @@ from .ir import (
     STD_FILE,
     STD_FILE_ERROR,
 )
-from .ir_text import IRFileExists, IRFileRemove
+from .ir_text import IRFileExists, IRFileRemove, IRTextView, IRTextViewCount, IRTextViewIndex
 from .universal_checked import CheckedUniversalLowerer
-from .universal_ir import BOOL, TEXT, UBranch, UField, UProgram, UReturn, UType
+from .universal_ir import BOOL, I64, TEXT, UBranch, UField, UProgram, UReturn, UType
 
 
 class ResourceUniversalLowerer(CheckedUniversalLowerer):
@@ -76,6 +76,11 @@ class ResourceUniversalLowerer(CheckedUniversalLowerer):
             return f"resource<{STD_FILE}>"
         if source_type == STD_FILE_ERROR:
             return f"nominal<{STD_FILE_ERROR}>"
+        if source_type.startswith("Text ") and source_type.endswith(" view"):
+            kind = source_type[5:-5]
+            if kind not in ("bytes", "scalars", "characters"):
+                raise ValueError(f"unknown Text view kind {kind!r}")
+            return f"textview<{kind}>"
         return super()._map_type(source_type)
 
     def _emit_active_cleanups(self) -> None:
@@ -153,6 +158,38 @@ class ResourceUniversalLowerer(CheckedUniversalLowerer):
         super()._stmt(stmt)
 
     def _expr(self, expr):
+        if isinstance(expr, IRTextView):
+            base = self._expr(expr.base)
+            if base is None or base.type_name != TEXT:
+                raise ValueError("Text view requires Text")
+            result = self._emit(
+                "text_view",
+                f"textview<{expr.kind}>",
+                (base,),
+                immediate=expr.kind,
+            )
+            assert result is not None
+            return result
+
+        if isinstance(expr, IRTextViewCount):
+            view = self._expr(expr.view)
+            if view is None or not view.type_name.startswith("textview<"):
+                raise ValueError("Text view count requires a Text view")
+            result = self._emit("text_view_count", I64, (view,), immediate=view.type_name[9:-1])
+            assert result is not None
+            return result
+
+        if isinstance(expr, IRTextViewIndex):
+            view = self._expr(expr.view)
+            index = self._expr(expr.index)
+            if view is None or not view.type_name.startswith("textview<") or index is None or index.type_name != I64:
+                raise ValueError("Text view index is malformed")
+            kind = view.type_name[9:-1]
+            result_type = I64 if kind == "bytes" else TEXT
+            result = self._emit("text_view_index", result_type, (view, index), immediate=kind)
+            assert result is not None
+            return result
+
         if isinstance(expr, IRFileOpen):
             path = self._expr(expr.path)
             if path is None or path.type_name != TEXT:
