@@ -37,6 +37,16 @@ class BackendTests(unittest.TestCase):
         p=self.compile_run('let x be [1,2,3]; for item in x { output(item); }'); self.assertEqual(p.stdout,'1\n2\n3\n')
     def test_native_for_uses_stable_snapshot(self):
         p=self.compile_run('let x be [1,2]; for item in x { output(item); x.add(9); } output(x.count);'); self.assertEqual(p.stdout,'1\n2\n4\n')
+    def test_native_user_value_construction_and_fields(self):
+        p=self.compile_run('type User { name Text; age Int; } let u be User { name="Anna"; age=30; }; output(u.name); output(u.age);'); self.assertEqual(p.stdout,'Anna\n30\n')
+    def test_native_user_value_copy_is_independent(self):
+        p=self.compile_run('type User { name Text; } let first be User { name="Anna"; }; let second be first; second.name="Maria"; output(first.name); output(second.name);'); self.assertEqual(p.stdout,'Anna\nMaria\n')
+    def test_native_user_value_structural_equality(self):
+        p=self.compile_run('type User { name Text; age Int; } let a be User { name="Anna"; age=30; }; let b be User { name="Anna"; age=30; }; let c be User { name="Anna"; age=31; }; output(a==b); output(a==c);'); self.assertEqual(p.stdout,'true\nfalse\n')
+    def test_native_user_value_parameter_is_independent(self):
+        p=self.compile_run('type User { name Text; } function rename(user User) returns User { user.name="Maria"; return user; } let original be User { name="Anna"; }; let changed be rename(original); output(original.name); output(changed.name);'); self.assertEqual(p.stdout,'Anna\nMaria\n')
+    def test_native_nested_value_mutation(self):
+        p=self.compile_run('type Address { city Text; } type User { address Address; } let u be User { address=Address { city="Paphos"; }; }; u.address.city="Nicosia"; output(u.address.city);'); self.assertEqual(p.stdout,'Nicosia\n')
     def test_build_c_emits_source(self):
         with tempfile.TemporaryDirectory() as td:
             r=Path(td); src=r/'app.eri'; out=r/'app.c'; src.write_text('output(42);',encoding='utf-8'); self.assertEqual(build_c_file(src,out,r),0); self.assertIn('int main',out.read_text())
