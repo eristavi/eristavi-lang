@@ -7,7 +7,8 @@ from .ir import IRConst, IRFunction, IRParameter, IRProgram, IRReturn
 from .ir_text import Lowerer
 from .object_artifact import ModuleObjectArtifact
 from .project import CompiledModule, compile_entry, compile_module
-from .universal_ir import BOOL, F64, I64, TEXT, VOID, UFunction, UProgram, UniversalLowerer
+from .universal_ir import BOOL, F64, I64, TEXT, VOID, UFunction, UProgram
+from .universal_checked import CheckedUniversalLowerer
 
 
 def object_path(source_path: Path) -> Path:
@@ -58,7 +59,7 @@ def compile_module_object(path: Path, source_root: Path | None = None) -> Module
     if mod.interface_only:
         raise ValueError("cannot compile an implementation artifact without module source")
     typed, _ = typed_source_project(mod, allow_interfaces=False)
-    universal = UniversalLowerer().lower(typed)
+    universal = CheckedUniversalLowerer().lower(typed)
     prefix = mod.module_id + "."
     own_functions = tuple(fn for fn in universal.functions if fn.name.startswith(prefix))
     own_types = tuple(item for item in universal.types if item.name.startswith(prefix))
@@ -118,9 +119,6 @@ def _signature_stub(fn: UFunction) -> IRFunction:
             default = {"Int": 0, "Float": 0.0, "Bool": False, "Text": ""}[source_type]
             return_value = IRConst(source_type, location, default)
         else:
-            # The stub body is never linked or executed.  Aggregate stubs only
-            # exist to expose a concrete signature while source entry code is
-            # lowered; use a scalar placeholder that is discarded with the stub.
             return_value = IRConst("Int", location, 0)
         body = [IRReturn(return_value, location)]
         result = source_type
@@ -134,9 +132,6 @@ def lower_direct_entry(path: Path, source_root: Path | None = None) -> UProgram:
     object_functions = [fn for artifact in artifacts for fn in artifact.functions]
     object_types = [item for artifact in artifacts for item in artifact.types]
 
-    # Signature stubs exist only while lowering source calls. They are removed
-    # immediately and replaced by serialized implementation functions. Aggregate
-    # object signatures are represented by their real Universal-IR type strings.
     object_names = {fn.name for fn in object_functions}
     scalar_stubs = []
     aggregate_stubs = []
@@ -144,10 +139,6 @@ def lower_direct_entry(path: Path, source_root: Path | None = None) -> UProgram:
         if fn.return_type == VOID or fn.return_type in (I64, F64, BOOL, TEXT):
             scalar_stubs.append(_signature_stub(fn))
         else:
-            # UniversalLowerer needs the signature in known_functions, but does
-            # not need a valid executable aggregate stub body. A source-level
-            # no-value shell is lowered, then its resulting function is removed;
-            # aggregate source calls are patched below through direct contracts.
             aggregate_stubs.append(fn)
 
     typed_with_contracts = IRProgram(
@@ -155,17 +146,9 @@ def lower_direct_entry(path: Path, source_root: Path | None = None) -> UProgram:
         typed.functions + scalar_stubs,
         typed.entry,
     )
-    lowerer = UniversalLowerer()
-    # Seed contracts for aggregate object functions after ordinary source
-    # signatures are known. This avoids inventing fake source aggregate values.
-    program = lowerer.lower(typed_with_contracts)
+    program = CheckedUniversalLowerer().lower(typed_with_contracts)
 
     if aggregate_stubs:
-        # Re-lower with lightweight source stubs is intentionally not attempted;
-        # aggregate object functions become callable once source typed IR carries
-        # serialized imported implementation signatures directly. For now they
-        # are linkable when referenced by other serialized objects and their type
-        # layouts are preserved below.
         referenced = {
             str(ins.immediate)
             for fn in program.functions
