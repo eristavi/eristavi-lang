@@ -5,6 +5,14 @@ from dataclasses import dataclass
 from .universal_analysis import cfg_liveness, interference_graph, register_candidates
 from .universal_ir import BOOL, F64, I64, UFunction, UInstruction, UValue
 from .x86_64_backend import X86_64LinuxBackend
+from .x86_64_lowering_contracts import x86_lowering_contract
+
+
+# Keep the first production pool intentionally small and separate from the
+# scratch/ABI registers used by current lowering code. Per-lowering clobber
+# contracts decide whether a value may cross a particular instruction.
+ALLOCATABLE_GP_REGISTERS = ("%r10", "%r11")
+ALLOCATABLE_XMM_REGISTERS = ("%xmm8", "%xmm9")
 
 
 @dataclass(frozen=True)
@@ -14,120 +22,119 @@ class X86RegisterPlan:
     registers: dict[int, str]
 
 
-# These operations are guaranteed by the current composed x86 backend not to
-# call a helper/PLT routine after consuming their inputs. Any other instruction
-# is treated conservatively as a caller-saved-register clobber boundary.
-_REGISTER_SAFE_OPS = frozenset({
-    "const_i64",
-    "const_bool",
-    "const_f64",
-    "load_local",
-    "neg_checked",
-    "add_checked",
-    "sub_checked",
-    "mul_checked",
-    "div_checked",
-    "rem_checked",
-    "bool_not",
-    "cmp_eq",
-    "cmp_ne",
-    "cmp_lt",
-    "cmp_le",
-    "cmp_gt",
-    "cmp_ge",
-    "f64_neg",
-    "f64_add",
-    "f64_sub",
-    "f64_mul",
-    "f64_div",
-    "f64_cmp_eq",
-    "f64_cmp_ne",
-    "f64_cmp_lt",
-    "f64_cmp_le",
-    "f64_cmp_gt",
-    "f64_cmp_ge",
-})
+def _value_types(fn: UFunction) -> dict[int, str]:
+    result: dict[int, str] = {}
+    for block in fn.blocks:
+        for ins in block.instructions:
+            if ins.result is not None:
+                result[ins.result.id] = ins.result.type_name
+    return result
 
 
-def _caller_saved_survivors(fn: UFunction) -> frozenset[int]:
-    """Return values that may not live solely in caller-saved registers.
+def _forbidden_registers(fn: UFunction, value_types: dict[int, str]) -> dict[int, frozenset[str]]:
+    """Return physical registers each virtual value may not occupy.
 
-    An unsafe Universal-IR instruction is a machine-level clobber region, not a
-    single point. Its lowering may call helpers before all source operands have
-    been consumed. Therefore both values live beyond the instruction and the
-    instruction's own input operands must be stack-backed in this first phase.
+    A value that is live beyond an instruction must avoid every physical
+    register clobbered by that lowering. If a lowering can clobber registers
+    before consuming its source operands, those operands receive the same
+    restriction even when they die at the instruction.
+
+    Results are intentionally excluded from the instruction's own clobbers:
+    an operation whose contract marks a scalar result register-safe produces
+    that result after its final clobber.
     """
 
     liveness = cfg_liveness(fn)
-    blocked: set[int] = set()
+    forbidden: dict[int, set[str]] = {value_id: set() for value_id in value_types}
+
+    def add_clobbers(value_id: int, gp: frozenset[str], xmm: frozenset[str]) -> None:
+        type_name = value_types.get(value_id)
+        if type_name == F64:
+            forbidden.setdefault(value_id, set()).update(xmm)
+        elif type_name in {I64, BOOL}:
+            forbidden.setdefault(value_id, set()).update(gp)
+
     for block in fn.blocks:
         for index, ins in enumerate(block.instructions):
-            if ins.op in _REGISTER_SAFE_OPS:
-                continue
+            contract = x86_lowering_contract(ins.op)
             live_after = set(liveness.live_after_instruction[(block.name, index)])
             if ins.result is not None:
                 live_after.discard(ins.result.id)
-            blocked.update(live_after)
-            blocked.update(arg.id for arg in ins.args)
-    return frozenset(blocked)
+
+            for value_id in live_after:
+                add_clobbers(value_id, contract.gp_clobbers, contract.xmm_clobbers)
+
+            if not contract.operands_before_clobber:
+                for arg in ins.args:
+                    add_clobbers(arg.id, contract.gp_clobbers, contract.xmm_clobbers)
+
+    return {
+        value_id: frozenset(registers)
+        for value_id, registers in forbidden.items()
+    }
+
+
+def _validate_register_pool(registers: tuple[str, ...], allowed: tuple[str, ...], register_class: str) -> None:
+    invalid = [register for register in registers if register not in allowed]
+    if invalid:
+        raise ValueError(
+            f"x86 allocator {register_class} pool contains unaudited register(s): "
+            + ", ".join(invalid)
+        )
 
 
 def allocate_x86_registers(
     fn: UFunction,
-    gp_registers: tuple[str, ...] = ("%r10",),
-    xmm_registers: tuple[str, ...] = ("%xmm8",),
+    gp_registers: tuple[str, ...] = ALLOCATABLE_GP_REGISTERS,
+    xmm_registers: tuple[str, ...] = ALLOCATABLE_XMM_REGISTERS,
 ) -> X86RegisterPlan:
-    """Greedily color short-lived scalar values onto physical registers.
+    """Color short-lived scalar values onto audited physical registers.
 
-    This is deliberately a conservative first allocator:
+    Allocation combines three independent correctness constraints:
 
-    - only the existing short-lived scalar register candidates participate;
-    - the producing instruction must itself be a known call-free scalar op;
-    - inputs to complex/clobbering instructions remain stack-backed;
-    - values that survive any possible helper/PLT/GC clobber remain spilled;
-    - Int/Bool and Float use independent register classes;
-    - the existing CFG interference graph prevents overlapping values from
-      sharing the same physical register.
-
-    Restricting the defining operation is important. Higher-level operations
-    such as field/List/error extraction may return a scalar, but their backend
-    lowering participates in complex runtime/scratch-register sequences. Those
-    values remain stack-backed until the machine-lowering layer has explicit
-    register-use/clobber contracts for those operations.
+    1. Universal-IR CFG interference prevents simultaneously live virtual
+       values from sharing a physical register.
+    2. x86 lowering contracts forbid registers clobbered while a value is live
+       and protect operands of lowerings that clobber before consuming them.
+    3. only scalar results whose defining lowering explicitly permits register
+       residency are eligible.
 
     Stack slots remain allocated as a fallback representation in this phase.
-    Removing unused spill slots is a later frame-compaction step.
+    Dead spill-slot/frame compaction is intentionally deferred until the
+    machine-lowering contracts and broader register pool are fully established.
     """
+
+    _validate_register_pool(gp_registers, ALLOCATABLE_GP_REGISTERS, "GP")
+    _validate_register_pool(xmm_registers, ALLOCATABLE_XMM_REGISTERS, "XMM")
 
     graph = interference_graph(fn)
     candidates = set(register_candidates(fn))
-    blocked = _caller_saved_survivors(fn)
+    value_types = _value_types(fn)
+    forbidden_by_value = _forbidden_registers(fn, value_types)
 
-    value_types: dict[int, str] = {}
     defining_ops: dict[int, str] = {}
     for block in fn.blocks:
         for ins in block.instructions:
             if ins.result is not None:
-                value_types[ins.result.id] = ins.result.type_name
                 defining_ops[ins.result.id] = ins.op
 
     eligible = [
         value_id
         for value_id in candidates
-        if value_id not in blocked
-        and value_types.get(value_id) in {I64, BOOL, F64}
-        and defining_ops.get(value_id) in _REGISTER_SAFE_OPS
+        if value_types.get(value_id) in {I64, BOOL, F64}
+        and x86_lowering_contract(defining_ops.get(value_id, "")).scalar_result_register_safe
     ]
     eligible.sort(key=lambda value_id: (-len(graph.get(value_id, ())), value_id))
 
     assigned: dict[int, str] = {}
     for value_id in eligible:
         register_pool = xmm_registers if value_types[value_id] == F64 else gp_registers
-        forbidden = {
+        forbidden = set(forbidden_by_value.get(value_id, ()))
+        forbidden.update(
             assigned[neighbor]
             for neighbor in graph.get(value_id, ())
             if neighbor in assigned
-        }
+        )
         register = next((item for item in register_pool if item not in forbidden), None)
         if register is not None:
             assigned[value_id] = register
@@ -139,10 +146,10 @@ class X86_64RegisterLinuxBackend(X86_64LinuxBackend):
     """x86-64 backend layer with conservative physical register allocation.
 
     Register-resident scalar Universal-IR values bypass their spill-slot loads
-    and stores. The allocator currently uses caller-saved registers only for
-    values proven not to survive a possible call/GC clobber boundary. This
-    keeps the existing System-V ABI, precise-GC root model and composed runtime
-    helpers unchanged while establishing a real physical-register path.
+    and stores. The allocator uses CFG interference plus explicit machine
+    lowering clobber contracts, while the existing stack slots remain a safe
+    fallback. This preserves the System-V ABI, precise-GC root model and
+    composed runtime helpers while allowing a growing register-resident path.
     """
 
     def __init__(self):
