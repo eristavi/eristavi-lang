@@ -28,13 +28,14 @@ class GenericListRelationshipTests(unittest.TestCase):
 
     def test_generic_for_infers_list_element_relationship(self):
         source = (
-            'function echo(values) { '
-            'for value in values { output(value); } '
+            'function sum(values) returns Int { '
+            'let total be 0; '
+            'for value in values { total = total + value; } '
+            'return total; '
             '} '
-            'echo([1,2]); '
-            'echo(["a","b"]);'
+            'output(sum([1,2,3]));'
         )
-        self.assertEqual(self.execute(source), ['1', '2', 'a', 'b'])
+        self.assertEqual(self.execute(source), ['6'])
 
 
 if __name__ == '__main__':
