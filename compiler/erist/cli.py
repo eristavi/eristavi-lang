@@ -15,6 +15,7 @@ from .universal_ir import format_program
 from .x86_64_gc_precise import X86_64PreciseRootGCLinuxBackend
 from .arm64_backend import ARM64LinuxBackend
 from .direct_project import compile_module_object, lower_direct_entry, object_path
+from .build_cache import ArtifactBuilder
 
 def analyze_frontend(source:str):
     program=Parser(Lexer(source).lex()).parse(); analyzer=Analyzer(); analyzer.analyze(program); return program,analyzer
@@ -76,6 +77,16 @@ def emit_object(path:Path,output:Path|None=None,source_root:Path|None=None)->int
         artifact=compile_module_object(path,source_root)
         target=output or object_path(path)
         target.write_text(artifact.to_json(),encoding='utf-8')
+        return 0
+    except (EristaviError,OSError,ValueError) as e:
+        print(e.format() if isinstance(e,EristaviError) else f'error: {e}',file=sys.stderr); return 1
+
+def compile_cached_module(path:Path,source_root:Path|None=None,cache_dir:Path|None=None)->int:
+    try:
+        root=(source_root or path.parent).resolve()
+        result=ArtifactBuilder(root,cache_dir).build_module(path)
+        status='cache-hit' if result.cache_hit else 'compiled'
+        print(f"{status} {result.module_id} {result.key}")
         return 0
     except (EristaviError,OSError,ValueError) as e:
         print(e.format() if isinstance(e,EristaviError) else f'error: {e}',file=sys.stderr); return 1
@@ -154,9 +165,11 @@ def build_parser():
         c=sub.add_parser(name); c.add_argument('entry',type=Path); c.add_argument('--source-root',type=Path,default=None)
     interface=sub.add_parser('interface',help='emit a deterministic versioned module interface artifact'); interface.add_argument('module',type=Path); interface.add_argument('-o','--output',type=Path,default=None); interface.add_argument('--source-root',type=Path,default=None)
     obj=sub.add_parser('object',help='emit a linkable Universal-IR module implementation artifact'); obj.add_argument('module',type=Path); obj.add_argument('-o','--output',type=Path,default=None); obj.add_argument('--source-root',type=Path,default=None)
+    cm=sub.add_parser('compile-module',help='compile/cache a reusable module interface and implementation object'); cm.add_argument('module',type=Path); cm.add_argument('--source-root',type=Path,default=None); cm.add_argument('--cache-dir',type=Path,default=None)
     uir=sub.add_parser('uir',help='lower the direct-backend subset to Universal IR'); uir.add_argument('entry',type=Path); uir.add_argument('-o','--output',type=Path,required=True); uir.add_argument('--source-root',type=Path,default=None)
     asm=sub.add_parser('build-asm',help='emit direct CPU assembly from Universal IR'); asm.add_argument('entry',type=Path); asm.add_argument('-o','--output',type=Path,required=True); asm.add_argument('--source-root',type=Path,default=None); asm.add_argument('--target',default='x86_64-linux',choices=('x86_64-linux','arm64-linux','aarch64-linux'))
-    direct=sub.add_parser('build-direct',help='compile without the C backend through a direct CPU backend'); direct.add_argument('entry',type=Path); direct.add_argument('-o','--output',type=Path,required=True); direct.add_argument('--source-root',type=Path,default=None); direct.add_argument('--target',default='x86_64-linux',choices=('x86_64-linux','arm64-linux','aarch64-linux')); direct.add_argument('--cc',default=os.environ.get('CC','cc'))
+    for name,help_text in (('build-direct','compile without the C backend through a direct CPU backend'),('link-direct','link an entry against source or precompiled module objects through a direct CPU backend')):
+        direct=sub.add_parser(name,help=help_text); direct.add_argument('entry',type=Path); direct.add_argument('-o','--output',type=Path,required=True); direct.add_argument('--source-root',type=Path,default=None); direct.add_argument('--target',default='x86_64-linux',choices=('x86_64-linux','arm64-linux','aarch64-linux')); direct.add_argument('--cc',default=os.environ.get('CC','cc'))
     bc=sub.add_parser('build-c',help='lower the typed IR subset to C source'); bc.add_argument('entry',type=Path); bc.add_argument('-o','--output',type=Path,required=True); bc.add_argument('--source-root',type=Path,default=None)
     b=sub.add_parser('build',help='compile the typed IR path through the system C toolchain'); b.add_argument('entry',type=Path); b.add_argument('-o','--output',type=Path,required=True); b.add_argument('--source-root',type=Path,default=None); b.add_argument('--cc',default=os.environ.get('CC','cc'))
     return p
@@ -167,9 +180,10 @@ def main(argv=None):
     if a.command=='check': return check_file(a.entry,a.source_root)
     if a.command=='interface': return emit_interface(a.module,a.output,a.source_root)
     if a.command=='object': return emit_object(a.module,a.output,a.source_root)
+    if a.command=='compile-module': return compile_cached_module(a.module,a.source_root,a.cache_dir)
     if a.command=='uir': return emit_uir(a.entry,a.output,a.source_root)
     if a.command=='build-asm': return emit_direct_asm(a.entry,a.output,a.source_root,a.target)
-    if a.command=='build-direct': return build_direct(a.entry,a.output,a.source_root,a.target,a.cc)
+    if a.command in ('build-direct','link-direct'): return build_direct(a.entry,a.output,a.source_root,a.target,a.cc)
     if a.command=='build-c': return build_c_file(a.entry,a.output,a.source_root)
     if a.command=='build': return build_native(a.entry,a.output,a.source_root,a.cc)
     return 2
