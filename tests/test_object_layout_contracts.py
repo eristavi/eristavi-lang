@@ -31,15 +31,18 @@ class ObjectLayoutContractTests(unittest.TestCase):
             user = program.type("lib.User")
             self.assertEqual([(f.name, f.type_name) for f in user.fields], [("name", "text"), ("score", "i64")])
             entry = program.function("__entry")
-            accesses = [
-                ins.immediate
-                for block in entry.blocks
-                for ins in block.instructions
-                if ins.op == "get_field"
-            ]
+            instructions = [ins for block in entry.blocks for ins in block.instructions]
+            accesses = [ins.immediate for ins in instructions if ins.op == "get_field"]
             self.assertEqual(
                 [(item["field"], item["index"]) for item in accesses],
                 [("score", 1), ("name", 0), ("score", 1)],
+            )
+            producers = {ins.result.id: ins for ins in instructions if ins.result is not None}
+            construction = next(ins for ins in instructions if ins.op == "make_struct" and ins.immediate == "lib.User")
+            self.assertEqual([arg.type_name for arg in construction.args], ["text", "i64"])
+            self.assertEqual(
+                [producers[arg.id].immediate for arg in construction.args],
+                ["Anna", 5],
             )
 
 
