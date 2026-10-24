@@ -15,9 +15,9 @@ Eristavi is an experimental general-purpose programming language focused on **re
 
 ## Status
 
-The **pre-0.1 source-language/frontend contract is frozen for implementation**. The Python bootstrap frontend/runtime covers the principal frozen surface: functions, collections, ordinary values, maybe/identity, checked errors, deterministic resources, modules/imports, inferred generic relationships and explicit Unicode Text views.
+The **pre-0.1 source-language/frontend contract is frozen for implementation**. The bootstrap/reference runtime covers the principal frozen surface: functions, collections, ordinary values, maybe/identity, checked errors, deterministic resources, modules/imports, inferred generic relationships and explicit Unicode Text views.
 
-Unicode identifier, normalization and grapheme behavior is pinned to Unicode **17.0.0**. The broad generated-C path supports all three explicit Text views. The direct x86-64 path now does too, including pinned grapheme segmentation without generated C.
+Unicode identifier, normalization and grapheme behavior is pinned to Unicode **17.0.0**. CI now executes the complete official Unicode-17 `GraphemeBreakTest` fixture against the pinned reference segmenter in addition to compiled/direct grapheme tests.
 
 ## Compiler architecture
 
@@ -31,18 +31,24 @@ typed/source-close Eristavi IR
     ↓
 verified + optimized Universal IR
     ├─→ x86-64 Linux → native executable
-    ├─→ ARM64 Linux → assembly/native on matching host
+    ├─→ ARM64 Linux → native executable
     ├─→ ES2020 JavaScript
-    └─→ WebAssembly text (current scalar/function slice)
+    └─→ WebAssembly text
 ```
 
-Universal IR is verified before/after bootstrap optimization. Current passes include constant folding and unreachable-block elimination, with liveness, stack-slot, escape-analysis and register-candidate analysis available for later backend use.
+Universal IR is verified before/after bootstrap optimization. Current passes include constant folding and unreachable-block elimination. CFG-aware liveness, interference, spill-slot coloring, escape analysis and register-candidate analysis are also available to direct backends.
+
+## Direct native backends
+
+### x86-64 Linux
 
 The direct x86-64 route executes a broad pre-0.1 implementation without generated C: functions/recursion, Int/Bool/Float/Text, all explicit Text views, Lists, ordinary values, maybe, identity, checked failures, inferred generic specializations, deterministic file resources and module-object linkage.
 
-The x86-64 runtime also has a non-moving mark-and-sweep bootstrap collector. Compiler-described root frames include heap-typed locals and Universal-IR temporaries. Heap child traversal still uses exact tracked-pointer discovery across allocation payload words; typed heap descriptors remain a production-hardening step.
+The runtime includes a non-moving mark-and-sweep collector. Compiler root frames are now **liveness-aware** and pair stable heap root addresses with static type descriptors. Typed traversal handles Text leaves, nominal fields, Lists, maybe/identity wrappers and file-resource records; conservative exact-pointer scanning remains only as a fallback for dynamic runtime state. Scalar Universal-IR temporaries also reuse CFG-noninterfering spill slots.
 
-ARM64 consumes the same Universal IR and now has assembly-generation layers for Text, aggregates, maybe/identity, checked failures and deterministic file resources in addition to scalar/functions. CI cross-assembles the generated AArch64 code; broad native ARM64 Linux execution still requires an ARM64 Linux runner.
+### ARM64 Linux
+
+ARM64 consumes the same Universal IR and covers Int/Bool/Float, functions, Text, ordinary values, Lists, maybe, identity, checked failures and deterministic file resources. The hosted CI matrix now includes a native ARM64 Linux runner, so aggregate/error/resource behavior is executed rather than only cross-assembled. Mixed scalar/Text output also preserves source order through the composed ARM64 direct backend.
 
 ## Module artifacts and incremental compilation
 
@@ -54,9 +60,15 @@ module.eri
 
 `erist interface` emits a deterministic public contract. `erist object` emits a versioned Universal-IR implementation bound to that interface digest.
 
-Object format v3 can also carry a bootstrap reusable implementation template for public inferred-generic functions. Downstream compilation can specialize those functions after the original dependency `.eri` file has been removed, without adding explicit generic syntax to Eristavi.
+Object format v3 can carry a reusable bootstrap implementation template for public inferred-generic functions. Downstream compilation can specialize those functions after the original dependency `.eri` file has been removed, without adding explicit generic syntax to Eristavi.
 
-`erist compile-module` provides content/interface-digest keyed reusable artifact caching. Public dependency changes invalidate importers; private implementation-only dependency changes do not invalidate an unchanged public contract key.
+`erist compile-module` provides content/interface-digest keyed artifact caching. Public dependency changes invalidate importers; private implementation-only changes do not invalidate an unchanged public-contract key.
+
+## JavaScript and WebAssembly
+
+The ES2020 backend preserves checked Eristavi `Int` through `BigInt` and now executes ordinary nominal values, Lists, maybe, identity, deep value cloning and structural equality in addition to scalar/function/control-flow behavior.
+
+The WebAssembly-text backend supports the current scalar/function/control slice plus Text through an explicit `externref` host ABI. UTF-8 constants are emitted as data segments; Text construction, concatenation, equality and output are explicit host contracts rather than numeric approximations.
 
 ## Design direction
 
@@ -155,6 +167,7 @@ erist build-direct examples/hello.eri -o hello --target x86_64-linux
 erist link-direct examples/hello.eri -o hello --target x86_64-linux
 
 erist build-asm examples/hello.eri -o hello-aarch64.s --target arm64-linux
+erist build-direct examples/hello.eri -o hello-aarch64 --target arm64-linux
 
 erist build-js examples/hello.eri -o hello.mjs
 erist build-wat examples/hello.eri -o hello.wat
@@ -166,13 +179,14 @@ erist build-wat examples/hello.eri -o hello.wat
 python -m unittest discover -s tests -v
 ```
 
-The current suite contains **245 tests** and passes in all three CI jobs:
+The current suite contains **255 tests** and passes in all four hosted CI jobs:
 
-- GCC on Ubuntu at `-O2`;
-- Clang on Ubuntu at `-O2`;
-- Clang on macOS at `-O2`.
+- GCC / x86-64 Ubuntu / `-O2`;
+- Clang / x86-64 Ubuntu / `-O2`;
+- Clang / ARM64 Ubuntu / `-O2`;
+- Clang / ARM64 macOS / `-O2`.
 
-Direct x86-64 executable tests run on Linux. ARM64 assembly is cross-assembled in CI; native ARM64 Linux execution remains host-gated. JavaScript tests execute with an available JS runtime, while the current WebAssembly target is validated at the emitted WAT contract level.
+The matrix also downloads an immutable-revision copy of the official Unicode 17 `GraphemeBreakTest` fixture and executes all of its vectors. Platform-specific direct-native cases run on their matching Linux architecture.
 
 See [`IMPLEMENTATION_AUDIT.md`](IMPLEMENTATION_AUDIT.md) for the audited boundary and remaining production work.
 
