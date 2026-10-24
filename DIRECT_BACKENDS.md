@@ -1,6 +1,6 @@
 # Eristavi Direct Backends
 
-> **Status: broad x86-64 bootstrap backend with initial physical register allocation; native-tested ARM64 runtime backend**
+> **Status: broad x86-64 bootstrap backend with contract-driven physical register allocation and spill-frame compaction; native-tested ARM64 runtime backend**
 
 Direct backends consume Eristavi Universal IR and emit CPU assembly without generated C.
 
@@ -40,26 +40,28 @@ Typed heap traversal currently understands:
 
 Dynamic checked-error state retains a conservative fallback that follows only exact tracked-allocation pointers. This is safer than scanning arbitrary addresses but remains bootstrap infrastructure rather than a final concurrent/generational collector.
 
-Scalar Universal-IR temporaries use CFG-aware interference-based spill-slot coloring, so non-overlapping values may reuse stack storage. Heap temporary slots remain pinned and unique whenever they participate in GC root metadata.
+Heap temporary slots remain pinned and unique whenever they participate in GC root metadata. Remaining scalar spills may reuse CFG-noninterfering slots, while values proven fully register-resident receive no spill slot at all.
 
 Deterministic non-memory resources remain outside GC ownership.
 
 ### Physical register allocation
 
-The x86-64 backend now has an initial verified physical-register allocation path layered beneath the checked-error/resource/direct/GC composition.
+The x86-64 backend has a verified physical-register allocation path layered beneath the checked-error/resource/direct/GC composition.
 
-The first allocator slice is deliberately conservative:
+Current allocator behavior:
 
-- eligible short-lived Int/Bool values may remain in a caller-saved GP register;
-- eligible short-lived Float values may remain in a caller-saved XMM register;
+- Int/Bool candidates may use `r10` or `r11`;
+- Float candidates may use `xmm8` or `xmm9`;
 - CFG interference prevents simultaneously live virtual values from sharing the same physical register;
-- only scalar lowering operations explicitly known to be call-free currently produce register-resident values;
+- explicit per-lowering contracts describe caller-saved and scratch clobbers, whether operands are consumed before clobber, and whether scalar results may remain register-resident;
 - values that must survive helper, PLT or GC clobbers remain stack-backed;
-- operands of complex lowerings also remain stack-backed because those lowerings may call helpers before every source operand has been consumed;
-- scalar values extracted through higher-level aggregate/List/error operations remain spilled until those machine lowerings have explicit use/clobber contracts;
-- stack slots remain the correctness fallback.
+- scalar call results and audited call-free extraction operations may become register-resident;
+- unknown lowerings conservatively clobber the full caller-saved set and cannot produce allocation-safe scalar results;
+- unaudited allocation pools are rejected;
+- register-resident scalar values are omitted from the precise x86 spill frame;
+- pinned heap/root storage always wins over spill exclusion.
 
-This establishes a real register-resident execution path without weakening the System V ABI or precise-GC rooting contract. It is not yet a mature whole-function allocator. The next work is explicit machine-level use/clobber metadata, a broader safe register pool, better move/coalescing decisions and compaction of spill slots that are no longer necessary.
+This establishes a real register-resident execution path without weakening the System V ABI or precise-GC rooting contract. It is not yet a mature whole-function allocator. Remaining work includes broader audited register use, better move/coalescing decisions, cost modeling and tighter instruction-selection integration.
 
 ### Unicode Text views
 
@@ -113,7 +115,7 @@ The next work is production hardening rather than source-language redesign:
 
 - ARM64 automatic memory management and explicit Text-view parity;
 - tighter dynamic-error descriptor coverage and shorter x86 GC root lifetimes;
-- x86 register-allocation maturation: explicit lowering clobber contracts, broader register pools and dead-spill/frame compaction;
+- x86 register-allocation maturation: broader audited register use, move/coalescing improvements and richer cost modeling;
 - additional OS/ABI targets;
 - broader standard-library runtime support.
 
