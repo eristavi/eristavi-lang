@@ -13,7 +13,7 @@ from .ir_text import Lowerer
 from .c_backend_views import CBackend
 from .universal_ir import format_program
 from .x86_64_gc_precise import X86_64PreciseRootGCLinuxBackend
-from .arm64_resource_backend import ARM64ResourceRuntimeLinuxBackend
+from .arm64_direct_backend import ARM64DirectLinuxBackend
 from .js_backend import JavaScriptBackend
 from .wasm_backend import WebAssemblyTextBackend
 from .direct_project import compile_module_object, lower_direct_entry, object_path
@@ -93,7 +93,7 @@ def emit_wat(path:Path,output:Path,source_root:Path|None=None)->int:
 
 def _direct_backend(target:str):
     if target=='x86_64-linux': return X86_64PreciseRootGCLinuxBackend()
-    if target in ('arm64-linux','aarch64-linux'): return ARM64ResourceRuntimeLinuxBackend()
+    if target in ('arm64-linux','aarch64-linux'): return ARM64DirectLinuxBackend()
     raise ValueError(f"unsupported direct backend target {target!r}")
 
 def _native_direct_host(target:str)->bool:
