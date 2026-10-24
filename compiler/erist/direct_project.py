@@ -2,12 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .diagnostics import SourceLocation
-from .ir import IRConst, IRFunction, IRParameter, IRProgram, IRReturn
+from .ir import IRProgram
 from .ir_text import Lowerer
 from .object_artifact import ModuleObjectArtifact
 from .project import CompiledModule, compile_entry, compile_module
-from .universal_ir import BOOL, F64, I64, TEXT, VOID, UFunction, UProgram
+from .universal_ir import UProgram
 from .universal_resources import ResourceUniversalLowerer
 
 
@@ -90,41 +89,6 @@ def _load_object(mod: CompiledModule) -> ModuleObjectArtifact:
     return artifact
 
 
-def _source_type(t: str) -> str:
-    mapping = {I64: "Int", F64: "Float", BOOL: "Bool", TEXT: "Text"}
-    if t in mapping:
-        return mapping[t]
-    if t.startswith("maybe<") and t.endswith(">"):
-        return "maybe " + _source_type(t[6:-1])
-    if t.startswith("identity<") and t.endswith(">"):
-        return "identity " + _source_type(t[9:-1])
-    if t.startswith("list<") and t.endswith(">"):
-        return "List of " + _source_type(t[5:-1])
-    if t.startswith("nominal<") and t.endswith(">"):
-        return t[8:-1]
-    if t.startswith("resource<") and t.endswith(">"):
-        return t[9:-1]
-    raise ValueError(f"module object linking does not yet synthesize signature type {t!r}")
-
-
-def _signature_stub(fn: UFunction) -> IRFunction:
-    location = SourceLocation(1, 1)
-    params = [IRParameter(p.name, _source_type(p.type_name)) for p in fn.parameters]
-    if fn.return_type == VOID:
-        body = [IRReturn(None, location)]
-        result = None
-    else:
-        source_type = _source_type(fn.return_type)
-        if source_type in ("Int", "Float", "Bool", "Text"):
-            default = {"Int": 0, "Float": 0.0, "Bool": False, "Text": ""}[source_type]
-            return_value = IRConst(source_type, location, default)
-        else:
-            return_value = IRConst("Int", location, 0)
-        body = [IRReturn(return_value, location)]
-        result = source_type
-    return IRFunction(fn.name, params, result, body, fn.public, tuple(fn.fails))
-
-
 def lower_direct_entry(path: Path, source_root: Path | None = None) -> UProgram:
     root = compile_entry(path, source_root)
     typed, interface_modules = typed_source_project(root, allow_interfaces=True)
@@ -132,53 +96,24 @@ def lower_direct_entry(path: Path, source_root: Path | None = None) -> UProgram:
     object_functions = [fn for artifact in artifacts for fn in artifact.functions]
     object_types = [item for artifact in artifacts for item in artifact.types]
 
-    object_names = {fn.name for fn in object_functions}
-    scalar_stubs = []
-    aggregate_stubs = []
-    for fn in object_functions:
-        if fn.return_type == VOID or fn.return_type in (I64, F64, BOOL, TEXT):
-            scalar_stubs.append(_signature_stub(fn))
-        else:
-            aggregate_stubs.append(fn)
+    external_contracts = {
+        fn.name: ([parameter.type_name for parameter in fn.parameters], fn.return_type, tuple(fn.fails))
+        for fn in object_functions
+    }
+    if len(external_contracts) != len(object_functions):
+        raise ValueError("duplicate function symbol across Eristavi module objects")
 
-    typed_with_contracts = IRProgram(
-        typed.structs,
-        typed.functions + scalar_stubs,
-        typed.entry,
-    )
-    program = ResourceUniversalLowerer().lower(typed_with_contracts)
+    # Imported object contracts and nominal layouts are injected directly into
+    # Universal lowering. This supports scalar and aggregate signatures without
+    # synthesizing fake source bodies or reopening dependency source.
+    program = ResourceUniversalLowerer(external_contracts, object_types).lower(typed)
 
-    if aggregate_stubs:
-        referenced = {
-            str(ins.immediate)
-            for fn in program.functions
-            for block in fn.blocks
-            for ins in block.instructions
-            if ins.op == "call"
-        }
-        missing = [fn.name for fn in aggregate_stubs if fn.name in referenced]
-        if missing:
-            raise ValueError(
-                "source-to-object aggregate call bridge is not yet available for " + ", ".join(sorted(missing))
-            )
-
-    source_functions = [
-        fn for fn in program.functions
-        if fn.name == program.entry or fn.name not in object_names
-    ]
-    combined_functions = source_functions + object_functions
-    names = [fn.name for fn in combined_functions]
-    if len(names) != len(set(names)):
-        raise ValueError("duplicate function symbol while linking Eristavi module objects")
-
-    combined_types = list(program.types)
-    known_types = {item.name: item for item in combined_types}
-    for item in object_types:
-        existing = known_types.get(item.name)
-        if existing is not None and existing != item:
-            raise ValueError(f"conflicting Universal-IR type layout for {item.name!r}")
-        if existing is None:
-            known_types[item.name] = item
-            combined_types.append(item)
-
-    return UProgram(combined_functions, program.entry, combined_types)
+    source_names = {fn.name for fn in program.functions}
+    duplicates = source_names.intersection(fn.name for fn in object_functions)
+    if duplicates:
+        raise ValueError(
+            "duplicate function symbol while linking Eristavi module objects: "
+            + ", ".join(sorted(duplicates))
+        )
+    combined_functions = list(program.functions) + object_functions
+    return UProgram(combined_functions, program.entry, list(program.types))
