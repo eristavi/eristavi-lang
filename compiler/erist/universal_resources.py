@@ -89,6 +89,11 @@ class ResourceUniversalLowerer(CheckedUniversalLowerer):
 
     def _stmt(self, stmt) -> None:
         if isinstance(stmt, IRReturn):
+            # Outside a `with` scope, ordinary/checked return lowering must remain
+            # identical to the checked layer. In particular, do not manufacture
+            # cleanup error-state checks for functions that own no resources.
+            if not self.cleanup_stack:
+                return super()._stmt(stmt)
             if stmt.value is None:
                 if self.current_return != "void":
                     raise ValueError("value-returning universal function cannot use bare return")
@@ -101,7 +106,9 @@ class ResourceUniversalLowerer(CheckedUniversalLowerer):
                 assert source is not None
                 source.terminator = UBranch(pending, fail_block.name, return_block.name)
                 self.current = fail_block
-                super()._terminate_propagation()
+                # Active cleanup already ran once above; use checked propagation
+                # directly to avoid closing the same resources twice.
+                CheckedUniversalLowerer._terminate_propagation(self)
                 self.current = return_block
                 self.current.terminator = UReturn()
                 return
@@ -118,7 +125,7 @@ class ResourceUniversalLowerer(CheckedUniversalLowerer):
             assert source is not None
             source.terminator = UBranch(pending, fail_block.name, return_block.name)
             self.current = fail_block
-            super()._terminate_propagation()
+            CheckedUniversalLowerer._terminate_propagation(self)
             self.current = return_block
             self.current.terminator = UReturn(value)
             return
