@@ -1,40 +1,42 @@
 from __future__ import annotations
+import math
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Callable
-from .syntax import *
 from .diagnostics import RuntimeFault
-from .unicode_support import grapheme_clusters, nfc
+from .syntax import *
 
-class _NoneValue: pass
+INT_MIN=-(2**63); INT_MAX=2**63-1
+STD_FILE_ERROR="std.files.FileError"
+
+class _NoneValue:
+    def __repr__(self): return "none"
 NONE=_NoneValue()
 class _NoValue: pass
 NO_RUNTIME=_NoValue()
 
 @dataclass
-class UserValue:
-    type_name:str
-    fields:dict[str,object]
+class ListValue: items:list[object]
 @dataclass
-class IdentityValue:
-    target:UserValue
+class UserValue: type_name:str; fields:dict[str,object]
 @dataclass
-class ListValue:
-    items:list[object]
+class IdentityValue: value:object
 @dataclass
-class FileResource:
-    path:str
-    handle:object
-@dataclass
-class Cell:
-    value:object
-    fixed:bool=False
-@dataclass
-class CheckedFailure(Exception):
-    error:UserValue
-@dataclass
-class ReturnSignal(Exception):
-    value:object
+class Cell: value:object; fixed:bool; resource:bool=False
 
+class ReturnSignal(Exception):
+    def __init__(self,value=NO_RUNTIME): self.value=value
+class CheckedFailure(Exception):
+    def __init__(self,error:UserValue,secondary=None): self.error=error; self.secondary=list(secondary or [])
+
+class FileResource:
+    def __init__(self,path:str,handle): self.path=path; self.handle=handle; self.closed=False
+    def cleanup(self):
+        if self.closed: return
+        try: self.handle.close(); self.closed=True
+        except OSError as e: raise CheckedFailure(file_error(str(e),self.path))
+
+def file_error(message,path=""): return UserValue(STD_FILE_ERROR,{"message":message,"path":path})
 
 def copy_value(v):
     if isinstance(v,(int,float,str,bool,_NoneValue,_NoValue)): return v
@@ -72,111 +74,117 @@ class Interpreter:
             if not isinstance(v,UserValue): raise RuntimeFault("fail requires an error value",s.location)
             raise CheckedFailure(v)
         if isinstance(s,LetStmt): self.scopes[-1][s.name]=Cell(copy_value(self._expr(s.initializer)),s.fixed); return
-        if isinstance(s,AssignmentStmt): self._assign(s.target,self._expr(s.value),s.location); return
+        if isinstance(s,AssignStmt): self._assign(s.target,copy_value(self._expr(s.value))); return
         if isinstance(s,ExprStmt): self._expr(s.expression); return
-        if isinstance(s,BlockStmt): self._block(s); return
         if isinstance(s,IfStmt):
-            if self._truth(self._expr(s.condition),s.condition.location): self._block(s.then_branch)
+            if self._expr(s.condition): self._block(s.then_branch)
             elif s.else_branch is not None: self._block(s.else_branch)
             return
         if isinstance(s,WhileStmt):
-            while self._truth(self._expr(s.condition),s.condition.location): self._block(s.body)
+            while self._expr(s.condition): self._block(s.body)
             return
         if isinstance(s,ForStmt):
-            src=self._expr(s.source)
-            if not isinstance(src,ListValue): raise RuntimeFault("for requires List",s.source.location)
-            snapshot=copy_value(src)
-            for item in snapshot.items:
-                self.scopes.append({s.name:Cell(copy_value(item),True)})
-                try: self._block(s.body,False)
+            src=self._expr(s.iterable)
+            if not isinstance(src,ListValue): raise RuntimeFault("for/in requires List",s.location)
+            snapshot=[copy_value(x) for x in src.items]
+            for item in snapshot:
+                self.scopes.append({s.name:Cell(copy_value(item),False)})
+                try:
+                    for st in s.body.statements: self._statement(st)
                 finally: self.scopes.pop()
             return
-        if isinstance(s,WithStmt):
-            resource=self._expr(s.initializer)
-            if not isinstance(resource,FileResource): raise RuntimeFault("with requires resource",s.location)
-            self.scopes.append({s.name:Cell(resource,True)})
-            primary=None
-            try:
-                try: self._block(s.body,False)
-                except BaseException as ex: primary=ex
-                try: resource.handle.close()
-                except OSError as ex:
-                    if primary is None: raise CheckedFailure(file_error(str(ex),resource.path))
-            finally: self.scopes.pop()
-            if primary is not None: raise primary
-            return
-        raise RuntimeFault("unsupported statement",s.location)
-    def _block(self,b,push=True):
-        if push: self.scopes.append({})
+        if isinstance(s,WithStmt): return self._with(s)
+        raise RuntimeFault("statement is not implemented by runtime",getattr(s,"location",None))
+
+    def _block(self,b):
+        self.scopes.append({})
         try:
             for s in b.statements: self._statement(s)
-        finally:
-            if push: self.scopes.pop()
-    def _find_cell(self,name,loc):
-        for scope in reversed(self.scopes):
-            if name in scope: return scope[name]
-        raise RuntimeFault(f"unknown name {name!r}",loc)
+        finally: self.scopes.pop()
+
+    def _with(self,s):
+        res=self._expr(s.resource)
+        if not isinstance(res,FileResource): raise RuntimeFault("with requires a deterministic resource",s.location)
+        self.scopes.append({s.name:Cell(res,True,True)}); pending=None
+        try:
+            try:
+                for st in s.body.statements: self._statement(st)
+            except (ReturnSignal,CheckedFailure,RuntimeFault) as e: pending=e
+            try: res.cleanup()
+            except CheckedFailure as cleanup:
+                if isinstance(pending,CheckedFailure): pending.secondary.append(cleanup.error); pending.secondary.extend(cleanup.secondary)
+                else: pending=cleanup
+        finally: self.scopes.pop()
+        if pending is not None: raise pending
+
     def _expr(self,e):
-        if isinstance(e,LiteralExpr): return NONE if e.value is None else e.value
-        if isinstance(e,NameExpr): return copy_value(self._find_cell(e.name,e.location).value)
-        if isinstance(e,ListExpr): return ListValue([copy_value(self._expr(x)) for x in e.items])
-        if isinstance(e,ConstructExpr):
-            return UserValue(e.type_ref.name,{n:copy_value(self._expr(x)) for n,x in e.fields})
-        if isinstance(e,IdentityExpr):
-            v=self._expr(e.value)
-            if isinstance(v,IdentityValue): return v
-            if not isinstance(v,UserValue): raise RuntimeFault("identity requires user value",e.location)
-            return IdentityValue(v)
+        if isinstance(e,LiteralExpr): return e.value
+        if isinstance(e,NoneExpr): return NONE
+        if isinstance(e,ListExpr): return ListValue([copy_value(self._expr(x)) for x in e.elements])
+        if isinstance(e,NameExpr):
+            cell=self._resolve_cell(e.name)
+            if cell is not None:
+                if cell.resource: return cell.value
+                return copy_value(cell.value)
+            if e.name=="output": return "<builtin output>"
+            if e.name in self.imports: return ("module",e.name)
+            raise RuntimeFault(f"unknown name {e.name!r}",e.location)
+        if isinstance(e,IdentityExpr): return IdentityValue(copy_value(self._expr(e.value)))
         if isinstance(e,TryExpr): return self._expr(e.value)
         if isinstance(e,HandledExpr): return self._handled(e)
         if isinstance(e,UnaryExpr):
             v=self._expr(e.operand)
-            if e.operator=="-": return -v
-            if e.operator=="not": return not self._truth(v,e.location)
+            if e.operator=="not": return not v
+            if e.operator=="-":
+                r=-v
+                return self._check_int(r,e) if isinstance(v,int) and not isinstance(v,bool) else r
         if isinstance(e,BinaryExpr): return self._binary(e)
         if isinstance(e,MemberExpr): return self._member_value(e)
         if isinstance(e,IndexExpr):
-            v=self._expr(e.base); i=self._expr(e.index)
-            if not isinstance(v,ListValue): raise RuntimeFault("indexing requires List",e.location)
-            if i<0 or i>=len(v.items): raise RuntimeFault("List index out of bounds",e.location)
-            return copy_value(v.items[i])
+            base=self._expr(e.base); idx=self._expr(e.index)
+            if not isinstance(base,ListValue): raise RuntimeFault("indexing requires List",e.location)
+            if idx<0 or idx>=len(base.items): raise RuntimeFault("List index out of bounds",e.location)
+            return copy_value(base.items[idx])
+        if isinstance(e,ConstructionExpr):
+            return UserValue(self._runtime_type_name(e.type_path),{f.name:copy_value(self._expr(f.value)) for f in e.fields})
         if isinstance(e,CallExpr): return self._call(e)
-        raise RuntimeFault("unsupported expression",e.location)
-    def _truth(self,v,loc):
-        if not isinstance(v,bool): raise RuntimeFault("condition requires Bool",loc)
-        return v
+        raise RuntimeFault("expression is not implemented by runtime",getattr(e,"location",None))
+
     def _binary(self,e):
         if e.operator=="and":
-            a=self._truth(self._expr(e.left),e.left.location); return a and self._truth(self._expr(e.right),e.right.location)
+            l=self._expr(e.left); return bool(l) and bool(self._expr(e.right))
         if e.operator=="or":
-            a=self._truth(self._expr(e.left),e.left.location); return a or self._truth(self._expr(e.right),e.right.location)
-        a=self._expr(e.left); b=self._expr(e.right)
-        if e.operator=="==": return equal_value(a,b)
-        if e.operator=="!=": return not equal_value(a,b)
-        if e.operator=="+": return a+b
-        if e.operator=="-": return a-b
-        if e.operator=="*": return a*b
-        if e.operator=="/":
-            if isinstance(a,int) and isinstance(b,int):
-                if b==0: raise RuntimeFault("division by zero",e.location)
-                return int(a/b)
-            return a/b
-        if e.operator=="%":
-            if b==0: raise RuntimeFault("division by zero",e.location)
-            q=int(a/b); return a-q*b
-        if e.operator=="<": return a<b
-        if e.operator=="<=": return a<=b
-        if e.operator==">": return a>b
-        if e.operator==">=": return a>=b
-        raise RuntimeFault("unknown operator",e.location)
+            l=self._expr(e.left); return bool(l) or bool(self._expr(e.right))
+        l=self._expr(e.left); r=self._expr(e.right); op=e.operator
+        if op=="+":
+            result=l+r; return self._checked_numeric(result,l,e)
+        if op=="-": return self._checked_numeric(l-r,l,e)
+        if op=="*": return self._checked_numeric(l*r,l,e)
+        if op=="/":
+            if isinstance(l,int) and not isinstance(l,bool): return self._int_div(l,r,e)
+            return self._float_div(float(l),float(r))
+        if op=="%": return self._int_rem(int(l),int(r),e)
+        if op=="==": return equal_value(l,r)
+        if op=="!=": return not equal_value(l,r)
+        if op=="<": return l<r
+        if op=="<=": return l<=r
+        if op==">": return l>r
+        if op==">=": return l>=r
+        raise RuntimeFault(f"unknown operator {op}",e.location)
+
     def _member_value(self,e):
+        if isinstance(e.base,NameExpr) and e.base.name in self.imports: return ("module-member",e.base.name,e.name)
         base=self._expr(e.base)
-        if isinstance(base,IdentityValue): base=base.target
+        if isinstance(base,IdentityValue): base=base.value
+        if isinstance(base,ListValue):
+            if e.name=="count": return len(base.items)
+            if e.name=="add": return ("list-add",e.base)
         if isinstance(base,UserValue):
-            if e.name not in base.fields: raise RuntimeFault(f"unknown field {e.name!r}",e.location)
+            if e.name not in base.fields: raise RuntimeFault(f"{base.type_name} has no field {e.name!r}",e.location)
             return copy_value(base.fields[e.name])
-        if isinstance(base,ListValue) and e.name=="count": return len(base.items)
+        if isinstance(base,FileResource): return ("file-method",e.base,e.name)
         raise RuntimeFault(f"member access is not defined for runtime value",e.location)
+
     def _call(self,e):
         if isinstance(e.callee,NameExpr) and e.callee.name=="output":
             v=self._expr(e.arguments[0]); self.output_sink(self._format(v)); return NO_RUNTIME
@@ -194,10 +202,6 @@ class Interpreter:
             mod=self.imported_modules[e.callee.base.name]
             fn=next((x for x in mod.program.statements if isinstance(x,FunctionDecl) and x.name==e.callee.name and x.public),None)
             if fn is None: raise RuntimeFault(f"module {e.callee.base.name!r} has no public function {e.callee.name!r}",e.location)
-            # Preserve the active runtime composition when entering imported
-            # Eristavi modules.  Using the base Interpreter here would silently
-            # drop extensions such as Unicode/Text views and future standard
-            # runtime services inside module calls.
             child=type(self)(self.output_sink,mod.module_id,mod.imports)
             child._prepare(mod.program)
             return child._call_function(fn,[self._expr(a) for a in e.arguments])
@@ -230,51 +234,82 @@ class Interpreter:
                 if h.type_ref is None or self._handler_name(h.type_ref)==failure.error.type_name:
                     self.scopes.append({"error":Cell(failure.error,False)})
                     try:
-                        try:
-                            for s in h.body.statements: self._statement(s)
-                        except ReturnSignal: raise
-                        return NO_RUNTIME
+                        for s in h.block.statements: self._statement(s)
                     finally: self.scopes.pop()
+                    return NO_RUNTIME
             raise
+    def _runtime_type_name(self,path):
+        if len(path)==1:
+            return f"{self.module_id}.{path[0]}" if self.module_id else path[0]
+        if len(path)==2 and path[0] in self.imported_modules:
+            mod=self.imported_modules[path[0]]
+            return f"{mod.module_id}.{path[1]}" if mod.module_id else path[1]
+        if len(path)==2 and path[0] in self.imports and self.imports[path[0]]==("std","files"):
+            return f"std.files.{path[1]}"
+        return ".".join(path)
+    def _handler_name(self,ref):
+        path=ref.path
+        if len(path)==2 and path[0] in self.imports and self.imports[path[0]]==("std","files") and path[1]=="FileError": return STD_FILE_ERROR
+        return self._runtime_type_name(path)
 
-    def _handler_name(self,t):
-        if len(t.path)==1:return t.path[0]
-        alias=t.path[0]
-        mod=self.imported_modules.get(alias)
-        return f"{mod.module_id}.{t.path[-1]}" if mod is not None else ".".join(t.path)
-    def _eval_ref(self,e):
-        if isinstance(e,NameExpr): return self._find_cell(e.name,e.location).value
-        if isinstance(e,MemberExpr):
-            base=self._eval_ref(e.base)
-            if isinstance(base,IdentityValue): base=base.target
-            if isinstance(base,UserValue): return base.fields[e.name]
-        if isinstance(e,IndexExpr):
-            base=self._eval_ref(e.base); idx=self._expr(e.index)
-            if isinstance(base,ListValue): return base.items[idx]
-        return self._expr(e)
-    def _assign(self,target,value,loc):
+    def _assign(self,target,value):
         if isinstance(target,NameExpr):
-            c=self._find_cell(target.name,loc)
-            if c.fixed: raise RuntimeFault("cannot assign to fixed binding",loc)
-            c.value=copy_value(value); return
-        if isinstance(target,MemberExpr):
-            base=self._eval_ref(target.base)
-            if isinstance(base,IdentityValue): base=base.target
-            if not isinstance(base,UserValue): raise RuntimeFault("field assignment requires value",loc)
-            base.fields[target.name]=copy_value(value); return
+            cell=self._resolve_cell(target.name)
+            if cell is None: raise RuntimeFault(f"unknown name {target.name!r}",target.location)
+            if cell.fixed: raise RuntimeFault(f"cannot assign to fixed binding {target.name!r}",target.location)
+            cell.value=copy_value(value); return
         if isinstance(target,IndexExpr):
             base=self._eval_ref(target.base); idx=self._expr(target.index)
-            if not isinstance(base,ListValue): raise RuntimeFault("index assignment requires List",loc)
-            if idx<0 or idx>=len(base.items): raise RuntimeFault("List index out of bounds",loc)
+            if not isinstance(base,ListValue): raise RuntimeFault("indexed assignment requires List",target.location)
+            if idx<0 or idx>=len(base.items): raise RuntimeFault("List index out of bounds",target.location)
             base.items[idx]=copy_value(value); return
-        raise RuntimeFault("invalid assignment target",loc)
-    def _format(self,v):
-        if v is NONE:return "none"
-        if isinstance(v,bool):return "true" if v else "false"
-        if isinstance(v,float):return format(v,'.15g')
-        if isinstance(v,ListValue):return "["+", ".join(self._format(x) for x in v.items)+"]"
-        if isinstance(v,IdentityValue):return f"identity {self._format(v.target)}"
-        if isinstance(v,UserValue):return f"{v.type_name} {{"+", ".join(f"{k}={self._format(x)}" for k,x in v.fields.items())+"}}"
-        return str(v)
+        if isinstance(target,MemberExpr):
+            base=self._eval_ref(target.base)
+            if isinstance(base,IdentityValue): base=base.value
+            if not isinstance(base,UserValue): raise RuntimeFault("member assignment requires a user-defined value",target.location)
+            base.fields[target.name]=copy_value(value); return
+        raise RuntimeFault("invalid assignment target",getattr(target,"location",None))
 
-def file_error(message,path): return UserValue("std.files.FileError",{"message":str(message),"path":str(path)})
+    def _eval_ref(self,e):
+        if isinstance(e,NameExpr):
+            cell=self._resolve_cell(e.name)
+            if cell is None: raise RuntimeFault(f"unknown name {e.name!r}",e.location)
+            return cell.value
+        if isinstance(e,MemberExpr):
+            base=self._eval_ref(e.base)
+            if isinstance(base,IdentityValue): base=base.value
+            if isinstance(base,UserValue): return base.fields[e.name]
+            raise RuntimeFault("member reference requires user-defined value",e.location)
+        if isinstance(e,IndexExpr):
+            base=self._eval_ref(e.base); idx=self._expr(e.index)
+            if not isinstance(base,ListValue): raise RuntimeFault("index reference requires List",e.location)
+            if idx<0 or idx>=len(base.items): raise RuntimeFault("List index out of bounds",e.location)
+            return base.items[idx]
+        return self._expr(e)
+
+    def _resolve_cell(self,name):
+        for s in reversed(self.scopes):
+            if name in s: return s[name]
+        return None
+    def _checked_numeric(self,result,left,e): return self._check_int(result,e) if isinstance(left,int) and not isinstance(left,bool) else result
+    def _check_int(self,v,e):
+        if v<INT_MIN or v>INT_MAX: raise RuntimeFault("signed 64-bit Int overflow",e.location)
+        return v
+    def _int_div(self,a,b,e):
+        if b==0: raise RuntimeFault("Int division by zero",e.location)
+        if a==INT_MIN and b==-1: raise RuntimeFault("signed 64-bit Int overflow",e.location)
+        q=abs(a)//abs(b); return -q if (a<0)!=(b<0) else q
+    def _int_rem(self,a,b,e):
+        if b==0: raise RuntimeFault("Int remainder by zero",e.location)
+        if a==INT_MIN and b==-1: raise RuntimeFault("signed 64-bit Int overflow",e.location)
+        q=self._int_div(a,b,e); return a-q*b
+    @staticmethod
+    def _float_div(a,b):
+        if b!=0.0: return a/b
+        if math.isnan(a) or a==0.0: return math.nan
+        return math.copysign(math.inf,math.copysign(1.0,a)*math.copysign(1.0,b))
+    @staticmethod
+    def _format(v):
+        if isinstance(v,bool): return "true" if v else "false"
+        if v is NONE: return "none"
+        return str(v)
