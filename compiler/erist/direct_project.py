@@ -8,7 +8,7 @@ from .ir_text import Lowerer
 from .object_artifact import ModuleObjectArtifact
 from .project import CompiledModule, compile_entry, compile_module
 from .universal_ir import BOOL, F64, I64, TEXT, VOID, UFunction, UProgram
-from .universal_checked import CheckedUniversalLowerer
+from .universal_resources import ResourceUniversalLowerer
 
 
 def object_path(source_path: Path) -> Path:
@@ -59,7 +59,7 @@ def compile_module_object(path: Path, source_root: Path | None = None) -> Module
     if mod.interface_only:
         raise ValueError("cannot compile an implementation artifact without module source")
     typed, _ = typed_source_project(mod, allow_interfaces=False)
-    universal = CheckedUniversalLowerer().lower(typed)
+    universal = ResourceUniversalLowerer().lower(typed)
     prefix = mod.module_id + "."
     own_functions = tuple(fn for fn in universal.functions if fn.name.startswith(prefix))
     own_types = tuple(item for item in universal.types if item.name.startswith(prefix))
@@ -146,7 +146,7 @@ def lower_direct_entry(path: Path, source_root: Path | None = None) -> UProgram:
         typed.functions + scalar_stubs,
         typed.entry,
     )
-    program = CheckedUniversalLowerer().lower(typed_with_contracts)
+    program = ResourceUniversalLowerer().lower(typed_with_contracts)
 
     if aggregate_stubs:
         referenced = {
