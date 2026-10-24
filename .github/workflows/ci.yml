@@ -23,6 +23,7 @@ jobs:
     env:
       CC: ${{ matrix.cc }}
       CFLAGS: -O2
+      ERISTAVI_GRAPHEME_BREAK_TEST: ${{ runner.temp }}/GraphemeBreakTest-17.0.0.txt
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -30,6 +31,11 @@ jobs:
           python-version: '3.11'
       - name: Install bootstrap toolchain
         run: python -m pip install -e .
+      - name: Fetch pinned Unicode 17 grapheme conformance vectors
+        run: >-
+          curl --fail --location --retry 3
+          https://raw.githubusercontent.com/starwing/luautf8/a47b1433473a2509d77ad28f59a976716d187927/GraphemeBreakTest.txt
+          --output "$ERISTAVI_GRAPHEME_BREAK_TEST"
       - name: Compile Python sources
         run: python -m compileall -q compiler tests
       - name: Run test suite
