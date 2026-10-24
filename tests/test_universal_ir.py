@@ -52,8 +52,8 @@ class UniversalIRTests(unittest.TestCase):
         )
         try:
             text = format_program(lower_universal_file(src, root))
-            self.assertIn("function @add($0 a: i64, $1 b: i64) -> i64", text)
-            self.assertIn("call 'add'", text)
+            self.assertIn("function @app.add($0 a: i64, $1 b: i64) -> i64", text)
+            self.assertIn("call 'app.add'", text)
             self.assertIn("return %", text)
         finally:
             td.cleanup()
@@ -139,7 +139,7 @@ class UniversalIRTests(unittest.TestCase):
             exe = root / "app"
             src.write_text(source, encoding="utf-8")
             self.assertEqual(build_direct(src, exe, root), 0)
-            return subprocess.run([str(exe)], capture_output=True, text=False)
+            return subprocess.run([str(exe)], capture_output=True, text=True)
 
 
 if __name__ == "__main__":
