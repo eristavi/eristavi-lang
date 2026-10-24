@@ -99,9 +99,9 @@ def allocate_x86_registers(
     3. only scalar results whose defining lowering explicitly permits register
        residency are eligible.
 
-    Stack slots remain allocated as a fallback representation in this phase.
-    Dead spill-slot/frame compaction is intentionally deferred until the
-    machine-lowering contracts and broader register pool are fully established.
+    Values that receive a physical register do not require a spill slot in the
+    precise x86 frame unless a later backend explicitly pins them. Unallocated
+    values retain stack storage as the correctness fallback.
     """
 
     _validate_register_pool(gp_registers, ALLOCATABLE_GP_REGISTERS, "GP")
@@ -147,9 +147,9 @@ class X86_64RegisterLinuxBackend(X86_64LinuxBackend):
 
     Register-resident scalar Universal-IR values bypass their spill-slot loads
     and stores. The allocator uses CFG interference plus explicit machine
-    lowering clobber contracts, while the existing stack slots remain a safe
-    fallback. This preserves the System-V ABI, precise-GC root model and
-    composed runtime helpers while allowing a growing register-resident path.
+    lowering clobber contracts, while unallocated values retain stack fallback.
+    This preserves the System-V ABI, precise-GC root model and composed runtime
+    helpers while allowing a growing register-resident path.
     """
 
     def __init__(self):
@@ -164,6 +164,10 @@ class X86_64RegisterLinuxBackend(X86_64LinuxBackend):
             return
         self._register_plan = allocate_x86_registers(self.fn)
         self._register_plan_fn = self.fn
+
+    def _allocated_value_ids(self) -> frozenset[int]:
+        self._ensure_register_plan()
+        return frozenset(self._register_plan.registers)
 
     def _assigned_register(self, value: UValue) -> str | None:
         self._ensure_register_plan()
