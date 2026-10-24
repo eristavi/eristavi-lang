@@ -4,7 +4,7 @@ from pathlib import Path
 from .diagnostics import SemanticError
 from .lexer import Lexer
 from .parser import Parser
-from .semantic import Analyzer
+from .semantic_ext import Analyzer
 from .syntax import ImportDecl
 
 @dataclass
@@ -29,7 +29,6 @@ class ProjectCompiler:
         if logical in self.cache:
             mod=self.cache[logical]
             if is_entry and not mod.analyzer.is_entry:
-                # Recompile as entry if ever needed; uncommon.
                 pass
             return mod
         if logical in self.loading:
