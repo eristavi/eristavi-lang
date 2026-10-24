@@ -8,8 +8,9 @@ from .parser import Parser
 from .semantic_ext import Analyzer
 from .runtime_ext import Interpreter
 from .project import compile_entry
-from .ir import Lowerer, IRProgram
-from .c_backend_text import CBackend
+from .ir import IRProgram
+from .ir_text import Lowerer
+from .c_backend_views import CBackend
 
 def analyze_frontend(source:str):
     program=Parser(Lexer(source).lex()).parse(); analyzer=Analyzer(); analyzer.analyze(program); return program,analyzer
