@@ -11,6 +11,10 @@ class NamedType:
     name: str
 
 @dataclass(frozen=True)
+class TextViewType:
+    kind: str
+
+@dataclass(frozen=True)
 class MaybeType:
     inner: TypeLike
 
@@ -45,7 +49,7 @@ class TypeVar:
         if not self.id:
             self.id = next(_counter)
 
-TypeLike = Union[NamedType, MaybeType, IdentityType, ListType, ResourceType, AnyErrorType, NoValueType, TypeVar]
+TypeLike = Union[NamedType, TextViewType, MaybeType, IdentityType, ListType, ResourceType, AnyErrorType, NoValueType, TypeVar]
 
 INT = NamedType("Int")
 FLOAT = NamedType("Float")
@@ -53,6 +57,9 @@ BOOL = NamedType("Bool")
 TEXT = NamedType("Text")
 NO_VALUE = NoValueType()
 ANY_ERROR = AnyErrorType()
+TEXT_CHARACTERS = TextViewType("characters")
+TEXT_SCALARS = TextViewType("scalars")
+TEXT_BYTES = TextViewType("bytes")
 
 
 def resolve(t: TypeLike) -> TypeLike:
@@ -101,6 +108,10 @@ def unify(a: TypeLike, b: TypeLike) -> TypeLike:
         if a.name != b.name:  # type: ignore[attr-defined]
             raise TypeError(f"cannot unify {a.name} with {b.name}")
         return a
+    if isinstance(a, TextViewType):
+        if a.kind != b.kind:  # type: ignore[attr-defined]
+            raise TypeError(f"cannot unify {describe(a)} with {describe(b)}")
+        return a
     if isinstance(a, ResourceType):
         if a.name != b.name:  # type: ignore[attr-defined]
             raise TypeError(f"cannot unify {describe(a)} with {describe(b)}")
@@ -137,6 +148,7 @@ def clone_type(t: TypeLike, vars_map: dict[int, TypeVar] | None = None) -> TypeL
             vars_map[t.id] = TypeVar(t.label, allowed_names=set(t.allowed_names) if t.allowed_names is not None else None)
         return vars_map[t.id]
     if isinstance(t, NamedType): return t
+    if isinstance(t, TextViewType): return t
     if isinstance(t, ResourceType): return t
     if isinstance(t, MaybeType): return MaybeType(clone_type(t.inner, vars_map))
     if isinstance(t, IdentityType): return IdentityType(clone_type(t.inner, vars_map))
@@ -157,6 +169,7 @@ def has_unresolved(t: TypeLike) -> bool:
 def describe(t: TypeLike) -> str:
     t = resolve(t)
     if isinstance(t, NamedType): return t.name
+    if isinstance(t, TextViewType): return f"Text {t.kind} view"
     if isinstance(t, ResourceType): return t.name
     if isinstance(t, MaybeType): return f"maybe {describe(t.inner)}"
     if isinstance(t, IdentityType): return f"identity {describe(t.inner)}"
