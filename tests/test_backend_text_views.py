@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from compiler.erist.cli import build_native
+from compiler.erist.unicode_support import grapheme_clusters
 
 
 class BackendTextViewTests(unittest.TestCase):
@@ -56,6 +57,29 @@ class BackendTextViewTests(unittest.TestCase):
         )
         self.assertEqual(p.returncode, 0)
         self.assertEqual(p.stdout, "1\nक्ष\n")
+
+    def test_native_character_counts_match_pinned_bootstrap_corpus(self):
+        samples = [
+            "A\u0301",
+            "👩‍💻",
+            "🇺🇸🇨🇾",
+            "क्ष",
+            "각",
+            "👍🏽",
+            "👨‍👩‍👧‍👦",
+            "a\u0308b",
+            "\u0600A",
+            "Z",
+        ]
+        source_items = []
+        for sample in samples:
+            escaped = sample.replace("\\", "\\\\").replace('"', '\\"')
+            source_items.append(f'"{escaped}"')
+        source = "let texts be [" + ",".join(source_items) + "]; for text in texts { output(text.characters.count); }"
+        p = self.compile_run(source)
+        self.assertEqual(p.returncode, 0)
+        expected = "".join(f"{len(grapheme_clusters(sample))}\n" for sample in samples)
+        self.assertEqual(p.stdout, expected)
 
     def test_native_views_can_be_stored(self):
         p = self.compile_run(
