@@ -23,7 +23,7 @@ jobs:
     env:
       CC: ${{ matrix.cc }}
       CFLAGS: -O2
-      ERISTAVI_GRAPHEME_BREAK_TEST: ${{ runner.temp }}/GraphemeBreakTest-17.0.0.txt
+      ERISTAVI_GRAPHEME_BREAK_TEST: /tmp/GraphemeBreakTest-17.0.0.txt
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
