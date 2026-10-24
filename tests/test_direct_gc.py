@@ -12,17 +12,24 @@ DIRECT_HOST = platform.system() == "Linux" and platform.machine().lower() in ("x
 
 
 class DirectGCTests(unittest.TestCase):
-    def test_assembly_contains_compiler_root_frames_and_mark_sweep_runtime(self):
+    def test_assembly_contains_typed_compiler_roots_and_mark_sweep_runtime(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             src = root / "app.eri"
             asm = root / "app.s"
-            src.write_text('let text be "A"; text = text + "B"; output(text);', encoding="utf-8")
+            src.write_text(
+                'type Item { name Text; count Int; } '
+                'let values be [Item { name="A"; count=1; }]; '
+                'output(values[0].name);',
+                encoding="utf-8",
+            )
             self.assertEqual(emit_direct_asm(src, asm, root, "x86_64-linux"), 0)
             text = asm.read_text(encoding="utf-8")
             self.assertIn(".Leri_gc_root_head", text)
             self.assertIn(".Leri_gc_collect", text)
-            self.assertIn(".Leri_gc_mark", text)
+            self.assertIn(".Leri_gc_mark_typed", text)
+            self.assertIn(".Leri_gc_mark_allocation_only", text)
+            self.assertIn(".Leri_gc_desc_", text)
             self.assertIn(".Leri_gc_sweep_loop", text)
             self.assertIn("call .Leri_gc_alloc", text)
 
@@ -60,6 +67,27 @@ class DirectGCTests(unittest.TestCase):
             p = subprocess.run([str(exe)], capture_output=True, text=True)
             self.assertEqual(p.returncode, 0, p.stderr)
             self.assertEqual(p.stdout, "201\nA\nB\n")
+
+    @unittest.skipUnless(DIRECT_HOST, "typed direct GC graph execution currently targets x86-64 Linux")
+    def test_typed_gc_preserves_nested_maybe_identity_and_list_graph(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            src = root / "app.eri"
+            exe = root / "app"
+            src.write_text(
+                'type Node { label Text; } '
+                'let node be Node { label="root"; }; '
+                'let shared be identity node; '
+                'let items be [shared]; '
+                'let i be 0; let text be ""; '
+                'while i < 500 { text = text + "x"; i = i + 1; } '
+                'output(items[0].label); output(text.bytes.count);',
+                encoding="utf-8",
+            )
+            self.assertEqual(build_direct(src, exe, root), 0)
+            p = subprocess.run([str(exe)], capture_output=True, text=True)
+            self.assertEqual(p.returncode, 0, p.stderr)
+            self.assertEqual(p.stdout, "root\n500\n")
 
 
 if __name__ == "__main__":
