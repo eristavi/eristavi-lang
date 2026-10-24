@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from . import c_backend as base
 from .c_backend_text import CBackend as TextBackend, TEXT_RUNTIME, _BASE_CTYPE
-from .ir_text import IRTextView, IRTextViewCount, IRTextViewIndex
+from .ir_text import IRFileExists, IRFileRemove, IRTextView, IRTextViewCount, IRTextViewIndex
 from .unicode_c import grapheme_runtime_c
 
 
@@ -15,6 +15,8 @@ def _view_ctype(t: str) -> str:
 
 
 _VIEW_PREFIX = r'''
+
+#include <sys/stat.h>
 
 typedef struct { eri_text text; int kind; } eri_text_view;
 enum { ERI_TEXT_VIEW_BYTES=1, ERI_TEXT_VIEW_SCALARS=2, ERI_TEXT_VIEW_CHARACTERS=3 };
@@ -52,6 +54,22 @@ static int64_t eri_text_byte_get(eri_text text,int64_t index){
     if(index<0||(uint64_t)index>=text.len)eri_fault("Text view index out of bounds");
     return (int64_t)text.data[index];
 }
+
+static bool eri_file_exists_path(eri_text path){
+    char *cp=eri_text_to_c_path(path);
+    if(!cp)eri_raise_file_failure("file path contains NUL",path);
+    struct stat st;
+    if(stat(cp,&st)==0)return true;
+    if(errno==ENOENT)return false;
+    eri_raise_file_failure(strerror(errno),path);
+    return false;
+}
+
+static void eri_file_remove_path(eri_text path){
+    char *cp=eri_text_to_c_path(path);
+    if(!cp)eri_raise_file_failure("file path contains NUL",path);
+    if(remove(cp)!=0)eri_raise_file_failure(strerror(errno),path);
+}
 '''
 
 _VIEW_SUFFIX = r'''
@@ -80,7 +98,7 @@ VIEW_RUNTIME = TEXT_RUNTIME + _VIEW_PREFIX + grapheme_runtime_c() + _VIEW_SUFFIX
 
 
 class CBackend(TextBackend):
-    """Length-aware C backend with all three pinned Unicode Text views."""
+    """Length-aware C backend with Unicode Text views and stdlib path operations."""
 
     def emit(self, program):
         old_runtime, old_ctype = base.RUNTIME, base.ctype
@@ -107,4 +125,8 @@ class CBackend(TextBackend):
             if e.type_name == "Int":
                 return f"eri_text_view_byte_get({self._expr(e.view)}, {self._expr(e.index)})"
             return f"eri_text_view_text_get({self._expr(e.view)}, {self._expr(e.index)})"
+        if isinstance(e, IRFileExists):
+            return f"eri_file_exists_path({self._expr(e.path)})"
+        if isinstance(e, IRFileRemove):
+            return f"eri_file_remove_path({self._expr(e.path)})"
         return super()._expr(e)
