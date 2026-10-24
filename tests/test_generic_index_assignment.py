@@ -6,7 +6,7 @@ from compiler.erist.cli import compile_frontend
 from compiler.erist.runtime import Interpreter
 
 
-class GenericIndexAssignmentTests(unittest.TestCase):
+class GenericListRelationshipTests(unittest.TestCase):
     def execute(self, source: str) -> list[str]:
         output: list[str] = []
         program = compile_frontend(source)
@@ -25,6 +25,16 @@ class GenericIndexAssignmentTests(unittest.TestCase):
             'output(texts[0]);'
         )
         self.assertEqual(self.execute(source), ['9', 'z'])
+
+    def test_generic_for_infers_list_element_relationship(self):
+        source = (
+            'function echo(values) { '
+            'for value in values { output(value); } '
+            '} '
+            'echo([1,2]); '
+            'echo(["a","b"]);'
+        )
+        self.assertEqual(self.execute(source), ['1', '2', 'a', 'b'])
 
 
 if __name__ == '__main__':
