@@ -10,6 +10,7 @@ class CBackend:
         if ordered:
             parts.append('\n'.join(f'typedef struct {struct_tag(s.name)} {ctype(s.name)};' for s in ordered))
             for s in ordered: parts.append(self._struct_definition(s))
+            for s in ordered: parts.append(self._identity_helper_for_struct(s.name))
             for s in ordered: parts.append(self._struct_equality(s))
         for f in p.functions: parts.append(self._function(f))
         body=self._stmts(p.entry)
@@ -22,18 +23,23 @@ class CBackend:
             if s.name in visiting: raise ValueError(f'recursive by-value struct layout is not supported: {s.name}')
             visiting.add(s.name)
             for f in s.fields:
-                if f.type_name in by: visit(by[f.type_name])
+                dep=identity_inner(f.type_name) if f.type_name.startswith('identity ') else f.type_name
+                if dep in by and not f.type_name.startswith('identity '): visit(by[dep])
             visiting.remove(s.name); done.add(s.name); out.append(s)
         for s in structs: visit(s)
         return out
     def _struct_definition(self,s):
         fields=''.join(f'    {ctype(f.type_name)} {field_name(f.name)};\n' for f in s.fields)
         return f'struct {struct_tag(s.name)} {{\n{fields}}};\n'
+    def _identity_helper_for_struct(self,t):
+        ct=ctype(t); fn=identity_helper(t)
+        return f'static {ct} *{fn}({ct} v) {{ {ct} *p=({ct}*)eri_alloc(sizeof({ct})); *p=v; return p; }}\n'
     def _struct_equality(self,s):
         checks=[self._eq_component(f.type_name,f'a.{field_name(f.name)}',f'b.{field_name(f.name)}') for f in s.fields]
         expr=' && '.join(checks) if checks else 'true'
         return f'static bool {eq_helper(s.name)}({ctype(s.name)} a, {ctype(s.name)} b) {{ return {expr}; }}\n'
     def _eq_component(self,t,a,b):
+        if t.startswith('identity '): return f'({a} == {b})'
         if t=='Text': return f'(strcmp({a}, {b}) == 0)'
         if t in ('Int','Float','Bool'): return f'({a} == {b})'
         if t.startswith('List of '): return f'{list_helper(t)}_eq({a}, {b})'
@@ -67,7 +73,10 @@ class CBackend:
         raise TypeError(s)
     def _lvalue(self,e):
         if isinstance(e,IRVar): return cname(e.name)
-        if isinstance(e,IRMember): return f'({self._lvalue(e.base)}).{field_name(e.name)}'
+        if isinstance(e,IRMember):
+            base=self._lvalue(e.base)
+            op='->' if e.base.type_name.startswith('identity ') else '.'
+            return f'({base}){op}{field_name(e.name)}'
         raise TypeError(f'unsupported C lvalue {e!r}')
     def _expr(self,e):
         if isinstance(e,IRConst):
@@ -79,10 +88,13 @@ class CBackend:
                 return repr(v)
             return str(e.value)
         if isinstance(e,IRVar): return cname(e.name)
+        if isinstance(e,IRIdentity): return f'{identity_helper(identity_inner(e.type_name))}({self._expr(e.value)})'
         if isinstance(e,IRConstruct):
             fields=', '.join(f'.{field_name(x.name)} = {self._expr(x.value)}' for x in e.fields)
             return f'({ctype(e.type_name)}){{{fields}}}'
-        if isinstance(e,IRMember): return f'({self._expr(e.base)}).{field_name(e.name)}'
+        if isinstance(e,IRMember):
+            op='->' if e.base.type_name.startswith('identity ') else '.'
+            return f'({self._expr(e.base)}){op}{field_name(e.name)}'
         if isinstance(e,IRList):
             helper=list_helper(e.type_name); elem=list_element(e.type_name)
             if not e.elements: return f'{helper}_make(0, NULL)'
@@ -97,6 +109,9 @@ class CBackend:
             if e.operator=='-' and e.type_name=='Float': return f'eri_fneg({self._expr(e.operand)})'
         if isinstance(e,IRBinary):
             a=self._expr(e.left); b=self._expr(e.right); op=e.operator
+            if e.left.type_name.startswith('identity ') and op in ('==','!='):
+                cmp=f'({a} == {b})'
+                return cmp if op=='==' else f'(!{cmp})'
             if e.left.type_name.startswith('List of ') and op in ('==','!='):
                 cmp=f'{list_helper(e.left.type_name)}_eq({a}, {b})'
                 return cmp if op=='==' else f'(!{cmp})'
@@ -137,6 +152,10 @@ def cname(n): return 'v_'+mangle(n)
 def field_name(n): return 'f_'+mangle(n)
 def struct_tag(t): return 'eri_struct_tag_'+mangle(t)
 def eq_helper(t): return 'eri_eq_'+mangle(t)
+def identity_inner(t):
+    if not t.startswith('identity '): raise KeyError(t)
+    return t[9:]
+def identity_helper(t): return 'eri_identity_'+mangle(t)+'_new'
 def list_element(t):
     if not t.startswith('List of '): raise KeyError(t)
     return t[8:]
@@ -147,6 +166,7 @@ def list_helper_from_element(t):
 def ctype(t):
     scalars={'Int':'int64_t','Float':'double','Bool':'bool','Text':'const char *'}
     if t in scalars: return scalars[t]
+    if t.startswith('identity '): return ctype(identity_inner(t))+' *'
     if t.startswith('List of '): return list_helper(t)
     return 'eri_struct_'+mangle(t)
 def c_string(s):
@@ -166,6 +186,10 @@ RUNTIME=r'''#include <stdint.h>
 static void eri_fault(const char *m) { fprintf(stderr, "Eristavi runtime fault: %s\n", m); exit(1); }
 static void *eri_alloc(size_t n){ void *p=malloc(n?n:1); if(!p)eri_fault("out of memory"); return p; }
 static void *eri_realloc(void *p,size_t n){ void *q=realloc(p,n?n:1); if(!q)eri_fault("out of memory"); return q; }
+static int64_t *eri_identity_Int_new(int64_t v){ int64_t *p=(int64_t*)eri_alloc(sizeof(int64_t)); *p=v; return p; }
+static double *eri_identity_Float_new(double v){ double *p=(double*)eri_alloc(sizeof(double)); *p=v; return p; }
+static bool *eri_identity_Bool_new(bool v){ bool *p=(bool*)eri_alloc(sizeof(bool)); *p=v; return p; }
+static const char **eri_identity_Text_new(const char *v){ const char **p=(const char**)eri_alloc(sizeof(char*)); *p=v; return p; }
 static int64_t eri_iadd(int64_t a,int64_t b){ if((b>0&&a>INT64_MAX-b)||(b<0&&a<INT64_MIN-b))eri_fault("Int overflow"); return a+b; }
 static int64_t eri_isub(int64_t a,int64_t b){ if((b<0&&a>INT64_MAX+b)||(b>0&&a<INT64_MIN+b))eri_fault("Int overflow"); return a-b; }
 static int64_t eri_imul(int64_t a,int64_t b){
