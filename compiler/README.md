@@ -18,80 +18,70 @@ bootstrap execution runtime    typed/source-close Eristavi IR
                                    ↓
                          verified + optimized Universal IR
                                    ├─→ x86-64 Linux → native
-                                   ├─→ ARM64 Linux → assembly/native on matching host
+                                   ├─→ ARM64 Linux → native
                                    ├─→ ES2020 JavaScript
                                    └─→ WebAssembly text
 ```
 
 ## Frontend/runtime surface
 
-The bootstrap frontend/reference runtime covers the principal frozen pre-0.1 language surface:
+The bootstrap frontend/reference runtime covers the principal frozen pre-0.1 surface: Unicode-17 identifiers/NFC, scalar types, explicit Text views, bindings/fixed, scopes, control flow, functions/recursion, inferred generics, Lists, ordinary values, maybe, identity, checked failures, deterministic resources and modules/imports.
 
-- Unicode 17.0.0-pinned identifiers/NFC;
-- Int, Float, Bool and length-aware Unicode Text;
-- `.characters`, `.scalars`, and `.bytes` Text views;
-- `let`, transitive `fixed`, annotations, lexical scopes and no-shadowing;
-- `if / else`, `while`, stable `for`;
-- functions, recursion, inferred/explicit results;
-- inferred generic relationships and concrete specialization;
-- growable `List` values;
-- ordinary named-field values and deep value semantics;
-- `maybe` / `none` and narrowing;
-- managed `identity` and identity equality;
-- checked failures;
-- deterministic `with` resources;
-- modules/imports, visibility and aliases.
+## Universal IR and analyses
 
-## Universal IR
+Universal IR is verified before and after bootstrap optimization.
 
-Universal IR now has verifier and bootstrap optimization stages.
+Verification checks symbols, CFG targets, local/value ids, branch types, call contracts and returns. Optimization currently performs safe constant folding and unreachable-block elimination.
 
-Verification checks functions/types/blocks, local/value ids, CFG targets, branch types, call contracts and returns. Optimization currently folds supported constants and eliminates unreachable blocks, then verifies again.
+Target-neutral analyses now include:
 
-Additional target-neutral analyses provide live ranges, stack-slot planning, escape classification and short-lived scalar register candidates. These analyses are groundwork for later code-generation quality improvements; the current direct backends still favor correctness over aggressive register allocation.
+- CFG-aware live-in/live-out sets;
+- instruction-level liveness at safe points;
+- virtual-value interference graphs;
+- spill-slot coloring;
+- escape classification;
+- scalar register-candidate discovery.
+
+The x86-64 GC backend uses these analyses to root only heap temporaries that cross collection safe points and to reuse noninterfering scalar spill slots. A full machine-register allocator is still future work.
 
 ## Direct x86-64 Linux
 
-The direct System V backend executes:
-
-- functions, recursion and register/stack ABI arguments;
-- Int/Bool/Float/length-aware Text;
-- all explicit Text views, including pinned Unicode-17 grapheme segmentation;
-- checked integer faults;
-- control flow and short-circuit Boolean behavior;
-- Lists and stable iteration;
-- deep nominal values and structural equality;
-- maybe and identity;
-- source-specialized inferred generics;
-- reusable inferred-generic object specialization after dependency source removal;
-- checked failures and handlers;
-- deterministic `std.files` resources;
-- UTF-8 validation, exact Text file I/O, `exists` and `remove`;
-- concrete module-object linkage without dependency source.
+The direct System V backend executes a broad pre-0.1 surface, including all Text views, deep ordinary values, Lists, maybe/identity, inferred generics, checked failures, deterministic files and object-only module linkage.
 
 ### Direct GC
 
-The x86-64 runtime now includes a non-moving mark-and-sweep bootstrap collector. Compiler root frames cover heap-typed locals and Universal-IR temporary spill slots; checked-error globals are also roots.
+The non-moving mark-and-sweep runtime now combines compiler-described root addresses with static type descriptors.
 
-Heap child traversal still identifies references by scanning tracked payload words for exact allocation pointers. That is safe for the current bootstrap representation but is not yet the final typed-descriptor collector.
+Typed traversal covers Text leaves, nominal fields, Lists and their backing arrays, maybe/identity wrappers and file-resource records. Dynamic checked-error state retains a conservative exact-tracked-pointer fallback. Heap temporary spill slots remain pinned/stable when rooted; scalar spill slots may be coalesced.
+
+This is substantially more precise than scanning every payload word, while still remaining a correctness-first bootstrap collector rather than a generational/concurrent production GC.
 
 ## ARM64 Linux
 
-The AArch64/AAPCS64 backend shares Universal IR and now has assembly-generation support for:
+The AArch64/AAPCS64 backend shares Universal IR and now runs natively in hosted ARM64 Linux CI.
+
+Behavioral coverage includes:
 
 - Int/Bool/Float and functions/calls;
-- Text runtime operations;
-- nominal values, Lists, maybe and identity operations;
-- checked-error state/dispatch operations;
-- deterministic file-resource operations and cleanup state.
+- length-aware Text;
+- nominal values and Lists;
+- maybe and identity;
+- checked errors/handlers;
+- deterministic file resources and embedded-NUL UTF-8 I/O.
 
-CI cross-assembles these layers. Broad native ARM64 Linux behavior is still host-gated.
+Cross-assembly tests remain in addition to native execution. ARM64 automatic memory reclamation and explicit Text-view parity remain open.
 
-## JavaScript and WebAssembly
+## JavaScript
 
-`build-js` emits ES2020 JavaScript for the current scalar/function/control slice. Eristavi Int uses checked BigInt helpers.
+`build-js` emits ES2020 JavaScript with checked `BigInt` for Eristavi Int.
 
-`build-wat` emits WebAssembly text for the current scalar/function/control slice. Unsupported Text/higher runtime families are rejected explicitly.
+The backend now supports ordinary nominal values, Lists, maybe, identity, deep cloning and structural equality in addition to functions, scalars and control flow. Checked errors, resources and explicit Text views are not yet parity-complete.
+
+## WebAssembly
+
+`build-wat` emits WebAssembly text for functions/control flow/scalars plus Text through an explicit `externref` host ABI.
+
+UTF-8 Text constants use data segments; construction, concatenation, equality and output are host contracts. Aggregate values, checked errors, resources, explicit Text views and binary execution integration remain future work.
 
 ## Module artifacts and caching
 
@@ -101,9 +91,13 @@ erist object module.eri        → module.eri-object.json
 erist compile-module module.eri
 ```
 
-Object format v3 (`universal-ir-v3`) serializes concrete Universal IR and can carry a bootstrap `eristavi-source-v1` generic template for public inferred-generic functions. Downstream object-only builds can produce concrete specializations after the original `.eri` source is removed.
+Object format v3 (`universal-ir-v3`) serializes concrete Universal IR and can carry a reusable bootstrap template for public inferred-generic functions. Downstream object-only builds can specialize these functions after original source removal.
 
 The module cache is keyed by source content plus dependency public-interface digests, so public contract changes invalidate dependents while private-only dependency changes do not.
+
+## Unicode conformance
+
+The toolchain pins Unicode 17.0.0. CI downloads an immutable-revision copy of the official Unicode-17 `GraphemeBreakTest` fixture and executes every non-comment vector against the pinned reference segmenter. Direct/generated-C Text-view tests provide additional backend coverage.
 
 ## Commands
 
@@ -123,6 +117,7 @@ erist build-asm examples/hello.eri -o hello.s --target x86_64-linux
 erist build-direct examples/hello.eri -o hello --target x86_64-linux
 erist link-direct examples/hello.eri -o hello --target x86_64-linux
 erist build-asm examples/hello.eri -o hello-aarch64.s --target arm64-linux
+erist build-direct examples/hello.eri -o hello-aarch64 --target arm64-linux
 erist build-js examples/hello.eri -o hello.mjs
 erist build-wat examples/hello.eri -o hello.wat
 ```
@@ -133,22 +128,22 @@ erist build-wat examples/hello.eri -o hello.wat
 python -m unittest discover -s tests -v
 ```
 
-The current suite contains **245 tests** and passes under:
+The current suite contains **255 tests** and passes under:
 
-- GCC / Ubuntu / `-O2`;
-- Clang / Ubuntu / `-O2`;
-- Clang / macOS / `-O2`.
+- GCC / x86-64 Ubuntu / `-O2`;
+- Clang / x86-64 Ubuntu / `-O2`;
+- Clang / ARM64 Ubuntu / `-O2`;
+- Clang / ARM64 macOS / `-O2`.
 
-Direct x86-64 executable tests run on Linux. ARM64 expanded runtime output is cross-assembled, with native Linux execution host-gated.
+Platform-specific native tests execute on their matching Linux architecture. The same matrix runs the official Unicode-17 grapheme vectors.
 
 ## Remaining engineering boundary
 
 The principal work is now production hardening:
 
-- typed heap descriptors and better GC liveness/precision;
-- native ARM64 Linux CI and runtime conformance;
-- applying stack-slot/register analyses to real allocation;
-- broader JavaScript/WebAssembly runtime parity;
-- compact production artifact/linker formats;
+- ARM64 GC and explicit Text-view parity;
+- real register allocation and additional optimization passes;
+- broader JavaScript/WebAssembly failure/resource/Text-view parity;
+- compact production object/linker formats;
 - broader OS/ABI support and later RISC-V;
 - wider standard library.
