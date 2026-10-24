@@ -182,20 +182,42 @@ def interference_graph(fn: UFunction) -> dict[int, frozenset[int]]:
     return {value_id: frozenset(neighbors) for value_id, neighbors in graph.items()}
 
 
-def coalesce_stack_slots(fn: UFunction, pinned_values: set[int] | frozenset[int] = frozenset()) -> StackSlotPlan:
+def coalesce_stack_slots(
+    fn: UFunction,
+    pinned_values: set[int] | frozenset[int] = frozenset(),
+    excluded_values: set[int] | frozenset[int] = frozenset(),
+) -> StackSlotPlan:
     """Color virtual-value spill slots using CFG liveness.
 
     Pinned values receive unique, never-reused slots. Direct GC backends pin
     heap-valued temporaries so a root frame can attach one stable type descriptor
-    to each address. Remaining values are greedily colored by interference.
+    to each address.
+
+    Excluded values receive no spill slot at all. Direct native backends use this
+    for virtual values whose complete lifetime is represented by an allocated
+    physical register. Pinned storage always wins over exclusion: a value needed
+    as a stable compiler root can never be removed from the frame accidentally.
+
+    Remaining values are greedily colored by interference.
     """
 
     graph = interference_graph(fn)
     pinned = sorted(value_id for value_id in pinned_values if value_id in graph)
+    pinned_set = set(pinned)
+    excluded = {
+        value_id
+        for value_id in excluded_values
+        if value_id in graph and value_id not in pinned_set
+    }
+
     slots: dict[int, int] = {value_id: index for index, value_id in enumerate(pinned)}
     first_reusable = len(pinned)
 
-    unpinned = [value_id for value_id in graph if value_id not in slots]
+    unpinned = [
+        value_id
+        for value_id in graph
+        if value_id not in slots and value_id not in excluded
+    ]
     unpinned.sort(key=lambda value_id: (-len(graph[value_id]), value_id))
     for value_id in unpinned:
         forbidden = {slots[neighbor] for neighbor in graph[value_id] if neighbor in slots}

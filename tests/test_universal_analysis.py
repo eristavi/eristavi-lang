@@ -39,6 +39,33 @@ class UniversalAnalysisTests(unittest.TestCase):
         finally:
             td.cleanup()
 
+    def test_excluded_register_values_omit_slots_but_pinned_values_win(self):
+        left = UValue(0, "i64")
+        right = UValue(1, "i64")
+        result = UValue(2, "i64")
+        block = UBlock(
+            "entry",
+            [
+                UInstruction("const_i64", left, (), None, 10),
+                UInstruction("const_i64", right, (), None, 20),
+                UInstruction("add_checked", result, (left, right), None, None),
+            ],
+            UReturn(result),
+        )
+        fn = UFunction("probe", "i64", [], [], [block], 3)
+
+        ordinary = coalesce_stack_slots(fn)
+        compact = coalesce_stack_slots(fn, excluded_values={0, 1})
+        pinned = coalesce_stack_slots(fn, pinned_values={0}, excluded_values={0, 1})
+
+        self.assertIn(0, ordinary.slots)
+        self.assertIn(1, ordinary.slots)
+        self.assertNotIn(0, compact.slots)
+        self.assertNotIn(1, compact.slots)
+        self.assertLess(compact.slot_count, ordinary.slot_count)
+        self.assertIn(0, pinned.slots)
+        self.assertNotIn(1, pinned.slots)
+
     def test_cfg_liveness_marks_heap_value_across_store_safepoint(self):
         value = UValue(0, TEXT)
         local = ULocal(0, "saved", TEXT)

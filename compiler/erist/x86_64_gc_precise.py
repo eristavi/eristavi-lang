@@ -19,9 +19,10 @@ class X86_64PreciseRootGCLinuxBackend(X86_64GCLinuxBackend):
     """Production-facing direct GC composition for the current bootstrap runtime.
 
     Heap locals always receive stable roots. Heap Universal-IR temporaries receive
-    roots only when CFG liveness proves they must survive a GC safe point. Scalar
-    temporaries reuse non-overlapping spill slots; heap temporary slots stay pinned
-    and unique so compiler roots retain stable addresses.
+    roots only when CFG liveness proves they must survive a GC safe point.
+    Register-resident scalar temporaries omit spill slots entirely; remaining
+    scalar temporaries reuse non-overlapping spill slots. Heap temporary slots
+    stay pinned and unique so compiler roots retain stable addresses.
 
     Each compiler root also carries a static type descriptor. The collector uses
     those descriptors to traverse nominal fields, maybe/identity wrappers, Lists,
@@ -160,7 +161,8 @@ class X86_64PreciseRootGCLinuxBackend(X86_64GCLinuxBackend):
             for value_id, type_name in types.items()
             if type_name not in {I64, F64, BOOL, "void"}
         }
-        plan = coalesce_stack_slots(fn, heap_value_ids)
+        allocated_value_ids = self._allocated_value_ids()
+        plan = coalesce_stack_slots(fn, heap_value_ids, allocated_value_ids)
         self.value_slots = plan.slots
         self.temp_slot_count = plan.slot_count
 
