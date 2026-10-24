@@ -195,6 +195,22 @@ class X86RegisterAllocationTests(unittest.TestCase):
         finally:
             td.cleanup()
 
+    def test_precise_gc_frame_omits_register_resident_scalar_spills(self):
+        td, program = self.lower("output((40 + 2) * 3);")
+        try:
+            fn = program.function("__entry")
+            allocation = allocate_x86_registers(fn)
+            self.assertTrue(allocation.registers)
+
+            backend = X86_64PreciseRootGCLinuxBackend()
+            backend.emit(program)
+
+            allocated_ids = set(allocation.registers)
+            self.assertTrue(allocated_ids.isdisjoint(backend.value_slots))
+            self.assertLess(backend.temp_slot_count, fn.value_count)
+        finally:
+            td.cleanup()
+
 
 if __name__ == "__main__":
     unittest.main()
