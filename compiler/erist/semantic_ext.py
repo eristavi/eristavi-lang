@@ -11,8 +11,11 @@ from .typesys import (
     TEXT_BYTES,
     TEXT_CHARACTERS,
     TEXT_SCALARS,
+    ListType,
     TextViewType,
+    TypeVar,
     resolve,
+    unify,
 )
 
 
@@ -84,7 +87,8 @@ class Analyzer(BaseAnalyzer):
 
     def _target_type(self, target, for_write=False):
         if isinstance(target, IndexExpr):
-            bt = resolve(self._expr(target.base, True, False))
+            raw_bt = self._expr(target.base, True, False)
+            bt = resolve(raw_bt)
             if isinstance(bt, TextViewType):
                 self._require_type(
                     self._expr(target.index, True, False),
@@ -95,6 +99,24 @@ class Analyzer(BaseAnalyzer):
                 if for_write:
                     raise SemanticError("Text views are read-only", target.location)
                 return INT if bt.kind == "bytes" else TEXT
+
+            # Reading through a generic indexed expression already shapes an
+            # unresolved parameter as List<T>.  Indexed assignment must impose
+            # the same relationship so generic functions can express ordinary
+            # List mutation without explicit generic syntax.  The List is still
+            # passed by value; this only completes the inference relationship.
+            if isinstance(bt, TypeVar):
+                element = TypeVar("element")
+                shaped = ListType(element)
+                unify(raw_bt, shaped)
+                self._require_type(
+                    self._expr(target.index, True, False),
+                    INT,
+                    target.index.location,
+                    "List index must have type Int",
+                )
+                return element
+
         if isinstance(target, MemberExpr):
             bt = resolve(self._expr(target.base, True, False))
             if isinstance(bt, TextViewType):
