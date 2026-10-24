@@ -38,8 +38,11 @@ class CBackend:
         if p.functions: parts.append('\n'.join(self._function_prototype(f) for f in p.functions))
         for f in p.functions: parts.append(self._function(f))
         body=self._stmts(p.entry,[])
-        parts.append('int main(void) {\n    fesetround(FE_TONEAREST);\n'+self._indent_text(body,1)+'    return 0;\n}\n')
+        parts.append(self._entry_function(body))
         return '\n'.join(x for x in parts if x)
+
+    def _entry_function(self,body):
+        return 'int main(void) {\n    fesetround(FE_TONEAREST);\n'+self._indent_text(body,1)+'    return 0;\n}\n'
 
     def _collect_prefixed_types(self,p,prefix):
         out=set()

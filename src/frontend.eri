@@ -1,0 +1,66 @@
+import std.files;
+import std.process;
+import compiler.lexer;
+import compiler.parser;
+import compiler.diagnostic;
+import compiler.format;
+import compiler.report;
+
+function read(path Text) returns Text fails files.FileError {
+    with file be try files.openRead(path) { return try file.readText(); }
+}
+
+function write(path Text, text Text) fails files.FileError {
+    with file be try files.create(path) { try file.writeText(text); }
+}
+
+function usage() {
+    process.writeError("Usage: erist-frontend check|ast|tokens SOURCE.eri [--output REPORT.json]");
+    process.writeError("Syntax frontend only. --output creates a new file; existing files are preserved.");
+    process.setExitCode(2);
+}
+
+function run() {
+    let arguments be process.arguments();
+    if arguments.count == 1 {
+        if arguments[0] == "--help" {
+            output("Usage: erist-frontend check|ast|tokens SOURCE.eri [--output REPORT.json]");
+            output("Checks syntax only; semantic analysis and code generation remain Stage-0.");
+            return;
+        }
+    }
+    if arguments.count != 2 and arguments.count != 4 { usage(); return; }
+    let command be arguments[0];
+    if command != "check" and command != "ast" and command != "tokens" { usage(); return; }
+    if arguments.count == 4 {
+        if arguments[2] != "--output" or command == "check" { usage(); return; }
+    }
+    let path be arguments[1];
+    let source be read(path) else error files.FileError {
+        process.writeError(path + ": file error: " + error.message);
+        process.setExitCode(1); return;
+    };
+    let tokens be lexer.lex(source) else error diagnostic.LexError {
+        process.writeError(path + ":" + format.integer(error.line) + ":" + format.integer(error.column) + ": lex error: " + error.message);
+        process.setExitCode(1); return;
+    };
+    let text be "";
+    if command == "tokens" { text = report.tokenList(tokens); }
+    else {
+        let tree be parser.parse(tokens) else error diagnostic.ParseError {
+            process.writeError(path + ":" + format.integer(error.line) + ":" + format.integer(error.column) + ": parse error: " + error.message);
+            process.setExitCode(1); return;
+        };
+        if command == "check" { return; }
+        text = report.tree(tree, tokens);
+    }
+    if arguments.count == 4 {
+        let destination be arguments[3];
+        write(destination, text + "\n") else error files.FileError {
+            process.writeError(destination + ": file error: " + error.message);
+            process.setExitCode(1);
+        };
+    } else { output(text); }
+}
+
+run();

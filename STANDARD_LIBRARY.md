@@ -105,3 +105,41 @@ Current execution support: reference runtime and generated-C backend (`erist bui
 The C executable embeds pinned tables and has no Python/ICU/locale dependency at
 runtime. Direct native, JavaScript and Wasm implementations of this library are
 pending and reject its use explicitly. Existing target capabilities are unchanged.
+
+## Frontend bootstrap I/O
+
+These additions currently execute in the reference runtime and C backend. Other
+backends reject their use with guidance to use `erist build`.
+
+### `files.openRead(path)`
+
+Opens an existing file for UTF-8 reading without requiring write permission.
+The returned `files.File` is owned by `with` and uses the existing cleanup and
+checked `files.FileError` contract. Attempting `writeText` on a read-only resource
+is a checked error and does not modify the input. Reads preserve CR/LF scalars.
+
+### `files.create(path)`
+
+Exclusively creates a new UTF-8 file and returns a writable scoped `files.File`.
+An existing path, including a symlink, causes checked `files.FileError`; it is not
+truncated. `writeText` and `readText` use the existing file-resource contract.
+Embedded NUL paths and OS acquisition errors are checked file failures. Contents
+can contain embedded NUL. This is not an atomic file-replacement operation.
+
+## `std.process`
+
+| Function | Result | Contract |
+| --- | --- | --- |
+| `process.arguments()` | inferred List of Text | A value snapshot of arguments, excluding the executable name. Empty values and ordering are preserved. Invalid UTF-8 produces a defined runtime fault. |
+| `process.writeError(text)` | no value | Writes Text followed by a newline to stderr. |
+| `process.setExitCode(code)` | no value | Sets the eventual entry exit status to an Int from 0 through 255. Out-of-range values produce a defined runtime fault. |
+
+`setExitCode` does not terminate execution. Ordinary return and checked-failure
+cleanup continue to release scoped resources. Imported modules share the same
+process state; modifying an argument List does not modify the stored arguments.
+The default exit status is zero. A runtime fault or unhandled failure still exits
+with failure according to the existing runtime contract.
+
+The reference CLI forwards arguments with `erist run SOURCE.eri -- ARGUMENTS`.
+These functions are library operations; Eristavi's implicit entry body and frozen
+keyword set are unchanged.

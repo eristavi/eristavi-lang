@@ -1,0 +1,104 @@
+# Eristavi-written frontend executable
+
+The repository now contains a usable **syntax frontend written in Eristavi** at
+`src/frontend.eri`. It reads a source file, runs the Eristavi-written lexer/parser,
+and checks syntax or writes a machine-readable token/AST report.
+
+It does not yet resolve imports, check types or generate application code.
+`erist check` remains the Stage-0 semantic checker; `erist-frontend check` checks
+syntax only. An unknown function name can therefore pass the frontend and still
+be rejected by Stage-0 semantic analysis.
+
+## Build
+
+From the repository root, with the bootstrap dependencies and a C compiler installed:
+
+```sh
+python -m pip install -e .
+erist build src/frontend.eri --source-root src -o erist-frontend
+```
+
+The build uses Python Stage-0 and the portable C backend. Once built, the executable
+runs locally without Python, a C compiler, installed Eristavi source modules or
+network access. It still uses the host's normal system libraries. This is an
+offline frontend executable, not yet a self-building standalone compiler.
+
+## Use
+
+```sh
+./erist-frontend check examples/hello.eri
+./erist-frontend ast examples/hello.eri
+./erist-frontend ast examples/hello.eri --output hello.ast.json
+./erist-frontend tokens examples/hello.eri --output hello.tokens.json
+./erist-frontend --help
+```
+
+Paths may be absolute or relative to the process working directory. Spaces and
+Unicode names are passed as ordinary arguments; use normal shell quoting when
+needed. This tool does not need a path-normalization library or an import resolver.
+
+Successful `check` is silent. Reports go to stdout unless `--output` is specified.
+Diagnostics go to stderr. Exit status is **0** for success, **1** for source/I/O
+failure, and **2** for incorrect command usage.
+
+The complete source is read and analyzed before a report file is created.
+`--output` exclusively creates a new file. Existing files, symlinks and the input
+itself are never truncated. Choose a new report name or remove an old report
+explicitly before reusing its name. A failed write can leave a partial newly
+created report; output is not an atomic-replacement API.
+
+The reference runner can execute the same entry program:
+
+```sh
+erist run src/frontend.eri --source-root src -- ast examples/hello.eri
+```
+
+Arguments after `--` are forwarded to the Eristavi program unchanged.
+
+## Reports
+
+AST output is an object with `format: "eristavi-ast-v1"`, `syntaxOnly: true`, and
+`tree`. Each tree node is an array:
+
+```text
+[kind, text, extra, flag, line, column, firstChildren, secondChildren, thirdChildren]
+```
+
+Kinds and the contextual `extra`/`flag` fields follow `src/compiler/ast.eri` and
+`src/compiler/parser.eri`. Each child group is an ordered array; internal identity
+handles and sibling links do not leak into the report. The program node uses the
+EOF location. Numeric literals retain validated spelling, Text contains decoded
+scalars, and identifiers use pinned Unicode-17 NFC identity.
+
+Token output has `format: "eristavi-tokens-v1"` and `tokens`. Each token is:
+
+```text
+[kind, rawLexeme, valueText, line, column]
+```
+
+Numeric `valueText` remains validated source spelling for the later typed literal
+stage. The report includes EOF. JSON escaping preserves control scalars and
+embedded NUL. Report versions are bootstrap inspection contracts, not a frozen
+public compiler IR or object ABI.
+
+## Conformance and boundaries
+
+`tests/fixtures/frontend_cases.json` is shared by the Stage-0 parser and the compiled
+Eristavi frontend. Tests compare complete AST shapes and source locations for
+valid cases, and phase/location for invalid cases. The compiled frontend also
+parses every repository `.eri` file under `src/` and compares its AST to Stage-0.
+Additional tests cover token payloads, exact UTF-8 I/O, error status, relative and
+Unicode paths, report preservation and execution with an empty `PATH`.
+
+The lexer/parser/report formatter and command flow are Eristavi source. The small
+`std.process`, `std.unicode`, `files.openRead` and `files.create` runtime boundaries
+currently execute in the reference runtime and generated-C route. Direct native,
+JavaScript and Wasm support for these new library operations is pending and their
+use is rejected explicitly. No language syntax or implicit ownership rules were
+added for this phase.
+
+Next comes semantic analysis in Eristavi, followed by verified IR and code
+generation. Full self-building requires repeatable compiler builds and equivalent
+semantic/conformance results. The final offline native toolchain must also bundle
+or implement its assembler/linker functionality before external build tools can
+be removed from normal native compilation.

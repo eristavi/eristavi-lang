@@ -1,0 +1,48 @@
+import compiler.ast;
+import compiler.token;
+import compiler.format;
+
+function tokenAt(tokens, index Int) returns token.Token {
+    return tokens[index];
+}
+
+function chain(head maybe identity ast.Node, tokens) returns Text {
+    let result be "[";
+    let cursor be head;
+    let separator be "";
+    while cursor != none {
+        result = result + separator + node(cursor, tokens);
+        separator = ",";
+        cursor = cursor.next;
+    }
+    return result + "]";
+}
+
+function node(value identity ast.Node, tokens) returns Text {
+    let location be tokenAt(tokens, value.token);
+    let result be "[" + format.integer(value.kind) + "," + format.quote(value.text);
+    result = result + "," + format.integer(value.extra) + "," + format.boolean(value.flag);
+    result = result + "," + format.integer(location.line) + "," + format.integer(location.column);
+    result = result + "," + chain(value.first, tokens);
+    result = result + "," + chain(value.second, tokens);
+    result = result + "," + chain(value.third, tokens);
+    return result + "]";
+}
+
+public function tree(root identity ast.Node, tokens) returns Text {
+    return "{\"format\":\"eristavi-ast-v1\",\"syntaxOnly\":true,\"tree\":" + node(root, tokens) + "}";
+}
+
+public function tokenList(tokens) returns Text {
+    let result be "{\"format\":\"eristavi-tokens-v1\",\"tokens\":[";
+    let separator be "";
+    let index be 0;
+    while index < tokens.count {
+        let item be tokenAt(tokens, index);
+        result = result + separator + "[" + format.integer(item.kind) + "," + format.quote(item.lexeme);
+        result = result + "," + format.quote(item.value) + "," + format.integer(item.line) + "," + format.integer(item.column) + "]";
+        separator = ",";
+        index = index + 1;
+    }
+    return result + "]}";
+}

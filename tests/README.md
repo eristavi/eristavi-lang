@@ -6,7 +6,7 @@ Run the full suite from the repository root:
 python -m unittest discover -s tests -v
 ```
 
-The current suite contains **300 tests**.
+The current suite contains **322 tests**.
 
 Coverage spans frontend/reference semantics and multiple compiler/runtime layers, including:
 

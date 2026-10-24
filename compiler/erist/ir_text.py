@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .diagnostics import SemanticError
-from .stdlib import UNICODE_FUNCTIONS
+from .stdlib import UNICODE_FUNCTIONS, PROCESS_FUNCTIONS
 from .ir import IRExpr, IRIndex, Lowerer as BaseLowerer, STD_FILE, STD_FILE_ERROR
 from .syntax import CallExpr, IndexExpr, MemberExpr, NameExpr
 from .typesys import (
@@ -20,6 +20,7 @@ from .typesys import (
     ResourceType,
     TextViewType,
     resolve,
+    describe,
 )
 
 
@@ -54,6 +55,18 @@ class IRFileRemove(IRExpr):
 class IRUnicodeCall(IRExpr):
     name: str
     argument: IRExpr
+
+
+@dataclass(frozen=True)
+class IRProcessCall(IRExpr):
+    name: str
+    arguments: tuple[IRExpr, ...]
+
+
+@dataclass(frozen=True)
+class IRFileAcquire(IRExpr):
+    name: str
+    path: IRExpr
 
 
 class Lowerer(BaseLowerer):
@@ -95,12 +108,21 @@ class Lowerer(BaseLowerer):
             return NO_VALUE
         return NamedType(t)
 
+    def _stdlib_call(self, e, module):
+        return (isinstance(e, CallExpr) and isinstance(e.callee, MemberExpr)
+                and isinstance(e.callee.base, NameExpr)
+                and self.a.imports.get(e.callee.base.name) == ("std", module))
+
     def _unicode_call(self, e):
         return (isinstance(e, CallExpr) and isinstance(e.callee, MemberExpr)
                 and isinstance(e.callee.base, NameExpr)
                 and self.a.imports.get(e.callee.base.name) == ("std", "unicode"))
 
     def _expr_type(self, e):
+        if self._stdlib_call(e, "process"):
+            return PROCESS_FUNCTIONS[e.callee.name][1]
+        if self._stdlib_call(e, "files") and e.callee.name in ("openRead", "create"):
+            return ResourceType(STD_FILE, (STD_FILE_ERROR,))
         if self._unicode_call(e):
             return UNICODE_FUNCTIONS[e.callee.name][1]
         if isinstance(e, IndexExpr):
@@ -109,6 +131,8 @@ class Lowerer(BaseLowerer):
                 return INT if bt.kind == "bytes" else TEXT
         if isinstance(e, MemberExpr):
             bt = resolve(self._expr_type(e.base))
+            if bt == NamedType(STD_FILE_ERROR) and e.name in ("message", "path"):
+                return TEXT
             if bt == TEXT and e.name in ("characters", "scalars", "bytes"):
                 return TextViewType(e.name)
             if isinstance(bt, TextViewType) and e.name == "count":
@@ -129,6 +153,8 @@ class Lowerer(BaseLowerer):
     def _ast_type(self, e):
         if isinstance(e, MemberExpr):
             bt = resolve(self._expr_type(e.base))
+            if bt == NamedType(STD_FILE_ERROR) and e.name in ("message", "path"):
+                return TEXT
             if bt == TEXT and e.name in ("characters", "scalars", "bytes"):
                 return TextViewType(e.name)
             if isinstance(bt, TextViewType) and e.name == "count":
@@ -140,6 +166,11 @@ class Lowerer(BaseLowerer):
         return super()._ast_type(e)
 
     def _expr(self, e):
+        if self._stdlib_call(e, "process"):
+            return IRProcessCall(describe(PROCESS_FUNCTIONS[e.callee.name][1]), e.location,
+                                 e.callee.name, tuple(self._expr(arg) for arg in e.arguments))
+        if self._stdlib_call(e, "files") and e.callee.name in ("openRead", "create"):
+            return IRFileAcquire(STD_FILE, e.location, e.callee.name, self._expr(e.arguments[0]))
         if self._unicode_call(e):
             result = UNICODE_FUNCTIONS[e.callee.name][1].name
             return IRUnicodeCall(result, e.location, e.callee.name, self._expr(e.arguments[0]))

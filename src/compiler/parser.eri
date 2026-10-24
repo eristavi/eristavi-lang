@@ -231,7 +231,7 @@ function parseConstruction(tokens, state identity parser_state.ParserState, type
     let fields be ast.emptyChain();
     while not check(tokens, state, token.rightBrace()) {
         if check(tokens, state, token.eof()) {
-            let found be current(tokens, state);
+            let found be tokenAt(tokens, start);
             fail diagnostic.ParseError {
                 message = "unterminated construction";
                 line = found.line;
@@ -313,9 +313,10 @@ function parsePrefix(tokens, state identity parser_state.ParserState, types, ali
 function parseMultiplicative(tokens, state identity parser_state.ParserState, types, aliases) returns identity ast.Node fails diagnostic.ParseError {
     let left be try parsePrefix(tokens, state, types, aliases);
     while check(tokens, state, token.star()) or check(tokens, state, token.slash()) or check(tokens, state, token.percent()) {
+        let opIndex be state.index;
         let op be advance(tokens, state);
         let right be try parsePrefix(tokens, state, types, aliases);
-        left = ast.make(ast.binaryExpr(), state.index - 1, left, right, none, op.lexeme, 0, false);
+        left = ast.make(ast.binaryExpr(), opIndex, left, right, none, op.lexeme, 0, false);
     }
     return left;
 }
@@ -323,9 +324,10 @@ function parseMultiplicative(tokens, state identity parser_state.ParserState, ty
 function parseAdditive(tokens, state identity parser_state.ParserState, types, aliases) returns identity ast.Node fails diagnostic.ParseError {
     let left be try parseMultiplicative(tokens, state, types, aliases);
     while check(tokens, state, token.plus()) or check(tokens, state, token.minus()) {
+        let opIndex be state.index;
         let op be advance(tokens, state);
         let right be try parseMultiplicative(tokens, state, types, aliases);
-        left = ast.make(ast.binaryExpr(), state.index - 1, left, right, none, op.lexeme, 0, false);
+        left = ast.make(ast.binaryExpr(), opIndex, left, right, none, op.lexeme, 0, false);
     }
     return left;
 }
@@ -337,9 +339,10 @@ function isComparisonKind(kind Int) returns Bool {
 function parseComparison(tokens, state identity parser_state.ParserState, types, aliases) returns identity ast.Node fails diagnostic.ParseError {
     let left be try parseAdditive(tokens, state, types, aliases);
     if isComparisonKind(current(tokens, state).kind) {
+        let opIndex be state.index;
         let op be advance(tokens, state);
         let right be try parseAdditive(tokens, state, types, aliases);
-        left = ast.make(ast.binaryExpr(), state.index - 1, left, right, none, op.lexeme, 0, false);
+        left = ast.make(ast.binaryExpr(), opIndex, left, right, none, op.lexeme, 0, false);
         if isComparisonKind(current(tokens, state).kind) {
             let found be current(tokens, state);
             fail diagnostic.ParseError {
@@ -363,8 +366,9 @@ function parseNot(tokens, state identity parser_state.ParserState, types, aliase
 function parseAnd(tokens, state identity parser_state.ParserState, types, aliases) returns identity ast.Node fails diagnostic.ParseError {
     let left be try parseNot(tokens, state, types, aliases);
     while match(tokens, state, token.andKeyword()) {
+        let opIndex be state.index - 1;
         let right be try parseNot(tokens, state, types, aliases);
-        left = ast.make(ast.binaryExpr(), state.index - 1, left, right, none, "and", 0, false);
+        left = ast.make(ast.binaryExpr(), opIndex, left, right, none, "and", 0, false);
     }
     return left;
 }
@@ -372,8 +376,9 @@ function parseAnd(tokens, state identity parser_state.ParserState, types, aliase
 function parseOr(tokens, state identity parser_state.ParserState, types, aliases) returns identity ast.Node fails diagnostic.ParseError {
     let left be try parseAnd(tokens, state, types, aliases);
     while match(tokens, state, token.orKeyword()) {
+        let opIndex be state.index - 1;
         let right be try parseAnd(tokens, state, types, aliases);
-        left = ast.make(ast.binaryExpr(), state.index - 1, left, right, none, "or", 0, false);
+        left = ast.make(ast.binaryExpr(), opIndex, left, right, none, "or", 0, false);
     }
     return left;
 }
@@ -386,7 +391,7 @@ function parseBlockAfterOpen(tokens, state identity parser_state.ParserState, ty
     let statements be ast.emptyChain();
     while not check(tokens, state, token.rightBrace()) {
         if check(tokens, state, token.eof()) {
-            let found be current(tokens, state);
+            let found be tokenAt(tokens, start);
             fail diagnostic.ParseError {
                 message = "unterminated block; expected '}'";
                 line = found.line;
@@ -443,11 +448,11 @@ function parseTypeDeclaration(tokens, state identity parser_state.ParserState, s
     let fields be ast.emptyChain();
     while not check(tokens, state, token.rightBrace()) {
         if check(tokens, state, token.eof()) {
-            let found be current(tokens, state);
+            let found be tokenAt(tokens, start);
             fail diagnostic.ParseError { message = "unterminated type declaration"; line = found.line; column = found.column; };
         }
-        let fieldStart be state.index;
         let isFixed be match(tokens, state, token.fixedKeyword());
+        let fieldStart be state.index;
         let fieldName be try consume(tokens, state, token.identifier(), "expected field name");
         let fieldType be try parseTypeRef(tokens, state);
         try consume(tokens, state, token.semicolon(), "expected ';' after field declaration");
@@ -463,7 +468,7 @@ function parseErrorDeclaration(tokens, state identity parser_state.ParserState, 
     let fields be ast.emptyChain();
     while not check(tokens, state, token.rightBrace()) {
         if check(tokens, state, token.eof()) {
-            let found be current(tokens, state);
+            let found be tokenAt(tokens, start);
             fail diagnostic.ParseError { message = "unterminated error declaration"; line = found.line; column = found.column; };
         }
         let fieldStart be state.index;
@@ -664,12 +669,12 @@ function parseStatement(tokens, state identity parser_state.ParserState, types, 
         }
         let value be try parseValueExpression(tokens, state, types, aliases);
         try consume(tokens, state, token.semicolon(), "expected ';' after assignment");
-        return ast.make(ast.assignStmt(), start, expression, value, none, "", 0, false);
+        return ast.make(ast.assignStmt(), expression.token, expression, value, none, "", 0, false);
     }
 
     expression = try parseHandledTail(tokens, state, types, aliases, expression);
     try consume(tokens, state, token.semicolon(), "expected ';' after expression");
-    return ast.make(ast.expressionStmt(), start, expression, none, none, "", 0, false);
+    return ast.make(ast.expressionStmt(), expression.token, expression, none, none, "", 0, false);
 }
 
 public function parse(tokens) returns identity ast.Node fails diagnostic.ParseError {

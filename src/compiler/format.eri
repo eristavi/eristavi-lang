@@ -1,0 +1,38 @@
+// Compiler report formatting, expressed entirely in the frozen language.
+public function integer(value Int) returns Text {
+    if value == 0 { return "0"; }
+    let remaining be value;
+    // Keep the magnitude negative so Int's minimum value also formats safely.
+    if remaining > 0 { remaining = -remaining; }
+    let result be "";
+    while remaining != 0 {
+        let digit be -(remaining % 10);
+        result = "0123456789".scalars[digit] + result;
+        remaining = remaining / 10;
+    }
+    if value < 0 { return "-" + result; }
+    return result;
+}
+
+public function boolean(value Bool) returns Text {
+    if value { return "true"; }
+    return "false";
+}
+
+public function quote(value Text) returns Text {
+    let result be "\"";
+    let index be 0;
+    while index < value.scalars.count {
+        let scalar be value.scalars[index];
+        let escaped be scalar;
+        if scalar == "\"" { escaped = "\\\""; }
+        if scalar == "\\" { escaped = "\\\\"; }
+        if scalar.bytes.count == 1 and scalar.bytes[0] < 32 {
+            let byte be scalar.bytes[0];
+            escaped = "\\u00" + "0123456789abcdef".scalars[byte / 16] + "0123456789abcdef".scalars[byte % 16];
+        }
+        result = result + escaped;
+        index = index + 1;
+    }
+    return result + "\"";
+}

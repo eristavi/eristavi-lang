@@ -34,7 +34,20 @@ runtime and generated-C backend. Direct native, JavaScript and Wasm support for
 this library remains pending; those routes reject its use with guidance to use
 `erist build`. Existing direct-native functionality remains available.
 
-See [`SELF_HOSTING.md`](SELF_HOSTING.md). This is not yet a compiler that can build itself.
+`src/frontend.eri` is now a usable syntax frontend: it reads a source file,
+checks syntax and emits token/AST JSON reports. The compiled executable runs
+offline without Python or a C compiler at runtime. Building it still uses Stage-0
+and a C toolchain; it does not yet check semantics or compile application code.
+
+```text
+erist build src/frontend.eri --source-root src -o erist-frontend
+./erist-frontend check examples/hello.eri
+./erist-frontend ast examples/hello.eri --output hello.ast.json
+```
+
+See [`FRONTEND_TOOL.md`](FRONTEND_TOOL.md) for build/use/report contracts and
+[`SELF_HOSTING.md`](SELF_HOSTING.md) for the migration. This is not yet a compiler
+that can build itself.
 
 ## Compiler architecture
 
@@ -198,7 +211,7 @@ erist build-wat examples/hello.eri -o hello.wat
 python -m unittest discover -s tests -v
 ```
 
-The current suite contains **300 tests**. The hosted CI matrix runs:
+The current suite contains **322 tests**. The hosted CI matrix runs:
 
 - GCC / x86-64 Ubuntu / `-O2`;
 - Clang / x86-64 Ubuntu / `-O2`;
@@ -211,6 +224,7 @@ See [`IMPLEMENTATION_AUDIT.md`](IMPLEMENTATION_AUDIT.md) for the audited boundar
 
 ## Documentation
 
+- [`FRONTEND_TOOL.md`](FRONTEND_TOOL.md) — Eristavi-written frontend executable
 - [`PRE_0_1_FREEZE.md`](PRE_0_1_FREEZE.md) — frozen source-language/frontend boundary
 - [`IMPLEMENTATION_AUDIT.md`](IMPLEMENTATION_AUDIT.md) — current audited implementation status
 - [`DESIGN_PHILOSOPHY.md`](DESIGN_PHILOSOPHY.md) — governing design charter
