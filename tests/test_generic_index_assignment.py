@@ -37,6 +37,15 @@ class GenericListRelationshipTests(unittest.TestCase):
         )
         self.assertEqual(self.execute(source), ['6'])
 
+    def test_member_maybe_narrowing_refines_exact_path(self):
+        source = (
+            'type Node { value Int; next maybe identity Node; } '
+            'let tail be identity Node { value=2; next=none; }; '
+            'let head be identity Node { value=1; next=tail; }; '
+            'if head.next != none { output(head.next.value); }'
+        )
+        self.assertEqual(self.execute(source), ['2'])
+
 
 if __name__ == '__main__':
     unittest.main()
