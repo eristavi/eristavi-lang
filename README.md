@@ -25,7 +25,9 @@ The project has a typed Eristavi IR and a working compiled path:
 Eristavi source → frontend → typed Eristavi IR → C11 → system C compiler → native executable
 ```
 
-The C/native path now has executable coverage for Lists, ordinary values, maybe, identity, checked errors, deterministic resources, modules and inferred-generic specializations in addition to scalar/control features. The main remaining frontend/backend parity gap is compiled support for the explicit Unicode Text views.
+The native bootstrap path now covers Lists, ordinary values, maybe, identity, checked errors, deterministic resources, modules, inferred-generic specializations, length-aware UTF-8 Text, and compiled byte/scalar Text views.
+
+Compiled Text is no longer modeled as a C string: embedded NUL is preserved through output, equality, concatenation and file round trips, and invalid UTF-8 from `readText()` remains a checked error. The remaining Text-view parity gap is compiled `text.characters`, which requires a pinned Unicode 17 grapheme-segmentation runtime and is deliberately rejected rather than approximated incorrectly.
 
 See [`IMPLEMENTATION_AUDIT.md`](IMPLEMENTATION_AUDIT.md) for the current audited boundary.
 
@@ -133,7 +135,7 @@ When installed via `pyproject.toml`, use the `erist` command directly.
 python -m unittest discover -s tests -v
 ```
 
-The verified suite contains **144 passing tests**. CI runs the complete suite with GCC and Clang on Ubuntu and Clang on macOS, with native compilation at `-O2`.
+The verified suite contains **155 passing tests**. CI runs the complete suite with GCC and Clang on Ubuntu and Clang on macOS, with native compilation at `-O2`; all three configurations pass.
 
 ## Documentation
 
