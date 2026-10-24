@@ -1,8 +1,8 @@
 # Eristavi Compilation Targets
 
-> **Status: Architectural direction with first direct native slice implemented**
+> **Status: Broad C backend, substantial direct x86-64 backend, ARM64 proof backend**
 
-Eristavi is designed around machine-independent compiler IRs. Target backends must preserve Eristavi semantics rather than inherit target-language or CPU behavior accidentally.
+Eristavi is designed around machine-independent compiler IRs. Target backends preserve Eristavi semantics rather than inheriting target-language, operating-system, or CPU behavior accidentally.
 
 ## Core target set
 
@@ -15,92 +15,97 @@ The long-term target strategy remains:
 
 Rust, Go, and PHP source-generation backends are not planned targets.
 
-## Current backend architecture
-
-Eristavi now has two relevant IR levels:
+## Current architecture
 
 ```text
 Eristavi source
     ↓
 typed/source-close Eristavi IR
-    ├─→ C11 portability backend
+    ├─→ C11 portability backend → C toolchain → native
     ↓
 Universal IR
-    └─→ direct CPU backend
+    ├─→ x86-64 Linux direct backend → assembly → native
+    └─→ ARM64 Linux backend → assembly
 ```
 
-The typed IR retains rich source semantics. Universal IR exposes lower target-neutral basic blocks and primitive checked operations for direct backends.
+The C path remains the broad portability baseline. The x86-64 route is a genuine direct compiler path and no longer only a scalar proof. ARM64 is the second CPU consumer of the same Universal IR and currently validates the scalar/function architecture.
 
-## Native
+## Native: x86-64 Linux
 
-Native compilation remains the primary long-term goal.
+The direct x86-64 System V backend currently executes:
 
-### First direct backend
+- Int, Bool, Float and length-aware Text;
+- functions, recursion, register and stack arguments;
+- checked Int arithmetic/division/remainder faults;
+- conditions, loops and short-circuit Boolean control flow;
+- ordinary nominal values with deep value semantics;
+- Lists, stable iteration, checked indexing and structural equality;
+- maybe/none;
+- managed identity and identity equality;
+- source-monomorphized inferred generics;
+- checked failures, typed/catch-all handlers and propagation;
+- deterministic `std.files` resources and cleanup;
+- exact-length UTF-8 file I/O plus checked `exists/remove`;
+- serialized module object linkage without dependency source for supported concrete functions/types.
 
-The first executable direct CPU slice targets **x86-64 Linux / System V**:
+Generated C does not participate in this route. The system compiler driver is currently used as assembler/linker.
 
-```text
-Eristavi source
-    ↓
-frontend
-    ↓
-typed IR
-    ↓
-Universal IR
-    ↓
-x86-64 assembly
-    ↓
-system assembler/linker
-    ↓
-native executable
-```
+Remaining direct x86-64 work includes Unicode Text views, production memory reclamation/GC, reusable precompiled generic templates, broader runtime/stdlib coverage and additional conformance/performance work.
 
-No generated C source is used in this path.
+## Native: ARM64 Linux
 
-The first slice covers Int/Bool locals, checked integer arithmetic, comparisons, `if / else`, `while`, and Int/Bool output. It is deliberately smaller than the mature C backend.
+An AArch64/AAPCS64 backend now consumes the same Universal IR for the scalar/function slice, including:
 
-x86-64 was selected first because the current CI can execute it directly. This is an implementation sequencing decision, not a language preference. ARM64 and later architectures must consume the same machine-independent semantics.
+- Int/Bool/Float;
+- functions, calls and recursion;
+- register/stack argument placement;
+- checked Int arithmetic/division/remainder;
+- comparisons and control flow;
+- scalar output.
+
+CI cross-assembles emitted ARM64 assembly with Clang's AArch64 target. A native execution test is present and activates only on an ARM64 Linux host.
+
+ARM64 aggregate, checked-error, resource and Text-runtime parity is not yet implemented. This backend currently proves the shared lower-IR architecture rather than claiming feature parity with x86-64.
 
 ## C
 
 C remains the broad bootstrap portability/interoperability target:
 
 ```text
-Eristavi typed IR → C source → C toolchain → native executable/library
+Eristavi typed IR → C11 → C toolchain → native executable
 ```
 
-The generated-C path currently implements substantially more of pre-0.1 than the first direct backend, including Text/Unicode, Lists, values, optionals, identity, checked failures, resources, modules and inferred generic specializations.
-
-Generated C is an implementation target, not the definition of Eristavi semantics.
+The generated-C backend covers the broad pre-0.1 implementation, including all three Unicode Text views with pinned grapheme segmentation. Generated C is an implementation target, not the definition of Eristavi semantics.
 
 ## JavaScript
 
 JavaScript remains a strategic target for browser and JavaScript-hosted environments.
 
-```text
-Eristavi IR → JavaScript
-```
+The backend must preserve checked signed 64-bit `Int`; ordinary JavaScript `Number` cannot silently stand in where integer precision would be lost. `BigInt` and runtime helpers may be required.
 
-The backend must preserve Eristavi semantics. In particular, checked signed 64-bit `Int` cannot silently become ordinary JavaScript `Number` where precision would be lost; `BigInt` and/or runtime helpers may be required.
+No JavaScript backend is implemented yet.
 
 ## WebAssembly
 
 WebAssembly remains a strategic direct target for portable sandboxed execution, browsers, servers, edge environments and embedding.
 
-Its runtime integration must preserve Eristavi semantics for memory management, checked failures, Text/Unicode, resources and other guarantees.
+Its runtime integration must preserve Eristavi semantics for memory management, checked failures, Unicode Text, resources and other guarantees.
+
+No WebAssembly backend is implemented yet.
 
 ## Semantic rule
 
-> Target platforms implement Eristavi semantics; they do not redefine them.
+> **Target platforms implement Eristavi semantics; they do not redefine them.**
 
-A program must not change its defined meaning merely because it is compiled to direct x86-64, generated C, JavaScript, WebAssembly, or a future architecture.
+A program must not change its defined meaning merely because it is compiled to direct x86-64, ARM64, generated C, WebAssembly or JavaScript.
 
 ## Next target work
 
-The recommended implementation order from the current state is:
+From the current state, the priority is:
 
-1. extend Universal IR with function calls and additional runtime/value concepts;
-2. grow the x86-64 backend through those capabilities;
-3. add ARM64 against the same Universal-IR boundary;
-4. add a direct WebAssembly backend when the runtime boundary is sufficiently stable;
-5. add JavaScript when browser/JS-hosted execution becomes a priority.
+1. production memory/GC support for direct heap-backed values;
+2. direct Unicode Text views and broader runtime parity;
+3. ARM64 parity against the same Universal IR plus native ARM CI;
+4. reusable inferred-generic module-object templates;
+5. WebAssembly once the direct runtime ABI is stable;
+6. JavaScript when browser/JS-hosted execution becomes a priority.
