@@ -4,7 +4,7 @@ from .diagnostics import SemanticError, SourceLocation
 from .syntax import *
 from .typesys import (
     describe, resolve, has_unresolved,
-    NoValueType, IdentityType, MaybeType, ListType, NamedType,
+    NoValueType, IdentityType, MaybeType, ListType, NamedType, AnyErrorType,
     INT, FLOAT, BOOL, TEXT, NO_VALUE,
 )
 
@@ -65,13 +65,33 @@ class IRWhile(IRStmt): condition: IRExpr; body: list[IRStmt]; location: SourceLo
 class IRFor(IRStmt): name: str; iterable: IRExpr; body: list[IRStmt]; location: SourceLocation
 @dataclass(frozen=True)
 class IRReturn(IRStmt): value: IRExpr|None; location: SourceLocation
+@dataclass(frozen=True)
+class IRFail(IRStmt): value: IRExpr; error_type: str; location: SourceLocation
+@dataclass(frozen=True)
+class IRErrorHandler:
+    error_type: str|None
+    body: list[IRStmt]
+    location: SourceLocation
+@dataclass(frozen=True)
+class IRHandledLet(IRStmt):
+    name: str; type_name: str; fixed: bool; value: IRExpr; handlers: list[IRErrorHandler]; location: SourceLocation
+@dataclass(frozen=True)
+class IRHandledAssign(IRStmt):
+    target: IRExpr; target_type: str; value: IRExpr; handlers: list[IRErrorHandler]; location: SourceLocation
+@dataclass(frozen=True)
+class IRHandledReturn(IRStmt):
+    value: IRExpr; handlers: list[IRErrorHandler]; location: SourceLocation
+@dataclass(frozen=True)
+class IRHandledExprStmt(IRStmt):
+    value: IRExpr; handlers: list[IRErrorHandler]; location: SourceLocation
 
 @dataclass(frozen=True)
 class IRParameter: name: str; type_name: str
 @dataclass(frozen=True)
 class IRStructField: name: str; type_name: str; fixed: bool=False
 @dataclass(frozen=True)
-class IRStruct: name: str; fields: list[IRStructField]
+class IRStruct:
+    name: str; fields: list[IRStructField]; is_error: bool=False
 @dataclass(frozen=True)
 class IRFunction:
     name: str
@@ -79,6 +99,7 @@ class IRFunction:
     return_type: str|None
     body: list[IRStmt]
     public: bool=False
+    fails: tuple[str,...]=()
 @dataclass(frozen=True)
 class IRProgram:
     structs: list[IRStruct]
@@ -88,8 +109,9 @@ class IRProgram:
 class Lowerer:
     """Lower one analyzed module to concrete typed Eristavi IR.
 
-    Inferred-generic functions are monomorphized from the concrete specializations
-    already proven by semantic analysis. Generic variables remain compiler-only.
+    Inferred-generic functions are monomorphized from concrete specializations
+    already proven by semantic analysis. Checked failures remain explicit IR
+    control effects; the C backend selects their physical propagation strategy.
     """
     def __init__(self,analyzer,module_id:str=""):
         self.a=analyzer
@@ -103,16 +125,14 @@ class Lowerer:
         for s in program.statements:
             if isinstance(s,ImportDecl):
                 continue
-            if isinstance(s,ErrorDecl):
-                raise SemanticError("the current typed IR backend does not yet lower checked errors",s.location)
-            if isinstance(s,TypeDecl):
+            if isinstance(s,(TypeDecl,ErrorDecl)):
                 canonical=self.a.local_types[s.name]
                 info=self.a.structs[canonical]
                 fs=[]
                 for f in info.fields.values():
                     tn=describe(resolve(f.type)); self._supported_type(tn,s.location)
                     fs.append(IRStructField(f.name,tn,f.fixed))
-                structs.append(IRStruct(canonical,fs))
+                structs.append(IRStruct(canonical,fs,isinstance(s,ErrorDecl)))
                 continue
             if isinstance(s,FunctionDecl):
                 fns.extend(self._functions(s))
@@ -147,8 +167,6 @@ class Lowerer:
             if not specs:
                 raise SemanticError(f"function {f.name!r} has no analyzed specialization",f.location)
             return [self._function_from_spec(f,specs[0],False)]
-        # An unused generic function may have only a symbolic proof specialization.
-        # It needs no emitted code until a concrete call specializes it.
         return [self._function_from_spec(f,s,True) for s in specs]
 
     def _function_from_spec(self,f,spec,generic:bool)->IRFunction:
@@ -166,7 +184,7 @@ class Lowerer:
             body=self._lower_block(f.body,False)
         finally:
             self.scopes=old_scopes; self.current_return=old_ret; self.generic_context=old_generic
-        return IRFunction(name,params,ret,body,f.public)
+        return IRFunction(name,params,ret,body,f.public,tuple(sorted(self.a.functions[f.name].fails)))
 
     def _lower_block(self,b:Block,new_scope=True,bindings:dict[str,str]|None=None):
         if new_scope: self.scopes.append(dict(bindings or {}))
@@ -180,8 +198,23 @@ class Lowerer:
             if name in s: return s[name]
         return None
 
+    def _handlers(self,handlers:list[ErrorHandler])->list[IRErrorHandler]:
+        out=[]
+        for h in handlers:
+            ht=None if h.type_ref is None else describe(resolve(self.a._resolve_type_ref(h.type_ref)))
+            binding=ht or "checked error"
+            out.append(IRErrorHandler(ht,self._lower_block(h.block,True,{"error":binding}),h.location))
+        return out
+
     def _stmt(self,s):
         if isinstance(s,LetStmt):
+            if isinstance(s.initializer,HandledExpr):
+                source_t=describe(self._expr_type(s.initializer.value))
+                target_t=describe(resolve(self.a._resolve_type_ref(s.type_annotation))) if s.type_annotation else source_t
+                self._supported_type(target_t,s.location)
+                value=self._coerce(self._expr(s.initializer.value),target_t,s.location)
+                self._declare(s.name,target_t)
+                return IRHandledLet(s.name,target_t,s.fixed,value,self._handlers(s.initializer.handlers),s.location)
             source_t=describe(self._expr_type(s.initializer))
             target_t=describe(resolve(self.a._resolve_type_ref(s.type_annotation))) if s.type_annotation else source_t
             self._supported_type(target_t,s.location)
@@ -189,38 +222,55 @@ class Lowerer:
             self._declare(s.name,target_t)
             return IRLet(s.name,target_t,s.fixed,value,s.location)
         if isinstance(s,AssignStmt):
-            target_t=describe(self._ast_type(s.target))
-            value=self._coerce(self._expr(s.value),target_t,s.location)
-            if isinstance(s.target,NameExpr):
-                return IRAssign(s.target.name,target_t,value,s.location)
-            if isinstance(s.target,IndexExpr) and isinstance(s.target.base,NameExpr):
-                return IRIndexAssign(s.target.base.name,self._expr(s.target.index),value,s.location)
-            if isinstance(s.target,MemberExpr):
-                return IRMemberAssign(self._member_expr(s.target),value,s.location)
+            if isinstance(s.value,HandledExpr):
+                target_t=describe(self._ast_type(s.target))
+                value=self._coerce(self._expr(s.value.value),target_t,s.location)
+                return IRHandledAssign(self._assignment_target(s.target),target_t,value,self._handlers(s.value.handlers),s.location)
+            target_t=describe(self._ast_type(s.target)); value=self._coerce(self._expr(s.value),target_t,s.location)
+            if isinstance(s.target,NameExpr): return IRAssign(s.target.name,target_t,value,s.location)
+            if isinstance(s.target,IndexExpr) and isinstance(s.target.base,NameExpr): return IRIndexAssign(s.target.base.name,self._expr(s.target.index),value,s.location)
+            if isinstance(s.target,MemberExpr): return IRMemberAssign(self._member_expr(s.target),value,s.location)
             raise SemanticError("the current C backend does not yet lower this assignment path",s.location)
         if isinstance(s,ExprStmt):
+            if isinstance(s.expression,HandledExpr):
+                return IRHandledExprStmt(self._expr(s.expression.value),self._handlers(s.expression.handlers),s.location)
             return IRExprStmt(self._expr(s.expression))
-        if isinstance(s,IfStmt):
-            return IRIf(self._expr(s.condition),self._lower_block(s.then_branch,True),self._lower_block(s.else_branch,True) if s.else_branch else [],s.location)
-        if isinstance(s,WhileStmt):
-            return IRWhile(self._expr(s.condition),self._lower_block(s.body,True),s.location)
+        if isinstance(s,IfStmt): return IRIf(self._expr(s.condition),self._lower_block(s.then_branch,True),self._lower_block(s.else_branch,True) if s.else_branch else [],s.location)
+        if isinstance(s,WhileStmt): return IRWhile(self._expr(s.condition),self._lower_block(s.body,True),s.location)
         if isinstance(s,ForStmt):
             it=self._expr(s.iterable); elem=list_inner(it.type_name)
             return IRFor(s.name,it,self._lower_block(s.body,True,{s.name:elem}),s.location)
         if isinstance(s,ReturnStmt):
             if s.value is None: return IRReturn(None,s.location)
+            if isinstance(s.value,HandledExpr):
+                value=self._expr(s.value.value)
+                if self.current_return is not None: value=self._coerce(value,self.current_return,s.location)
+                return IRHandledReturn(value,self._handlers(s.value.handlers),s.location)
             value=self._expr(s.value)
             if self.current_return is not None: value=self._coerce(value,self.current_return,s.location)
             return IRReturn(value,s.location)
+        if isinstance(s,FailStmt):
+            value=self._expr(s.value)
+            return IRFail(value,value.type_name,s.location)
+        if isinstance(s,WithStmt):
+            raise SemanticError("the current typed IR backend does not yet lower deterministic resources",s.location)
         raise SemanticError(f"the current typed IR backend does not yet lower {type(s).__name__}",getattr(s,"location",None))
 
+    def _assignment_target(self,target:Expr)->IRExpr:
+        if isinstance(target,NameExpr):
+            return IRVar(describe(self._ast_type(target)),target.location,target.name)
+        if isinstance(target,MemberExpr): return self._member_expr(target)
+        if isinstance(target,IndexExpr):
+            return IRIndex(describe(self._ast_type(target)),target.location,self._expr(target.base),self._expr(target.index))
+        raise SemanticError("unsupported handled assignment target",getattr(target,"location",None))
+
     def _expr_type(self,e:Expr):
+        if isinstance(e,HandledExpr): return self._expr_type(e.value)
+        if isinstance(e,TryExpr): return self._expr_type(e.value)
         if not self.generic_context:
             known=self.a.expr_types.get(id(e))
-            if known is not None and not has_unresolved(known):
-                return resolve(known)
-        if isinstance(e,LiteralExpr):
-            return {"Int":INT,"Float":FLOAT,"Bool":BOOL,"Text":TEXT}[e.type_name]
+            if known is not None and not has_unresolved(known): return resolve(known)
+        if isinstance(e,LiteralExpr): return {"Int":INT,"Float":FLOAT,"Bool":BOOL,"Text":TEXT}[e.type_name]
         if isinstance(e,NoneExpr):
             known=self.a.expr_types.get(id(e))
             if known is not None and not has_unresolved(known): return resolve(known)
@@ -244,8 +294,7 @@ class Lowerer:
             known=self.a.expr_types.get(id(e))
             if known is not None: return resolve(known)
         if isinstance(e,IdentityExpr): return IdentityType(self._expr_type(e.value))
-        if isinstance(e,UnaryExpr):
-            return BOOL if e.operator=="not" else self._expr_type(e.operand)
+        if isinstance(e,UnaryExpr): return BOOL if e.operator=="not" else self._expr_type(e.operand)
         if isinstance(e,BinaryExpr):
             if e.operator in ("==","!=","<","<=",">",">=","and","or"): return BOOL
             return self._expr_type(e.left)
@@ -283,9 +332,11 @@ class Lowerer:
             bt=self._expr_type(e.base)
             base=resolve(bt.inner) if isinstance(bt,IdentityType) else resolve(bt)
             if isinstance(base,MaybeType): base=resolve(base.inner)
+            if isinstance(base,AnyErrorType):
+                if e.name=="message": return TEXT
+                raise SemanticError(f"catch-all error exposes only message, not {e.name!r}",e.location)
             info=self.a.structs.get(describe(base))
-            if info is None or e.name not in info.fields:
-                raise SemanticError(f"cannot derive member type for {e.name!r}",e.location)
+            if info is None or e.name not in info.fields: raise SemanticError(f"cannot derive member type for {e.name!r}",e.location)
             return resolve(info.fields[e.name].type)
         if isinstance(e,IndexExpr):
             bt=resolve(self._expr_type(e.base))
@@ -305,14 +356,15 @@ class Lowerer:
         return base+"$"+"$".join(v.type_name for v in arg_values)
 
     def _expr(self,e):
+        if isinstance(e,TryExpr): return self._expr(e.value)
+        if isinstance(e,HandledExpr): raise SemanticError("handled expressions must be lowered by their containing statement",e.location)
         semantic_t=describe(self._expr_type(e))
         if semantic_t!="no-value": self._supported_type(semantic_t,e.location)
         if isinstance(e,LiteralExpr): return IRConst(semantic_t,e.location,e.value)
         if isinstance(e,NoneExpr): return IRMaybeNone(semantic_t,e.location)
         if isinstance(e,NameExpr):
             stored=self._lookup(e.name)
-            if stored is not None and stored.startswith("maybe ") and semantic_t==maybe_inner(stored):
-                return IRMaybeGet(semantic_t,e.location,IRVar(stored,e.location,e.name))
+            if stored is not None and stored.startswith("maybe ") and semantic_t==maybe_inner(stored): return IRMaybeGet(semantic_t,e.location,IRVar(stored,e.location,e.name))
             return IRVar(semantic_t,e.location,e.name)
         if isinstance(e,ListExpr): return IRList(semantic_t,e.location,[self._expr(x) for x in e.elements])
         if isinstance(e,IndexExpr): return IRIndex(semantic_t,e.location,self._expr(e.base),self._expr(e.index))
@@ -340,17 +392,14 @@ class Lowerer:
                 fn=self.a.functions.get(e.callee.name)
                 if fn is None: raise SemanticError(f"unknown function {e.callee.name!r}",e.location)
                 for i,av in enumerate(args):
-                    if i<len(fn.typed_parameters) and fn.typed_parameters[i] is not None:
-                        args[i]=self._coerce(av,describe(resolve(fn.typed_parameters[i])),e.arguments[i].location)
+                    if i<len(fn.typed_parameters) and fn.typed_parameters[i] is not None: args[i]=self._coerce(av,describe(resolve(fn.typed_parameters[i])),e.arguments[i].location)
                 return IRCall(semantic_t,e.location,self._call_name(fn,e.callee.name,args),args)
             if isinstance(e.callee,MemberExpr) and isinstance(e.callee.base,NameExpr) and e.callee.base.name in self.a.imported_modules:
-                mod=self.a.imported_modules[e.callee.base.name]
-                fn=mod.analyzer.functions.get(e.callee.name)
+                mod=self.a.imported_modules[e.callee.base.name]; fn=mod.analyzer.functions.get(e.callee.name)
                 if fn is None: raise SemanticError(f"unknown imported function {e.callee.name!r}",e.location)
                 args=[self._expr(a) for a in e.arguments]
                 for i,av in enumerate(args):
-                    if i<len(fn.typed_parameters) and fn.typed_parameters[i] is not None:
-                        args[i]=self._coerce(av,describe(resolve(fn.typed_parameters[i])),e.arguments[i].location)
+                    if i<len(fn.typed_parameters) and fn.typed_parameters[i] is not None: args[i]=self._coerce(av,describe(resolve(fn.typed_parameters[i])),e.arguments[i].location)
                 return IRCall(semantic_t,e.location,self._call_name(fn,e.callee.name,args,mod.module_id),args)
             if isinstance(e.callee,MemberExpr) and e.callee.name=="add" and isinstance(e.callee.base,NameExpr):
                 if len(e.arguments)!=1: raise SemanticError("List.add lowering expects one argument",e.location)
@@ -364,6 +413,7 @@ class Lowerer:
 
     @staticmethod
     def _type_from_name(t):
+        if t=="checked error": return AnyErrorType()
         if t.startswith("maybe "): return MaybeType(Lowerer._type_from_name(maybe_inner(t)))
         if t.startswith("identity "): return IdentityType(Lowerer._type_from_name(identity_inner(t)))
         if t.startswith("List of "): return ListType(Lowerer._type_from_name(list_inner(t)))
@@ -375,7 +425,7 @@ class Lowerer:
 
     @staticmethod
     def _supported_type(t,loc):
-        if t in ("Int","Float","Bool","Text","no-value"): return
+        if t in ("Int","Float","Bool","Text","no-value","checked error"): return
         if t.startswith("List of "):
             inner=list_inner(t)
             if inner.startswith("maybe "): raise SemanticError(f"the current C backend does not yet compile Lists of optional values: {t}",loc)
