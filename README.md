@@ -17,17 +17,42 @@ Eristavi is an experimental general-purpose programming language focused on **re
 
 The **pre-0.1 source-language/frontend contract is frozen for implementation**.
 
-The Python bootstrap implements the principal frozen language surface through collections, user-defined values, maybe/identity, checked errors, deterministic resources, modules/imports, inferred generic relationships, and explicit Unicode Text views. Unicode identifier and grapheme behavior is pinned to Unicode 17.0.0 rather than inherited from the host interpreter.
+The Python bootstrap implements the principal frozen language surface through collections, user-defined values, maybe/identity, checked errors, deterministic resources, modules/imports, inferred generic relationships, and explicit Unicode Text views.
 
-The project has a typed Eristavi IR and a working compiled path:
+Unicode identifier, normalization and grapheme behavior is pinned to Unicode **17.0.0**. All three explicit Text views now execute through the compiled C path:
 
-```text
-Eristavi source → frontend → typed Eristavi IR → C11 → system C compiler → native executable
+```eri
+text.characters
+text.scalars
+text.bytes
 ```
 
-The native bootstrap path now covers Lists, ordinary values, maybe, identity, checked errors, deterministic resources, modules, inferred-generic specializations, length-aware UTF-8 Text, and compiled byte/scalar Text views.
+Compiled `Text` uses explicit UTF-8 bytes plus length rather than C-string semantics, preserving embedded NUL and validating UTF-8 at file boundaries.
 
-Compiled Text is no longer modeled as a C string: embedded NUL is preserved through output, equality, concatenation and file round trips, and invalid UTF-8 from `readText()` remains a checked error. The remaining Text-view parity gap is compiled `text.characters`, which requires a pinned Unicode 17 grapheme-segmentation runtime and is deliberately rejected rather than approximated incorrectly.
+### Compiler layers
+
+Eristavi now has both a broad portability backend and the beginning of a direct native architecture:
+
+```text
+Eristavi source
+    ↓
+frontend / semantic analysis
+    ↓
+typed Eristavi IR
+    ├──────────────→ C11 → system C compiler → native executable
+    ↓
+Universal IR
+    ↓
+direct x86-64 backend → assembly → system assembler/linker → native executable
+```
+
+The generated-C backend covers the broad pre-0.1 implementation surface. The first direct x86-64 Linux slice is intentionally narrower and currently proves Int/Bool locals, checked integer arithmetic, comparisons, `if / else`, `while`, and output without generated C.
+
+### Module artifacts
+
+The compiler can emit deterministic, versioned `.eri-interface.json` module artifacts. Importers can type-check public types, checked-error contracts and inferred generic function relationships from the interface even when the imported `.eri` implementation source is unavailable.
+
+Executable linkage still requires implementation source until compiled object/module artifacts are added.
 
 See [`IMPLEMENTATION_AUDIT.md`](IMPLEMENTATION_AUDIT.md) for the current audited boundary.
 
@@ -41,8 +66,8 @@ Eristavi aims for:
 - a rich standard library instead of keyword bloat;
 - automatic memory management;
 - deterministic cleanup for files, sockets, and other external resources;
-- a machine-neutral Eristavi intermediate representation;
-- native compilation for supported CPU architectures;
+- machine-neutral compiler IRs;
+- direct native compilation for supported CPU architectures;
 - C, JavaScript, and WebAssembly as strategic additional targets;
 - clear compiler diagnostics that explain how to fix problems;
 - performance transparency without forcing low-level complexity into ordinary code.
@@ -92,12 +117,12 @@ output(customers.count);
 Generic relationships are inferred rather than written with generic syntax:
 
 ```eri
-function identity(value) {
+function preserve(value) {
     return value;
 }
 
-output(identity(10));
-output(identity("Hello"));
+output(preserve(10));
+output(preserve("Hello"));
 ```
 
 Text indexing makes the intended Unicode unit explicit:
@@ -109,25 +134,49 @@ output(text.scalars.count);    // 2 Unicode scalars
 output(text.bytes.count);      // 3 UTF-8 bytes
 ```
 
+Standard-library capability grows without keyword growth. For example:
+
+```eri
+import std.files;
+
+function exists(path Text) returns Bool fails files.FileError {
+    return try files.exists(path);
+}
+```
+
 Checked failures remain explicit, and deterministic resources use `with` rather than manual lifetime management.
 
 ## Toolchain
 
-Bootstrap runtime path:
+Bootstrap execution/checking:
 
 ```text
-python -m compiler.erist run examples/hello.eri
-python -m compiler.erist check examples/hello.eri
+erist run examples/hello.eri
+erist check examples/hello.eri
 ```
 
-Compiled backend path:
+Versioned module interface:
 
 ```text
-python -m compiler.erist build-c examples/hello.eri -o hello.c
-python -m compiler.erist build examples/hello.eri -o hello
+erist interface models/user.eri
 ```
 
-When installed via `pyproject.toml`, use the `erist` command directly.
+Broad generated-C backend:
+
+```text
+erist build-c examples/hello.eri -o hello.c
+erist build examples/hello.eri -o hello
+```
+
+First Universal-IR/direct backend commands:
+
+```text
+erist uir examples/hello.eri -o hello.uir
+erist build-asm examples/hello.eri -o hello.s --target x86_64-linux
+erist build-direct examples/hello.eri -o hello --target x86_64-linux
+```
+
+The direct route emits CPU assembly from Eristavi Universal IR; it does not generate C source. The system compiler driver is currently used only as assembler/linker for `build-direct`.
 
 ## Tests
 
@@ -135,7 +184,9 @@ When installed via `pyproject.toml`, use the `erist` command directly.
 python -m unittest discover -s tests -v
 ```
 
-The verified suite contains **155 passing tests**. CI runs the complete suite with GCC and Clang on Ubuntu and Clang on macOS, with native compilation at `-O2`; all three configurations pass.
+The suite now contains **174 tests**. CI runs the full suite with GCC and Clang on Ubuntu and Clang on macOS at `-O2`. Direct x86-64 executable tests run on the Linux jobs; macOS validates the rest of the portable compiler/runtime surface.
+
+Coverage now includes versioned source-independent module interfaces, pinned compiled Unicode grapheme segmentation, generated-C execution, Universal IR, real direct x86-64 execution, checked direct arithmetic faults, and expanded `std.files` path operations.
 
 ## Documentation
 
@@ -146,6 +197,9 @@ The verified suite contains **155 passing tests**. CI runs the complete suite wi
 - [`GRAMMAR.md`](GRAMMAR.md) — consolidated surface grammar
 - [`LEXICAL_RULES.md`](LEXICAL_RULES.md) — lexical rules
 - [`TEXT_VIEWS.md`](TEXT_VIEWS.md) — Unicode character/scalar/UTF-8 views
+- [`MODULE_INTERFACES.md`](MODULE_INTERFACES.md) — serialized public module contracts
+- [`UNIVERSAL_IR.md`](UNIVERSAL_IR.md) — lower target-neutral IR and direct backend boundary
+- [`STANDARD_LIBRARY.md`](STANDARD_LIBRARY.md) — current bootstrap standard-library surface
 - [`PRECEDENCE.md`](PRECEDENCE.md) — expression ordering
 - [`FUNCTION_RETURNS.md`](FUNCTION_RETURNS.md) — function completion/result semantics
 - [`COLLECTIONS.md`](COLLECTIONS.md) — `List`
@@ -156,7 +210,7 @@ The verified suite contains **155 passing tests**. CI runs the complete suite wi
 - [`ERRORS.md`](ERRORS.md) — checked failures
 - [`RESOURCE_CLEANUP.md`](RESOURCE_CLEANUP.md) — deterministic cleanup and dual-failure composition
 - [`GENERICS.md`](GENERICS.md) — inferred generic relationships
-- [`TARGETS.md`](TARGETS.md) — target strategy
+- [`TARGETS.md`](TARGETS.md) — target strategy and direct backend status
 
 ## License
 
