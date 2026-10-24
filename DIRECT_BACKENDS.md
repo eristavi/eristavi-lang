@@ -1,15 +1,16 @@
 # Eristavi Direct Backends
 
-> **Status: x86-64 substantially implemented; ARM64 architecture slice implemented**
+> **Status: x86-64 broad bootstrap backend; ARM64 expanded assembly backend**
 
 Direct backends consume Eristavi Universal IR and emit CPU assembly without generated C.
 
 ## x86-64 Linux / System V
 
-The x86-64 backend currently supports a broad pre-0.1 execution slice:
+The direct x86-64 backend currently supports a broad pre-0.1 execution slice:
 
 - Int, Bool, Float and length-aware UTF-8 Text;
-- functions, recursion, register arguments and stack spill arguments;
+- `.bytes`, `.scalars`, and pinned Unicode-17 `.characters` views;
+- functions, recursion, register arguments and stack-passed arguments;
 - checked signed-64-bit arithmetic and defined division/remainder faults;
 - conditions, loops and short-circuit Boolean control flow;
 - deep ordinary value semantics for nominal values and Lists;
@@ -17,42 +18,58 @@ The x86-64 backend currently supports a broad pre-0.1 execution slice:
 - maybe/none;
 - shared identity semantics;
 - inferred source generic specializations;
+- source-independent inferred-generic specialization from module-object templates;
 - checked errors and handler dispatch;
 - deterministic `std.files` resources, UTF-8 validation and path operations;
-- source-independent linking from `.eri-interface.json` + `.eri-object.json` for supported concrete implementations.
+- source-independent linking from `.eri-interface.json` + `.eri-object.json`.
 
-The backend currently uses libc/system runtime services for bootstrap allocation, formatted scalar output, file operations and process termination. CPU assembly generation itself is direct.
+The system compiler driver is currently used as assembler/linker. Generated C is not involved.
 
-### Heap representation
+### Automatic memory management
 
-Heap-backed direct values use explicit Universal-IR type information and runtime helpers. Ordinary value transfers invoke deep cloning where required; identity transfers preserve the shared handle.
+The current direct runtime now has a non-moving mark-and-sweep bootstrap collector.
 
-This is intentionally correctness-first. Current direct allocations are not yet reclaimed by a production GC. Automatic memory management remains a language guarantee that the production direct runtime must implement before the direct backend is considered release-complete.
+Compiler-emitted root frames contain addresses of:
+
+- heap-typed declared locals;
+- heap-typed Universal-IR temporary spill slots;
+- checked-error globals maintained outside ordinary local scope.
+
+This fixed the main correctness risk of collecting a temporary aggregate between construction and its next use. GC stress tests exercise repeated heap replacement and nested List/value graphs.
+
+The collector is **not yet the final production precise collector**. Root slots are compiler-described, but heap child discovery still scans tracked payload words and treats only exact tracked allocation pointers as references. Typed heap descriptor masks and shorter liveness-based root ranges remain future hardening work.
+
+Deterministic non-memory resources remain outside GC ownership.
+
+### Unicode Text views
+
+Direct Text views no longer fall back to generated C. Native runtime assembly implements byte/scalar access and Unicode-17 extended grapheme segmentation using generated property tables derived from the pinned toolchain data.
 
 ### Output ordering
 
-Text output uses exact-length raw writes so embedded NUL remains valid. Scalar output currently uses stdio. The composed direct backend flushes buffered stdio before raw Text writes so mixed `output(...)` calls preserve source-program order.
+Text output uses exact-length raw writes so embedded NUL remains valid. Scalar output currently uses stdio. The composed direct backend flushes buffered stdio before raw Text writes so mixed `output(...)` calls preserve source order.
 
-### Checked failures
+### Checked failures and resources
 
-Checked errors are represented as explicit Universal-IR state and branches. The backend provides runtime storage for the current error and handler-visible captured views. Resource cleanup failures encountered while another failure is active are retained as secondary runtime context rather than replacing the primary failure.
+Checked errors are explicit Universal-IR state/CFG operations rather than target exceptions. Resource cleanup failures encountered while another failure is active remain secondary runtime context instead of replacing the primary failure.
 
 ## ARM64 Linux / AAPCS64
 
-The ARM64 backend is deliberately based on the same Universal IR rather than a parallel semantic lowering.
+ARM64 uses the same Universal IR rather than a separate semantic lowering.
 
-Current coverage includes:
+Current assembly-generation coverage includes:
 
 - Int, Bool and Float;
 - functions/calls/recursion;
 - AAPCS64 register and stack argument placement;
 - checked Int arithmetic/division/remainder;
 - comparisons and control flow;
-- scalar output.
+- Text runtime operations;
+- nominal values, Lists, maybe and identity operations;
+- checked-error state/handler operations;
+- deterministic file-resource runtime operations and secondary-failure state.
 
-CI validates generated AArch64 assembly by cross-assembling it. A native ARM64 execution test exists and runs automatically when an ARM64 Linux runner is available.
-
-The ARM64 backend does not yet implement the x86-64 heap-value, checked-error and resource runtime layers.
+CI cross-assembles the expanded runtime output. A native ARM64 execution test exists for matching ARM64 Linux hosts, but current hosted CI does not provide broad native ARM64 Linux behavioral coverage. Cross-assembly therefore proves code-generation validity, not complete runtime parity.
 
 ## Commands
 
@@ -61,22 +78,21 @@ erist uir app.eri -o app.uir
 
 erist build-asm app.eri -o app.s --target x86_64-linux
 erist build-direct app.eri -o app --target x86_64-linux
+erist link-direct app.eri -o app --target x86_64-linux
 
 erist build-asm app.eri -o app-aarch64.s --target arm64-linux
 ```
 
-`build-direct` currently links only on a host matching the requested Linux architecture. Cross-assembly emission is available independently through `build-asm`.
+`build-direct`/`link-direct` link only on a host matching the requested Linux architecture. Cross-assembly emission is available independently through `build-asm`.
 
 ## Current direct-backend boundary
 
-The most important remaining work is:
+The next direct-backend work is principally production hardening:
 
-- direct `.bytes`, `.scalars`, and `.characters` Text views;
-- production automatic memory reclamation/GC;
-- ARM64 parity for Text, aggregates, errors and resources;
-- native ARM64 CI;
-- additional OS/ABI targets;
-- optimization/register allocation beyond the correctness-first stack-slot strategy;
-- reusable precompiled inferred-generic implementation templates.
+- typed heap descriptors and improved GC precision/liveness;
+- native ARM64 Linux CI and behavioral parity verification;
+- better stack-slot reuse and real register allocation;
+- broader OS/ABI targets;
+- wider standard-library runtime support.
 
-These are compiler/runtime engineering tasks. They do not require new source-language syntax.
+These are compiler/runtime engineering tasks and do not require new source-language syntax.
