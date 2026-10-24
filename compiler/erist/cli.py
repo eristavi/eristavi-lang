@@ -5,8 +5,8 @@ import sys
 from .diagnostics import EristaviError
 from .lexer import Lexer
 from .parser import Parser
-from .semantic import Analyzer
-from .runtime import Interpreter
+from .semantic_ext import Analyzer
+from .runtime_ext import Interpreter
 from .project import compile_entry
 from .ir import Lowerer, IRProgram
 from .c_backend import CBackend
@@ -27,9 +27,6 @@ def lower_project(entry_module):
     visit(entry_module)
     structs=[]; functions=[]; entry=[]
     for mod in order:
-        # Keep the selected entry module unqualified so predeclared names such as
-        # output remain ordinary builtins. Imported module declarations are
-        # canonicalized to their module IDs to avoid cross-module collisions.
         module_id='' if mod is entry_module else mod.module_id
         part=Lowerer(mod.analyzer,module_id).lower(mod.program,mod is entry_module)
         structs.extend(part.structs); functions.extend(part.functions)
