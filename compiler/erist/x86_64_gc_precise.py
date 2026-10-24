@@ -84,3 +84,12 @@ class X86_64PreciseRootGCLinuxBackend(X86_64GCLinuxBackend):
         for block in fn.blocks:
             self._block(block)
         self.lines.append(f".size {symbol},.-{symbol}")
+
+    @staticmethod
+    def _gc_runtime() -> str:
+        runtime = X86_64GCLinuxBackend._gc_runtime()
+        old = '''.Leri_gc_sweep_free:\n    movq -32(%rbp), %rdi\n    call free@PLT\n    incq .Leri_gc_reclaimed(%rip)\n    movq -40(%rbp), %rax\n    jmp .Leri_gc_sweep_loop'''
+        new = '''.Leri_gc_sweep_free:\n    movq %rcx, -48(%rbp)\n    movq -32(%rbp), %rdi\n    call free@PLT\n    movq -48(%rbp), %rcx\n    incq .Leri_gc_reclaimed(%rip)\n    movq -40(%rbp), %rax\n    jmp .Leri_gc_sweep_loop'''
+        if old not in runtime:
+            raise ValueError("GC runtime sweep template changed unexpectedly")
+        return runtime.replace(old, new, 1)
