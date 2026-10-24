@@ -50,7 +50,13 @@ _REGISTER_SAFE_OPS = frozenset({
 
 
 def _caller_saved_survivors(fn: UFunction) -> frozenset[int]:
-    """Return values that may not live solely in caller-saved registers."""
+    """Return values that may not live solely in caller-saved registers.
+
+    An unsafe Universal-IR instruction is a machine-level clobber region, not a
+    single point. Its lowering may call helpers before all source operands have
+    been consumed. Therefore both values live beyond the instruction and the
+    instruction's own input operands must be stack-backed in this first phase.
+    """
 
     liveness = cfg_liveness(fn)
     blocked: set[int] = set()
@@ -62,6 +68,7 @@ def _caller_saved_survivors(fn: UFunction) -> frozenset[int]:
             if ins.result is not None:
                 live_after.discard(ins.result.id)
             blocked.update(live_after)
+            blocked.update(arg.id for arg in ins.args)
     return frozenset(blocked)
 
 
@@ -75,10 +82,18 @@ def allocate_x86_registers(
     This is deliberately a conservative first allocator:
 
     - only the existing short-lived scalar register candidates participate;
+    - the producing instruction must itself be a known call-free scalar op;
+    - inputs to complex/clobbering instructions remain stack-backed;
     - values that survive any possible helper/PLT/GC clobber remain spilled;
     - Int/Bool and Float use independent register classes;
     - the existing CFG interference graph prevents overlapping values from
       sharing the same physical register.
+
+    Restricting the defining operation is important. Higher-level operations
+    such as field/List/error extraction may return a scalar, but their backend
+    lowering participates in complex runtime/scratch-register sequences. Those
+    values remain stack-backed until the machine-lowering layer has explicit
+    register-use/clobber contracts for those operations.
 
     Stack slots remain allocated as a fallback representation in this phase.
     Removing unused spill slots is a later frame-compaction step.
@@ -89,15 +104,19 @@ def allocate_x86_registers(
     blocked = _caller_saved_survivors(fn)
 
     value_types: dict[int, str] = {}
+    defining_ops: dict[int, str] = {}
     for block in fn.blocks:
         for ins in block.instructions:
             if ins.result is not None:
                 value_types[ins.result.id] = ins.result.type_name
+                defining_ops[ins.result.id] = ins.op
 
     eligible = [
         value_id
         for value_id in candidates
-        if value_id not in blocked and value_types.get(value_id) in {I64, BOOL, F64}
+        if value_id not in blocked
+        and value_types.get(value_id) in {I64, BOOL, F64}
+        and defining_ops.get(value_id) in _REGISTER_SAFE_OPS
     ]
     eligible.sort(key=lambda value_id: (-len(graph.get(value_id, ())), value_id))
 

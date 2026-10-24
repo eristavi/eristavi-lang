@@ -3,10 +3,10 @@ from __future__ import annotations
 import hashlib
 
 from .universal_ir import UInstruction
-from .x86_64_backend import X86_64LinuxBackend
+from .x86_64_register_backend import X86_64RegisterLinuxBackend
 
 
-class X86_64CheckedLinuxBackend(X86_64LinuxBackend):
+class X86_64CheckedLinuxBackend(X86_64RegisterLinuxBackend):
     """x86-64 backend extension for explicit Universal-IR checked failures."""
 
     @staticmethod
