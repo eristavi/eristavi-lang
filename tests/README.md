@@ -6,35 +6,36 @@ Run the full suite from the repository root:
 python -m unittest discover -s tests -v
 ```
 
-The current suite contains **245 tests**.
+The current suite contains **255 tests**.
 
-Coverage is split across frontend/reference semantics and multiple compiler/runtime layers, including:
+Coverage spans frontend/reference semantics and multiple compiler/runtime layers, including:
 
-- lexical, type, scope/no-shadowing and control-flow semantics;
+- lexical/type/scope/control-flow semantics;
 - functions, recursion and result inference;
-- compiler-inferred generic relationships;
+- inferred generic relationships;
 - Lists, ordinary values, maybe/none and identity;
 - checked failures and deterministic resources;
 - project modules/imports/visibility/cycles;
 - generated-C native execution;
 - Unicode 17 Text views and grapheme behavior;
+- the complete official Unicode-17 `GraphemeBreakTest` fixture supplied to CI from an immutable revision;
 - serialized interfaces/objects and source-independent linkage;
 - reusable inferred-generic object specialization after source removal;
-- direct x86-64 functions/ABI, Float/Text, aggregates, Lists, maybe/identity, checked errors and resources;
-- direct x86-64 Unicode Text views;
-- direct GC root-frame and heap-reachability stress cases;
-- ARM64 scalar/runtime/checked-error/resource assembly generation and AArch64 cross-assembly;
+- direct x86-64 functions/ABI, Float/Text/Text views, aggregates, Lists, maybe/identity, checked errors and resources;
+- x86-64 typed GC descriptors, liveness-aware roots, spill-slot planning and heap-reachability stress cases;
+- native ARM64 Text/aggregate/maybe/identity/error/resource execution plus cross-assembly checks;
 - content/interface-digest keyed module caching;
-- Universal-IR verification/optimization analysis groundwork;
-- ES2020 JavaScript backend execution for the current scalar/function slice;
-- WebAssembly-text backend contracts for the current scalar/function slice.
+- Universal-IR verification, optimization, CFG liveness, interference and escape-analysis groundwork;
+- ES2020 JavaScript execution through ordinary-value/List/maybe/identity semantics;
+- WebAssembly-text scalar/function/control contracts and explicit Text `externref` host ABI.
 
 CI currently runs the suite on:
 
-- GCC / Ubuntu / `-O2`;
-- Clang / Ubuntu / `-O2`;
-- Clang / macOS / `-O2`.
+- GCC / x86-64 Ubuntu / `-O2`;
+- Clang / x86-64 Ubuntu / `-O2`;
+- Clang / ARM64 Ubuntu / `-O2`;
+- Clang / ARM64 macOS / `-O2`.
 
-Platform-specific execution tests skip where the requested ABI/host is unavailable. Direct x86-64 behavior executes on x86-64 Linux; expanded ARM64 code is cross-assembled in the current hosted matrix.
+Architecture-specific executable tests run on their matching Linux host. On x86-64 Linux the ARM-native cases are skipped; on ARM64 Linux they execute.
 
 Tests should continue to grow around frozen semantics, cross-backend equivalence, runtime conformance and failure-mode regression rather than speculative source syntax.
