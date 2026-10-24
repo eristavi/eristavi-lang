@@ -82,15 +82,15 @@ class IRProgram:
     entry: list[IRStmt]
 
 class Lowerer:
-    """Lower the currently compiled concrete subset to typed, storage-aware Eristavi IR."""
-    def __init__(self,analyzer):
-        self.a=analyzer
+    """Lower one analyzed module to typed, storage-aware Eristavi IR."""
+    def __init__(self,analyzer,module_id:str=""):
+        self.a=analyzer; self.module_id=module_id or getattr(analyzer,"module_id","")
         self.scopes:list[dict[str,str]]=[{}]
         self.current_return:str|None=None
-    def lower(self,program:Program)->IRProgram:
+    def lower(self,program:Program,include_entry:bool=True)->IRProgram:
         structs=[]; fns=[]; entry=[]
         for s in program.statements:
-            if isinstance(s,ImportDecl): raise SemanticError("the current C backend does not yet lower imports",s.location)
+            if isinstance(s,ImportDecl): continue
             if isinstance(s,ErrorDecl): raise SemanticError("the current typed IR backend does not yet lower checked errors",s.location)
             if isinstance(s,TypeDecl):
                 canonical=self.a.local_types[s.name]; info=self.a.structs[canonical]
@@ -100,8 +100,10 @@ class Lowerer:
                     fields.append(IRStructField(f.name,tn,f.fixed))
                 structs.append(IRStruct(canonical,fields)); continue
             if isinstance(s,FunctionDecl): fns.append(self._function(s))
-            else: entry.append(self._stmt(s))
+            elif include_entry: entry.append(self._stmt(s))
         return IRProgram(structs,fns,entry)
+    def _function_name(self,name:str)->str:
+        return f"{self.module_id}.{name}" if self.module_id else name
     def _function(self,f:FunctionDecl):
         if any(p.type_annotation is None for p in f.parameters):
             raise SemanticError("the current C backend requires concrete function parameter types; inferred-generic specialization lowering is not implemented yet",f.location)
@@ -117,7 +119,7 @@ class Lowerer:
         self.scopes=[{p.name:p.type_name for p in params}]; self.current_return=ret
         try: body=self._lower_block(f.body,False)
         finally: self.scopes=old_scopes; self.current_return=old_ret
-        return IRFunction(f.name,params,ret,body,f.public)
+        return IRFunction(self._function_name(f.name),params,ret,body,f.public)
     def _lower_block(self,b:Block,new_scope=True,bindings:dict[str,str]|None=None):
         if new_scope: self.scopes.append(dict(bindings or {}))
         try: return [self._stmt(s) for s in b.statements]
@@ -209,7 +211,16 @@ class Lowerer:
                     av=self._expr(a)
                     if fn is not None and i<len(fn.typed_parameters) and fn.typed_parameters[i] is not None: av=self._coerce(av,describe(resolve(fn.typed_parameters[i])),a.location)
                     args.append(av)
-                return IRCall(semantic_t,e.location,e.callee.name,args)
+                return IRCall(semantic_t,e.location,self._function_name(e.callee.name),args)
+            if isinstance(e.callee,MemberExpr) and isinstance(e.callee.base,NameExpr) and e.callee.base.name in self.a.imported_modules:
+                mod=self.a.imported_modules[e.callee.base.name]; fn=mod.analyzer.functions.get(e.callee.name); args=[]
+                if fn is None: raise SemanticError(f"unknown imported function {e.callee.name!r}",e.location)
+                for i,a in enumerate(e.arguments):
+                    av=self._expr(a)
+                    if i<len(fn.typed_parameters) and fn.typed_parameters[i] is not None: av=self._coerce(av,describe(resolve(fn.typed_parameters[i])),a.location)
+                    args.append(av)
+                name=f"{mod.module_id}.{e.callee.name}" if mod.module_id else e.callee.name
+                return IRCall(semantic_t,e.location,name,args)
             if isinstance(e.callee,MemberExpr) and e.callee.name=="add" and isinstance(e.callee.base,NameExpr):
                 if len(e.arguments)!=1: raise SemanticError("List.add lowering expects one argument",e.location)
                 return IRListAdd(semantic_t,e.location,e.callee.base.name,self._expr(e.arguments[0]))
@@ -240,6 +251,25 @@ class Lowerer:
             if inner and not inner.startswith(("maybe ","identity ","List of ","<")): return
         if not t.startswith(("maybe ","identity ","<")): return
         raise SemanticError(f"the current C backend does not yet support compiled type {t}",loc)
+
+class ProjectLowerer:
+    """Merge an analyzed project graph into one machine-independent IR program."""
+    def __init__(self,entry_module): self.entry=entry_module
+    def lower(self)->IRProgram:
+        order=[]; seen=set()
+        def visit(mod):
+            key=mod.module_id or str(mod.file_path)
+            if key in seen: return
+            seen.add(key)
+            for child in mod.imports.values(): visit(child)
+            order.append(mod)
+        visit(self.entry)
+        structs=[]; functions=[]; entry=[]
+        for mod in order:
+            part=Lowerer(mod.analyzer,mod.module_id).lower(mod.program,mod is self.entry)
+            structs.extend(part.structs); functions.extend(part.functions)
+            if mod is self.entry: entry.extend(part.entry)
+        return IRProgram(structs,functions,entry)
 
 def maybe_inner(t):
     if not t.startswith("maybe "): raise ValueError(t)
