@@ -14,7 +14,7 @@ SELFHOST_ROOT = REPO_ROOT / "src"
 
 
 class SelfHostingStage2Tests(unittest.TestCase):
-    def test_flat_ast_and_parser_modules_compile(self):
+    def test_identity_ast_and_parser_modules_compile(self):
         modules = (
             "compiler/ast.eri",
             "compiler/parser_state.eri",
@@ -52,9 +52,10 @@ class SelfHostingStage2Tests(unittest.TestCase):
                 "import compiler.ast;\n"
                 "function probe(source Text) returns Int {\n"
                 "    let tokens be lexer.lex(source) else error { return -1; };\n"
-                "    let nodes be parser.parse(tokens) else error { return -2; };\n"
-                "    if nodes[nodes.count - 1].kind != ast.program() { return -3; }\n"
-                "    return nodes.count;\n"
+                "    let tree be parser.parse(tokens) else error { return -2; };\n"
+                "    if tree.kind != ast.program() { return -3; }\n"
+                "    if tree.first == none { return -4; }\n"
+                "    return 1;\n"
                 "}\n"
                 f"output(probe({literal}));\n",
                 encoding="utf-8",
@@ -74,9 +75,7 @@ class SelfHostingStage2Tests(unittest.TestCase):
             'let user be User { name = "A"; }; '
             'output(choose(1));'
         )
-        output = self.run_self_host_parser(source)
-        self.assertEqual(len(output), 1)
-        self.assertGreater(int(output[0]), 1)
+        self.assertEqual(self.run_self_host_parser(source), ["1"])
 
     def test_self_host_parser_accepts_checked_error_resource_shape(self):
         source = (
@@ -88,9 +87,7 @@ class SelfHostingStage2Tests(unittest.TestCase):
             '} '
             '} '
         )
-        output = self.run_self_host_parser(source)
-        self.assertEqual(len(output), 1)
-        self.assertGreater(int(output[0]), 1)
+        self.assertEqual(self.run_self_host_parser(source), ["1"])
 
 
 if __name__ == "__main__":
