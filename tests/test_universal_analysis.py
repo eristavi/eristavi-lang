@@ -5,7 +5,16 @@ import unittest
 from pathlib import Path
 
 from compiler.erist.cli import lower_universal_file
-from compiler.erist.universal_analysis import coalesce_stack_slots, escape_analysis, live_ranges, register_candidates
+from compiler.erist.universal_analysis import (
+    cfg_liveness,
+    coalesce_stack_slots,
+    escape_analysis,
+    heap_values_live_across_safepoints,
+    interference_graph,
+    live_ranges,
+    register_candidates,
+)
+from compiler.erist.universal_ir import TEXT, UBlock, UFunction, UInstruction, ULocal, UReturn, UValue
 
 
 class UniversalAnalysisTests(unittest.TestCase):
@@ -26,6 +35,42 @@ class UniversalAnalysisTests(unittest.TestCase):
             second = coalesce_stack_slots(fn)
             self.assertEqual(first, second)
             self.assertLessEqual(first.slot_count, fn.value_count)
+            self.assertEqual(interference_graph(fn), interference_graph(fn))
+        finally:
+            td.cleanup()
+
+    def test_cfg_liveness_marks_heap_value_across_store_safepoint(self):
+        value = UValue(0, TEXT)
+        local = ULocal(0, "saved", TEXT)
+        block = UBlock(
+            "entry",
+            [
+                UInstruction("const_text", value, (), None, "hello"),
+                UInstruction("store_local", None, (value,), 0, None),
+                UInstruction("output_text", None, (value,), None, None),
+            ],
+            UReturn(),
+        )
+        fn = UFunction("probe", "void", [], [local], [block], 1)
+        liveness = cfg_liveness(fn)
+        self.assertIn(0, liveness.live_after_instruction[("entry", 1)])
+        self.assertEqual(heap_values_live_across_safepoints(fn), frozenset({0}))
+
+    def test_pinned_heap_slots_are_never_reused(self):
+        td, program = self.lower('let text be "A" + "B"; output(text); output(1 + 2); output(3 + 4);')
+        try:
+            fn = program.function("__entry")
+            heap_ids = {
+                item.value_id
+                for item in live_ranges(fn)
+                if item.type_name not in {"i64", "bool", "f64", "void"}
+            }
+            plan = coalesce_stack_slots(fn, heap_ids)
+            heap_slots = [plan.slots[value_id] for value_id in sorted(heap_ids)]
+            self.assertEqual(len(heap_slots), len(set(heap_slots)))
+            scalar_slots = [slot for value_id, slot in plan.slots.items() if value_id not in heap_ids]
+            if heap_slots and scalar_slots:
+                self.assertGreaterEqual(min(scalar_slots), len(heap_slots))
         finally:
             td.cleanup()
 
