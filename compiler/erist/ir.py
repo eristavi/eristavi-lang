@@ -2,7 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from .diagnostics import SemanticError, SourceLocation
 from .syntax import *
-from .typesys import describe, resolve, NoValueType, ListType
+from .typesys import describe, resolve, NoValueType
 
 @dataclass(frozen=True)
 class IRExpr:
@@ -26,6 +26,13 @@ class IRIndex(IRExpr): base: IRExpr; index: IRExpr
 class IRCount(IRExpr): base: IRExpr
 @dataclass(frozen=True)
 class IRListAdd(IRExpr): base_name: str; value: IRExpr
+@dataclass(frozen=True)
+class IRFieldValue:
+    name: str; value: IRExpr
+@dataclass(frozen=True)
+class IRConstruct(IRExpr): fields: list[IRFieldValue]
+@dataclass(frozen=True)
+class IRMember(IRExpr): base: IRExpr; name: str
 
 class IRStmt: pass
 @dataclass(frozen=True)
@@ -34,6 +41,8 @@ class IRLet(IRStmt): name: str; type_name: str; fixed: bool; value: IRExpr; loca
 class IRAssign(IRStmt): name: str; value: IRExpr; location: SourceLocation
 @dataclass(frozen=True)
 class IRIndexAssign(IRStmt): name: str; index: IRExpr; value: IRExpr; location: SourceLocation
+@dataclass(frozen=True)
+class IRMemberAssign(IRStmt): target: IRMember; value: IRExpr; location: SourceLocation
 @dataclass(frozen=True)
 class IRExprStmt(IRStmt): expression: IRExpr
 @dataclass(frozen=True)
@@ -48,6 +57,10 @@ class IRReturn(IRStmt): value: IRExpr|None; location: SourceLocation
 @dataclass(frozen=True)
 class IRParameter: name: str; type_name: str
 @dataclass(frozen=True)
+class IRStructField: name: str; type_name: str; fixed: bool=False
+@dataclass(frozen=True)
+class IRStruct: name: str; fields: list[IRStructField]
+@dataclass(frozen=True)
 class IRFunction:
     name: str
     parameters: list[IRParameter]
@@ -56,25 +69,28 @@ class IRFunction:
     public: bool=False
 @dataclass(frozen=True)
 class IRProgram:
+    structs: list[IRStruct]
     functions: list[IRFunction]
     entry: list[IRStmt]
 
 class Lowerer:
-    """Lower the currently supported concrete subset to typed Eristavi IR.
-
-    The IR remains machine-independent and structured. Lists are represented semantically;
-    target backends choose their storage and copy-on-mutation strategy.
-    """
+    """Lower the currently compiled concrete subset to typed Eristavi IR."""
     def __init__(self,analyzer): self.a=analyzer
     def lower(self,program:Program)->IRProgram:
-        fns=[]; entry=[]
+        structs=[]; fns=[]; entry=[]
         for s in program.statements:
-            if isinstance(s,(ImportDecl,TypeDecl,ErrorDecl)):
-                if isinstance(s,ImportDecl): raise SemanticError("the current C backend does not yet lower imports",s.location)
-                raise SemanticError("the current typed IR backend does not yet lower user-defined types/errors",s.location)
+            if isinstance(s,ImportDecl): raise SemanticError("the current C backend does not yet lower imports",s.location)
+            if isinstance(s,ErrorDecl): raise SemanticError("the current typed IR backend does not yet lower checked errors",s.location)
+            if isinstance(s,TypeDecl):
+                canonical=self.a.local_types[s.name]; info=self.a.structs[canonical]
+                fields=[]
+                for f in info.fields.values():
+                    tn=describe(resolve(f.type)); self._supported_type(tn,s.location)
+                    fields.append(IRStructField(f.name,tn,f.fixed))
+                structs.append(IRStruct(canonical,fields)); continue
             if isinstance(s,FunctionDecl): fns.append(self._function(s))
             else: entry.append(self._stmt(s))
-        return IRProgram(fns,entry)
+        return IRProgram(structs,fns,entry)
     def _function(self,f:FunctionDecl):
         if any(p.type_annotation is None for p in f.parameters):
             raise SemanticError("the current C backend requires concrete function parameter types; inferred-generic specialization lowering is not implemented yet",f.location)
@@ -95,13 +111,17 @@ class Lowerer:
             if isinstance(s.target,NameExpr): return IRAssign(s.target.name,self._expr(s.value),s.location)
             if isinstance(s.target,IndexExpr) and isinstance(s.target.base,NameExpr):
                 return IRIndexAssign(s.target.base.name,self._expr(s.target.index),self._expr(s.value),s.location)
-            raise SemanticError("the current C backend lowers assignment to names and direct List indexes",s.location)
+            if isinstance(s.target,MemberExpr): return IRMemberAssign(self._member_expr(s.target),self._expr(s.value),s.location)
+            raise SemanticError("the current C backend does not yet lower this assignment path",s.location)
         if isinstance(s,ExprStmt): return IRExprStmt(self._expr(s.expression))
         if isinstance(s,IfStmt): return IRIf(self._expr(s.condition),[self._stmt(x) for x in s.then_branch.statements],[self._stmt(x) for x in (s.else_branch.statements if s.else_branch else [])],s.location)
         if isinstance(s,WhileStmt): return IRWhile(self._expr(s.condition),[self._stmt(x) for x in s.body.statements],s.location)
         if isinstance(s,ForStmt): return IRFor(s.name,self._expr(s.iterable),[self._stmt(x) for x in s.body.statements],s.location)
         if isinstance(s,ReturnStmt): return IRReturn(self._expr(s.value) if s.value else None,s.location)
         raise SemanticError(f"the current typed IR backend does not yet lower {type(s).__name__}",getattr(s,"location",None))
+    def _member_expr(self,e:MemberExpr):
+        t=describe(resolve(self.a.expr_types[id(e)])); self._supported_type(t,e.location)
+        return IRMember(t,e.location,self._expr(e.base),e.name)
     def _expr(self,e):
         t=describe(resolve(self.a.expr_types[id(e)]))
         if t!="no-value": self._supported_type(t,e.location)
@@ -109,7 +129,10 @@ class Lowerer:
         if isinstance(e,NameExpr): return IRVar(t,e.location,e.name)
         if isinstance(e,ListExpr): return IRList(t,e.location,[self._expr(x) for x in e.elements])
         if isinstance(e,IndexExpr): return IRIndex(t,e.location,self._expr(e.base),self._expr(e.index))
-        if isinstance(e,MemberExpr) and e.name=="count": return IRCount(t,e.location,self._expr(e.base))
+        if isinstance(e,MemberExpr):
+            if e.name=="count": return IRCount(t,e.location,self._expr(e.base))
+            return self._member_expr(e)
+        if isinstance(e,ConstructionExpr): return IRConstruct(t,e.location,[IRFieldValue(f.name,self._expr(f.value)) for f in e.fields])
         if isinstance(e,UnaryExpr): return IRUnary(t,e.location,e.operator,self._expr(e.operand))
         if isinstance(e,BinaryExpr):
             if t=="Text" and e.operator=="+": raise SemanticError("Text concatenation is not yet lowered by the current C backend",e.location)
@@ -123,5 +146,8 @@ class Lowerer:
     @staticmethod
     def _supported_type(t,loc):
         if t in ("Int","Float","Bool","Text","no-value"): return
-        if t.startswith("List of ") and t[8:] in ("Int","Float","Bool","Text"): return
-        raise SemanticError(f"the current C backend supports scalar types and Lists of scalar values, got {t}",loc)
+        if t.startswith("List of "):
+            elem=t[8:]
+            if elem in ("Int","Float","Bool","Text") or (elem and not elem.startswith(("maybe ","identity ","List of "))): return
+        if not t.startswith(("maybe ","identity ","<")): return
+        raise SemanticError(f"the current C backend does not yet support compiled type {t}",loc)
