@@ -94,11 +94,11 @@ class Lowerer:
             if isinstance(s,ErrorDecl): raise SemanticError("the current typed IR backend does not yet lower checked errors",s.location)
             if isinstance(s,TypeDecl):
                 canonical=self.a.local_types[s.name]; info=self.a.structs[canonical]
-                fields=[]
+                fs=[]
                 for f in info.fields.values():
                     tn=describe(resolve(f.type)); self._supported_type(tn,s.location)
-                    fields.append(IRStructField(f.name,tn,f.fixed))
-                structs.append(IRStruct(canonical,fields)); continue
+                    fs.append(IRStructField(f.name,tn,f.fixed))
+                structs.append(IRStruct(canonical,fs)); continue
             if isinstance(s,FunctionDecl): fns.append(self._function(s))
             elif include_entry: entry.append(self._stmt(s))
         return IRProgram(structs,fns,entry)
@@ -191,11 +191,11 @@ class Lowerer:
             if e.name=="count": return IRCount(semantic_t,e.location,self._expr(e.base))
             return self._member_expr(e)
         if isinstance(e,ConstructionExpr):
-            info=self.a.structs.get(semantic_t); fields=[]
+            info=self.a.structs.get(semantic_t); fs=[]
             for f in e.fields:
                 expected=describe(resolve(info.fields[f.name].type)) if info else describe(resolve(self.a.expr_types[id(f.value)]))
-                fields.append(IRFieldValue(f.name,self._coerce(self._expr(f.value),expected,f.location)))
-            return IRConstruct(semantic_t,e.location,fields)
+                fs.append(IRFieldValue(f.name,self._coerce(self._expr(f.value),expected,f.location)))
+            return IRConstruct(semantic_t,e.location,fs)
         if isinstance(e,IdentityExpr): return IRIdentity(semantic_t,e.location,self._expr(e.value))
         if isinstance(e,UnaryExpr): return IRUnary(semantic_t,e.location,e.operator,self._expr(e.operand))
         if isinstance(e,BinaryExpr):
@@ -211,7 +211,8 @@ class Lowerer:
                     av=self._expr(a)
                     if fn is not None and i<len(fn.typed_parameters) and fn.typed_parameters[i] is not None: av=self._coerce(av,describe(resolve(fn.typed_parameters[i])),a.location)
                     args.append(av)
-                return IRCall(semantic_t,e.location,self._function_name(e.callee.name),args)
+                call_name="output" if e.callee.name=="output" else self._function_name(e.callee.name)
+                return IRCall(semantic_t,e.location,call_name,args)
             if isinstance(e.callee,MemberExpr) and isinstance(e.callee.base,NameExpr) and e.callee.base.name in self.a.imported_modules:
                 mod=self.a.imported_modules[e.callee.base.name]; fn=mod.analyzer.functions.get(e.callee.name); args=[]
                 if fn is None: raise SemanticError(f"unknown imported function {e.callee.name!r}",e.location)
@@ -266,7 +267,8 @@ class ProjectLowerer:
         visit(self.entry)
         structs=[]; functions=[]; entry=[]
         for mod in order:
-            part=Lowerer(mod.analyzer,mod.module_id).lower(mod.program,mod is self.entry)
+            module_id="" if mod is self.entry else mod.module_id
+            part=Lowerer(mod.analyzer,module_id).lower(mod.program,mod is self.entry)
             structs.extend(part.structs); functions.extend(part.functions)
             if mod is self.entry: entry.extend(part.entry)
         return IRProgram(structs,functions,entry)
