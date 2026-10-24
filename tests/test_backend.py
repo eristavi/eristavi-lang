@@ -47,6 +47,14 @@ class BackendTests(unittest.TestCase):
         p=self.compile_run('type User { name Text; } function rename(user User) returns User { user.name="Maria"; return user; } let original be User { name="Anna"; }; let changed be rename(original); output(original.name); output(changed.name);'); self.assertEqual(p.stdout,'Anna\nMaria\n')
     def test_native_nested_value_mutation(self):
         p=self.compile_run('type Address { city Text; } type User { address Address; } let u be User { address=Address { city="Paphos"; }; }; u.address.city="Nicosia"; output(u.address.city);'); self.assertEqual(p.stdout,'Nicosia\n')
+    def test_native_identity_alias_and_equality(self):
+        p=self.compile_run('type Counter { value Int; } let first be identity Counter { value=0; }; let second be first; second.value=10; output(first.value); output(first==second);'); self.assertEqual(p.stdout,'10\ntrue\n')
+    def test_native_independent_identities_are_not_equal(self):
+        p=self.compile_run('type Counter { value Int; } let first be identity Counter { value=0; }; let second be identity Counter { value=0; }; output(first==second);'); self.assertEqual(p.stdout,'false\n')
+    def test_native_identity_parameter_mutates_shared_object(self):
+        p=self.compile_run('type Counter { value Int; } function bump(counter identity Counter) { counter.value=counter.value+1; } let c be identity Counter { value=4; }; bump(c); output(c.value);'); self.assertEqual(p.stdout,'5\n')
+    def test_native_structural_equality_uses_identity_fields(self):
+        p=self.compile_run('type Counter { value Int; } type Session { counter identity Counter; } let c be identity Counter { value=0; }; let a be Session { counter=c; }; let b be Session { counter=c; }; let d be Session { counter=identity Counter { value=0; }; }; output(a==b); output(a==d);'); self.assertEqual(p.stdout,'true\nfalse\n')
     def test_build_c_emits_source(self):
         with tempfile.TemporaryDirectory() as td:
             r=Path(td); src=r/'app.eri'; out=r/'app.c'; src.write_text('output(42);',encoding='utf-8'); self.assertEqual(build_c_file(src,out,r),0); self.assertIn('int main',out.read_text())
