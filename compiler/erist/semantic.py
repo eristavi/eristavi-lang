@@ -135,8 +135,11 @@ class Analyzer:
         # Functions after errors/types known.
         for d in decls:
             if not isinstance(d,FunctionDecl): continue
-            typed=[]
+            typed=[]; parameter_names=set()
             for p in d.parameters:
+                if p.name in parameter_names:
+                    raise SemanticError(f"duplicate parameter {p.name!r}; pre-0.1 does not allow shadowing",p.location)
+                parameter_names.add(p.name)
                 typed.append(self._resolve_type_ref(p.type_annotation) if p.type_annotation else None)
             explicit=self._resolve_type_ref(d.return_type) if d.return_type else None
             fails=set()
@@ -226,6 +229,7 @@ class Analyzer:
         if isinstance(stmt,AssignStmt):
             target_t=self._target_type(stmt.target,True); rhs=self._expr(stmt.value,True,False)
             if isinstance(resolve(rhs),NoValueType): raise SemanticError("a no-value expression cannot be assigned",stmt.location)
+            if isinstance(resolve(rhs),ResourceType): raise SemanticError("resource handles cannot be copied into ordinary storage",stmt.location)
             self._assign_or_error(target_t,rhs,stmt.location,"assignment")
             root=self._root_name(stmt.target)
             if root:
@@ -326,7 +330,9 @@ class Analyzer:
         if isinstance(expr,ListExpr):
             elem:TypeLike=TypeVar("element")
             for e in expr.elements:
-                et=self._expr(e,True,allow_checked); fails|=self.expr_failures.get(id(e),set()); elem=self._join_or_error(elem,et,e.location,"List element")
+                et=self._expr(e,True,allow_checked)
+                if isinstance(resolve(et),(ResourceType,NoValueType)): raise SemanticError("List elements require ordinary values; resources cannot be copied",e.location)
+                fails|=self.expr_failures.get(id(e),set()); elem=self._join_or_error(elem,et,e.location,"List element")
             return self._record(expr,ListType(elem),fails)
         if isinstance(expr,NameExpr):
             sym=self._resolve_symbol(expr.name)
@@ -435,7 +441,9 @@ class Analyzer:
             if init.name in seen: raise SemanticError(f"field {init.name!r} is initialized more than once",init.location)
             seen.add(init.name)
             if init.name not in info.fields: raise SemanticError(f"unknown field {init.name!r} for {info.name}",init.location)
-            et=self._expr(init.value,True,allow_checked); self._assign_or_error(info.fields[init.name].type,et,init.location,f"field {init.name}"); provided[init.name]=True
+            et=self._expr(init.value,True,allow_checked)
+            if isinstance(resolve(et),ResourceType): raise SemanticError("resource handles cannot be copied into value fields",init.location)
+            self._assign_or_error(info.fields[init.name].type,et,init.location,f"field {init.name}"); provided[init.name]=True
         missing=[n for n in info.fields if n not in provided]
         if missing: raise SemanticError(f"construction of {info.name} is missing field(s): {', '.join(missing)}",expr.location)
         fails=set()
@@ -457,7 +465,9 @@ class Analyzer:
             if not isinstance(bt,ListType): raise SemanticError("add(value) is defined only for List",expr.location)
             self._ensure_mutable_path(expr.callee.base)
             if len(expr.arguments)!=1: raise SemanticError("List.add(value) takes exactly one argument",expr.location)
-            at=self._expr(expr.arguments[0],True,allow_checked); fails|=self.expr_failures.get(id(expr.arguments[0]),set()); self._assign_or_error(bt.element,at,expr.arguments[0].location,"List.add element")
+            at=self._expr(expr.arguments[0],True,allow_checked)
+            if isinstance(resolve(at),(ResourceType,NoValueType)): raise SemanticError("List elements require ordinary values; resources cannot be copied",expr.arguments[0].location)
+            fails|=self.expr_failures.get(id(expr.arguments[0]),set()); self._assign_or_error(bt.element,at,expr.arguments[0].location,"List.add element")
             return self._record(expr,NO_VALUE,fails)
         # std.files open
         if isinstance(expr.callee,MemberExpr) and isinstance(expr.callee.base,NameExpr) and expr.callee.base.name in self.imports and self.imports[expr.callee.base.name]==("std","files"):
@@ -556,9 +566,9 @@ class Analyzer:
             if not isinstance(bt,ListType): raise SemanticError("indexed assignment requires a List",target.location)
             return bt.element
         if isinstance(target,MemberExpr):
-            if target.name=="count": raise SemanticError("List.count is read-only",target.location)
             if for_write: self._ensure_mutable_path(target.base)
             bt=resolve(self._expr(target.base,True,False)); base=resolve(bt.inner) if isinstance(bt,IdentityType) else bt
+            if isinstance(base,ListType) and target.name=="count": raise SemanticError("List.count is read-only",target.location)
             if isinstance(base,NamedType) and base.name in self.structs:
                 f=self.structs[base.name].fields.get(target.name)
                 if not f: raise SemanticError(f"{base.name} has no field {target.name!r}",target.location)

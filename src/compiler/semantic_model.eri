@@ -1,0 +1,74 @@
+import compiler.ast;
+
+public error SemanticError { message Text; category Text; path Text; line Int; column Int; }
+public type Location { path Text; line Int; column Int; next maybe identity Location; }
+public type Type { kind Int; name Text; inner maybe identity Type; link maybe identity Type; allowed Int; mustFixed Bool; mustEqual Bool; }
+public type Name { text Text; next maybe identity Name; }
+public type Binding { name Text; value identity Type; immutable Bool; resource Bool; location identity Location; next maybe identity Binding; }
+public type Narrow { binding identity Binding; value identity Type; active Bool; next maybe identity Narrow; }
+public type Import { alias Text; path Text; target maybe identity Module; next maybe identity Import; }
+public type Module { name Text; path Text; root identity ast.Node; locations maybe identity Location; imports maybe identity Import; declarations maybe identity Declaration; facts maybe identity Fact; state Int; entry Bool; next maybe identity Module; }
+public type Declaration { node identity ast.Node; owner identity Module; value identity Type; fields maybe identity Binding; parameters maybe identity Binding; result identity Type; explicitResult Bool; failures maybe identity Name; state Int; next maybe identity Declaration; }
+public type Context { owner identity Module; symbols maybe identity Binding; narrowings maybe identity Narrow; activeFunction maybe identity Declaration; result identity Type; sawValue Bool; sawBare Bool; generics maybe identity Binding; }
+public type Fact { node identity ast.Node; value identity Type; failures maybe identity Name; next maybe identity Fact; }
+public type Result { value identity Type; failures maybe identity Name; }
+public type Pair { source identity Type; target identity Type; next maybe identity Pair; }
+public type Clone { head maybe identity Pair; }
+public type Seen { declaration identity Declaration; next maybe identity Seen; }
+
+public function makeType(kind Int, name Text) returns identity Type {
+    return identity Type { kind=kind; name=name; inner=none; link=none; allowed=0; mustFixed=false; mustEqual=false; };
+}
+public function wrap(kind Int, inner identity Type) returns identity Type {
+    let value be makeType(kind, ""); value.inner=inner; return value;
+}
+public function result(value identity Type) returns Result { return Result { value=value; failures=none; }; }
+public function at(owner identity Module, token Int) returns identity Location {
+    let cursor be owner.locations; let index be 0;
+    while cursor != none { if index == token { return cursor; } index=index+1; cursor=cursor.next; }
+    return identity Location { path=owner.path; line=1; column=1; next=none; };
+}
+public function reject(location identity Location, category Text, message Text) returns Bool fails SemanticError {
+    fail SemanticError { message=message; category=category; path=location.path; line=location.line; column=location.column; };
+}
+public function child(value maybe identity ast.Node) returns identity ast.Node {
+    if value != none { return value; }
+    // Only called for required children of a parser-produced AST.
+    return ast.make(-1,0,none,none,none,"",0,false);
+}
+public function has(names maybe identity Name, text Text) returns Bool {
+    let cursor be names;
+    while cursor != none { if cursor.text == text { return true; } cursor=cursor.next; }
+    return false;
+}
+public function add(names maybe identity Name, text Text) returns identity Name {
+    return identity Name { text=text; next=names; };
+}
+public function union(first maybe identity Name, second maybe identity Name) returns maybe identity Name {
+    let result be first; let cursor be second;
+    while cursor != none { if not has(result,cursor.text) { result=add(result,cursor.text); } cursor=cursor.next; }
+    return result;
+}
+public function subset(first maybe identity Name, second maybe identity Name) returns Bool {
+    let cursor be first;
+    while cursor != none { if not has(second,cursor.text) { return false; } cursor=cursor.next; }
+    return true;
+}
+public function binding(name Text, value identity Type, immutable Bool, resource Bool, location identity Location, next maybe identity Binding) returns identity Binding {
+    return identity Binding { name=name; value=value; immutable=immutable; resource=resource; location=location; next=next; };
+}
+public function find(bindings maybe identity Binding, name Text) returns maybe identity Binding {
+    let cursor be bindings;
+    while cursor != none { if cursor.name == name { return cursor; } cursor=cursor.next; }
+    return none;
+}
+public function declaration(owner identity Module, name Text) returns maybe identity Declaration {
+    let cursor be owner.declarations;
+    while cursor != none { if cursor.node.text == name { return cursor; } cursor=cursor.next; }
+    return none;
+}
+public function imported(owner identity Module, alias Text) returns maybe identity Import {
+    let cursor be owner.imports;
+    while cursor != none { if cursor.alias == alias { return cursor; } cursor=cursor.next; }
+    return none;
+}

@@ -79,7 +79,7 @@ class Analyzer(BaseAnalyzer):
 
         if (isinstance(expr.callee, MemberExpr) and isinstance(expr.callee.base, NameExpr)
                 and self.imports.get(expr.callee.base.name) == ("std", "files")
-                and expr.callee.name in ("openRead", "create")):
+                and expr.callee.name in ("openRead", "create", "canonicalPath")):
             if len(expr.arguments) != 1:
                 raise SemanticError(f"files.{expr.callee.name} expects one Text path", expr.location)
             argument = expr.arguments[0]
@@ -87,7 +87,7 @@ class Analyzer(BaseAnalyzer):
                                "file path requires Text")
             if not allow_checked:
                 raise SemanticError(f"files.{expr.callee.name} may fail; handle it or use try", expr.location)
-            return self._record(expr, STD_FILE, {STD_FILE_ERROR} | self.expr_failures.get(id(argument), set()))
+            return self._record(expr, TEXT if expr.callee.name == "canonicalPath" else STD_FILE, {STD_FILE_ERROR} | self.expr_failures.get(id(argument), set()))
 
         if (isinstance(expr.callee, MemberExpr)
                 and isinstance(expr.callee.base, NameExpr)

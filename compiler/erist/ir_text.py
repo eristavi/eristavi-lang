@@ -121,6 +121,8 @@ class Lowerer(BaseLowerer):
     def _expr_type(self, e):
         if self._stdlib_call(e, "process"):
             return PROCESS_FUNCTIONS[e.callee.name][1]
+        if self._stdlib_call(e, "files") and e.callee.name == "canonicalPath":
+            return TEXT
         if self._stdlib_call(e, "files") and e.callee.name in ("openRead", "create"):
             return ResourceType(STD_FILE, (STD_FILE_ERROR,))
         if self._unicode_call(e):
@@ -169,6 +171,8 @@ class Lowerer(BaseLowerer):
         if self._stdlib_call(e, "process"):
             return IRProcessCall(describe(PROCESS_FUNCTIONS[e.callee.name][1]), e.location,
                                  e.callee.name, tuple(self._expr(arg) for arg in e.arguments))
+        if self._stdlib_call(e, "files") and e.callee.name == "canonicalPath":
+            return IRFileAcquire("Text", e.location, e.callee.name, self._expr(e.arguments[0]))
         if self._stdlib_call(e, "files") and e.callee.name in ("openRead", "create"):
             return IRFileAcquire(STD_FILE, e.location, e.callee.name, self._expr(e.arguments[0]))
         if self._unicode_call(e):

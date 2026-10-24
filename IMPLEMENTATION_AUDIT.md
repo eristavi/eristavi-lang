@@ -4,6 +4,27 @@
 >
 > **Scope:** frozen pre-0.1 source contract, bootstrap/reference runtime, generated-C path, verified Universal IR, direct x86-64 GC/runtime with contract-driven physical register allocation and spill-frame compaction, native ARM64 runtime, module artifacts/caching, JavaScript/WebAssembly consumers, Unicode conformance and hosted CI.
 
+## Eristavi-written semantic analyzer update
+
+The experimental candidate now implements name/scope/module resolution, type
+unification and inferred relationships, ordinary/List/maybe/identity values,
+transitive fixed checks, returns, checked failures and deterministic resource rules.
+The source module loader checks roots/visibility/cycles; expression type/effect
+facts and inferred function contracts are retained for the next IR stage.
+
+A 175-case corpus (67 accepted, 108 rejected) matches Stage-0 acceptance and inferred
+contracts. Ten diagnostic-location differences are intentional and recorded.
+Compiled and interpreted execution of the same Eristavi analyzer are compared,
+and the compiled candidate analyzes its own frontend module graph offline.
+
+Conformance also corrected Stage-0 duplicate parameters, ordinary count-field
+assignment, ordinary resource-copy escape paths and no-value List elements.
+These enforce existing frozen rules; the philosophy, grammar, lexical and semantic
+specifications are unchanged. `analyze` is opt-in; Stage-0 remains the trusted normal
+compiler. Source-independent interface artifacts and the Eristavi-written IR/
+code-generation/self-build pipeline remain later work. See SEMANTIC_ANALYSIS.md.
+The suite now contains **333 tests**; current-commit hosted results belong to its PR.
+
 ## Executable frontend update
 
 `src/frontend.eri` now builds through C into an offline syntax-check/token/AST tool.
@@ -19,7 +40,7 @@ locations and opening-construct EOF diagnostics. Generic C lowering now preserve
 checked optional-presence facts. Typed FileError handlers expose their existing
 message/path payloads in the reference and C paths.
 
-The suite contains **322 tests**. Current-commit hosted results belong to its PR.
+The suite contains **333 tests**. Current-commit hosted results belong to its PR.
 The frontend remains syntax-only; semantic analysis, self-building and a fully
 standalone assembler/linker toolchain remain later work. The frozen philosophy,
 grammar, lexical specification and language semantics are unchanged.
@@ -49,7 +70,7 @@ fields named `count`. Mutable AST links use local optional snapshots and the
 existing presence checks; compiler convenience does not introduce new field
 narrowing semantics. Python remains Stage-0, and full self-building remains open.
 
-The suite now contains **322 tests**. Hosted results for this revision are tracked
+The suite now contains **333 tests**. Hosted results for this revision are tracked
 in the pull request; historical baseline results below are not a substitute for
 checking the current commit.
 
@@ -77,7 +98,7 @@ At this audit point:
 - ES2020 JavaScript supports ordinary aggregate/value semantics in addition to scalars/functions;
 - WebAssembly text supports the scalar/function/control slice plus Text through an explicit UTF-8/`externref` host ABI;
 - CI runs the complete official Unicode-17 `GraphemeBreakTest` fixture against the pinned reference segmenter;
-- the repository suite contains **322 tests**; current-commit results are recorded in GitHub Actions.
+- the repository suite contains **333 tests**; current-commit results are recorded in GitHub Actions.
 
 The governing target rule remains:
 
@@ -350,7 +371,7 @@ Remaining Wasm work includes aggregate values, checked failures, resources, Text
 The current suite contains:
 
 ```text
-322 tests
+333 tests
 ```
 
 The audited matrix is:
@@ -429,7 +450,7 @@ The following remain outside the frozen pre-0.1 source scope unless real program
 - reflection/macros;
 - package registry;
 - stable bytecode/JIT;
-- a complete self-hosted toolchain (the lexer/parser migration is active);
+- a complete self-hosted toolchain (the lexer/parser/semantic migration is active);
 - advanced low-level/unsafe features.
 
 ## 16. Audit verdict
@@ -451,6 +472,6 @@ Eristavi now has:
 - expanded JavaScript ordinary-value semantics;
 - an explicit Text-aware WebAssembly host contract;
 - full official Unicode-17 grapheme reference conformance;
-- a **322-test four-platform CI matrix**.
+- a **333-test four-platform CI matrix**.
 
 The project has moved firmly from language-prototype construction into **compiler/runtime maturation and cross-target conformance work**. The remaining gaps are engineering depth and target parity, not evidence that the core source-language contract needs to be reopened.

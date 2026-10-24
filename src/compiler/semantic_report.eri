@@ -1,0 +1,53 @@
+import compiler.ast;
+import compiler.format;
+import compiler.semantic_model as m;
+import compiler.semantic_types as t;
+
+type Variable { value identity m.Type; name Text; next maybe identity Variable; }
+type Variables { head maybe identity Variable; count Int; }
+function typeData(value identity m.Type, variables identity Variables) returns Text {
+    let actual be t.resolve(value); let kind be actual.kind;
+    if kind == 0 {
+        let cursor be variables.head; let name be "";
+        while cursor != none { if cursor.value == actual { name=cursor.name; } cursor=cursor.next; }
+        if name == "" { name="T" + format.integer(variables.count); variables.count=variables.count+1; variables.head=identity Variable { value=actual; name=name; next=variables.head; }; }
+        let result be "{\"kind\":\"var\",\"name\":" + format.quote(name);
+        if actual.allowed != 0 {
+            let allowed be ""; let separator be "";
+            if (actual.allowed / 2) % 2 == 1 { allowed="\"Float\""; separator=","; }
+            if actual.allowed % 2 == 1 { allowed=allowed+separator+"\"Int\""; separator=","; }
+            if (actual.allowed / 4) % 2 == 1 { allowed=allowed+separator+"\"Text\""; }
+            result=result+",\"allowed\":["+allowed+"]";
+        }
+        return result+"}";
+    }
+    if kind == 5 { return "{\"kind\":\"no-value\"}"; }
+    if kind == 11 { return "{\"kind\":\"any-error\"}"; }
+    if kind == 12 { return "{\"kind\":\"text-view\",\"view\":"+format.quote(actual.name)+"}"; }
+    if kind == 10 { return "{\"kind\":\"resource\",\"name\":\"std.files.File\",\"cleanup_errors\":[\"std.files.FileError\"]}"; }
+    if kind == 7 { return "{\"kind\":\"list\",\"element\":"+typeData(t.inner(actual),variables)+"}"; }
+    if kind == 8 { return "{\"kind\":\"maybe\",\"inner\":"+typeData(t.inner(actual),variables)+"}"; }
+    if kind == 9 { return "{\"kind\":\"identity\",\"inner\":"+typeData(t.inner(actual),variables)+"}"; }
+    let name be actual.name;
+    if kind == 1 { name="Int"; } if kind == 2 { name="Float"; } if kind == 3 { name="Bool"; } if kind == 4 { name="Text"; }
+    return "{\"kind\":\"named\",\"name\":"+format.quote(name)+"}";
+}
+public function report(owner identity m.Module) returns Text {
+    let result be "{\"format\":\"eristavi-semantics-v1\",\"experimental\":true,\"functions\":[";
+    let cursor be owner.declarations; let separator be "";
+    while cursor != none {
+        if cursor.node.kind == ast.functionDecl() {
+            let variables be identity Variables { head=none; count=0; };
+            result=result+separator+"{\"name\":"+format.quote(cursor.node.text)+",\"parameters\":[";
+            let parameter be cursor.parameters; let comma be "";
+            while parameter != none { result=result+comma+typeData(parameter.value,variables); comma=","; parameter=parameter.next; }
+            result=result+"],\"result\":"+typeData(cursor.result,variables)+",\"fails\":[";
+            let failure be cursor.failures; comma="";
+            while failure != none { result=result+comma+format.quote(failure.text); comma=","; failure=failure.next; }
+            result=result+"]}"; separator=",";
+        }
+        cursor=cursor.next;
+    }
+    let count be 0; let fact be owner.facts; while fact != none { count=count+1; fact=fact.next; }
+    return result+"],\"expressionFacts\":"+format.integer(count)+"}";
+}

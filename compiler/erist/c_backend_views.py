@@ -98,6 +98,22 @@ static eri_text eri_text_view_text_get(eri_text_view view,int64_t index){
 '''
 
 _HOSTED_FILES = r'''
+#ifndef _WIN32
+extern char *realpath(const char *restrict path,char *restrict resolved_path);
+#endif
+static eri_text eri_file_canonical_path(eri_text path){
+    char *cp=eri_text_to_c_path(path);
+    if(!cp)eri_raise_file_failure("file path contains NUL",path);
+#ifdef _WIN32
+    struct stat information;
+    if(stat(cp,&information)!=0)eri_raise_file_failure(strerror(errno),path);
+    char *resolved=_fullpath(NULL,cp,0);
+#else
+    char *resolved=realpath(cp,NULL);
+#endif
+    if(!resolved)eri_raise_file_failure(strerror(errno),path);
+    eri_text result=eri_text_from_cstr(resolved);free(resolved);return result;
+}
 static eri_file eri_file_acquire(eri_text path,bool create){
     char *cp=eri_text_to_c_path(path);
     if(!cp)eri_raise_file_failure("file path contains NUL",path);
@@ -160,6 +176,8 @@ class CBackend(TextBackend):
             arguments = ", ".join(self._expr(arg) for arg in e.arguments)
             return f"eri_process_{e.name}({arguments})"
         if isinstance(e, IRFileAcquire):
+            if e.name == "canonicalPath":
+                return f"eri_file_canonical_path({self._expr(e.path)})"
             create = "true" if e.name == "create" else "false"
             return f"eri_file_acquire({self._expr(e.path)}, {create})"
         if isinstance(e, IRUnicodeCall):

@@ -1,0 +1,656 @@
+import compiler.ast;
+import compiler.semantic_model as m;
+import compiler.semantic_types as t;
+
+function location(context identity m.Context, node identity ast.Node) returns identity m.Location { return m.at(context.owner,node.token); }
+function require(condition Bool, context identity m.Context, node identity ast.Node, category Text, message Text) returns Bool fails m.SemanticError {
+    if not condition { return try m.reject(location(context,node),category,message); } return true;
+}
+function failAt(owner identity m.Module, node identity ast.Node, category Text, message Text) returns Bool fails m.SemanticError { return try m.reject(m.at(owner,node.token),category,message); }
+function part(text Text, start Int, end Int) returns Text {
+    let value be ""; let index be start;
+    while index < end { value=value+text.scalars[index]; index=index+1; } return value;
+}
+function dot(text Text) returns Int {
+    let index be 0; while index < text.scalars.count { if text.scalars[index] == "." { return index; } index=index+1; } return -1;
+}
+function resolveName(owner identity m.Module, name Text, node identity ast.Node) returns identity m.Type fails m.SemanticError {
+    if name == "Int" { return m.makeType(1,""); } if name == "Float" { return m.makeType(2,""); }
+    if name == "Bool" { return m.makeType(3,""); } if name == "Text" { return m.makeType(4,""); }
+    let split be dot(name);
+    if split >= 0 {
+        let qualifier be part(name,0,split); let member be part(name,split+1,name.scalars.count);
+        let imported be m.imported(owner,qualifier);
+        if imported != none {
+            if imported.path == "std.files" {
+                if member == "File" { return m.makeType(10,"std.files.File"); }
+                if member == "FileError" { return m.makeType(6,"std.files.FileError"); }
+            }
+            let target be imported.target;
+            if target != none {
+                let declaration be m.declaration(target,member);
+                if declaration != none {
+                    if declaration.node.flag and (declaration.node.kind == ast.typeDecl() or declaration.node.kind == ast.errorDecl()) { return declaration.value; }
+                }
+            }
+        }
+    } else {
+        let declaration be m.declaration(owner,name);
+        if declaration != none { if declaration.node.kind == ast.typeDecl() or declaration.node.kind == ast.errorDecl() { return declaration.value; } }
+    }
+    try failAt(owner,node,"name","unknown or private type: " + name); return m.makeType(5,"");
+}
+function typeRef(owner identity m.Module, node identity ast.Node) returns identity m.Type fails m.SemanticError {
+    let result be try resolveName(owner,node.text,node);
+    if node.extra >= 2 { result=m.wrap(9,result); }
+    if node.extra % 2 == 1 { result=m.wrap(8,result); }
+    return result;
+}
+function layout(owner identity m.Module, name Text) returns maybe identity m.Declaration {
+    let declarations be owner.declarations;
+    while declarations != none { let currentDeclaration be declarations;
+        if currentDeclaration.value.name == name and currentDeclaration.value.kind == 6 { return declarations; }
+        declarations=currentDeclaration.next;
+    }
+    let imports be owner.imports;
+    while imports != none { let target be imports.target; if target != none { let found be layout(target,name); if found != none { return found; } } imports=imports.next; }
+    return none;
+}
+function errorType(owner identity m.Module, value identity m.Type) returns Bool {
+    let actual be t.resolve(value);
+    if actual.kind != 6 { return false; }
+    if actual.name == "std.files.FileError" { return true; }
+    let declaration be layout(owner,actual.name);
+    if declaration != none { return declaration.node.kind == ast.errorDecl(); }
+    return false;
+}
+function seenBefore(seen maybe identity m.Seen, declaration identity m.Declaration) returns Bool {
+    let cursor be seen; while cursor != none { if cursor.declaration == declaration { return true; } cursor=cursor.next; } return false;
+}
+function eligible(owner identity m.Module, value identity m.Type, fixedCheck Bool, seen maybe identity m.Seen) returns Bool {
+    let actual be t.resolve(value);
+    if actual.kind == 0 { return not fixedCheck; }
+    if actual.kind >= 1 and actual.kind <= 4 { return true; }
+    if actual.kind == 12 { return fixedCheck; }
+    if actual.kind == 9 { if fixedCheck { return false; } return true; }
+    if actual.kind == 7 or actual.kind == 8 { return eligible(owner,t.inner(actual),fixedCheck,seen); }
+    if actual.kind == 6 {
+        if actual.name == "std.files.FileError" { return true; }
+        let declaration be layout(owner,actual.name);
+        if declaration != none {
+            if seenBefore(seen,declaration) { return true; }
+            let nextSeen be identity m.Seen { declaration=declaration; next=seen; };
+            let fields be declaration.fields;
+            while fields != none { if not eligible(owner,fields.value,fixedCheck,nextSeen) { return false; } fields=fields.next; } return true;
+        }
+    }
+    return false;
+}
+function newContext(owner identity m.Module) returns identity m.Context {
+    return identity m.Context { owner=owner; symbols=none; narrowings=none; activeFunction=none; result=m.makeType(5,""); sawValue=false; sawBare=false; generics=none; };
+}
+function visible(context identity m.Context, binding identity m.Binding) returns identity m.Type {
+    let cursor be context.narrowings;
+    while cursor != none { if cursor.binding == binding and cursor.active { return cursor.value; } cursor=cursor.next; } return binding.value;
+}
+function clear(context identity m.Context, binding identity m.Binding) {
+    let cursor be context.narrowings;
+    while cursor != none { if cursor.binding == binding { let activeNarrow be cursor; activeNarrow.active=false; } cursor=cursor.next; }
+}
+function present(context identity m.Context, binding identity m.Binding) {
+    context.narrowings=identity m.Narrow { binding=binding; value=t.inner(binding.value); active=true; next=context.narrowings; };
+}
+function conditionBinding(context identity m.Context, condition identity ast.Node, truth Bool) returns maybe identity m.Binding {
+    if condition.kind != ast.binaryExpr() { return none; }
+    if (condition.text == "!=" and truth) or (condition.text == "==" and not truth) {
+        let first be m.child(condition.first); let second be m.child(condition.second);
+        if first.kind == ast.noneExpr() { let temporary be first; first=second; second=temporary; }
+        if first.kind == ast.nameExpr() and second.kind == ast.noneExpr() {
+            let binding be m.find(context.symbols,first.text);
+            if binding != none { if t.resolve(binding.value).kind == 8 { return binding; } }
+        }
+    } return none;
+}
+function declare(context identity m.Context, node identity ast.Node, name Text, value identity m.Type, immutable Bool, resource Bool) returns identity m.Binding fails m.SemanticError {
+    let prior be m.find(context.symbols,name);
+    try require(prior == none,context,node,"scope","binding would redeclare or shadow a visible name: " + name);
+    let binding be m.binding(name,value,immutable,resource,location(context,node),context.symbols); context.symbols=binding; return binding;
+}
+function validate(context identity m.Context, stop maybe identity m.Binding) returns Bool fails m.SemanticError {
+    let cursor be context.symbols;
+    while cursor != stop {
+        if cursor == none { return true; }
+        if not cursor.resource {
+            if t.unresolved(cursor.value) { if not t.variablesWithin(cursor.value,context.generics) { try m.reject(cursor.location,"inference","cannot infer a complete static type for " + cursor.name); } }
+            if cursor.immutable and not t.unresolved(cursor.value) { if not eligible(context.owner,cursor.value,true,none) { try m.reject(cursor.location,"fixed","fixed requires a transitively immutable ordinary value"); } }
+        }
+        cursor=cursor.next;
+    } return true;
+}
+function mutable(context identity m.Context, node identity ast.Node) returns Bool fails m.SemanticError {
+    let root be m.find(context.symbols,rootName(node));
+    if root != none { try require(not root.immutable or root.resource,context,node,"fixed","cannot mutate through a fixed binding"); }
+    if node.kind == ast.nameExpr() {
+        let binding be m.find(context.symbols,node.text);
+        if binding != none { try require(not binding.immutable or binding.resource,context,node,"fixed","cannot mutate through a fixed binding"); }
+    }
+    if node.kind == ast.memberExpr() {
+        let base be m.child(node.first); let baseType be t.resolve((try expression(context,base,true,false)).value);
+        if baseType.kind == 9 { baseType=t.inner(baseType); }
+        let declaration be layout(context.owner,baseType.name);
+        if declaration != none { let field be m.find(declaration.fields,node.text); if field != none { try require(not field.immutable,context,node,"fixed","cannot mutate a fixed field"); } }
+        return try mutable(context,base);
+    }
+    if node.kind == ast.indexExpr() { return try mutable(context,m.child(node.first)); }
+    return true;
+}
+function target(context identity m.Context, node identity ast.Node) returns identity m.Type fails m.SemanticError {
+    if node.kind == ast.nameExpr() {
+        let binding be m.find(context.symbols,node.text);
+        if binding != none { try require(not binding.immutable and not binding.resource,context,node,"fixed","binding cannot be reassigned"); return binding.value; }
+        try require(false,context,node,"name","unknown assignment target: " + node.text);
+    }
+    if node.kind == ast.indexExpr() {
+        let base be m.child(node.first); try mutable(context,base);
+        let value be t.resolve((try expression(context,base,true,false)).value);
+        try t.unify((try expression(context,m.child(node.second),true,false)).value,m.makeType(1,""),location(context,m.child(node.second)));
+        if value.kind == 0 { value=try t.unify(value,m.wrap(7,m.makeType(0,"")),location(context,node)); }
+        try require(value.kind == 7,context,node,"type","indexed assignment requires a List"); return t.inner(value);
+    }
+    if node.kind == ast.memberExpr() {
+        let base be m.child(node.first); try mutable(context,base);
+        let value be t.resolve((try expression(context,base,true,false)).value);
+        if value.kind == 9 { value=t.inner(value); }
+        let declaration be layout(context.owner,value.name);
+        if declaration != none { let field be m.find(declaration.fields,node.text); if field != none { try require(not field.immutable,context,node,"fixed","field is fixed"); return field.value; } }
+        try require(false,context,node,"type","member is not writable");
+    }
+    try require(false,context,node,"type","invalid assignment path"); return m.makeType(5,"");
+}
+
+public function prepare(owner identity m.Module) returns Bool fails m.SemanticError {
+    let cursor be owner.root.first; let phase be 0;
+    while cursor != none {
+        if cursor.kind == ast.importDecl() { if phase != 0 { try failAt(owner,cursor,"module","imports must precede declarations and entry statements"); } }
+        else {
+            if cursor.kind == ast.functionDecl() or cursor.kind == ast.typeDecl() or cursor.kind == ast.errorDecl() {
+                if phase == 2 { try failAt(owner,cursor,"module","declarations must precede entry statements"); } phase=1;
+                let prior be m.declaration(owner,cursor.text);
+                if prior != none or cursor.text == "output" { try failAt(owner,cursor,"scope","duplicate or reserved module declaration: " + cursor.text); }
+                let value be m.makeType(5,""); if cursor.kind != ast.functionDecl() { value=m.makeType(6,owner.name + "." + cursor.text); }
+                owner.declarations=identity m.Declaration { node=cursor; owner=owner; value=value; fields=none; parameters=none; result=m.makeType(5,""); explicitResult=false; failures=none; state=0; next=owner.declarations; };
+            } else { if not owner.entry { try failAt(owner,cursor,"module","imported modules must be declaration-only"); } phase=2; }
+        }
+        cursor=cursor.next;
+    }
+    let declarations be owner.declarations;
+    while declarations != none { let currentDeclaration be declarations;
+        let node be currentDeclaration.node;
+        if node.kind == ast.typeDecl() or node.kind == ast.errorDecl() {
+            let field be node.first;
+            while field != none {
+                let existing be m.find(currentDeclaration.fields,field.text);
+                if existing != none { try failAt(owner,field,"scope","duplicate field: " + field.text); }
+                let value be try typeRef(owner,m.child(field.first));
+                currentDeclaration.fields=m.binding(field.text,value,field.flag,false,m.at(owner,field.token),currentDeclaration.fields);
+                field=field.next;
+            }
+            if node.kind == ast.errorDecl() {
+                let message be m.find(currentDeclaration.fields,"message");
+                if message == none { try failAt(owner,node,"type","checked error requires a message Text field"); }
+                else { if t.resolve(message.value).kind != 4 { try failAt(owner,node,"type","checked error requires a message Text field"); } }
+            }
+        }
+        declarations=currentDeclaration.next;
+    }
+    declarations=owner.declarations;
+    while declarations != none { let currentDeclaration be declarations;
+        let node be currentDeclaration.node;
+        if node.kind == ast.functionDecl() {
+            let parameter be node.first; let tail maybe identity m.Binding be none;
+            while parameter != none {
+                if parameter.flag {
+                    let errorValue be try typeRef(owner,parameter);
+                    if not errorType(owner,errorValue) or m.has(currentDeclaration.failures,errorValue.name) { try failAt(owner,parameter,"failure","fails clause requires distinct checked error types"); }
+                    currentDeclaration.failures=m.add(currentDeclaration.failures,errorValue.name);
+                } else {
+                    let value be m.makeType(0,""); let annotation be parameter.first;
+                    if annotation != none { value=try typeRef(owner,annotation); }
+                    let item be m.binding(parameter.text,value,false,false,m.at(owner,parameter.token),none);
+                    if tail != none { tail.next=item; } else { currentDeclaration.parameters=item; } tail=item;
+                }
+                parameter=parameter.next;
+            }
+            let annotation be node.second;
+            if annotation != none { currentDeclaration.result=try typeRef(owner,annotation); currentDeclaration.explicitResult=true; }
+        } else {
+            let field be currentDeclaration.fields;
+            while field != none { if field.immutable and not eligible(owner,field.value,true,none) { try m.reject(field.location,"fixed","fixed field contains identity or resource state"); } field=field.next; }
+        }
+        declarations=currentDeclaration.next;
+    }
+    return true;
+}
+
+function integerLiteral(node identity ast.Node, context identity m.Context) returns Int fails m.SemanticError {
+    let raw be node.text; let index be 0; let base be 10;
+    if raw.scalars.count > 1 {
+        let marker be raw.scalars[1];
+        if marker == "x" or marker == "X" { base=16; index=2; }
+        if marker == "b" or marker == "B" { base=2; index=2; }
+    }
+    let result be 0;
+    while index < raw.scalars.count {
+        let character be raw.scalars[index];
+        if character != "_" {
+            let code be character.bytes[0]; let digit be code-48;
+            if code >= 65 and code <= 70 { digit=code-55; }
+            if code >= 97 and code <= 102 { digit=code-87; }
+            try require(result <= (9223372036854775807-digit)/base,context,node,"arithmetic","Int literal is outside the signed 64-bit range");
+            result=result*base+digit;
+        }
+        index=index+1;
+    } return result;
+}
+function checkedResult(context identity m.Context, node identity ast.Node, result m.Result, valueRequired Bool, allowChecked Bool) returns m.Result fails m.SemanticError {
+    if valueRequired { try require(t.resolve(result.value).kind != 5,context,node,"type","a no-value call cannot be used where a value is required"); }
+    if not allowChecked { try require(result.failures == none,context,node,"failure","checked call must be handled or propagated with try"); }
+    return result;
+}
+function arguments(context identity m.Context, first maybe identity ast.Node, expected Text, allowChecked Bool, call identity ast.Node) returns maybe identity m.Name fails m.SemanticError {
+    let cursor be first; let index be 0; let failures maybe identity m.Name be none;
+    while cursor != none {
+        try require(index < expected.scalars.count,context,call,"type","too many arguments");
+        let kind be 4; if expected.scalars[index] == "I" { kind=1; }
+        let value be try expression(context,cursor,true,allowChecked);
+        try t.unify(value.value,m.makeType(kind,""),location(context,cursor)); failures=m.union(failures,value.failures);
+        index=index+1; cursor=cursor.next;
+    }
+    try require(index == expected.scalars.count,context,call,"type","wrong argument count"); return failures;
+}
+function builtin(context identity m.Context, node identity ast.Node, module Text, method Text, valueRequired Bool, allowChecked Bool) returns m.Result fails m.SemanticError {
+    let result be m.result(m.makeType(5,"")); let expected be ""; let known be false;
+    if module == "std.files" {
+        if method == "open" or method == "openRead" or method == "create" { result.value=m.makeType(10,"std.files.File"); known=true; }
+        if method == "exists" { result.value=m.makeType(3,""); known=true; }
+        if method == "canonicalPath" { result.value=m.makeType(4,""); known=true; }
+        if method == "remove" { known=true; }
+        expected="T"; result.failures=m.add(none,"std.files.FileError");
+    }
+    if module == "std.unicode" {
+        expected="T";
+        if method == "isIdentifierStart" or method == "isIdentifierContinue" { result.value=m.makeType(3,""); known=true; }
+        if method == "normalizeNfc" or method == "fromScalar" { result.value=m.makeType(4,""); known=true; }
+        if method == "fromScalar" { expected="I"; }
+    }
+    if module == "std.process" {
+        if method == "arguments" { result.value=m.wrap(7,m.makeType(4,"")); known=true; }
+        if method == "setExitCode" { expected="I"; known=true; }
+        if method == "writeError" { expected="T"; known=true; }
+    }
+    try require(known,context,node,"name","unknown standard-library function: " + module + "." + method);
+    result.failures=m.union(result.failures,try arguments(context,node.second,expected,allowChecked,node));
+    return try checkedResult(context,node,result,valueRequired,allowChecked);
+}
+function ensureFunction(declaration identity m.Declaration, valueRequired Bool) returns Bool fails m.SemanticError {
+    if declaration.state == 2 { return true; }
+    if declaration.state == 1 {
+        if valueRequired and not declaration.explicitResult { try failAt(declaration.owner,declaration.node,"inference","recursive result inference requires an explicit returns contract"); }
+        return true;
+    }
+    declaration.state=1;
+    let context be newContext(declaration.owner); context.activeFunction=declaration;
+    context.result=declaration.result; context.generics=declaration.parameters;
+    let parameter be declaration.parameters;
+    while parameter != none {
+        let prior be m.find(context.symbols,parameter.name);
+        if prior != none { try m.reject(parameter.location,"scope","parameter would shadow a visible name"); }
+        context.symbols=m.binding(parameter.name,parameter.value,false,false,parameter.location,context.symbols); parameter=parameter.next;
+    }
+    let terminated be try block(context,m.child(declaration.node.third));
+    if declaration.explicitResult or context.sawValue {
+        try require(not context.sawBare and terminated,context,declaration.node,"return","value function has a reachable successful path without a return value");
+    }
+    if context.sawBare and context.sawValue { try require(false,context,declaration.node,"return","cannot mix bare and value returns"); }
+    if context.sawValue { declaration.result=context.result; }
+    try validate(context,none); declaration.state=2; return true;
+}
+function userCall(context identity m.Context, node identity ast.Node, declaration identity m.Declaration, valueRequired Bool, allowChecked Bool) returns m.Result fails m.SemanticError {
+    try ensureFunction(declaration,valueRequired);
+    let map be identity m.Clone { head=none; };
+    let parameter be declaration.parameters; let argument be node.second;
+    let failures be declaration.failures;
+    while parameter != none {
+        try require(argument != none,context,node,"type","not enough function arguments");
+        if argument != none {
+            let value be try expression(context,argument,true,allowChecked);
+            try require(t.resolve(value.value).kind != 10 and t.resolve(value.value).kind != 5,context,argument,"resource","resources cannot be passed as ordinary value parameters");
+            let expected be t.clone(parameter.value,map);
+            try t.assign(expected,value.value,location(context,argument)); failures=m.union(failures,value.failures); argument=argument.next;
+        }
+        parameter=parameter.next;
+    }
+    try require(argument == none,context,node,"type","too many function arguments");
+    let result be m.Result { value=t.clone(declaration.result,map); failures=failures; };
+    let constraints be map.head;
+    while constraints != none {
+        if constraints.target.mustFixed { try enforceFixed(context,constraints.target,node); }
+        if constraints.target.mustEqual { try enforceEquality(context,constraints.target,node); }
+        constraints=constraints.next;
+    }
+    return try checkedResult(context,node,result,valueRequired,allowChecked);
+}
+function call(context identity m.Context, node identity ast.Node, valueRequired Bool, allowChecked Bool) returns m.Result fails m.SemanticError {
+    let callee be m.child(node.first);
+    if callee.kind == ast.nameExpr() {
+        if callee.text == "output" {
+            let argument be node.second; try require(argument != none,context,node,"type","output requires one argument");
+            if argument != none {
+                try require(argument.next == none,context,node,"type","output requires one argument");
+                let value be try expression(context,argument,true,allowChecked); let kind be t.resolve(value.value).kind;
+                try require(kind >= 1 and kind <= 4,context,node,"type","output requires a scalar value");
+                return m.Result { value=m.makeType(5,""); failures=value.failures; };
+            }
+        }
+        let declaration be m.declaration(context.owner,callee.text);
+        if declaration != none { if declaration.node.kind == ast.functionDecl() { return try userCall(context,node,declaration,valueRequired,allowChecked); } }
+        try require(false,context,callee,"name","unknown function: " + callee.text);
+    }
+    if callee.kind == ast.memberExpr() {
+        let base be m.child(callee.first);
+        if base.kind == ast.nameExpr() {
+            let imported be m.imported(context.owner,base.text);
+            if imported != none {
+                let owner be imported.target;
+                if owner == none { return try builtin(context,node,imported.path,callee.text,valueRequired,allowChecked); }
+                else {
+                    let declaration be m.declaration(owner,callee.text);
+                    if declaration != none { if declaration.node.flag and declaration.node.kind == ast.functionDecl() { return try userCall(context,node,declaration,valueRequired,allowChecked); } }
+                    try require(false,context,node,"name","unknown or private imported function: " + callee.text);
+                }
+            }
+        }
+        let value be try expression(context,base,true,allowChecked); let actual be t.resolve(value.value);
+        if callee.text == "add" {
+            if actual.kind == 0 { actual=try t.unify(actual,m.wrap(7,m.makeType(0,"")),location(context,node)); }
+            try require(actual.kind == 7,context,node,"type","add is defined only for List"); try mutable(context,base);
+            let argument be node.second; try require(argument != none,context,node,"type","List.add requires one argument");
+            if argument != none {
+                try require(argument.next == none,context,node,"type","List.add requires one argument");
+                let element be try expression(context,argument,true,allowChecked);
+                try require(t.resolve(element.value).kind != 5,context,argument,"type","List elements require ordinary values");
+                try require(t.resolve(element.value).kind != 10,context,argument,"resource","resources cannot be copied into Lists");
+                try t.assign(t.inner(actual),element.value,location(context,argument));
+                return m.Result { value=m.makeType(5,""); failures=m.union(value.failures,element.failures); };
+            }
+        }
+        if actual.kind == 10 {
+            let expected be ""; let resultType be m.makeType(4,"");
+            if callee.text == "writeText" { expected="T"; resultType=m.makeType(5,""); }
+            try require(callee.text == "readText" or callee.text == "writeText",context,node,"name","unknown resource method");
+            let failures be try arguments(context,node.second,expected,allowChecked,node);
+            failures=m.union(failures,m.add(value.failures,"std.files.FileError"));
+            return try checkedResult(context,node,m.Result { value=resultType; failures=failures; },valueRequired,allowChecked);
+        }
+    }
+    try require(false,context,node,"type","calls require a named function or supported member"); return m.result(m.makeType(5,""));
+}
+function handled(context identity m.Context, node identity ast.Node, valueRequired Bool) returns m.Result fails m.SemanticError {
+    let value be try expression(context,m.child(node.first),valueRequired,true);
+    try require(value.failures != none,context,node,"failure","else error requires an expression with checked failures");
+    let covered maybe identity m.Name be none; let catchAll be false; let handler be node.second;
+    while handler != none {
+        try require(not catchAll,context,handler,"failure","catch-all handler must be last");
+        let annotation be handler.first; let errorValue be m.makeType(11,"");
+        if annotation != none {
+            errorValue=try typeRef(context.owner,annotation);
+            try require(errorType(context.owner,errorValue) and not m.has(covered,errorValue.name),context,handler,"failure","handler requires a distinct checked error type");
+            covered=m.add(covered,errorValue.name);
+        } else { catchAll=true; }
+        let saved be context.symbols;
+        try declare(context,handler,"error",errorValue,false,false);
+        let terminated be try block(context,m.child(handler.second));
+        try validate(context,saved); context.symbols=saved;
+        if valueRequired { try require(terminated,context,handler,"failure","handler attached to a value expression must terminate the current path"); }
+        handler=handler.next;
+    }
+    try require(catchAll or m.subset(value.failures,covered),context,node,"failure","checked-error handling is incomplete");
+    return m.result(value.value);
+}
+function member(context identity m.Context, node identity ast.Node, allowChecked Bool) returns m.Result fails m.SemanticError {
+    let value be try expression(context,m.child(node.first),true,allowChecked); let actual be t.resolve(value.value);
+    try require(actual.kind != 8,context,node,"maybe","optional value must be proven present");
+    if actual.kind == 0 and node.text == "count" { actual=try t.unify(actual,m.wrap(7,m.makeType(0,"")),location(context,node)); }
+    if actual.kind == 9 { actual=t.inner(actual); }
+    if actual.kind == 4 and (node.text == "bytes" or node.text == "scalars" or node.text == "characters") { return m.Result { value=m.makeType(12,node.text); failures=value.failures; }; }
+    if (actual.kind == 7 or actual.kind == 12) and node.text == "count" { return m.Result { value=m.makeType(1,""); failures=value.failures; }; }
+    if actual.kind == 11 and node.text == "message" { return m.result(m.makeType(4,"")); }
+    if actual.kind == 6 {
+        if actual.name == "std.files.FileError" and (node.text == "message" or node.text == "path") { return m.result(m.makeType(4,"")); }
+        let declaration be layout(context.owner,actual.name);
+        if declaration != none { let field be m.find(declaration.fields,node.text); if field != none { return m.Result { value=field.value; failures=value.failures; }; } }
+    }
+    try require(false,context,node,"type","member is not defined for this type: " + node.text); return m.result(m.makeType(5,""));
+}
+function construct(context identity m.Context, node identity ast.Node, allowChecked Bool) returns m.Result fails m.SemanticError {
+    let value be try resolveName(context.owner,node.text,node); let declaration be layout(context.owner,value.name);
+    try require(declaration != none,context,node,"type","type is not constructible");
+    let fields be node.first; let provided maybe identity m.Name be none; let failures maybe identity m.Name be none;
+    if declaration != none {
+        while fields != none {
+            try require(not m.has(provided,fields.text),context,fields,"type","field is initialized more than once");
+            let field be m.find(declaration.fields,fields.text);
+            try require(field != none,context,fields,"type","unknown construction field");
+            if field != none {
+                let item be try expression(context,m.child(fields.first),true,allowChecked);
+                try require(t.resolve(item.value).kind != 10,context,fields,"resource","resources cannot be copied into value fields");
+                try t.assign(field.value,item.value,location(context,fields)); failures=m.union(failures,item.failures);
+            }
+            provided=m.add(provided,fields.text); fields=fields.next;
+        }
+        let field be declaration.fields;
+        while field != none { try require(m.has(provided,field.name),context,node,"type","construction is missing required fields"); field=field.next; }
+    } return m.Result { value=value; failures=failures; };
+}
+function expression(context identity m.Context, node identity ast.Node, valueRequired Bool, allowChecked Bool) returns m.Result fails m.SemanticError {
+    let value be try evaluate(context,node,valueRequired,allowChecked);
+    context.owner.facts=identity m.Fact { node=node; value=value.value; failures=value.failures; next=context.owner.facts; };
+    return value;
+}
+function evaluate(context identity m.Context, node identity ast.Node, valueRequired Bool, allowChecked Bool) returns m.Result fails m.SemanticError {
+    let kind be node.kind;
+    if kind == ast.literalExpr() {
+        let typeKind be 4;
+        if node.extra == 2 { typeKind=1; try integerLiteral(node,context); }
+        if node.extra == 3 { typeKind=2; }
+        if node.extra == 30 or node.extra == 31 { typeKind=3; }
+        return m.result(m.makeType(typeKind,""));
+    }
+    if kind == ast.noneExpr() { return m.result(m.wrap(8,m.makeType(0,""))); }
+    if kind == ast.nameExpr() {
+        let binding be m.find(context.symbols,node.text);
+        if binding != none { return m.result(visible(context,binding)); }
+        try require(false,context,node,"name","unknown name or function used as a value: " + node.text);
+    }
+    if kind == ast.listExpr() {
+        let element be m.makeType(0,""); let cursor be node.first; let failures maybe identity m.Name be none;
+        while cursor != none { let value be try expression(context,cursor,true,allowChecked); try require(t.resolve(value.value).kind != 5,context,cursor,"type","List elements require ordinary values"); try require(t.resolve(value.value).kind != 10,context,cursor,"resource","resources cannot be copied into Lists"); element=try t.join(element,value.value,location(context,cursor)); failures=m.union(failures,value.failures); cursor=cursor.next; }
+        return m.Result { value=m.wrap(7,element); failures=failures; };
+    }
+    if kind == ast.identityExpr() {
+        let value be try expression(context,m.child(node.first),true,allowChecked); let actual be t.resolve(value.value);
+        try require(actual.kind != 8 and actual.kind != 9 and actual.kind != 10 and actual.kind != 5,context,node,"type","identity requires an ordinary non-resource value");
+        return m.Result { value=m.wrap(9,actual); failures=value.failures; };
+    }
+    if kind == ast.tryExpr() {
+        let active be context.activeFunction;
+        try require(active != none,context,node,"failure","try cannot propagate beyond the entry boundary");
+        let value be try expression(context,m.child(node.first),valueRequired,true);
+        if active != none { try require(m.subset(value.failures,active.failures),context,node,"failure","try propagates failures not declared in the function contract"); }
+        return m.result(value.value);
+    }
+    if kind == ast.handledExpr() { return try handled(context,node,valueRequired); }
+    if kind == ast.memberExpr() { return try member(context,node,allowChecked); }
+    if kind == ast.constructionExpr() { return try construct(context,node,allowChecked); }
+    if kind == ast.callExpr() { return try call(context,node,valueRequired,allowChecked); }
+    if kind == ast.indexExpr() {
+        let base be m.child(node.first); let index be m.child(node.second);
+        let value be try expression(context,base,true,allowChecked); let subscript be try expression(context,index,true,allowChecked);
+        try t.unify(subscript.value,m.makeType(1,""),location(context,index)); let actual be t.resolve(value.value);
+        if actual.kind == 0 { actual=try t.unify(actual,m.wrap(7,m.makeType(0,"")),location(context,node)); }
+        if actual.kind == 12 { let element be m.makeType(4,""); if actual.name == "bytes" { element=m.makeType(1,""); } return m.Result { value=element; failures=m.union(value.failures,subscript.failures); }; }
+        try require(actual.kind == 7,context,node,"type","indexing requires a List or explicit Text view");
+        if base.kind == ast.listExpr() and index.kind == ast.literalExpr() {
+            let count be 0; let cursor be base.first; while cursor != none { count=count+1; cursor=cursor.next; }
+            let constant be try integerLiteral(index,context); try require(constant < count,context,index,"bounds","List index is provably out of bounds");
+        }
+        return m.Result { value=t.inner(actual); failures=m.union(value.failures,subscript.failures); };
+    }
+    if kind == ast.unaryExpr() {
+        let value be try expression(context,m.child(node.first),true,allowChecked);
+        if node.text == "not" { try t.unify(value.value,m.makeType(3,""),location(context,node)); }
+        else { let actual be t.resolve(value.value); try require(actual.kind == 1 or actual.kind == 2,context,node,"type","unary minus requires Int or Float"); }
+        return value;
+    }
+    if kind == ast.binaryExpr() {
+        let left be try expression(context,m.child(node.first),true,allowChecked); let right be try expression(context,m.child(node.second),true,allowChecked);
+        let failures be m.union(left.failures,right.failures); let op be node.text;
+        try require(t.resolve(left.value).kind != 5 and t.resolve(right.value).kind != 5,context,node,"type","operator requires values");
+        if op == "and" or op == "or" {
+            try t.unify(left.value,m.makeType(3,""),location(context,node)); try t.unify(right.value,m.makeType(3,""),location(context,node)); return m.Result { value=m.makeType(3,""); failures=failures; };
+        }
+        if op == "==" or op == "!=" {
+            let joined be try t.join(left.value,right.value,location(context,node));
+            try enforceEquality(context,joined,node); return m.Result { value=m.makeType(3,""); failures=failures; };
+        }
+        let actual be try t.unify(left.value,right.value,location(context,node)); let allowed be 3;
+        if op == "+" { allowed=7; } if op == "%" { allowed=1; }
+        try t.constrain(actual,allowed,location(context,node));
+        if op == "<" or op == "<=" or op == ">" or op == ">=" { actual=m.makeType(3,""); }
+        return m.Result { value=actual; failures=failures; };
+    }
+    try require(false,context,node,"unsupported","unimplemented semantic expression"); return m.result(m.makeType(5,""));
+}
+
+function rootName(node identity ast.Node) returns Text {
+    if node.kind == ast.nameExpr() { return node.text; }
+    if node.kind == ast.memberExpr() or node.kind == ast.indexExpr() { return rootName(m.child(node.first)); }
+    return "";
+}
+function statement(context identity m.Context, node identity ast.Node) returns Bool fails m.SemanticError {
+    let kind be node.kind;
+    if kind == ast.letStmt() {
+        let prior be m.find(context.symbols,node.text);
+        try require(prior == none,context,node,"scope","binding would redeclare or shadow a visible name: " + node.text);
+        let value be t.resolve((try expression(context,m.child(node.second),true,false)).value);
+        try require(value.kind != 5 and value.kind != 10,context,node,"resource","binding requires an ordinary value; resources belong to with");
+        let annotation be node.first;
+        if annotation != none { value=try t.assign(try typeRef(context.owner,annotation),value,location(context,node)); }
+        try declare(context,node,node.text,value,node.flag,false);
+        if node.flag { try enforceFixed(context,value,node); }
+        return false;
+    }
+    if kind == ast.assignStmt() {
+        let destination be m.child(node.first); let expected be try target(context,destination);
+        let value be try expression(context,m.child(node.second),true,false);
+        try require(t.resolve(value.value).kind != 5,context,node,"type","cannot assign a no-value expression");
+        try require(t.resolve(value.value).kind != 10,context,node,"resource","resources cannot be copied into ordinary storage");
+        try t.assign(expected,value.value,location(context,node));
+        let binding be m.find(context.symbols,rootName(destination));
+        if binding != none {
+            clear(context,binding);
+            if destination.kind == ast.nameExpr() and t.resolve(binding.value).kind == 8 and t.resolve(value.value).kind != 8 { present(context,binding); }
+        } return false;
+    }
+    if kind == ast.expressionStmt() { try expression(context,m.child(node.first),false,false); return false; }
+    if kind == ast.returnStmt() {
+        let active be context.activeFunction;
+        try require(active != none,context,node,"return","return is valid only inside a function");
+        let returned be node.first;
+        if returned == none {
+            try require(not context.sawValue,context,node,"return","cannot mix bare and value returns");
+            if active != none { try require(not active.explicitResult,context,node,"return","value function cannot return without a value"); }
+            context.sawBare=true;
+        } else {
+            let value be try expression(context,returned,true,false); let actual be t.resolve(value.value);
+            try require(actual.kind != 5 and actual.kind != 10 and not context.sawBare,context,node,"return","return requires an ordinary value and consistent result contract");
+            if active != none { if active.explicitResult { try t.assign(active.result,actual,location(context,node)); actual=active.result; } }
+            if context.sawValue { context.result=try t.join(context.result,actual,location(context,node)); }
+            else { context.result=actual; }
+            context.sawValue=true;
+        } return true;
+    }
+    if kind == ast.failStmt() {
+        let active be context.activeFunction;
+        try require(active != none,context,node,"failure","fail requires a function fails contract");
+        let value be t.resolve((try expression(context,m.child(node.first),true,false)).value);
+        try require(errorType(context.owner,value),context,node,"failure","fail requires a checked error value");
+        if active != none { try require(m.has(active.failures,value.name),context,node,"failure","checked failure is not declared by the function"); }
+        return true;
+    }
+    if kind == ast.ifStmt() {
+        let condition be m.child(node.first); try t.unify((try expression(context,condition,true,false)).value,m.makeType(3,""),location(context,condition));
+        let saved be context.narrowings; let thenBinding be conditionBinding(context,condition,true); let elseBinding be conditionBinding(context,condition,false);
+        if thenBinding != none { present(context,thenBinding); }
+        let thenTerminated be try block(context,m.child(node.second)); context.narrowings=saved;
+        let other be node.third; let elseTerminated be false;
+        if other != none { if elseBinding != none { present(context,elseBinding); } elseTerminated=try block(context,other); context.narrowings=saved; }
+        if thenTerminated and not elseTerminated { if elseBinding != none { present(context,elseBinding); } }
+        if elseTerminated and not thenTerminated { if thenBinding != none { present(context,thenBinding); } }
+        return other != none and thenTerminated and elseTerminated;
+    }
+    if kind == ast.whileStmt() {
+        let condition be m.child(node.first); try t.unify((try expression(context,condition,true,false)).value,m.makeType(3,""),location(context,condition));
+        let saved be context.narrowings; let binding be conditionBinding(context,condition,true); if binding != none { present(context,binding); }
+        try block(context,m.child(node.second)); context.narrowings=saved; return false;
+    }
+    if kind == ast.forStmt() {
+        let value be t.resolve((try expression(context,m.child(node.first),true,false)).value);
+        if value.kind == 0 { value=try t.unify(value,m.wrap(7,m.makeType(0,"")),location(context,node)); }
+        try require(value.kind == 7,context,m.child(node.first),"type","for/in requires a List");
+        let saved be context.symbols; try declare(context,node,node.text,t.inner(value),false,false);
+        try block(context,m.child(node.second)); try validate(context,saved); context.symbols=saved; return false;
+    }
+    if kind == ast.withStmt() {
+        let value be t.resolve((try expression(context,m.child(node.second),true,false)).value);
+        try require(value.kind == 10,context,m.child(node.second),"resource","with requires a deterministic resource");
+        let annotation be node.first; if annotation != none { try t.unify(try typeRef(context.owner,annotation),value,location(context,node)); }
+        let active be context.activeFunction;
+        try require(active != none,context,node,"resource","resource cleanup requires a function fails contract");
+        if active != none { try require(m.has(active.failures,"std.files.FileError"),context,node,"failure","file cleanup failure is missing from the function contract"); }
+        let saved be context.symbols; try declare(context,node,node.text,value,true,true);
+        let terminated be try block(context,m.child(node.third)); try validate(context,saved); context.symbols=saved; return terminated;
+    }
+    try require(false,context,node,"scope","module declarations are not valid inside executable blocks"); return false;
+}
+function block(context identity m.Context, node identity ast.Node) returns Bool fails m.SemanticError {
+    let saved be context.symbols; let savedNarrowings be context.narrowings; let cursor be node.first; let terminated be false;
+    while cursor != none {
+        if not terminated { terminated=try statement(context,cursor); }
+        cursor=cursor.next;
+    }
+    try validate(context,saved); context.symbols=saved; context.narrowings=savedNarrowings; return terminated;
+}
+function enforceFixed(context identity m.Context, value identity m.Type, node identity ast.Node) returns Bool fails m.SemanticError {
+    let actual be t.resolve(value);
+    if actual.kind == 0 { actual.mustFixed=true; return true; }
+    if actual.kind == 7 or actual.kind == 8 { return try enforceFixed(context,t.inner(actual),node); }
+    return try require(eligible(context.owner,actual,true,none),context,node,"fixed","fixed requires a transitively immutable ordinary value");
+}
+function enforceEquality(context identity m.Context, value identity m.Type, node identity ast.Node) returns Bool fails m.SemanticError {
+    let actual be t.resolve(value);
+    if actual.kind == 0 { actual.mustEqual=true; return true; }
+    if actual.kind == 7 or actual.kind == 8 { return try enforceEquality(context,t.inner(actual),node); }
+    return try require(eligible(context.owner,actual,false,none),context,node,"type","equality is not defined for this type");
+}
+public function analyze(owner identity m.Module) returns Bool fails m.SemanticError {
+    try prepare(owner);
+    let declarations be owner.declarations;
+    while declarations != none { let currentDeclaration be declarations; if currentDeclaration.node.kind == ast.functionDecl() { try ensureFunction(declarations,true); } declarations=currentDeclaration.next; }
+    let context be newContext(owner); let cursor be owner.root.first;
+    while cursor != none {
+        if cursor.kind != ast.importDecl() and cursor.kind != ast.functionDecl() and cursor.kind != ast.typeDecl() and cursor.kind != ast.errorDecl() { try statement(context,cursor); }
+        cursor=cursor.next;
+    }
+    try validate(context,none); return true;
+}

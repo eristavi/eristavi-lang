@@ -4,7 +4,8 @@ The repository now contains a usable **syntax frontend written in Eristavi** at
 `src/frontend.eri`. It reads a source file, runs the Eristavi-written lexer/parser,
 and checks syntax or writes a machine-readable token/AST report.
 
-It does not yet resolve imports, check types or generate application code.
+The syntax commands do not resolve imports or check types. Experimental semantic
+commands now do; application code generation remains Stage-0.
 `erist check` remains the Stage-0 semantic checker; `erist-frontend check` checks
 syntax only. An unknown function name can therefore pass the frontend and still
 be rejected by Stage-0 semantic analysis.
@@ -35,7 +36,8 @@ offline frontend executable, not yet a self-building standalone compiler.
 
 Paths may be absolute or relative to the process working directory. Spaces and
 Unicode names are passed as ordinary arguments; use normal shell quoting when
-needed. This tool does not need a path-normalization library or an import resolver.
+needed. Syntax commands pass paths directly to the file boundary. Semantic
+commands add canonical root validation and a source module loader.
 
 Successful `check` is silent. Reports go to stdout unless `--output` is specified.
 Diagnostics go to stderr. Exit status is **0** for success, **1** for source/I/O
@@ -54,6 +56,20 @@ erist run src/frontend.eri --source-root src -- ast examples/hello.eri
 ```
 
 Arguments after `--` are forwarded to the Eristavi program unchanged.
+
+## Experimental semantic commands
+
+```sh
+./erist-frontend analyze project/src/application.eri --source-root project/src
+./erist-frontend analyze-report project/src/application.eri --source-root project/src
+```
+
+These commands run the Eristavi-written name/type/safety analyzer and source module
+loader. They do not execute the application. The source root defaults to the entry
+file's parent. Successful analysis is silent; `analyze-report` emits inferred
+function contracts. Semantic commands use `--source-root`, not `--output`.
+Stage-0 remains the reference while differential coverage and later IR work continue.
+See [`SEMANTIC_ANALYSIS.md`](SEMANTIC_ANALYSIS.md).
 
 ## Reports
 
@@ -97,8 +113,8 @@ JavaScript and Wasm support for these new library operations is pending and thei
 use is rejected explicitly. No language syntax or implicit ownership rules were
 added for this phase.
 
-Next comes semantic analysis in Eristavi, followed by verified IR and code
-generation. Full self-building requires repeatable compiler builds and equivalent
+Experimental semantic analysis is now implemented in Eristavi. Verified IR and
+code generation are the next stages. Full self-building requires repeatable compiler builds and equivalent
 semantic/conformance results. The final offline native toolchain must also bundle
 or implement its assembler/linker functionality before external build tools can
 be removed from normal native compilation.
