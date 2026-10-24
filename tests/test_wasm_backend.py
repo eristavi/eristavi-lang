@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import shutil
-import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -40,14 +38,26 @@ class WebAssemblyBackendTests(unittest.TestCase):
         finally:
             td.cleanup()
 
-    def test_unsupported_text_is_explicitly_rejected(self):
-        td = tempfile.TemporaryDirectory()
+    def test_text_uses_explicit_externref_utf8_host_contract(self):
+        td, wat = self.emit('let value be "A" + "β"; output(value); output(value == "Aβ");')
         try:
-            root = Path(td.name)
-            src = root / "app.eri"
-            src.write_text('output("hello");', encoding="utf-8")
-            with self.assertRaises(ValueError):
-                WebAssemblyTextBackend().emit(lower_universal_file(src, root))
+            self.assertIn('(import "eristavi" "text_from_utf8"', wat)
+            self.assertIn('(import "eristavi" "text_concat"', wat)
+            self.assertIn('(import "eristavi" "text_eq"', wat)
+            self.assertIn('(import "eristavi" "output_text"', wat)
+            self.assertIn('(result externref)', wat)
+            self.assertIn('(memory (export "memory")', wat)
+            self.assertIn('(data (i32.const 1024)', wat)
+            self.assertIn('call $eri_text_concat', wat)
+            self.assertIn('call $eri_text_eq', wat)
+            self.assertIn('call $eri_out_text', wat)
+        finally:
+            td.cleanup()
+
+    def test_bool_equality_uses_i32_not_i64_comparison(self):
+        td, wat = self.emit('let a be true; let b be false; output(a != b);')
+        try:
+            self.assertIn('i32.ne', wat)
         finally:
             td.cleanup()
 
