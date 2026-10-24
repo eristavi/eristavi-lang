@@ -13,6 +13,7 @@ from .typesys import (
     TEXT_SCALARS,
     ListType,
     MaybeType,
+    NoValueType,
     TextViewType,
     TypeVar,
     resolve,
@@ -50,9 +51,6 @@ class Analyzer(BaseAnalyzer):
         return None
 
     def _condition_narrowings(self, expr):
-        # Preserve the base bare-name rules, then extend the same frozen
-        # `maybe != none` contract to exact member paths.  For `and`, every
-        # refinement established by either operand is valid in the true arm.
         then, other = super()._condition_narrowings(expr)
         if isinstance(expr, BinaryExpr) and expr.operator == "and":
             left_then, _ = self._condition_narrowings(expr.left)
@@ -117,6 +115,44 @@ class Analyzer(BaseAnalyzer):
         if (
             isinstance(expr.callee, MemberExpr)
             and isinstance(expr.callee.base, NameExpr)
+            and expr.callee.base.name in self.imported_modules
+        ):
+            mod = self.imported_modules[expr.callee.base.name]
+            fn = mod.analyzer.functions.get(expr.callee.name)
+            if fn is None or not fn.declaration.public:
+                raise SemanticError(
+                    f"module {expr.callee.base.name!r} does not expose public function {expr.callee.name!r}",
+                    expr.location,
+                )
+            if len(expr.arguments) != len(fn.typed_parameters):
+                raise SemanticError(
+                    f"function {expr.callee.name!r} expects {len(fn.typed_parameters)} argument(s), got {len(expr.arguments)}",
+                    expr.location,
+                )
+            args = []
+            failures = set()
+            for i, (argument, declared_type) in enumerate(zip(expr.arguments, fn.typed_parameters), 1):
+                actual_type = self._expr(argument, True, allow_checked)
+                failures |= self.expr_failures.get(id(argument), set())
+                if declared_type is not None:
+                    self._assign_or_error(declared_type, actual_type, argument.location, f"argument {i}")
+                    args.append(declared_type)
+                else:
+                    args.append(actual_type)
+            failures |= fn.fails
+            if fn.fails and not allow_checked:
+                raise SemanticError(
+                    f"call to {expr.callee.base.name}.{expr.callee.name} may fail with {', '.join(sorted(fn.fails))}; handle it or use try",
+                    expr.location,
+                )
+            result_type = mod.analyzer._ensure_function(fn, args, value_required)
+            if value_required and isinstance(resolve(result_type), NoValueType):
+                raise SemanticError("a no-value function call cannot be used where a value is required", expr.location)
+            return self._record(expr, result_type, failures)
+
+        if (
+            isinstance(expr.callee, MemberExpr)
+            and isinstance(expr.callee.base, NameExpr)
             and expr.callee.base.name in self.imports
             and self.imports[expr.callee.base.name] == ("std", "files")
             and expr.callee.name in ("exists", "remove")
@@ -169,11 +205,6 @@ class Analyzer(BaseAnalyzer):
                     raise SemanticError("Text views are read-only", target.location)
                 return INT if bt.kind == "bytes" else TEXT
 
-            # Reading through a generic indexed expression already shapes an
-            # unresolved parameter as List<T>. Indexed assignment must impose
-            # the same relationship so generic functions can express ordinary
-            # List mutation without explicit generic syntax. The List is still
-            # passed by value; this only completes the inference relationship.
             if isinstance(bt, TypeVar):
                 element = TypeVar("element")
                 shaped = ListType(element)
