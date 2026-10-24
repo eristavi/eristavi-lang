@@ -23,6 +23,20 @@ class BackendTests(unittest.TestCase):
         p=self.compile_run('output("A\\nB");'); self.assertEqual(p.stdout,'A\nB\n')
     def test_native_unicode_identifier(self):
         p=self.compile_run('let τιμή be 42; output(τιμή);'); self.assertEqual(p.stdout,'42\n')
+    def test_native_list_literal_index_and_count(self):
+        p=self.compile_run('let x be [10,20,30]; output(x.count); output(x[1]);'); self.assertEqual(p.stdout,'3\n20\n')
+    def test_native_list_add_and_index_assignment(self):
+        p=self.compile_run('let x be [1,2]; x.add(3); x[0]=9; output(x.count); output(x[0]); output(x[2]);'); self.assertEqual(p.stdout,'3\n9\n3\n')
+    def test_native_list_value_semantics(self):
+        p=self.compile_run('let first be [1,2]; let second be first; second.add(3); second[0]=9; output(first.count); output(first[0]); output(second.count); output(second[0]);'); self.assertEqual(p.stdout,'2\n1\n3\n9\n')
+    def test_native_list_equality(self):
+        p=self.compile_run('output([1,2,3]==[1,2,3]); output([1,2,3]==[3,2,1]); output(["a"]==["a"]);'); self.assertEqual(p.stdout,'true\nfalse\ntrue\n')
+    def test_native_list_bounds_fault(self):
+        p=self.compile_run('let i be 2; let x be [1]; output(x[i]);'); self.assertNotEqual(p.returncode,0); self.assertIn('List index out of bounds',p.stderr)
+    def test_native_for_list_order(self):
+        p=self.compile_run('let x be [1,2,3]; for item in x { output(item); }'); self.assertEqual(p.stdout,'1\n2\n3\n')
+    def test_native_for_uses_stable_snapshot(self):
+        p=self.compile_run('let x be [1,2]; for item in x { output(item); x.add(9); } output(x.count);'); self.assertEqual(p.stdout,'1\n2\n4\n')
     def test_build_c_emits_source(self):
         with tempfile.TemporaryDirectory() as td:
             r=Path(td); src=r/'app.eri'; out=r/'app.c'; src.write_text('output(42);',encoding='utf-8'); self.assertEqual(build_c_file(src,out,r),0); self.assertIn('int main',out.read_text())
