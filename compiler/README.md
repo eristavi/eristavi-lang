@@ -2,111 +2,167 @@
 
 This directory contains the Python bootstrap implementation of the `erist` toolchain.
 
-The source-language contract is frozen in `PRE_0_1_FREEZE.md`. The bootstrap implements that contract vertically so supported features can be parsed, type-checked, executed, lowered to typed Eristavi IR, compiled, and tested without inventing alternate syntax.
+The source-language contract is frozen in `PRE_0_1_FREEZE.md`. The bootstrap implements that contract vertically while keeping backend limitations explicit instead of changing source semantics for implementation convenience.
 
 ## Current pipeline
 
 ```text
 .eri source
     ↓
-lexer
-    ↓
-parser / AST
+lexer / parser / AST
     ↓
 name resolution + semantic analysis + type inference
     ↓                         ↘
-bootstrap execution runtime    typed Eristavi IR
+bootstrap execution runtime    typed/source-close Eristavi IR
+                                   ├─→ C11 backend → C toolchain → native executable
                                    ↓
-                                C backend
+                                Universal IR
                                    ↓
-                              system C compiler
+                                x86-64 backend
                                    ↓
-                              native executable
+                                assembly → assembler/linker → native executable
 ```
+
+The C route remains the broad portability backend. The direct route is the first machine-code architecture slice and does not generate C.
 
 ## Frontend/runtime surface
 
-The bootstrap frontend and execution runtime cover the principal frozen pre-0.1 language surface:
+The bootstrap frontend and execution runtime cover the principal frozen pre-0.1 surface:
 
 - exact 28-keyword lexical vocabulary, nested comments, numeric/Text literals and locked whitespace rules;
 - Unicode 17.0.0-pinned XID identifiers and NFC normalization;
 - explicit `Text` views: `.characters`, `.scalars`, `.bytes`, `.count`, checked indexing and read-only behavior;
 - `let`, transitive `fixed`, name-first annotations, assignment and lexical no-shadowing;
 - checked signed-64-bit `Int`, binary64-oriented `Float`, `Bool`, and `Text` behavior;
-- frozen operator precedence, Bool-only conditions, `if` / `else`, `while`, and stable `for` iteration;
-- module-level functions, typed/inferred result contracts, no-value functions, recursion and completion analysis;
-- compiler-inferred generic parameter relationships with concrete specialization;
-- growable homogeneous `List` values, empty-list inference, checked indexing, `.count`, `.add`, mutation, equality and value semantics;
-- ordinary user-defined values, fixed fields, named-field construction, nested mutation, structural equality and copying;
-- `maybe T` / `none` and flow-sensitive presence narrowing;
-- managed `identity T`, aliasing, identity equality and shared mutation;
-- checked errors, `fails`, `fail`, typed/catch-all `else error`, exhaustiveness and `try` propagation;
-- deterministic `with` ownership for `std.files`, including cleanup-failure composition;
-- modules/imports, aliases, public/private declarations, circular-import diagnostics and source-root loading.
+- frozen operator precedence, Bool-only conditions, `if / else`, `while`, and stable `for` iteration;
+- functions, recursion, result inference and completion analysis;
+- compiler-inferred generic relationships with concrete specialization;
+- homogeneous growable `List` values with value semantics;
+- ordinary user-defined values, fixed fields, named-field construction and structural equality;
+- `maybe T` / `none` with flow-sensitive narrowing;
+- managed `identity T` and identity equality;
+- checked errors and `try`/`else error` handling;
+- deterministic `with` ownership and cleanup-failure composition;
+- modules/imports, visibility, aliases and circular-import diagnostics.
 
-The Unicode Text-view implementation deliberately uses compiler-internal view types. Character/scalar indexing yields `Text`; byte indexing yields `Int`; no public `Character`, `Scalar`, or `Byte` type has been introduced.
+## Unicode/Text compiled runtime
 
-## Typed IR and C/native backend
+Compiled `Text` is represented as explicit UTF-8 bytes plus length rather than a C NUL-terminated pointer.
 
-The C/native path now has executable coverage for:
+The generated-C backend now executes all three frozen Text views:
 
-- `Int`, `Float`, `Bool`, and length-aware UTF-8 `Text`;
-- embedded-NUL-safe Text output, concatenation and equality;
-- checked signed-64-bit arithmetic and Int division/remainder faults;
-- `if` / `else`, `while`, functions, recursion and output;
-- Lists, checked indexing, mutation, equality, value copying and stable iteration;
-- ordinary user-defined values, nested fields, structural equality and value semantics;
-- `maybe` / `none` and narrowed optional values;
-- identities, aliasing and identity equality;
-- checked errors, typed/catch-all handlers and propagation;
-- inferred-generic concrete specializations;
-- imported public functions/types and aliases;
-- deterministic `std.files` resources, exact-length Text I/O and cleanup unwinding;
-- UTF-8 validation for `readText()` with invalid input reported as checked `FileError`;
-- `text.bytes` count/index operations;
-- `text.scalars` count/index operations.
+```text
+text.bytes
+text.scalars
+text.characters
+```
 
-Compiled `Text` is represented as explicit bytes plus length rather than `const char *`, so C-string termination cannot redefine Eristavi semantics.
+`text.characters` uses generated Unicode grapheme-property tables and an embedded UAX #29-style segmentation runtime derived from the same pinned Unicode-support dependency used by the bootstrap. It does not delegate character boundaries to libc locales or arbitrary platform Unicode APIs.
 
-`text.characters` remains the one explicit Text-view backend gap. The C backend rejects it deliberately until a pinned Unicode 17 extended-grapheme segmentation runtime is embedded. It is not approximated with code points or platform locale APIs.
+Tests cover combining sequences, ZWJ emoji, Regional Indicator pairing, Indic conjuncts, Hangul/emoji cases, bounds faults and a multi-rule parity corpus against the pinned bootstrap segmentation.
 
-The generated-C route is a real native compilation path but remains a bootstrap portability backend rather than Eristavi's eventual direct CPU backend.
+## Module interfaces
+
+`interface.py` implements versioned deterministic module metadata.
+
+```text
+erist interface models/user.eri
+```
+
+produces a `.eri-interface.json` artifact containing public type/function/error contracts, dependency identities, Unicode version and inferred generic relationships.
+
+The project compiler can type-check an importer from that interface even if the imported source file is absent. Private functions are not exported as callable symbols.
+
+Interface-only imports are not yet executable object artifacts; runtime/build linkage still requires implementation source.
+
+## Typed IR and generated-C backend
+
+The broad native path has executable coverage for:
+
+- Int, Float, Bool and length-aware UTF-8 Text;
+- checked Int arithmetic and division/remainder faults;
+- Text concatenation/equality and embedded NUL;
+- all explicit Unicode Text views;
+- control flow, functions and recursion;
+- Lists and stable iteration;
+- ordinary values and structural equality;
+- maybe/none;
+- identities;
+- checked errors;
+- inferred-generic specializations;
+- imported public functions/types;
+- deterministic file resources and checked path operations.
+
+`std.files` now includes deterministic file resources plus checked `exists(path)` and `remove(path)` operations.
+
+## Universal IR
+
+`universal_ir.py` defines the first lower machine-independent IR used by direct CPU backends.
+
+The initial executable slice makes these concepts explicit:
+
+- basic blocks;
+- virtual typed values;
+- local slots;
+- jump/branch/return terminators;
+- checked Int arithmetic;
+- Int/Bool comparisons and primitive output.
+
+The first slice intentionally rejects high-level features not yet represented there. The broader typed IR/C path remains available for them.
+
+## Direct x86-64 backend
+
+`x86_64_backend.py` emits x86-64 System V assembly directly from Universal IR.
+
+Current direct executable coverage includes:
+
+- Int/Bool locals;
+- assignment;
+- checked Int add/subtract/multiply/divide/remainder/negation;
+- comparisons and Boolean negation;
+- `if / else` and `while`;
+- Int/Bool output;
+- overflow and division-by-zero runtime faults.
+
+`build-direct` currently targets x86-64 Linux. The system C compiler driver is used as assembler/linker, but generated C source does not participate.
 
 ## Commands
 
 ```text
-python -m compiler.erist run examples/hello.eri
-python -m compiler.erist check examples/hello.eri
-python -m compiler.erist build-c examples/hello.eri -o hello.c
-python -m compiler.erist build examples/hello.eri -o hello
+erist run examples/hello.eri
+erist check examples/hello.eri
+erist interface models/user.eri
+erist build-c examples/hello.eri -o hello.c
+erist build examples/hello.eri -o hello
+erist uir examples/hello.eri -o hello.uir
+erist build-asm examples/hello.eri -o hello.s --target x86_64-linux
+erist build-direct examples/hello.eri -o hello --target x86_64-linux
 ```
 
-When installed through `pyproject.toml`, the same commands are available through `erist`.
+For multi-file programs, pass `--source-root` when the entry file's parent is not the intended source root.
 
-For multi-file programs, pass `--source-root` when the entry file's parent is not the intended project source root.
-
-The native builder honors both `CC` and `CFLAGS`, allowing the conformance suite to vary the host C compiler and optimization mode.
+The C/native builders honor `CC` and `CFLAGS` where applicable.
 
 ## Tests
-
-Run:
 
 ```text
 python -m unittest discover -s tests -v
 ```
 
-The verified suite contains **155 passing tests**. It covers frontend/runtime semantics, project loading, generated C/native execution, Lists, values, maybe, identity, errors, resources, generics, modules, Unicode 17 identifiers/graphemes/Text views, length-aware native Text including embedded NUL and invalid UTF-8 handling, compiled byte/scalar Text views, and binary64 edge cases.
+The suite contains **174 tests**. CI runs it with GCC and Clang on Ubuntu and Clang on macOS at `-O2`.
 
-CI executes the full suite with GCC and Clang on Ubuntu and Clang on macOS at `-O2`. All three configurations pass.
+Direct x86-64 executable tests run on Linux. Portable frontend/runtime/C-backend tests run across the full matrix. Coverage includes module-interface round trips and source-independent checking, Unicode 17 grapheme compilation, std.files path operations, Universal-IR structure, direct x86-64 execution and direct arithmetic faults.
 
 ## Remaining engineering boundary
 
-The source language is no longer waiting on broad semantic design. Remaining work is concentrated in:
+The language is no longer waiting on broad syntax/semantic design. Main compiler work is now:
 
-- a pinned Unicode 17 grapheme-segmentation runtime for compiled `text.characters`;
-- stable serialized module/interface metadata instead of live Python analyzer sharing;
-- broader architecture/platform conformance;
-- broader standard-library/runtime facilities;
-- the lower-level universal IR and first direct CPU backend.
+- compiled implementation/object artifacts to accompany module interfaces;
+- Universal-IR support for functions, Text/Float, aggregates, failures and resources;
+- broader direct x86-64 parity;
+- an ARM64 backend against the same Universal IR;
+- broader OS/architecture CI;
+- continued standard-library growth;
+- eventually WebAssembly and JavaScript targets.
 
-Implementation should continue to follow the frozen specifications rather than changing Eristavi semantics for backend convenience.
+Implementation should continue to follow the frozen specifications rather than alter Eristavi semantics for backend convenience.
