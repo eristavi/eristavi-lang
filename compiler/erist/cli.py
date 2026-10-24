@@ -11,8 +11,9 @@ from .project import compile_entry, compile_module
 from .ir import IRProgram
 from .ir_text import Lowerer
 from .c_backend_views import CBackend
-from .universal_ir import UniversalLowerer, format_program
+from .universal_ir import format_program
 from .x86_64_backend import X86_64LinuxBackend
+from .direct_project import compile_module_object, lower_direct_entry, object_path
 
 def analyze_frontend(source:str):
     program=Parser(Lexer(source).lex()).parse(); analyzer=Analyzer(); analyzer.analyze(program); return program,analyzer
@@ -25,7 +26,7 @@ def _require_implementations(mod):
         if current.module_id in seen: return
         seen.add(current.module_id)
         if current.interface_only:
-            raise ValueError(f"module {current.module_id!r} is available only as an interface; executable builds require its implementation")
+            raise ValueError(f"module {current.module_id!r} is available only as an interface; this backend requires its implementation source")
         for child in current.imports.values(): visit(child)
     visit(mod)
 
@@ -41,16 +42,13 @@ def lower_project(entry_module):
     visit(entry_module)
     structs=[]; functions=[]; entry=[]
     for mod in order:
-        module_id='' if mod is entry_module else mod.module_id
-        part=Lowerer(mod.analyzer,module_id).lower(mod.program,mod is entry_module)
+        part=Lowerer(mod.analyzer,mod.module_id).lower(mod.program,mod is entry_module)
         structs.extend(part.structs); functions.extend(part.functions)
         if mod is entry_module: entry.extend(part.entry)
     return IRProgram(structs,functions,entry)
 
 def lower_universal_file(path:Path,source_root:Path|None=None):
-    mod=compile_entry(path,source_root)
-    typed=lower_project(mod)
-    return UniversalLowerer().lower(typed)
+    return lower_direct_entry(path,source_root)
 
 def run_file(path:Path,source_root:Path|None=None)->int:
     try:
@@ -68,6 +66,15 @@ def emit_interface(path:Path,output:Path|None=None,source_root:Path|None=None)->
         mod=compile_module(path,source_root)
         target=output or path.with_suffix('.eri-interface.json')
         target.write_text(mod.interface.to_json(),encoding='utf-8')
+        return 0
+    except (EristaviError,OSError,ValueError) as e:
+        print(e.format() if isinstance(e,EristaviError) else f'error: {e}',file=sys.stderr); return 1
+
+def emit_object(path:Path,output:Path|None=None,source_root:Path|None=None)->int:
+    try:
+        artifact=compile_module_object(path,source_root)
+        target=output or object_path(path)
+        target.write_text(artifact.to_json(),encoding='utf-8')
         return 0
     except (EristaviError,OSError,ValueError) as e:
         print(e.format() if isinstance(e,EristaviError) else f'error: {e}',file=sys.stderr); return 1
@@ -136,11 +143,12 @@ def build_parser():
     for name in ('run','check'):
         c=sub.add_parser(name); c.add_argument('entry',type=Path); c.add_argument('--source-root',type=Path,default=None)
     interface=sub.add_parser('interface',help='emit a deterministic versioned module interface artifact'); interface.add_argument('module',type=Path); interface.add_argument('-o','--output',type=Path,default=None); interface.add_argument('--source-root',type=Path,default=None)
-    uir=sub.add_parser('uir',help='lower the first direct-backend subset to universal IR'); uir.add_argument('entry',type=Path); uir.add_argument('-o','--output',type=Path,required=True); uir.add_argument('--source-root',type=Path,default=None)
-    asm=sub.add_parser('build-asm',help='emit direct CPU assembly from universal IR'); asm.add_argument('entry',type=Path); asm.add_argument('-o','--output',type=Path,required=True); asm.add_argument('--source-root',type=Path,default=None); asm.add_argument('--target',default='x86_64-linux')
-    direct=sub.add_parser('build-direct',help='compile without the C backend through the first direct CPU backend'); direct.add_argument('entry',type=Path); direct.add_argument('-o','--output',type=Path,required=True); direct.add_argument('--source-root',type=Path,default=None); direct.add_argument('--target',default='x86_64-linux'); direct.add_argument('--cc',default=os.environ.get('CC','cc'))
-    bc=sub.add_parser('build-c',help='lower the currently supported typed IR subset to C source'); bc.add_argument('entry',type=Path); bc.add_argument('-o','--output',type=Path,required=True); bc.add_argument('--source-root',type=Path,default=None)
-    b=sub.add_parser('build',help='compile the currently supported typed IR subset through the system C toolchain'); b.add_argument('entry',type=Path); b.add_argument('-o','--output',type=Path,required=True); b.add_argument('--source-root',type=Path,default=None); b.add_argument('--cc',default=os.environ.get('CC','cc'))
+    obj=sub.add_parser('object',help='emit a linkable Universal-IR module implementation artifact'); obj.add_argument('module',type=Path); obj.add_argument('-o','--output',type=Path,default=None); obj.add_argument('--source-root',type=Path,default=None)
+    uir=sub.add_parser('uir',help='lower the direct-backend subset to Universal IR'); uir.add_argument('entry',type=Path); uir.add_argument('-o','--output',type=Path,required=True); uir.add_argument('--source-root',type=Path,default=None)
+    asm=sub.add_parser('build-asm',help='emit direct CPU assembly from Universal IR'); asm.add_argument('entry',type=Path); asm.add_argument('-o','--output',type=Path,required=True); asm.add_argument('--source-root',type=Path,default=None); asm.add_argument('--target',default='x86_64-linux')
+    direct=sub.add_parser('build-direct',help='compile without the C backend through a direct CPU backend'); direct.add_argument('entry',type=Path); direct.add_argument('-o','--output',type=Path,required=True); direct.add_argument('--source-root',type=Path,default=None); direct.add_argument('--target',default='x86_64-linux'); direct.add_argument('--cc',default=os.environ.get('CC','cc'))
+    bc=sub.add_parser('build-c',help='lower the typed IR subset to C source'); bc.add_argument('entry',type=Path); bc.add_argument('-o','--output',type=Path,required=True); bc.add_argument('--source-root',type=Path,default=None)
+    b=sub.add_parser('build',help='compile the typed IR path through the system C toolchain'); b.add_argument('entry',type=Path); b.add_argument('-o','--output',type=Path,required=True); b.add_argument('--source-root',type=Path,default=None); b.add_argument('--cc',default=os.environ.get('CC','cc'))
     return p
 
 def main(argv=None):
@@ -148,6 +156,7 @@ def main(argv=None):
     if a.command=='run': return run_file(a.entry,a.source_root)
     if a.command=='check': return check_file(a.entry,a.source_root)
     if a.command=='interface': return emit_interface(a.module,a.output,a.source_root)
+    if a.command=='object': return emit_object(a.module,a.output,a.source_root)
     if a.command=='uir': return emit_uir(a.entry,a.output,a.source_root)
     if a.command=='build-asm': return emit_direct_asm(a.entry,a.output,a.source_root,a.target)
     if a.command=='build-direct': return build_direct(a.entry,a.output,a.source_root,a.target,a.cc)
