@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from . import c_backend as base
-from .c_backend_text import CBackend as TextBackend, TEXT_RUNTIME, _BASE_CTYPE
-from .ir_text import IRUnicodeCall, IRFileExists, IRFileRemove, IRTextView, IRTextViewCount, IRTextViewIndex
+from .c_backend_text import CBackend as TextBackend, TEXT_RUNTIME, _BASE_CTYPE, _replace_once
+from .ir_text import IRProcessCall, IRFileAcquire, IRUnicodeCall, IRFileExists, IRFileRemove, IRTextView, IRTextViewCount, IRTextViewIndex
 from .unicode_c import grapheme_runtime_c
 from .unicode_library_c import unicode_library_c
+from .process_c import PROCESS_RUNTIME
 from dataclasses import fields, is_dataclass
 
 
@@ -96,7 +97,32 @@ static eri_text eri_text_view_text_get(eri_text_view view,int64_t index){
 }
 '''
 
-VIEW_RUNTIME = TEXT_RUNTIME + _VIEW_PREFIX + grapheme_runtime_c() + _VIEW_SUFFIX
+_HOSTED_FILES = r'''
+static eri_file eri_file_acquire(eri_text path,bool create){
+    char *cp=eri_text_to_c_path(path);
+    if(!cp)eri_raise_file_failure("file path contains NUL",path);
+    FILE *handle=fopen(cp,create ? "wx+" : "r");
+    if(!handle)eri_raise_file_failure(strerror(errno),path);
+    return (eri_file){path,cp,handle,false,create};
+}
+'''
+
+# The existing File surface retains read/write behavior. Additional acquisition
+# modes share its cleanup/error contract, including an enforced read-only flag.
+_HOSTED_TEXT_RUNTIME = _replace_once(
+    TEXT_RUNTIME,
+    "FILE *handle; bool closed; } eri_file;",
+    "FILE *handle; bool closed; bool writable; } eri_file;",
+)
+_HOSTED_TEXT_RUNTIME = _replace_once(
+    _HOSTED_TEXT_RUNTIME, "(eri_file){path,cp,h,false}", "(eri_file){path,cp,h,false,true}",
+)
+_HOSTED_TEXT_RUNTIME = _replace_once(
+    _HOSTED_TEXT_RUNTIME,
+    "static void eri_file_write_text(eri_file *f,eri_text text){",
+    'static void eri_file_write_text(eri_file *f,eri_text text){ if(f&&!f->writable)eri_raise_file_failure("file was opened read-only",f->path);',
+)
+VIEW_RUNTIME = _HOSTED_TEXT_RUNTIME + _VIEW_PREFIX + grapheme_runtime_c() + _VIEW_SUFFIX + _HOSTED_FILES + PROCESS_RUNTIME
 
 
 class CBackend(TextBackend):
@@ -122,7 +148,20 @@ class CBackend(TextBackend):
         finally:
             base.RUNTIME, base.ctype = old_runtime, old_ctype
 
+    def _entry_function(self, body):
+        # Hosted argc/argv do not change Eristavi's implicit source entry body.
+        return ("int main(int argc,char **argv) {\n"
+                "    eri_process_argc=argc; eri_process_argv=argv;\n"
+                "    fesetround(FE_TONEAREST);\n" + self._indent_text(body, 1)
+                + "    return eri_process_exit_code;\n}\n")
+
     def _expr(self, e):
+        if isinstance(e, IRProcessCall):
+            arguments = ", ".join(self._expr(arg) for arg in e.arguments)
+            return f"eri_process_{e.name}({arguments})"
+        if isinstance(e, IRFileAcquire):
+            create = "true" if e.name == "create" else "false"
+            return f"eri_file_acquire({self._expr(e.path)}, {create})"
         if isinstance(e, IRUnicodeCall):
             return f"eri_unicode_{e.name}({self._expr(e.argument)})"
         if isinstance(e, IRTextView):

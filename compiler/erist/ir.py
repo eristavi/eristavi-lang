@@ -259,7 +259,13 @@ class Lowerer:
             raise SemanticError("generic lowering cannot infer a standalone none without context",e.location)
         if isinstance(e,NameExpr):
             stored=self._lookup(e.name)
-            if stored is not None: return self._type_from_name(stored)
+            if stored is not None:
+                # Generic lowering re-derives concrete types, but presence is a
+                # checked flow fact, not a different generic specialization.
+                known=self.a.expr_types.get(id(e))
+                if stored.startswith("maybe ") and known is not None and describe(resolve(known))==maybe_inner(stored):
+                    return resolve(known)
+                return self._type_from_name(stored)
             known=self.a.expr_types.get(id(e))
             if known is not None and not has_unresolved(known): return resolve(known)
         if isinstance(e,ListExpr):

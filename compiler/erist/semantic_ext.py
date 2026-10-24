@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from .diagnostics import SemanticError
-from .stdlib import UNICODE_FUNCTIONS
-from .semantic import Analyzer as BaseAnalyzer, STD_FILE_ERROR
+from .stdlib import UNICODE_FUNCTIONS, PROCESS_FUNCTIONS
+from .semantic import Analyzer as BaseAnalyzer, STD_FILE_ERROR, STD_FILE
 from .syntax import CallExpr, ForStmt, IndexExpr, MemberExpr, NameExpr
 from .typesys import (
     BOOL,
@@ -14,6 +14,7 @@ from .typesys import (
     TEXT_SCALARS,
     ListType,
     NoValueType,
+    NamedType,
     TextViewType,
     TypeVar,
     resolve,
@@ -37,6 +38,9 @@ class Analyzer(BaseAnalyzer):
         bt = resolve(self._expr(expr.base, True, allow_checked))
         fails = set(self.expr_failures.get(id(expr.base), set()))
 
+        if bt == NamedType(STD_FILE_ERROR) and expr.name in ("message", "path"):
+            return self._record(expr, TEXT, fails)
+
         if bt == TEXT:
             if expr.name == "characters":
                 return self._record(expr, TEXT_CHARACTERS, fails)
@@ -56,6 +60,35 @@ class Analyzer(BaseAnalyzer):
         return super()._member(expr, allow_checked)
 
     def _call(self, expr: CallExpr, value_required, allow_checked):
+        if (isinstance(expr.callee, MemberExpr) and isinstance(expr.callee.base, NameExpr)
+                and self.imports.get(expr.callee.base.name) == ("std", "process")):
+            contract = PROCESS_FUNCTIONS.get(expr.callee.name)
+            if contract is None:
+                raise SemanticError(f"unknown std.process function {expr.callee.name!r}", expr.location)
+            parameters, result = contract
+            if len(expr.arguments) != len(parameters):
+                raise SemanticError(f"process.{expr.callee.name} expects {len(parameters)} argument(s)", expr.location)
+            failures = set()
+            for argument, expected in zip(expr.arguments, parameters):
+                self._require_type(self._expr(argument, True, allow_checked), expected, argument.location,
+                                   f"process.{expr.callee.name} argument has the wrong type")
+                failures |= self.expr_failures.get(id(argument), set())
+            if value_required and result == NO_VALUE:
+                raise SemanticError("a no-value function call cannot be used where a value is required", expr.location)
+            return self._record(expr, result, failures)
+
+        if (isinstance(expr.callee, MemberExpr) and isinstance(expr.callee.base, NameExpr)
+                and self.imports.get(expr.callee.base.name) == ("std", "files")
+                and expr.callee.name in ("openRead", "create")):
+            if len(expr.arguments) != 1:
+                raise SemanticError(f"files.{expr.callee.name} expects one Text path", expr.location)
+            argument = expr.arguments[0]
+            self._require_type(self._expr(argument, True, allow_checked), TEXT, argument.location,
+                               "file path requires Text")
+            if not allow_checked:
+                raise SemanticError(f"files.{expr.callee.name} may fail; handle it or use try", expr.location)
+            return self._record(expr, STD_FILE, {STD_FILE_ERROR} | self.expr_failures.get(id(argument), set()))
+
         if (isinstance(expr.callee, MemberExpr)
                 and isinstance(expr.callee.base, NameExpr)
                 and self.imports.get(expr.callee.base.name) == ("std", "unicode")):

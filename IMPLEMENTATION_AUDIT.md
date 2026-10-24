@@ -4,6 +4,26 @@
 >
 > **Scope:** frozen pre-0.1 source contract, bootstrap/reference runtime, generated-C path, verified Universal IR, direct x86-64 GC/runtime with contract-driven physical register allocation and spill-frame compaction, native ARM64 runtime, module artifacts/caching, JavaScript/WebAssembly consumers, Unicode conformance and hosted CI.
 
+## Executable frontend update
+
+`src/frontend.eri` now builds through C into an offline syntax-check/token/AST tool.
+Its entry flow, lexer, parser and report formatting are written in Eristavi. Process
+arguments, diagnostics and exit status are small `std.process` runtime operations;
+read-only input and exclusive output use scoped `std.files` resources. Python and
+a C toolchain remain build dependencies, but are not required to run the binary.
+
+The shared frontend corpus compares full ASTs and source locations, as well as
+rejection phases/locations. Every repository `.eri` source under `src/` is parsed
+and compared to Stage-0. These checks exposed and corrected operator/statement
+locations and opening-construct EOF diagnostics. Generic C lowering now preserves
+checked optional-presence facts. Typed FileError handlers expose their existing
+message/path payloads in the reference and C paths.
+
+The suite contains **322 tests**. Current-commit hosted results belong to its PR.
+The frontend remains syntax-only; semantic analysis, self-building and a fully
+standalone assembler/linker toolchain remain later work. The frozen philosophy,
+grammar, lexical specification and language semantics are unchanged.
+
 ## Self-hosting frontend update
 
 The current change set repairs the Stage-2 parser recursion failure by identifying
@@ -29,7 +49,7 @@ fields named `count`. Mutable AST links use local optional snapshots and the
 existing presence checks; compiler convenience does not introduce new field
 narrowing semantics. Python remains Stage-0, and full self-building remains open.
 
-The suite now contains **300 tests**. Hosted results for this revision are tracked
+The suite now contains **322 tests**. Hosted results for this revision are tracked
 in the pull request; historical baseline results below are not a substitute for
 checking the current commit.
 
@@ -57,7 +77,7 @@ At this audit point:
 - ES2020 JavaScript supports ordinary aggregate/value semantics in addition to scalars/functions;
 - WebAssembly text supports the scalar/function/control slice plus Text through an explicit UTF-8/`externref` host ABI;
 - CI runs the complete official Unicode-17 `GraphemeBreakTest` fixture against the pinned reference segmenter;
-- the repository suite contains **300 tests**; current-commit results are recorded in GitHub Actions.
+- the repository suite contains **322 tests**; current-commit results are recorded in GitHub Actions.
 
 The governing target rule remains:
 
@@ -330,7 +350,7 @@ Remaining Wasm work includes aggregate values, checked failures, resources, Text
 The current suite contains:
 
 ```text
-300 tests
+322 tests
 ```
 
 The audited matrix is:

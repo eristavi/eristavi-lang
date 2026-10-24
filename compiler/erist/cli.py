@@ -53,9 +53,12 @@ def lower_project(entry_module):
 
 def lower_universal_file(path:Path,source_root:Path|None=None): return lower_direct_entry(path,source_root)
 
-def run_file(path:Path,source_root:Path|None=None)->int:
+def run_file(path:Path,source_root:Path|None=None,arguments=())->int:
     try:
-        mod=compile_entry(path,source_root); _require_implementations(mod); Interpreter(module_id=mod.module_id,imported_modules=mod.imports).run(mod.program); return 0
+        mod=compile_entry(path,source_root); _require_implementations(mod)
+        interpreter=Interpreter(module_id=mod.module_id,imported_modules=mod.imports,arguments=arguments)
+        interpreter.run(mod.program)
+        return interpreter.process_state.exit_code
     except EristaviError as e: print(e.format(),file=sys.stderr); return 1
     except (OSError,ValueError) as e: print(f'error: {e}',file=sys.stderr); return 1
 
@@ -153,8 +156,12 @@ def build_parser():
     return p
 
 def main(argv=None):
-    a=build_parser().parse_args(argv)
-    if a.command=='run': return run_file(a.entry,a.source_root)
+    actual=list(sys.argv[1:] if argv is None else argv)
+    arguments=[]
+    if actual and actual[0]=='run' and '--' in actual:
+        boundary=actual.index('--'); arguments=actual[boundary+1:]; actual=actual[:boundary]
+    parser=build_parser(); a=parser.parse_args(actual)
+    if a.command=='run': return run_file(a.entry,a.source_root,arguments)
     if a.command=='check': return check_file(a.entry,a.source_root)
     if a.command=='interface': return emit_interface(a.module,a.output,a.source_root)
     if a.command=='object': return emit_object(a.module,a.output,a.source_root)

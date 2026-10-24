@@ -1,0 +1,212 @@
+[
+  {
+    "name": "empty",
+    "source": "",
+    "valid": true
+  },
+  {
+    "name": "arithmetic",
+    "source": "let x be -1 + 2 * (3 - 4) / 5 % 2; output(x);",
+    "valid": true
+  },
+  {
+    "name": "boolean",
+    "source": "let value be not 1 + 2 == 3 and true or false;",
+    "valid": true
+  },
+  {
+    "name": "unicode",
+    "source": "﻿let café be \"A\\u{301}\\u{0}\\u{10ffff}\";\r\noutput(café);",
+    "valid": true
+  },
+  {
+    "name": "lists",
+    "source": "let values be [[1,2],[3,4]]; values[0][1] = 8; output(values[0].count);",
+    "valid": true
+  },
+  {
+    "name": "type",
+    "source": "public type User { fixed id Int; name Text; parent maybe identity User; } let user be identity User { id = 1; name = \"A\"; parent = none; };",
+    "valid": true
+  },
+  {
+    "name": "functions",
+    "source": "function preserve(value) { return value; } public function fib(n Int) returns Int { if n < 2 { return n; } else { return fib(n - 1) + fib(n - 2); } } output(preserve(fib(4)));",
+    "valid": true
+  },
+  {
+    "name": "loops",
+    "source": "function walk(values) { let index be 0; while index < values.count { index = index + 1; } for item in values { output(item); } return; }",
+    "valid": true
+  },
+  {
+    "name": "imports",
+    "source": "import models.user as people; import std.files; let user be people.User { name = \"A\"; }; output(user.name);",
+    "valid": true
+  },
+  {
+    "name": "checked",
+    "source": "error A { message Text; } error B { message Text; } function risky(value Int) returns Int fails A, B { if value < 0 { fail A { message = \"bad\"; }; } return value; } function outer() returns Int fails A, B { return try risky(1); } outer() else error A { output(error.message); } else error { output(error.message); };",
+    "valid": true
+  },
+  {
+    "name": "resource",
+    "source": "import std.files; function read(path Text) returns Text fails files.FileError { with file files.File be try files.openRead(path) { return try file.readText(); } }",
+    "valid": true
+  },
+  {
+    "name": "handlers",
+    "source": "error E { message Text; } function f() returns Int fails E { fail E { message=\"x\"; }; } function g() { let value be f() else error E { return; }; value = f() else error E { return; }; return f() else error E { return; }; }",
+    "valid": true
+  },
+  {
+    "name": "construction",
+    "source": "type Point { x Int; } let values be [Point { x=1; }, Point { x=2; }]; values[0].x = 3;",
+    "valid": true
+  },
+  {
+    "name": "numeric",
+    "source": "let x be [0xAB_CD, 0B10_01, 1_000]; let y be 1.25e-3; let z be 00.5;",
+    "valid": true
+  },
+  {
+    "name": "comments",
+    "source": "/* outer\n /* nested */ */ function f() { // comment\n output(\"a\\n\\t\\\\\\\"\"); } f();",
+    "valid": true
+  },
+  {
+    "name": "syntax_only",
+    "source": "let missing be unknownFunction(1); output(missing);",
+    "valid": true
+  },
+  {
+    "name": "semicolon",
+    "source": "let x be 1",
+    "valid": false
+  },
+  {
+    "name": "comparison",
+    "source": "output(1 < 2 < 3);",
+    "valid": false
+  },
+  {
+    "name": "trailing_list",
+    "source": "let x be [1,];",
+    "valid": false
+  },
+  {
+    "name": "trailing_args",
+    "source": "output(1,);",
+    "valid": false
+  },
+  {
+    "name": "trailing_params",
+    "source": "function f(x,) {}",
+    "valid": false
+  },
+  {
+    "name": "annotation_colon",
+    "source": "let x: Int be 1;",
+    "valid": false
+  },
+  {
+    "name": "assignment_chain",
+    "source": "let x be 1; x = x = 2;",
+    "valid": false
+  },
+  {
+    "name": "assignment_expression",
+    "source": "let x be (a = 1);",
+    "valid": false
+  },
+  {
+    "name": "bad_lvalue",
+    "source": "(1 + 2) = 3;",
+    "valid": false
+  },
+  {
+    "name": "unclosed_block",
+    "source": "function f() {\n output(1);",
+    "valid": false
+  },
+  {
+    "name": "unclosed_type",
+    "source": "public type U {\n name Text;",
+    "valid": false
+  },
+  {
+    "name": "unclosed_error",
+    "source": "error E { message Text;",
+    "valid": false
+  },
+  {
+    "name": "unclosed_construct",
+    "source": "type U { x Int; } let u be U { x = 1;",
+    "valid": false
+  },
+  {
+    "name": "bad_typeref",
+    "source": "let x identity maybe User be none;",
+    "valid": false
+  },
+  {
+    "name": "public",
+    "source": "public let x be 1;",
+    "valid": false
+  },
+  {
+    "name": "missing_field_semicolon",
+    "source": "type U { x Int }",
+    "valid": false
+  },
+  {
+    "name": "handler_brace",
+    "source": "output(1) else error E;",
+    "valid": false
+  },
+  {
+    "name": "invalid_separator",
+    "source": "1__2",
+    "valid": false
+  },
+  {
+    "name": "leading_zero",
+    "source": "012",
+    "valid": false
+  },
+  {
+    "name": "invalid_scalar",
+    "source": "\"\\u{D800}\"",
+    "valid": false
+  },
+  {
+    "name": "bom_inside",
+    "source": "// ﻿",
+    "valid": false
+  },
+  {
+    "name": "unclosed_comment",
+    "source": "/* comment",
+    "valid": false
+  },
+  {
+    "name": "newline_text",
+    "source": "\"a\nb\"",
+    "valid": false
+  },
+  {
+    "name": "missing_expr",
+    "source": "let x be ;",
+    "valid": false
+  },
+  {
+    "name": "missing_index",
+    "source": "values[] = 1;",
+    "valid": false
+  },
+  {
+    "name": "missing_member",
+    "source": "values.;",
+    "valid": false
+  }
+]

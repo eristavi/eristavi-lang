@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import os
+import sys
 
 from .diagnostics import RuntimeFault
 from .runtime import (
     CheckedFailure,
     FileResource,
+    ListValue,
     Interpreter as BaseInterpreter,
     NO_RUNTIME,
     copy_value,
@@ -32,8 +34,19 @@ class TextViewValue:
         raise RuntimeFault(f"unknown Text view {self.kind!r}")
 
 
+@dataclass
+class ProcessState:
+    arguments: tuple[str, ...] = ()
+    exit_code: int = 0
+    error_sink: object = None
+
+
 class Interpreter(BaseInterpreter):
     """Bootstrap runtime extensions for pinned Unicode/Text and stdlib operations."""
+
+    def __init__(self, output=print, module_id="", imported_modules=None, *, arguments=(), process_state=None, error_output=None):
+        super().__init__(output, module_id, imported_modules)
+        self.process_state = process_state if process_state is not None else ProcessState(tuple(arguments), 0, error_output or (lambda text: print(text, file=sys.stderr)))
 
     def _member_value(self, e):
         base = self._expr(e.base)
@@ -60,6 +73,36 @@ class Interpreter(BaseInterpreter):
         return super()._expr(e)
 
     def _call(self, e: CallExpr):
+        if (isinstance(e.callee, MemberExpr) and isinstance(e.callee.base, NameExpr)
+                and self.imports.get(e.callee.base.name) == ("std", "process")):
+            if e.callee.name == "arguments":
+                try:
+                    for value in self.process_state.arguments:
+                        value.encode("utf-8")
+                except UnicodeError:
+                    raise RuntimeFault("process arguments must be valid UTF-8", e.location)
+                return ListValue(list(self.process_state.arguments))
+            if e.callee.name == "writeError":
+                self.process_state.error_sink(self._expr(e.arguments[0]))
+                return NO_RUNTIME
+            code = self._expr(e.arguments[0])
+            if not 0 <= code <= 255:
+                raise RuntimeFault("process exit code must be between 0 and 255", e.location)
+            self.process_state.exit_code = code
+            return NO_RUNTIME
+
+        if (isinstance(e.callee, MemberExpr) and isinstance(e.callee.base, NameExpr)
+                and self.imports.get(e.callee.base.name) == ("std", "files")
+                and e.callee.name in ("openRead", "create")):
+            path = self._expr(e.arguments[0])
+            try:
+                mode = "r" if e.callee.name == "openRead" else "x+"
+                resource = FileResource(path, open(path, mode, encoding="utf-8", newline=""))
+                resource.writable = e.callee.name == "create"
+                return resource
+            except (OSError, ValueError, UnicodeError) as error:
+                raise CheckedFailure(file_error(str(error), path))
+
         if (isinstance(e.callee, MemberExpr)
                 and isinstance(e.callee.base, NameExpr)
                 and self.imports.get(e.callee.base.name) == ("std", "unicode")):
@@ -98,7 +141,7 @@ class Interpreter(BaseInterpreter):
                     f"module {e.callee.base.name!r} has no public function {e.callee.name!r}",
                     e.location,
                 )
-            child = type(self)(self.output_sink, mod.module_id, mod.imports)
+            child = type(self)(self.output_sink, mod.module_id, mod.imports, process_state=self.process_state)
             child._prepare(mod.program)
             return child._call_function(fn, [self._expr(argument) for argument in e.arguments])
 
@@ -137,6 +180,8 @@ class Interpreter(BaseInterpreter):
                         base.handle.seek(0)
                         return base.handle.read()
                     if e.callee.name == "writeText":
+                        if not getattr(base, "writable", True):
+                            raise CheckedFailure(file_error("file was opened read-only", base.path))
                         text = self._expr(e.arguments[0])
                         base.handle.seek(0)
                         base.handle.write(text)

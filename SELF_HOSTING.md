@@ -115,6 +115,27 @@ For this migration, use `erist build` for compiler components requiring
 report that limitation explicitly. This C bootstrap path is an implementation
 bridge; Stage-0 is still required to build it, and it is not full self-hosting.
 
+## Executable frontend milestone
+
+`src/frontend.eri` composes the lexer/parser into a command-line program. It reads
+UTF-8 through a deterministic read-only resource, checks syntax, and emits
+versioned JSON token/AST reports. New report files use exclusive creation so a
+source or existing report is not overwritten. Process arguments, stderr and exit
+status are standard-library operations; no magic entry function or keywords were
+introduced. Relative paths are handled by the existing file boundary; this stage
+does not yet resolve imports and does not need speculative path APIs.
+
+The compiled C executable is tested with an empty `PATH`; it needs no Python or
+C compiler at runtime. Build-time Python/C requirements remain until later
+self-hosting stages. The reference and compiled frontends share a corpus covering
+accepted syntax, rejected syntax, complete AST structure and locations. Every
+repository `.eri` source is also parsed and compared to Stage-0.
+
+Semantic analysis remains Stage-0. See [`FRONTEND_TOOL.md`](FRONTEND_TOOL.md).
+The final standalone offline compiler also needs bundled or Eristavi-owned
+assembler/linker functionality; a self-hosted frontend alone does not satisfy that
+native-toolchain goal.
+
 ## Promotion rule
 
 > **Self-hosting is an implementation milestone, not permission to change Eristavi semantics.**
