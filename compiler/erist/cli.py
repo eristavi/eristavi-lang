@@ -12,7 +12,7 @@ from .ir import IRProgram
 from .ir_text import Lowerer
 from .c_backend_views import CBackend
 from .universal_ir import format_program
-from .x86_64_resource_backend import X86_64ResourceLinuxBackend
+from .x86_64_direct_backend import X86_64DirectLinuxBackend
 from .arm64_backend import ARM64LinuxBackend
 from .direct_project import compile_module_object, lower_direct_entry, object_path
 
@@ -88,7 +88,7 @@ def emit_uir(path:Path,output:Path,source_root:Path|None=None)->int:
         print(e.format() if isinstance(e,EristaviError) else f'error: {e}',file=sys.stderr); return 1
 
 def _direct_backend(target:str):
-    if target=='x86_64-linux': return X86_64ResourceLinuxBackend()
+    if target=='x86_64-linux': return X86_64DirectLinuxBackend()
     if target in ('arm64-linux','aarch64-linux'): return ARM64LinuxBackend()
     raise ValueError(f"unsupported direct backend target {target!r}")
 
