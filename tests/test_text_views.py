@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import tempfile
 import unittest
+from pathlib import Path
 
 from compiler.erist.cli import compile_frontend
 from compiler.erist.diagnostics import RuntimeFault, SemanticError
@@ -59,6 +61,29 @@ class TextViewTests(unittest.TestCase):
     def test_text_view_bounds_fault_is_runtime_defined(self):
         with self.assertRaises(RuntimeFault):
             self.execute('let text be "a"; let i be 1; output(text.characters[i]);')
+
+    def test_invalid_utf8_read_is_checked_file_failure(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "invalid.bin"
+            path.write_bytes(b"\xff\xfe")
+            quoted = str(path).replace("\\", "\\\\").replace('"', '\\"')
+            source = f'''
+import std.files;
+function read(path Text) returns Text fails files.FileError {{
+    with file be try files.open(path) {{
+        return try file.readText();
+    }}
+}}
+function show() {{
+    let text be read("{quoted}") else error {{
+        output("decode failed");
+        return;
+    }};
+    output(text);
+}}
+show();
+'''
+            self.assertEqual(self.execute(source), ["decode failed"])
 
 
 if __name__ == "__main__":
