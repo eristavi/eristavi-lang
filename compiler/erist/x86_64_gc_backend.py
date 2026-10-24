@@ -82,8 +82,8 @@ class X86_64GCLinuxBackend(X86_64DirectLinuxBackend):
                 self.lines.append(f"    movsd {self.XMM_ARGS[index]}, {dst}(%rbp)")
             else:
                 src = 16 + index * 8
-                self.lines.append(f"    movq {src}(%rbp), %rax")
-                self.lines.append(f"    movq %rax, {dst}(%rbp)")
+                self.lines.append(f"    movq {src}(%rbp), %r11")
+                self.lines.append(f"    movq %r11, {dst}(%rbp)")
 
         for block in fn.blocks:
             self._block(block)
@@ -92,9 +92,12 @@ class X86_64GCLinuxBackend(X86_64DirectLinuxBackend):
     def _restore_saved(self) -> None:
         if self.gc_root_base_offset is None:
             raise ValueError("GC root frame is not initialized")
+        # `%rax` carries ordinary return values at this exact point. Use the
+        # caller-saved scratch register r11 for GC-frame unlinking so ABI return
+        # state is preserved. XMM return state is unaffected as well.
         self.lines.extend([
-            f"    movq {self.gc_root_base_offset}(%rbp), %rax",
-            "    movq %rax, .Leri_gc_root_head(%rip)",
+            f"    movq {self.gc_root_base_offset}(%rbp), %r11",
+            "    movq %r11, .Leri_gc_root_head(%rip)",
         ])
         super()._restore_saved()
 
