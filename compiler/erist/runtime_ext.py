@@ -3,9 +3,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .diagnostics import RuntimeFault
-from .runtime import Interpreter as BaseInterpreter
-from .runtime import copy_value
-from .syntax import IndexExpr
+from .runtime import (
+    CheckedFailure,
+    FileResource,
+    Interpreter as BaseInterpreter,
+    NO_RUNTIME,
+    copy_value,
+    file_error,
+)
+from .syntax import CallExpr, IndexExpr, MemberExpr
 from .unicode_support import grapheme_clusters, scalar_texts, utf8_bytes
 
 
@@ -25,7 +31,7 @@ class TextViewValue:
 
 
 class Interpreter(BaseInterpreter):
-    """Bootstrap runtime with the frozen explicit Unicode Text views."""
+    """Bootstrap runtime extensions for pinned Unicode/Text semantics."""
 
     def _member_value(self, e):
         base = self._expr(e.base)
@@ -50,3 +56,28 @@ class Interpreter(BaseInterpreter):
                     raise RuntimeFault("Text view index out of bounds", e.location)
                 return copy_value(items[idx])
         return super()._expr(e)
+
+    def _call(self, e: CallExpr):
+        # The base bootstrap file model uses Python's UTF-8 text decoder.  A
+        # decode failure is part of files.readText's checked FileError contract,
+        # not an uncaught host-language UnicodeDecodeError.
+        if isinstance(e.callee, MemberExpr):
+            try:
+                base = self._eval_ref(e.callee.base)
+            except RuntimeFault:
+                base = None
+            if isinstance(base, FileResource):
+                try:
+                    if e.callee.name == "readText":
+                        base.handle.seek(0)
+                        return base.handle.read()
+                    if e.callee.name == "writeText":
+                        text = self._expr(e.arguments[0])
+                        base.handle.seek(0)
+                        base.handle.write(text)
+                        base.handle.truncate()
+                        base.handle.flush()
+                        return NO_RUNTIME
+                except (OSError, UnicodeError) as ex:
+                    raise CheckedFailure(file_error(str(ex), base.path))
+        return super()._call(e)
