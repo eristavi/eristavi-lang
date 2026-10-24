@@ -4,20 +4,22 @@ from .ir import *
 
 class CBackend:
     def __init__(self):
-        self.indent=0; self.temp=0; self.struct_names=set(); self.maybe_types=set(); self.maybe_defined=set()
+        self.indent=0; self.temp=0; self.struct_names=set(); self.maybe_types=set(); self.maybe_defined=set(); self.extra_list_types=set()
     def emit(self,p:IRProgram)->str:
         self.struct_names={s.name for s in p.structs}
-        self.maybe_types=self._collect_maybe_types(p)
+        self.maybe_types=self._collect_prefixed_types(p,'maybe ')
+        all_lists=self._collect_prefixed_types(p,'List of ')
+        self.extra_list_types={t for t in all_lists if list_element(t) not in ('Int','Float','Bool','Text')}
         ordered=self._order_structs(p.structs)
         parts=[RUNTIME]
         if ordered: parts.append('\n'.join(f'typedef struct {struct_tag(s.name)} {ctype(s.name)};' for s in ordered))
-        # Define optional wrappers only when their by-value inner type is already complete.
+        if self.extra_list_types:
+            parts.append('\n'.join(self._list_typedef(t) for t in sorted(self.extra_list_types)))
         for t in sorted(self.maybe_types):
             if self._maybe_ready(t,set()): parts.append(self._maybe_typedef(t)); self.maybe_defined.add(t)
         defined_structs=set()
         for s in ordered:
-            needed=[f.type_name for f in s.fields if f.type_name.startswith('maybe ')]
-            for t in needed:
+            for t in [f.type_name for f in s.fields if f.type_name.startswith('maybe ')]:
                 if t not in self.maybe_defined and self._maybe_ready(t,defined_structs):
                     parts.append(self._maybe_typedef(t)); self.maybe_defined.add(t)
             parts.append(self._struct_definition(s)); defined_structs.add(s.name)
@@ -29,18 +31,23 @@ class CBackend:
             parts.append('\n'.join(f'static bool {eq_helper(s.name)}({ctype(s.name)} a, {ctype(s.name)} b);' for s in ordered))
         if self.maybe_types:
             parts.append('\n'.join(f'static bool {maybe_eq(t)}({ctype(t)} a, {ctype(t)} b);' for t in sorted(self.maybe_types)))
+        if self.extra_list_types:
+            parts.append('\n'.join(f'static bool {list_helper(t)}_eq({ctype(t)} a, {ctype(t)} b);' for t in sorted(self.extra_list_types)))
         for s in ordered: parts.append(self._identity_helper_for_struct(s.name))
         for s in ordered: parts.append(self._struct_equality(s))
         for t in sorted(self.maybe_types): parts.append(self._maybe_equality(t))
+        for t in sorted(self.extra_list_types): parts.append(self._list_helpers(t))
         for f in p.functions: parts.append(self._function(f))
         body=self._stmts(p.entry)
         parts.append('int main(void) {\n    fesetround(FE_TONEAREST);\n'+self._indent_text(body,1)+'    return 0;\n}\n')
         return '\n'.join(x for x in parts if x)
-    def _collect_maybe_types(self,p):
+    def _collect_prefixed_types(self,p,prefix):
         out=set()
         def add_type(t):
             if not isinstance(t,str): return
-            if t.startswith('maybe '): out.add(t); add_type(maybe_inner(t))
+            if t.startswith(prefix): out.add(t)
+            if t.startswith('maybe '): add_type(maybe_inner(t))
+            if t.startswith('List of '): add_type(list_element(t))
         def walk(x):
             if isinstance(x,str): return
             if isinstance(x,(list,tuple,set)):
@@ -62,6 +69,18 @@ class CBackend:
     def _maybe_equality(self,t):
         inner=maybe_inner(t); comp=self._eq_component(inner,'a.value','b.value')
         return f'static bool {maybe_eq(t)}({ctype(t)} a, {ctype(t)} b) {{ if(a.has!=b.has)return false; if(!a.has)return true; return {comp}; }}\n'
+    def _list_typedef(self,t):
+        elem=list_element(t)
+        return f'typedef struct {{ size_t count; {ctype(elem)} *data; }} {list_helper(t)};'
+    def _list_helpers(self,t):
+        elem=list_element(t); ct=ctype(elem); h=list_helper(t); eq=self._eq_component(elem,'a.data[i]','b.data[i]')
+        return f'''static {h} {h}_make(size_t n,const {ct} *src){{ {h} r={{n,NULL}}; if(n){{r.data=({ct}*)eri_alloc(sizeof({ct})*n); memcpy(r.data,src,sizeof({ct})*n);}} return r; }}
+static void {h}_detach({h} *v){{ if(!v->count){{v->data=NULL;return;}} {ct} *p=({ct}*)eri_alloc(sizeof({ct})*v->count); memcpy(p,v->data,sizeof({ct})*v->count); v->data=p; }}
+static {ct} {h}_get({h} v,int64_t i){{ if(i<0||(uint64_t)i>=v.count)eri_fault("List index out of bounds"); return v.data[i]; }}
+static void {h}_set({h} *v,int64_t i,{ct} x){{ if(i<0||(uint64_t)i>=v->count)eri_fault("List index out of bounds"); {h}_detach(v); v->data[i]=x; }}
+static void {h}_add({h} *v,{ct} x){{ {h}_detach(v); v->data=({ct}*)eri_realloc(v->data,sizeof({ct})*(v->count+1)); v->data[v->count++]=x; }}
+static bool {h}_eq({h} a,{h} b){{ if(a.count!=b.count)return false; for(size_t i=0;i<a.count;i++){{if(!({eq}))return false;}} return true; }}
+'''
     def _order_structs(self,structs):
         by={s.name:s for s in structs}; out=[]; visiting=set(); done=set()
         def dep_type(t):
@@ -70,6 +89,7 @@ class CBackend:
                 inner=maybe_inner(t)
                 if inner.startswith('identity '): return None
                 return inner
+            if t.startswith('List of '): return None
             return t
         def visit(s):
             if s.name in done: return
@@ -82,8 +102,8 @@ class CBackend:
         for s in structs: visit(s)
         return out
     def _struct_definition(self,s):
-        fields=''.join(f'    {ctype(f.type_name)} {field_name(f.name)};\n' for f in s.fields)
-        return f'struct {struct_tag(s.name)} {{\n{fields}}};\n'
+        fs=''.join(f'    {ctype(f.type_name)} {field_name(f.name)};\n' for f in s.fields)
+        return f'struct {struct_tag(s.name)} {{\n{fs}}};\n'
     def _identity_helper_for_struct(self,t):
         ct=ctype(t); fn=identity_helper(t)
         return f'static {ct} *{fn}({ct} v) {{ {ct} *p=({ct}*)eri_alloc(sizeof({ct})); *p=v; return p; }}\n'
@@ -106,9 +126,7 @@ class CBackend:
     def _stmt(self,s):
         if isinstance(s,IRLet): return f'{ctype(s.type_name)} {cname(s.name)} = {self._expr(s.value)};\n'
         if isinstance(s,IRAssign): return f'{cname(s.name)} = {self._expr(s.value)};\n'
-        if isinstance(s,IRIndexAssign):
-            helper=list_helper_from_element(s.value.type_name)
-            return f'{helper}_set(&{cname(s.name)}, {self._expr(s.index)}, {self._expr(s.value)});\n'
+        if isinstance(s,IRIndexAssign): return f'{list_helper_from_element(s.value.type_name)}_set(&{cname(s.name)}, {self._expr(s.index)}, {self._expr(s.value)});\n'
         if isinstance(s,IRMemberAssign): return f'{self._lvalue(s.target)} = {self._expr(s.value)};\n'
         if isinstance(s,IRExprStmt): return f'{self._expr(s.expression)};\n'
         if isinstance(s,IRReturn): return 'return;\n' if s.value is None else f'return {self._expr(s.value)};\n'
@@ -118,9 +136,7 @@ class CBackend:
             return out+'\n'
         if isinstance(s,IRWhile): return f'while ({self._expr(s.condition)}) {{\n'+self._indent_text(self._stmts(s.body),1)+'}\n'
         if isinstance(s,IRFor):
-            self.temp+=1; n=self.temp
-            snap=f'_eri_iter_{n}'; idx=f'_eri_i_{n}'
-            helper=list_helper(s.iterable.type_name); elem=list_element(s.iterable.type_name)
+            self.temp+=1; n=self.temp; snap=f'_eri_iter_{n}'; idx=f'_eri_i_{n}'; helper=list_helper(s.iterable.type_name); elem=list_element(s.iterable.type_name)
             head=f'{ctype(s.iterable.type_name)} {snap} = {self._expr(s.iterable)};\nfor (int64_t {idx}=0; {idx}<(int64_t){snap}.count; ++{idx}) {{\n'
             binding=f'{ctype(elem)} {cname(s.name)} = {helper}_get({snap}, {idx});\n'
             return head+self._indent_text(binding+self._stmts(s.body),1)+'}\n'
@@ -129,8 +145,7 @@ class CBackend:
         if isinstance(e,IRVar): return cname(e.name)
         if isinstance(e,IRMaybeGet): return f'({self._lvalue(e.value)}).value'
         if isinstance(e,IRMember):
-            base=self._lvalue(e.base)
-            op='->' if e.base.type_name.startswith('identity ') else '.'
+            base=self._lvalue(e.base); op='->' if e.base.type_name.startswith('identity ') else '.'
             return f'({base}){op}{field_name(e.name)}'
         raise TypeError(f'unsupported C lvalue {e!r}')
     def _expr(self,e):
@@ -168,8 +183,7 @@ class CBackend:
         if isinstance(e,IRBinary):
             a=self._expr(e.left); b=self._expr(e.right); op=e.operator
             if e.left.type_name.startswith('maybe ') and op in ('==','!='):
-                cmp=f'{maybe_eq(e.left.type_name)}({a}, {b})'
-                return cmp if op=='==' else f'(!{cmp})'
+                cmp=f'{maybe_eq(e.left.type_name)}({a}, {b})'; return cmp if op=='==' else f'(!{cmp})'
             if e.left.type_name.startswith('identity ') and op in ('==','!='):
                 cmp=f'({a} == {b})'; return cmp if op=='==' else f'(!{cmp})'
             if e.left.type_name.startswith('List of ') and op in ('==','!='):
@@ -178,6 +192,7 @@ class CBackend:
                 cmp=f'{eq_helper(e.left.type_name)}({a}, {b})'; return cmp if op=='==' else f'(!{cmp})'
             if e.left.type_name=='Int' and op in '+-*/%': return f'eri_i{OPNAME[op]}({a}, {b})'
             if e.left.type_name=='Float' and op in '+-*/': return f'eri_f{OPNAME[op]}({a}, {b})'
+            if e.left.type_name=='Text' and op=='+': return f'eri_text_add({a}, {b})'
             if e.left.type_name=='Text' and op in ('==','!='):
                 cmp=f'(strcmp({a}, {b}) == 0)'; return cmp if op=='==' else f'(!{cmp})'
             cop={'and':'&&','or':'||','==':'==','!=':'!=','<':'<','<=':'<=','>':'>','>=':'>='}.get(op,op)
@@ -224,8 +239,7 @@ def list_element(t):
     return t[8:]
 def list_helper(t): return list_helper_from_element(list_element(t))
 def list_helper_from_element(t):
-    if t in ('Int','Float','Bool','Text'): return {'Int':'eri_list_int','Float':'eri_list_float','Bool':'eri_list_bool','Text':'eri_list_text'}[t]
-    raise KeyError(f'compiled Lists of {t} are not implemented yet')
+    return {'Int':'eri_list_int','Float':'eri_list_float','Bool':'eri_list_bool','Text':'eri_list_text'}.get(t,'eri_list_'+mangle(t))
 def ctype(t):
     scalars={'Int':'int64_t','Float':'double','Bool':'bool','Text':'const char *'}
     if t in scalars: return scalars[t]
@@ -250,6 +264,7 @@ RUNTIME=r'''#include <stdint.h>
 static void eri_fault(const char *m) { fprintf(stderr, "Eristavi runtime fault: %s\n", m); exit(1); }
 static void *eri_alloc(size_t n){ void *p=malloc(n?n:1); if(!p)eri_fault("out of memory"); return p; }
 static void *eri_realloc(void *p,size_t n){ void *q=realloc(p,n?n:1); if(!q)eri_fault("out of memory"); return q; }
+static char *eri_text_add(const char *a,const char *b){ size_t na=strlen(a),nb=strlen(b); char *r=(char*)eri_alloc(na+nb+1); memcpy(r,a,na); memcpy(r+na,b,nb+1); return r; }
 static int64_t *eri_identity_Int_new(int64_t v){ int64_t *p=(int64_t*)eri_alloc(sizeof(int64_t)); *p=v; return p; }
 static double *eri_identity_Float_new(double v){ double *p=(double*)eri_alloc(sizeof(double)); *p=v; return p; }
 static bool *eri_identity_Bool_new(bool v){ bool *p=(bool*)eri_alloc(sizeof(bool)); *p=v; return p; }
