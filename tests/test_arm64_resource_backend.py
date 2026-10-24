@@ -23,7 +23,7 @@ class ARM64ResourceBackendTests(unittest.TestCase):
             'import std.files; '
             'function load(path Text) returns Text fails files.FileError { '
             'with file be try files.open(path) { return try file.readText(); } } '
-            'load("/tmp/missing") else error files.FileError { output(error.message); };'
+            'load("/tmp/missing") else error { output(error.message); };'
         )
         try:
             for symbol in (".Leri_file_open", ".Leri_file_read_text", ".Leri_file_cleanup", ".Leri_error_secondary_head"):
