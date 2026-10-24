@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import contextlib
-import io
 import subprocess
 import tempfile
 import unittest
@@ -36,30 +34,47 @@ class BackendTextViewTests(unittest.TestCase):
         self.assertEqual(p.returncode, 0)
         self.assertEqual(p.stdout, "3\nA\ń\n😀\n")
 
-    def test_native_views_can_be_stored(self):
+    def test_native_character_view_combining_and_zwj(self):
         p = self.compile_run(
-            'let text be "é"; let bytes be text.bytes; let scalars be text.scalars; '
-            'output(bytes.count); output(scalars.count); output(bytes[0]); output(scalars[0]);'
+            'let text be "A\\u{301}👩‍💻B"; let chars be text.characters; '
+            'output(chars.count); output(chars[0]); output(chars[1]); output(chars[2]);'
         )
         self.assertEqual(p.returncode, 0)
-        self.assertEqual(p.stdout, "2\n1\n195\né\n")
+        self.assertEqual(p.stdout, "3\nÁ\n👩‍💻\nB\n")
+
+    def test_native_character_view_pairs_regional_indicators(self):
+        p = self.compile_run(
+            'let text be "🇺🇸🇨🇾"; output(text.characters.count); '
+            'output(text.characters[0]); output(text.characters[1]);'
+        )
+        self.assertEqual(p.returncode, 0)
+        self.assertEqual(p.stdout, "2\n🇺🇸\n🇨🇾\n")
+
+    def test_native_character_view_indic_conjunct(self):
+        p = self.compile_run(
+            'let text be "क्ष"; output(text.characters.count); output(text.characters[0]);'
+        )
+        self.assertEqual(p.returncode, 0)
+        self.assertEqual(p.stdout, "1\nक्ष\n")
+
+    def test_native_views_can_be_stored(self):
+        p = self.compile_run(
+            'let text be "é"; let bytes be text.bytes; let scalars be text.scalars; let chars be text.characters; '
+            'output(bytes.count); output(scalars.count); output(chars.count); '
+            'output(bytes[0]); output(scalars[0]); output(chars[0]);'
+        )
+        self.assertEqual(p.returncode, 0)
+        self.assertEqual(p.stdout, "2\n1\n1\n195\né\né\n")
 
     def test_native_scalar_view_bounds_fault(self):
         p = self.compile_run('let text be "A"; let i be 1; output(text.scalars[i]);')
         self.assertNotEqual(p.returncode, 0)
         self.assertIn("Text view index out of bounds", p.stderr)
 
-    def test_compiled_character_view_is_explicitly_not_silently_approximated(self):
-        with tempfile.TemporaryDirectory() as td:
-            root = Path(td)
-            src = root / "app.eri"
-            exe = root / "app"
-            src.write_text('let text be "A"; output(text.characters.count);', encoding="utf-8")
-            stderr = io.StringIO()
-            with contextlib.redirect_stderr(stderr):
-                rc = build_native(src, exe, root)
-            self.assertEqual(rc, 1)
-            self.assertIn("pinned Unicode 17 grapheme runtime", stderr.getvalue())
+    def test_native_character_view_bounds_fault(self):
+        p = self.compile_run('let text be "👩‍💻"; let i be 1; output(text.characters[i]);')
+        self.assertNotEqual(p.returncode, 0)
+        self.assertIn("Text view index out of bounds", p.stderr)
 
 
 if __name__ == "__main__":
