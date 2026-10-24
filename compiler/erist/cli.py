@@ -13,6 +13,7 @@ from .ir_text import Lowerer
 from .c_backend_views import CBackend
 from .universal_ir import format_program
 from .x86_64_backend import X86_64LinuxBackend
+from .arm64_backend import ARM64LinuxBackend
 from .direct_project import compile_module_object, lower_direct_entry, object_path
 
 def analyze_frontend(source:str):
@@ -86,25 +87,34 @@ def emit_uir(path:Path,output:Path,source_root:Path|None=None)->int:
     except (EristaviError,OSError,ValueError) as e:
         print(e.format() if isinstance(e,EristaviError) else f'error: {e}',file=sys.stderr); return 1
 
+def _direct_backend(target:str):
+    if target=='x86_64-linux': return X86_64LinuxBackend()
+    if target in ('arm64-linux','aarch64-linux'): return ARM64LinuxBackend()
+    raise ValueError(f"unsupported direct backend target {target!r}")
+
+def _native_direct_host(target:str)->bool:
+    machine=platform.machine().lower(); system=platform.system()
+    if target=='x86_64-linux': return system=='Linux' and machine in ('x86_64','amd64')
+    if target in ('arm64-linux','aarch64-linux'): return system=='Linux' and machine in ('aarch64','arm64')
+    return False
+
 def emit_direct_asm(path:Path,output:Path,source_root:Path|None=None,target:str='x86_64-linux')->int:
     try:
-        if target!='x86_64-linux': raise ValueError(f"unsupported direct backend target {target!r}")
         program=lower_universal_file(path,source_root)
-        output.write_text(X86_64LinuxBackend().emit(program),encoding='utf-8')
+        output.write_text(_direct_backend(target).emit(program),encoding='utf-8')
         return 0
     except (EristaviError,OSError,ValueError) as e:
         print(e.format() if isinstance(e,EristaviError) else f'error: {e}',file=sys.stderr); return 1
 
 def build_direct(path:Path,output:Path,source_root:Path|None=None,target:str='x86_64-linux',cc:str|None=None)->int:
     try:
-        if target!='x86_64-linux': raise ValueError(f"unsupported direct backend target {target!r}")
-        machine=platform.machine().lower()
-        if platform.system()!='Linux' or machine not in ('x86_64','amd64'):
-            raise ValueError("x86_64-linux direct linking currently requires an x86-64 Linux host")
+        backend=_direct_backend(target)
+        if not _native_direct_host(target):
+            raise ValueError(f"{target} direct linking currently requires a matching native Linux host")
         compiler=cc or os.environ.get('CC','cc')
         flags=shlex.split(os.environ.get('CFLAGS',''))
         program=lower_universal_file(path,source_root)
-        assembly=X86_64LinuxBackend().emit(program)
+        assembly=backend.emit(program)
         with tempfile.TemporaryDirectory() as td:
             asm=Path(td)/'program.s'; asm.write_text(assembly,encoding='utf-8')
             proc=subprocess.run([compiler,*flags,str(asm),'-o',str(output)],capture_output=True,text=True)
@@ -145,8 +155,8 @@ def build_parser():
     interface=sub.add_parser('interface',help='emit a deterministic versioned module interface artifact'); interface.add_argument('module',type=Path); interface.add_argument('-o','--output',type=Path,default=None); interface.add_argument('--source-root',type=Path,default=None)
     obj=sub.add_parser('object',help='emit a linkable Universal-IR module implementation artifact'); obj.add_argument('module',type=Path); obj.add_argument('-o','--output',type=Path,default=None); obj.add_argument('--source-root',type=Path,default=None)
     uir=sub.add_parser('uir',help='lower the direct-backend subset to Universal IR'); uir.add_argument('entry',type=Path); uir.add_argument('-o','--output',type=Path,required=True); uir.add_argument('--source-root',type=Path,default=None)
-    asm=sub.add_parser('build-asm',help='emit direct CPU assembly from Universal IR'); asm.add_argument('entry',type=Path); asm.add_argument('-o','--output',type=Path,required=True); asm.add_argument('--source-root',type=Path,default=None); asm.add_argument('--target',default='x86_64-linux')
-    direct=sub.add_parser('build-direct',help='compile without the C backend through a direct CPU backend'); direct.add_argument('entry',type=Path); direct.add_argument('-o','--output',type=Path,required=True); direct.add_argument('--source-root',type=Path,default=None); direct.add_argument('--target',default='x86_64-linux'); direct.add_argument('--cc',default=os.environ.get('CC','cc'))
+    asm=sub.add_parser('build-asm',help='emit direct CPU assembly from Universal IR'); asm.add_argument('entry',type=Path); asm.add_argument('-o','--output',type=Path,required=True); asm.add_argument('--source-root',type=Path,default=None); asm.add_argument('--target',default='x86_64-linux',choices=('x86_64-linux','arm64-linux','aarch64-linux'))
+    direct=sub.add_parser('build-direct',help='compile without the C backend through a direct CPU backend'); direct.add_argument('entry',type=Path); direct.add_argument('-o','--output',type=Path,required=True); direct.add_argument('--source-root',type=Path,default=None); direct.add_argument('--target',default='x86_64-linux',choices=('x86_64-linux','arm64-linux','aarch64-linux')); direct.add_argument('--cc',default=os.environ.get('CC','cc'))
     bc=sub.add_parser('build-c',help='lower the typed IR subset to C source'); bc.add_argument('entry',type=Path); bc.add_argument('-o','--output',type=Path,required=True); bc.add_argument('--source-root',type=Path,default=None)
     b=sub.add_parser('build',help='compile the typed IR path through the system C toolchain'); b.add_argument('entry',type=Path); b.add_argument('-o','--output',type=Path,required=True); b.add_argument('--source-root',type=Path,default=None); b.add_argument('--cc',default=os.environ.get('CC','cc'))
     return p
