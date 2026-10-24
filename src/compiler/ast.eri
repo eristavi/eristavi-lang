@@ -12,7 +12,7 @@ public type Node {
 
 public type Chain {
     first maybe identity Node;
-    last maybe identity Node;
+    last identity Node;
 }
 
 public function program() returns Int { return 0; }
@@ -64,9 +64,10 @@ public function make(kind Int, token Int, first maybe identity Node, second mayb
 }
 
 public function emptyChain() returns identity Chain {
+    let sentinel be make(-1, 0, none, none, none, "", 0, false);
     return identity Chain {
         first = none;
-        last = none;
+        last = sentinel;
     };
 }
 
@@ -76,8 +77,6 @@ public function add(chain identity Chain, node identity Node) {
         chain.last = node;
         return;
     }
-    if chain.last != none {
-        chain.last.next = node;
-    }
+    chain.last.next = node;
     chain.last = node;
 }
