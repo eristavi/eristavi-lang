@@ -7,6 +7,7 @@ from .ir_text import Lowerer
 from .object_artifact import ModuleObjectArtifact
 from .project import CompiledModule, compile_entry, compile_module
 from .universal_ir import UProgram
+from .universal_passes import optimize_program
 from .universal_resources import ResourceUniversalLowerer
 
 
@@ -58,7 +59,7 @@ def compile_module_object(path: Path, source_root: Path | None = None) -> Module
     if mod.interface_only:
         raise ValueError("cannot compile an implementation artifact without module source")
     typed, _ = typed_source_project(mod, allow_interfaces=False)
-    universal = ResourceUniversalLowerer().lower(typed)
+    universal = optimize_program(ResourceUniversalLowerer().lower(typed))
     prefix = mod.module_id + "."
     own_functions = tuple(fn for fn in universal.functions if fn.name.startswith(prefix))
     own_types = tuple(item for item in universal.types if item.name.startswith(prefix))
@@ -116,4 +117,4 @@ def lower_direct_entry(path: Path, source_root: Path | None = None) -> UProgram:
             + ", ".join(sorted(duplicates))
         )
     combined_functions = list(program.functions) + object_functions
-    return UProgram(combined_functions, program.entry, list(program.types))
+    return optimize_program(UProgram(combined_functions, program.entry, list(program.types)))
