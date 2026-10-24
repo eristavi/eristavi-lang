@@ -2,30 +2,33 @@
 
 > **Audit date: 2026-10-24**
 >
-> **Scope:** frozen pre-0.1 source contract versus the Python bootstrap/reference runtime, serialized module artifacts, typed IR, generated-C backend, Universal IR, direct x86-64 backend, ARM64 backend, Unicode/runtime behavior and multi-toolchain CI.
+> **Scope:** frozen pre-0.1 source contract, bootstrap/reference runtime, generated-C path, verified Universal IR, direct x86-64 runtime/GC, ARM64 assembly backend, module artifacts/caching, JavaScript/WebAssembly consumers, Unicode behavior and multi-toolchain CI.
 
 ## 1. Executive result
 
-Eristavi is now a **broad working pre-0.1 bootstrap compiler with an independent direct-native architecture**, not merely a parser/interpreter or a C transpilation experiment.
+Eristavi is now a **broad working pre-0.1 compiler/toolchain with an independent direct-native runtime architecture and multiple Universal-IR consumers**.
 
 At this audit point:
 
 - the source-language/frontend contract remains frozen;
-- no fundamental language semantic had to be reopened during this implementation phase;
+- this implementation phase required no new source keywords or fundamental semantic redesign;
 - the Python bootstrap/reference runtime covers the principal frozen pre-0.1 language surface;
-- the generated-C backend remains the broad portable compiled baseline;
-- Universal IR now represents functions, Float/Text, aggregates, Lists, maybe, identity, checked failures and deterministic resources in addition to primitive control flow;
-- the direct x86-64 Linux backend executes a substantial pre-0.1 subset without generated C;
-- versioned module **interfaces and concrete implementation objects** permit source-independent type checking and direct executable linkage for supported concrete implementations;
-- an ARM64/AAPCS64 backend consumes the same Universal IR and cross-assembles successfully;
-- the verified suite contains **216 tests** and passes in all three CI jobs: GCC/Ubuntu, Clang/Ubuntu and Clang/macOS at `-O2`;
-- direct ARM64 native execution remains skipped unless an ARM64 Linux host is available; AArch64 assembly is nevertheless validated by cross-assembly in CI.
+- the generated-C backend remains the broad portability/conformance baseline;
+- Universal IR is verified and bootstrap-optimized before direct/object consumption;
+- direct x86-64 Linux executes a broad language/runtime slice without generated C;
+- all three explicit Text views execute directly on x86-64, including pinned Unicode-17 grapheme segmentation;
+- the direct x86-64 runtime now includes automatic non-moving mark-and-sweep reclamation with compiler-described roots;
+- module interface/object artifacts support source-independent concrete linkage and reusable downstream inferred-generic specialization;
+- incremental module artifact caching uses source content plus dependency public-contract identities;
+- ARM64 consumes the same Universal IR and now has expanded Text/aggregate/error/resource assembly-generation layers;
+- ES2020 JavaScript and WebAssembly-text backends consume the current scalar/function/control Universal-IR slice;
+- the verified suite contains **245 tests** and passes in all three hosted CI jobs: GCC/Ubuntu, Clang/Ubuntu and Clang/macOS at `-O2`.
 
-The governing target rule remains intact:
+The governing target rule remains:
 
 > **Target platforms implement Eristavi semantics; they do not redefine them.**
 
-## 2. Current architecture
+## 2. Current compiler architecture
 
 ```text
 Eristavi source
@@ -35,56 +38,58 @@ lexer / parser / AST
 name resolution + semantic analysis + type inference
     ↓                         ↘
 bootstrap/reference runtime   typed/source-close Eristavi IR
-                                  ├─→ C11 backend → C compiler → native executable
+                                  ├─→ C11 backend → C compiler → native
                                   ↓
-                               Universal IR
-                                  ├─→ x86-64 Linux backend → assembly → native executable
-                                  └─→ ARM64 Linux backend → assembly
+                         verified + optimized Universal IR
+                                  ├─→ x86-64 Linux → assembly → native
+                                  ├─→ ARM64 Linux → assembly/native on matching host
+                                  ├─→ ES2020 JavaScript
+                                  └─→ WebAssembly text
 ```
 
-Module compilation now also has a source-independent artifact boundary:
+Reusable module compilation has a separate semantic/implementation boundary:
 
 ```text
 module.eri
   ├─→ module.eri-interface.json   public semantic contract
-  └─→ module.eri-object.json      concrete Universal-IR implementation
+  └─→ module.eri-object.json      Universal-IR implementation + optional generic template
 ```
 
-This is an important architectural change: generated C is no longer the only executable proof, and live Python analyzer objects are no longer the only reusable module boundary.
+This means generated C is no longer the only compiled proof, and live Python analyzer state is no longer required as the only reusable module boundary.
 
 ## 3. Frozen frontend/reference implementation
 
-The frontend/reference runtime continues to cover the principal frozen language surface, including:
+The frontend/reference runtime continues to implement the principal frozen surface:
 
-- the exact lexical/keyword contract;
+- exact lexical/keyword rules;
 - Unicode 17 XID identifiers and NFC identity;
-- checked signed-64-bit Int;
-- IEEE binary64-oriented Float;
-- length-aware Unicode Text;
-- explicit Text character/scalar/byte views;
+- checked signed-64-bit `Int`;
+- IEEE binary64-oriented `Float`;
+- length-aware Unicode `Text`;
+- explicit `.characters`, `.scalars`, `.bytes` Text views;
 - `let`, transitive `fixed`, annotations and lexical no-shadowing;
 - Bool-only conditions, `if / else`, `while`, stable `for`;
 - functions, recursion and return inference;
-- compiler-inferred generic relationships;
-- Lists with ordinary value semantics;
-- named-field user-defined values and structural equality;
-- maybe/none and flow narrowing;
-- explicit managed identity;
-- checked errors and propagation;
+- compiler-inferred generic relationships without source generic variables;
+- growable ordered `List` values;
+- named-field ordinary values and structural equality;
+- `maybe` / `none` and flow narrowing;
+- explicit managed `identity`;
+- checked errors, propagation and handlers;
 - deterministic `with` resources;
 - modules/imports/aliases/visibility.
 
-This phase did not add source keywords, generic syntax, borrowing syntax, exception syntax or manual memory-management syntax.
+This phase did not add borrowing syntax, manual memory syntax, exception syntax, traits, explicit generic syntax, reflection or async syntax.
 
-## 4. Unicode and Text
+## 4. Unicode and Text audit
 
 ### Pinned semantics
 
-Identifier normalization/classification and grapheme behavior remain pinned to Unicode **17.0.0** rather than the host Python or OS Unicode database.
+Identifier normalization/classification and grapheme behavior remain pinned to Unicode **17.0.0** rather than host Python/OS Unicode versions.
 
 ### Generated-C path
 
-The broad generated-C runtime executes all frozen explicit Text views:
+Generated C supports:
 
 ```eri
 text.bytes
@@ -92,213 +97,309 @@ text.scalars
 text.characters
 ```
 
-The character view uses generated Unicode-property tables and a pinned extended-grapheme implementation rather than libc locale APIs or code-point approximation.
+The character view uses generated Unicode-property tables and a pinned extended-grapheme implementation rather than libc locale behavior or code-point approximation.
 
-Compiled Text remains explicit UTF-8 bytes plus length. Embedded NUL therefore survives output, equality, concatenation and file round trips, and invalid UTF-8 read from a file remains a checked `FileError`.
+Compiled Text remains UTF-8 bytes plus explicit length. Embedded NUL survives output, equality, concatenation and file round trips. Invalid UTF-8 read from a file remains a checked `FileError`.
 
 ### Direct x86-64 path
 
-The direct backend now implements length-aware Text values, concatenation, exact equality, function transfer, output and UTF-8 file boundaries. It also preserves mixed scalar/Text output order despite using both stdio and exact-length raw writes.
+The direct backend now executes all three explicit views without generated C:
 
-The explicit direct Text-view operations `.bytes`, `.scalars`, and `.characters` are **not yet implemented through Universal IR/direct x86-64**. This is a direct-backend parity gap, not a source-semantic gap.
+- byte count/index;
+- Unicode scalar count/index;
+- extended grapheme cluster count/index.
 
-### Unicode test boundary
+Pinned Unicode property tables are emitted for the assembly runtime. Direct tests cover combining sequences, emoji ZWJ sequences, regional-indicator pairing, Indic conjunct behavior and bounds faults.
 
-The compiled grapheme implementation has representative/corpus parity tests against the pinned bootstrap segmentation, but this audit does not claim exhaustive execution of the complete official Unicode GraphemeBreakTest corpus. Adding the complete pinned official vectors remains desirable production conformance work.
+### Remaining conformance boundary
 
-## 5. Universal IR
+Representative/corpus parity is tested, but this audit does **not** claim automated execution of every vector from the complete official Unicode `GraphemeBreakTest.txt`. Adding the full pinned official corpus remains desirable production conformance work.
 
-Universal IR has grown from a scalar experiment into a meaningful machine-independent execution representation.
+## 5. Universal IR audit
 
-It now makes explicit:
+Universal IR now represents a meaningful machine-independent execution contract rather than a scalar experiment.
 
-- typed virtual values and local slots;
-- basic blocks and branch/jump/return terminators;
+It includes:
+
+- typed virtual values and locals;
+- basic blocks and jump/branch/return terminators;
 - functions, parameters, calls, returns and recursion;
-- Int, Bool, Float and Text;
+- `i64`, `f64`, `bool`, length-aware `text`, and `void`;
+- Text-view operations;
+- nominal layouts and fields;
+- Lists, maybe and identity handles;
 - checked Int arithmetic;
-- Float arithmetic/comparisons;
+- Float arithmetic/comparison operations;
 - Text concatenation/equality/output;
 - short-circuit Boolean CFG;
-- nominal type layouts and field access/mutation;
-- List construction/count/index/set/add and stable iteration;
-- maybe values;
-- identity handles;
-- explicit ordinary-value cloning;
+- construction, field access and mutation;
+- List construction/count/get/set/add and stable iteration;
+- explicit ordinary-value cloning at transfer boundaries;
 - structural equality versus identity equality;
-- checked-error state, matching, handler dispatch and propagation;
+- checked-error state/matching/dispatch/propagation;
 - deterministic resource cleanup;
-- std.files open/read/write/exists/remove runtime operations.
+- `std.files` open/read/write/exists/remove operations.
 
-### Value/identity semantics below the frontend
+Ordinary values and shared identity are therefore distinguished *before* target-specific code generation.
 
-Ordinary composite transfers emit explicit clone operations. This includes assignment, parameter passing, return transfer and stable iteration where required. The direct backend therefore receives the fact that ordinary values are logically independent.
+### Verification
 
-Identity handles are not deep-cloned on transfer and preserve shared logical identity.
+Universal-IR verification checks, among other things:
 
-Tests directly exercise nested value copies, Lists of values, parameter isolation and identity aliasing. This is stronger evidence than relying only on frontend interpretation.
+- unique function/type/block symbols;
+- entry-function presence;
+- dense valid local/value ids;
+- valid CFG targets;
+- Bool branch conditions;
+- function-call target/arity/type contracts;
+- return contracts;
+- presence and validity of terminators.
+
+Verification runs before and after the current optimization pipeline.
+
+### Bootstrap optimization
+
+Implemented semantics-preserving passes include:
+
+- supported Int/Bool/Float constant folding;
+- checked-Int folding only when Eristavi overflow/division rules remain valid;
+- unreachable-block elimination;
+- post-pass verification.
+
+Target-neutral analysis also computes:
+
+- deterministic value live ranges;
+- stack-slot planning/coalescing groundwork;
+- escape classification for calls/returns;
+- short-lived scalar register candidates.
+
+These analyses are currently groundwork rather than a production register allocator.
 
 ## 6. Direct x86-64 Linux backend
 
-The x86-64 System V backend now executes the following without generated C:
+The System V backend executes a broad pre-0.1 slice without generated C.
 
 ### Functions and ABI
 
-- module-level functions;
-- recursion;
-- no-value and value-returning functions;
-- integer/pointer arguments in System V general registers;
-- Float arguments/returns in XMM registers;
-- stack-passed arguments beyond register capacity;
-- nested checked arithmetic faults that terminate rather than becoming ordinary return values.
+Implemented and tested:
+
+- functions and recursion;
+- value/no-value returns;
+- general-register arguments;
+- XMM Float arguments/returns;
+- stack arguments after register capacity;
+- nested checked arithmetic faults that terminate through the runtime fault path.
 
 Tests include recursive factorial and an eight-argument function.
 
-### Scalars and Text
+### Scalars, Text and aggregates
+
+Implemented and tested:
 
 - Int/Bool/Float;
 - checked Int arithmetic/division/remainder;
-- IEEE-oriented Float arithmetic/comparison behavior for the tested subset;
-- length-aware Text constants, equality, concatenation and output;
-- embedded NUL Text.
-
-### Aggregates and identity
-
+- Float functions/arithmetic/comparison cases;
+- length-aware Text and embedded NUL;
+- all Text views;
 - ordinary nominal values;
-- nested field mutation;
-- recursive deep copying where required;
+- nested mutation;
+- deep logical copying;
 - structural equality;
-- Lists, mutation, checked indexing, `.count`, `.add`, equality and stable iteration;
+- Lists, checked indexing, `.count`, `.add`, mutation, equality and stable iteration;
 - maybe/none;
-- identity aliasing and identity equality.
+- identity aliasing and logical identity equality.
 
 ### Inferred generics
 
-Source builds monomorphize inferred generic relationships through the direct backend. Tests cover:
+Source builds specialize inferred relationships directly. Tests cover:
 
-- one-value identity-style relationship across Int/Text/Float;
+- preserve/identity-style relationships across multiple concrete scalar types;
 - same-type multi-parameter relationships;
-- inferred List element relationships.
+- inferred List element relationships;
+- generic ordinary value use.
 
-### Checked errors
+### Checked failures
 
-Checked failures are represented below the frontend using explicit Universal-IR state/CFG operations rather than target exceptions.
+Checked failures are represented as Universal-IR state/CFG operations, not target exceptions.
 
 Direct tests cover:
 
-- catch-all handler message access;
+- catch-all error message access;
 - typed error fields;
 - typed handler selection;
-- `try` propagation through multiple functions;
+- `try` propagation through functions;
 - success bypassing handlers;
-- cleared failure state not leaking into subsequent calls;
-- a handler producing and propagating a new failure.
+- cleared failure state not leaking into later calls;
+- handler-produced secondary/new checked failures.
 
 ### Deterministic resources
 
-The direct runtime now implements the current `std.files` surface:
+The direct runtime implements the current `std.files` surface:
 
 - `files.open`;
 - `File.readText()`;
 - `File.writeText()`;
 - `files.exists()`;
 - `files.remove()`;
-- deterministic cleanup from `with`.
+- deterministic `with` cleanup.
 
-Direct tests cover:
+Tests cover return cleanup, nested cleanup, UTF-8 validation, embedded NUL data/path handling, missing paths, `exists/remove`, and body-failure priority over cleanup failure.
 
-- cleanup on return;
-- nested resource cleanup;
-- exact Text I/O including embedded NUL;
-- invalid UTF-8 as checked `FileError`;
-- missing paths;
-- embedded-NUL paths;
-- `exists/remove` behavior;
-- body failure remaining primary through cleanup.
+Deterministic external resources remain separate from GC memory ownership.
 
-The direct runtime retains cleanup failures that occur during active checked-failure unwinding as secondary runtime failure context instead of replacing the primary failure. Source-visible programmatic inspection of that secondary context remains intentionally outside pre-0.1.
+## 7. Direct automatic-memory-management audit
 
-## 7. Direct-memory-management audit
+Automatic memory management now exists in the direct x86-64 path.
 
-The direct heap representation is currently **correctness-first bootstrap infrastructure**, not the final automatic-memory-management implementation.
+### Current collector
 
-Lists, nominal values, maybe wrappers, identities, Text concatenation and some runtime records allocate heap storage. Ordinary value semantics are implemented through explicit deep-clone helpers where required.
+The runtime uses a tracked **non-moving mark-and-sweep** collector.
 
-However, the direct runtime currently does **not reclaim all ordinary heap allocations with a production precise GC**. Many allocations are process-lifetime bootstrap allocations.
+Compiler-generated root frames contain addresses of:
 
-This is now one of the most important remaining runtime tasks because automatic memory management is a language-level design commitment. Before a production pre-0.1 direct runtime is considered complete, the direct backend/runtime must introduce precise root metadata and collection/reclamation while preserving identity and deterministic non-memory resources.
+- heap-typed declared local slots;
+- heap-typed Universal-IR temporary spill slots.
 
-This limitation does not affect the language's source semantics, but it does affect long-running direct-runtime production readiness.
+Checked-error runtime globals are also marked as roots.
 
-## 8. Module interfaces and objects
+The temporary-slot addition is important: a composite temporary can remain live between construction and a later use even when it has not yet become an ordinary source binding.
+
+### Correctness bugs found and fixed
+
+During collector integration:
+
+1. GC-frame unlink initially used `%rax`, overwriting ordinary function return values after the return value had already been placed there. Root-frame unlink now uses `%r11`.
+2. Rooting only declared locals allowed heap-valued IR temporaries to be reclaimed prematurely. Heap-typed temporary spill slots are now roots as well.
+3. The collector sweep loop needed to preserve its list cursor across libc `free`, since caller-saved `%rcx` cannot be assumed stable.
+4. Two near-identical GC root-frame implementations were consolidated so future root-contract fixes cannot diverge.
+
+After these fixes, direct aggregate/error/resource/object/generic tests and dedicated GC graph/stress tests pass.
+
+### Precision boundary
+
+This audit deliberately does **not** call the current collector a finished production precise GC.
+
+Root discovery is compiler-described at known slots. However, child discovery inside a tracked heap allocation currently scans payload machine words and treats exact tracked allocation pointers as references.
+
+This is safe for the present bootstrap representation but can conservatively retain allocations whose data word happens to equal a tracked pointer. A production collector should use typed heap descriptors/pointer masks and tighter liveness-derived root ranges.
+
+## 8. Module interfaces, objects and inferred-generic templates
 
 ### Interface artifact
 
-The public contract remains:
+Current public contract:
 
 ```text
 schema  = eristavi.module-interface
 version = 1
 ```
 
-It preserves public types/errors/functions, dependency identities, pinned Unicode version, checked `fails` contracts and inferred generic relationships.
+It preserves public types/errors/functions, dependency identities, Unicode version, checked `fails` contracts and inferred generic relationships.
 
 Importers can type-check from the interface after dependency source removal.
 
 ### Implementation artifact
 
-Concrete implementations now use:
+Current implementation artifact:
 
 ```text
 schema  = eristavi.module-object
-version = 2
-IR      = universal-ir-v2
+version = 3
+IR      = universal-ir-v3
 ```
 
-The object serializes concrete Universal-IR functions and relevant nominal/error layouts and embeds the exact interface digest against which it was compiled.
+It serializes concrete verified/optimized Universal-IR implementations and required type layouts, tied to the exact interface digest.
 
-The linker rejects interface/object digest mismatches.
+The linker rejects interface/object digest mismatch.
 
-### Source-independent executable linkage
+### Reusable inferred-generic specialization
 
-Direct tests now compile a module interface/object pair, delete the dependency `.eri` source, and successfully build/run the importing application.
+For a module exporting public inferred-generic functions, object v3 can carry a bootstrap reusable implementation template:
 
-Coverage includes:
+```text
+generic_template.kind = eristavi-source-v1
+```
 
-- scalar function linkage;
-- nominal parameters/returns;
-- List returns;
-- checked-error contracts and typed handlers;
-- imported nominal field-layout consistency.
+A downstream importer can request a concrete specialization after the original dependency `.eri` source has been deleted. The template is re-analyzed against serialized module/dependency contracts, concretized for the downstream argument types, lowered to Universal IR and linked.
 
-### Remaining generic object boundary
+Tests cover post-source-removal specialization of:
 
-The interface can describe inferred generic contracts and source builds can monomorphize inferred generics. A precompiled object does **not yet carry a reusable generic implementation template** that can be specialized for arbitrary future call-site types after source removal.
+- preserve-style `(T) -> T` relationships;
+- same-type multi-parameter relationships;
+- List element relationships.
 
-This is a concrete object-format/link-time specialization task, not a reason to add explicit generic syntax.
+This does **not** introduce user-visible generic syntax. A future compact generic IR/template representation should replace the bootstrap internal source-template payload.
 
-## 9. ARM64 backend
+## 9. Incremental module/build cache
 
-A second CPU backend now consumes the same Universal IR for the current scalar/function slice.
+`erist compile-module` now supports reusable artifact caching keyed by source content and dependency public-contract identities.
 
-The AArch64/AAPCS64 implementation covers:
+Verified behavior:
 
-- Int/Bool/Float values;
+- identical second compile is a cache hit;
+- own source changes invalidate the module;
+- dependency public-interface changes invalidate importers;
+- dependency private implementation changes do not invalidate an importer when the public interface digest is unchanged.
+
+This is a sound bootstrap incremental-compilation boundary. It is not yet a complete package manager/build graph or production artifact store.
+
+## 10. ARM64 backend
+
+ARM64/AAPCS64 consumes the same Universal IR rather than a parallel semantic pipeline.
+
+Current assembly-generation coverage includes:
+
+- Int/Bool/Float;
 - functions/calls/recursion;
-- register and stack argument placement;
-- checked Int arithmetic/division/remainder;
-- comparisons and control flow;
-- scalar output.
+- register/stack argument placement;
+- checked integer arithmetic/division/remainder;
+- comparisons/control flow;
+- Text runtime operations;
+- ordinary values and List operations;
+- maybe and identity operations;
+- checked-error state/handler operations;
+- deterministic file-resource runtime operations and secondary-failure state.
 
-CI cross-assembles generated AArch64 assembly with Clang's AArch64 target. This provides concrete evidence that the lower IR is not structurally coupled to x86-64.
+CI cross-assembles the expanded AArch64 output successfully.
 
-A native ARM64 execution test exists but is skipped on the current non-ARM hosted runners.
+A native ARM64 execution test exists for matching ARM64 Linux hosts. The current hosted matrix does not provide broad ARM64 **Linux** native execution, so cross-assembly proves code-generation validity but does not yet establish full runtime behavioral parity with x86-64.
 
-ARM64 does **not** yet have parity for Text runtime values, Lists/nominal values, maybe/identity, checked-error runtime state or deterministic resources.
+## 11. JavaScript backend
 
-## 10. Generated-C backend
+An ES2020 backend now consumes the current scalar/function/control Universal-IR slice.
 
-The generated-C route remains the broad portable backend. It covers the principal implemented pre-0.1 surface, including:
+Most important semantic choice:
+
+> Eristavi `Int` uses checked JavaScript `BigInt`; ordinary `Number` is not allowed to silently redefine 64-bit integer semantics.
+
+Tests execute:
+
+- functions;
+- Float/Text cases in the supported slice;
+- control flow;
+- checked Int overflow behavior.
+
+Lists, ordinary aggregates, maybe/identity, checked errors, deterministic resources and complete Unicode Text runtime parity remain future JavaScript work.
+
+## 12. WebAssembly backend
+
+A WebAssembly-text backend now consumes the current scalar/function/control Universal-IR slice.
+
+It emits direct WAT contracts for:
+
+- functions/calls;
+- checked Int operations;
+- control-flow dispatch.
+
+Unsupported runtime families such as Text are currently rejected explicitly rather than approximated.
+
+The current tests validate emitted WAT structure/contracts. This audit does not claim a complete WebAssembly runtime, full heap semantics or broad `.wasm` executable conformance yet.
+
+## 13. Generated-C backend
+
+Generated C remains the broad portable baseline and important semantic cross-check.
+
+It covers the principal implemented pre-0.1 surface, including:
 
 - scalar types and checked Int behavior;
 - length-aware Text and all explicit Unicode Text views;
@@ -307,162 +408,133 @@ The generated-C route remains the broad portable backend. It covers the principa
 - maybe and identity;
 - checked errors;
 - inferred generic specializations;
-- source modules;
+- modules;
 - deterministic resources;
-- exact Text file I/O;
-- checked file existence/removal.
+- exact Text file I/O and checked path operations.
 
-The C backend remains important for portability and semantic cross-checking even as direct backends mature.
+Generated-C executable linkage still follows its own implementation-source route rather than using the Universal-IR direct object linker.
 
-Generated-C executable linkage still relies on implementation source rather than the new Universal-IR object linker. That is an implementation-path difference, not a semantic difference.
+## 14. Float conformance
 
-## 11. Float conformance
-
-The generated-C conformance suite continues to exercise:
+The suite continues to exercise important IEEE behavior, including:
 
 - NaN equality behavior;
-- positive/negative infinity;
+- infinities;
 - signed zero;
 - smallest subnormal preservation;
-- overflow to infinity.
+- overflow to infinity;
+- direct x86-64 Float function/arithmetic/comparison behavior.
 
-The direct x86-64 path now also executes Float functions/arithmetic/comparisons, including a NaN-equality case used in direct tests.
+This is meaningful conformance evidence but not exhaustive proof across every CPU, optimization mode and floating-point environment. Native ARM64 Linux Float execution and Windows toolchains remain future matrix additions.
 
-The current matrix does not constitute exhaustive proof across all CPUs, compiler optimization modes and floating-point environments. Native ARM64 Float execution, Windows/MSVC and future RISC-V remain additional conformance work.
-
-## 12. Test and CI result
+## 15. Test and CI result
 
 The verified suite contains:
 
 ```text
-216 tests
+245 tests
 ```
 
-The final tested code boundary passes in all three GitHub Actions jobs:
+The tested implementation boundary passes all three GitHub Actions jobs:
 
-- GCC on Ubuntu, `-O2`;
-- Clang on Ubuntu, `-O2`;
-- Clang on macOS, `-O2`.
+- GCC / Ubuntu / `-O2`;
+- Clang / Ubuntu / `-O2`;
+- Clang / macOS / `-O2`.
 
-The Ubuntu run reports:
+Coverage includes:
 
-```text
-Ran 216 tests
-OK (skipped=1)
-```
-
-The skipped test is native ARM64 execution on a non-ARM host. Direct x86-64 executable tests run on Linux. ARM64 assembly generation is cross-assembled in CI.
-
-Coverage now includes:
-
-- frontend/reference semantics;
+- frozen frontend/reference semantics;
 - generated-C native execution;
-- pinned Unicode and grapheme behavior;
-- interface serialization and source-independent type checking;
-- object serialization, digest integrity and source-independent direct linking;
+- pinned Unicode/grapheme behavior;
+- module interfaces and source-independent type checking;
+- v3 objects, digest integrity and source-independent linkage;
+- inferred-generic object specialization after source removal;
+- incremental artifact caching;
+- verified/optimized Universal IR and analysis groundwork;
 - direct x86-64 function ABI/recursion;
-- Float/Text direct execution;
+- Float/Text/Text-view direct execution;
 - deep values, Lists, maybe and identity;
-- inferred generic direct specializations;
 - checked-error direct execution;
-- deterministic direct resources and UTF-8 file boundaries;
-- ARM64 shared-IR emission/cross-assembly.
+- deterministic resources/UTF-8 boundaries;
+- GC root-frame and nested-graph/replacement stress behavior;
+- ARM64 expanded runtime emission and cross-assembly;
+- JavaScript scalar/function execution;
+- WebAssembly-text scalar/function contracts.
 
-## 13. Quality findings from this phase
+Platform-specific tests skip when a matching execution ABI/runtime is unavailable rather than pretending another host proves native behavior.
 
-Implementation exposed several issues that were corrected rather than documented away:
+## 16. Quality findings from this implementation phase
 
-- arithmetic faults inside nested direct functions originally risked behaving like ordinary function returns; they now terminate through the runtime fault path;
-- interface analyzer proxies initially lost whether a parameter was explicitly declared, which affected object symbol selection; declared-parameter metadata is now preserved;
-- early object linkage used fake source stubs; concrete object contracts/layouts are now injected directly into Universal lowering;
-- catch-all error handlers initially cleared the active failure before preserving the handler-visible error view; captured error views are now stable;
-- fully terminating handled-return CFGs initially left an artificial merge block that appeared to fall through; unreachable merge blocks are removed;
-- resource-return lowering initially inserted cleanup checks even with no active resources and could double-clean during propagation; both cases were corrected;
-- mixed scalar/Text direct output could reorder because stdio buffering was mixed with raw writes; buffered output is flushed before exact-length Text writes;
-- an apparent imported two-field layout corruption was traced to that output-ordering issue; dedicated IR-layout tests confirm serialized field ordering and access indices are consistent;
-- direct tests explicitly catch shallow-copy mistakes in nested values and Lists of values.
+The phase exposed concrete engineering defects and resolved them rather than weakening semantics:
 
-Earlier fixes remain in force: length-aware Text, content equality, UTF-8 validation, Unicode identifier mangling, Int-only `%`, deep `fixed`, value semantics, pinned Unicode and multi-compiler CI.
+- direct Text views were implemented natively instead of approximating graphemes as code points;
+- return-register corruption from GC-frame unlinking was fixed;
+- heap-valued IR temporary roots were added after stress tests exposed premature reclamation;
+- the GC sweep cursor is preserved across external allocator calls;
+- duplicate GC root-frame implementations were consolidated;
+- ARM64 resource tests exposed an invalid test fixture attempting an unsupported member access in that handler context; the fixture was corrected to the valid catch-all error view;
+- prior direct-runtime fixes remain in force: exact-length Text, output ordering, deep value copies, checked-error lifetime, deterministic cleanup and object layout consistency.
 
-## 14. Remaining implementation gaps
+The source-language design survived these issues unchanged.
 
-The major gaps are now engineering/runtime boundaries rather than unresolved source-language design.
+## 17. Remaining production gaps
 
-### A. Direct automatic memory management
+The largest remaining gaps are now implementation maturity boundaries.
 
-Implement precise root/type metadata and a production collector/reclamation strategy for direct heap values. Deterministic external resources remain separate from GC.
+### A. Typed heap descriptors and GC liveness
 
-### B. Direct Unicode Text views
+Replace payload-word child scanning with typed pointer descriptors/masks, integrate liveness so dead temporary roots do not remain for an entire function, and tune collection policy/performance.
 
-Lower and execute `.bytes`, `.scalars`, and `.characters` through Universal IR/direct backends using the same pinned Unicode semantics as the generated-C path.
+### B. Backend allocation quality
 
-### C. Precompiled inferred-generic implementation templates
+Apply the existing live-range/stack-slot/register-candidate analysis to real stack-slot reuse and register allocation. The current direct backend remains correctness-first and spill-heavy.
 
-Allow interface-only object dependencies to carry generic implementation templates or another validated specialization representation so arbitrary downstream concrete instantiations do not require source.
+### C. Native ARM64 Linux CI
 
-### D. ARM64 parity and native CI
+Run the expanded ARM64 runtime behavior on actual ARM64 Linux, not only cross-assemble it. Resolve any ABI/runtime parity issues discovered there.
 
-Extend the second backend through Text, aggregates, checked errors and resources; add a native ARM64 Linux runner/test environment.
+### D. JavaScript/WebAssembly parity
 
-### E. Broader platform/ABI conformance
+Extend both targets through aggregates, maybe/identity, checked failures, deterministic resources, Text views and automatic-memory/runtime services while preserving Eristavi semantics.
 
-Windows/MSVC, additional Linux architectures, macOS direct ABI work and future RISC-V remain unimplemented or unautomated.
+### E. Production artifacts/linker
 
-### F. WebAssembly and JavaScript
+Replace or complement bootstrap JSON/source-template objects with compact validated binary/template artifacts, stronger dependency metadata and mature separate compile/link behavior.
 
-Both remain strategic targets but have not been implemented.
+### F. Broader OS/ABI matrix
 
-### G. Unicode official conformance corpus
+Windows, macOS direct-native ABI work, more Linux architectures and later RISC-V remain future target work.
 
-Add the complete official pinned Unicode grapheme test vectors as an automated fixture.
+### G. Full Unicode official test corpus
 
-### H. Optimization and production object format
+Automate the complete pinned official grapheme-break vector set rather than relying only on representative/corpus parity cases.
 
-The direct backend intentionally favors correctness and stack spilling. Register allocation, optimization, binary/compact object formats, incremental build caching and mature linker metadata remain future compiler work.
+### H. Standard-library breadth
 
-### I. Standard library breadth
+Paths, time, JSON, networking, process/environment APIs and other domains remain library work.
 
-Paths as a richer abstraction, time, JSON, networking, process/environment APIs and other domains remain library work.
+## 18. Deliberately postponed — not defects
 
-## 15. Deliberately postponed — not defects
-
-The following remain deliberately outside the current pre-0.1 implementation scope unless real programs force an earlier decision:
+Still outside current pre-0.1 scope unless real use forces reconsideration:
 
 - explicit generic syntax/constraints;
 - traits/interfaces;
 - pattern matching;
 - async/await and advanced concurrency;
-- reflection/macros;
-- identity-to-value snapshot API;
-- advanced resource transfer/borrowing/lifetime syntax;
-- package registry/version/lockfile design;
-- advanced GC generations/concurrent collectors;
-- stable portable bytecode/JIT;
-- self-hosting;
-- multiple feature-complete direct CPU backends.
+- reflection;
+- macros;
+- operator overloading;
+- package registry;
+- self-hosting.
 
-## 16. Audit conclusion
+## 19. Final audit verdict
 
-The requested implementation sequence is complete at a meaningful bootstrap milestone.
+The current repository is best described as:
 
-Eristavi now demonstrates three mutually useful execution layers:
+> **A broad pre-0.1 Eristavi compiler/toolchain with a frozen source-language contract, a mature bootstrap/reference and generated-C baseline, verified target-neutral Universal IR, a broad direct x86-64 runtime including Unicode views and automatic reclamation, reusable module objects with inferred-generic specialization, an expanded ARM64 backend, and first JavaScript/WebAssembly consumers.**
 
-```text
-Python bootstrap/reference runtime
-```
+It is **not yet a production 0.1 release**. The next work is mainly runtime precision, code-generation quality, second-backend native conformance, portable-target parity and production artifact/tooling maturity.
 
-```text
-typed Eristavi IR → C11 → native
-```
+Most importantly, the implementation continues to support the governing design decision:
 
-and, for a substantial language subset:
-
-```text
-typed Eristavi IR → Universal IR → direct x86-64 → native
-```
-
-A second ARM64 backend already consumes the same Universal IR, and serialized interface/object pairs prove that reusable Eristavi modules no longer require live Python analyzer state or dependency source for supported direct linkage.
-
-The frozen source model survived this work without redesign.
-
-> **Audit verdict:** Eristavi is now a broad pre-0.1 bootstrap compiler with a frozen source language, a mature reference/generated-C path, versioned source-independent module contracts and concrete Universal-IR objects, a substantially capable direct x86-64 backend, an independent ARM64 consumer of the same lower IR, and a 216-test multi-toolchain conformance suite. The next phase should prioritize production direct-runtime memory management, direct Unicode Text-view parity, reusable generic object templates, ARM64 parity/native CI and broader target/platform conformance—not new source syntax.
+> **Small language. Rich libraries. Powerful compiler. Predictable runtime. Universal architecture.**
