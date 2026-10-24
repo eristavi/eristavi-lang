@@ -1,0 +1,9 @@
+public type ParserState {
+    index Int;
+}
+
+public function make() returns identity ParserState {
+    return identity ParserState {
+        index = 0;
+    };
+}

@@ -9,6 +9,17 @@ class BackendTests(unittest.TestCase):
             root=Path(td); src=root/'app.eri'; exe=root/'app'; src.write_text(source,encoding='utf-8')
             self.assertEqual(build_native(src,exe,root),0)
             return subprocess.run([str(exe)],capture_output=True,text=True)
+    def test_native_nominal_count_field_keeps_its_declared_type(self):
+        p=self.compile_run('type Counter { count Text; } let ordinary be Counter { count="ordinary"; }; '
+                           'let shared be identity Counter { count="identity"; }; '
+                           'output(ordinary.count); output(shared.count);')
+        self.assertEqual(p.returncode,0); self.assertEqual(p.stdout,'ordinary\nidentity\n')
+    def test_native_try_no_value_call_propagates_checked_failure(self):
+        p=self.compile_run('error E { message Text; } '
+                           'function risky() fails E { fail E { message="expected"; }; } '
+                           'function outer() fails E { try risky(); } '
+                           'outer() else error E { output(error.message); };')
+        self.assertEqual(p.returncode,0); self.assertEqual(p.stdout,'expected\n')
     def test_native_hello(self):
         p=self.compile_run('let x be 40; let y be 2; output(x+y);'); self.assertEqual(p.returncode,0); self.assertEqual(p.stdout,'42\n')
     def test_native_function_recursion(self):

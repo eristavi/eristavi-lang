@@ -139,7 +139,7 @@ class Lexer:
             if ch == '"':
                 self._text()
                 continue
-            if ch.isdigit():
+            if ch in "0123456789":
                 self._number()
                 continue
             if self._is_identifier_start(ch):
@@ -239,7 +239,7 @@ class Lexer:
         self._decimal_digits(start)
         is_float = False
         if self._peek() == ".":
-            if not self._peek(1).isdigit():
+            if self._peek(1) not in "0123456789":
                 raise LexError("a decimal point in a Float literal requires digits on both sides", self._loc())
             is_float = True
             self._advance()
@@ -249,7 +249,7 @@ class Lexer:
             self._advance()
             if self._peek() in "+-":
                 self._advance()
-            if not self._peek().isdigit():
+            if self._peek() not in "0123456789":
                 raise LexError("Float exponent requires decimal digits", self._loc())
             self._decimal_digits(start)
 
@@ -263,10 +263,10 @@ class Lexer:
             self.tokens.append(Token(TokenKind.INTEGER, raw, int(clean, 10), start))
 
     def _decimal_digits(self, start: SourceLocation) -> None:
-        self._digit_sequence(lambda c: c.isdigit(), start, "decimal")
+        self._digit_sequence(lambda c: c in "0123456789", start, "decimal")
 
     def _digits_for_base(self, base: int, start: SourceLocation) -> None:
-        allowed = (lambda c: c in "01") if base == 2 else (lambda c: c.isdigit() or c.lower() in "abcdef")
+        allowed = (lambda c: c in "01") if base == 2 else (lambda c: c in "0123456789" or c.lower() in "abcdef")
         self._digit_sequence(allowed, start, "binary" if base == 2 else "hexadecimal")
 
     def _digit_sequence(self, allowed, start: SourceLocation, label: str) -> None:
@@ -287,6 +287,7 @@ class Lexer:
                 break
 
     def _text(self) -> None:
+        start_i = self.i
         start = self._loc()
         self._advance()
         value: list[str] = []
@@ -325,7 +326,7 @@ class Lexer:
         if self._at_end():
             raise LexError("unterminated Text literal", start)
         self._advance()
-        self.tokens.append(Token(TokenKind.TEXT, "", "".join(value), start))
+        self.tokens.append(Token(TokenKind.TEXT, self.source[start_i:self.i], "".join(value), start))
 
     def _symbol(self) -> None:
         start = self._loc()

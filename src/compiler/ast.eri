@@ -1,0 +1,82 @@
+public type Node {
+    kind Int;
+    token Int;
+    first maybe identity Node;
+    second maybe identity Node;
+    third maybe identity Node;
+    next maybe identity Node;
+    text Text;
+    extra Int;
+    flag Bool;
+}
+
+public type Chain {
+    first maybe identity Node;
+    last identity Node;
+}
+
+public function program() returns Int { return 0; }
+public function importDecl() returns Int { return 1; }
+public function functionDecl() returns Int { return 2; }
+public function parameter() returns Int { return 3; }
+public function typeDecl() returns Int { return 4; }
+public function errorDecl() returns Int { return 5; }
+public function fieldDecl() returns Int { return 6; }
+public function block() returns Int { return 7; }
+public function returnStmt() returns Int { return 8; }
+public function failStmt() returns Int { return 9; }
+public function letStmt() returns Int { return 10; }
+public function ifStmt() returns Int { return 11; }
+public function whileStmt() returns Int { return 12; }
+public function forStmt() returns Int { return 13; }
+public function withStmt() returns Int { return 14; }
+public function assignStmt() returns Int { return 15; }
+public function expressionStmt() returns Int { return 16; }
+public function typeRef() returns Int { return 17; }
+public function errorHandler() returns Int { return 18; }
+public function handledExpr() returns Int { return 19; }
+public function binaryExpr() returns Int { return 20; }
+public function unaryExpr() returns Int { return 21; }
+public function tryExpr() returns Int { return 22; }
+public function identityExpr() returns Int { return 23; }
+public function callExpr() returns Int { return 24; }
+public function memberExpr() returns Int { return 25; }
+public function indexExpr() returns Int { return 26; }
+public function constructionExpr() returns Int { return 27; }
+public function fieldInit() returns Int { return 28; }
+public function literalExpr() returns Int { return 29; }
+public function noneExpr() returns Int { return 30; }
+public function listExpr() returns Int { return 31; }
+public function nameExpr() returns Int { return 32; }
+
+public function make(kind Int, token Int, first maybe identity Node, second maybe identity Node, third maybe identity Node, text Text, extra Int, flag Bool) returns identity Node {
+    return identity Node {
+        kind = kind;
+        token = token;
+        first = first;
+        second = second;
+        third = third;
+        next = none;
+        text = text;
+        extra = extra;
+        flag = flag;
+    };
+}
+
+public function emptyChain() returns identity Chain {
+    let sentinel be make(-1, 0, none, none, none, "", 0, false);
+    return identity Chain {
+        first = none;
+        last = sentinel;
+    };
+}
+
+public function add(chain identity Chain, node identity Node) {
+    if chain.first == none {
+        chain.first = node;
+        chain.last = node;
+        return;
+    }
+    chain.last.next = node;
+    chain.last = node;
+}

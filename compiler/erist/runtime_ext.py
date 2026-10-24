@@ -12,8 +12,9 @@ from .runtime import (
     copy_value,
     file_error,
 )
-from .syntax import CallExpr, IndexExpr, MemberExpr, NameExpr
-from .unicode_support import grapheme_clusters, scalar_texts, utf8_bytes
+from .syntax import CallExpr, FunctionDecl, IndexExpr, MemberExpr, NameExpr
+from .unicode_support import (grapheme_clusters, scalar_texts, utf8_bytes,
+                              is_xid_start, is_xid_continue, normalize_nfc)
 
 
 @dataclass(frozen=True)
@@ -59,6 +60,48 @@ class Interpreter(BaseInterpreter):
         return super()._expr(e)
 
     def _call(self, e: CallExpr):
+        if (isinstance(e.callee, MemberExpr)
+                and isinstance(e.callee.base, NameExpr)
+                and self.imports.get(e.callee.base.name) == ("std", "unicode")):
+            value = self._expr(e.arguments[0])
+            name = e.callee.name
+            if name == "isIdentifierStart":
+                return value == "_" or is_xid_start(value)
+            if name == "isIdentifierContinue":
+                return value == "_" or is_xid_continue(value)
+            if name == "normalizeNfc":
+                return normalize_nfc(value)
+            if name == "fromScalar":
+                if value < 0 or value > 0x10FFFF or 0xD800 <= value <= 0xDFFF:
+                    raise RuntimeFault("invalid Unicode scalar value", e.location)
+                return chr(value)
+            raise RuntimeFault(f"unknown std.unicode function {name!r}", e.location)
+
+        if (
+            isinstance(e.callee, MemberExpr)
+            and isinstance(e.callee.base, NameExpr)
+            and e.callee.base.name in self.imported_modules
+        ):
+            mod = self.imported_modules[e.callee.base.name]
+            fn = next(
+                (
+                    item
+                    for item in mod.program.statements
+                    if isinstance(item, FunctionDecl)
+                    and item.name == e.callee.name
+                    and item.public
+                ),
+                None,
+            )
+            if fn is None:
+                raise RuntimeFault(
+                    f"module {e.callee.base.name!r} has no public function {e.callee.name!r}",
+                    e.location,
+                )
+            child = type(self)(self.output_sink, mod.module_id, mod.imports)
+            child._prepare(mod.program)
+            return child._call_function(fn, [self._expr(argument) for argument in e.arguments])
+
         if (
             isinstance(e.callee, MemberExpr)
             and isinstance(e.callee.base, NameExpr)

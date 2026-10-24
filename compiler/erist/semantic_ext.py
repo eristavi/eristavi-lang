@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from .diagnostics import SemanticError
+from .stdlib import UNICODE_FUNCTIONS
 from .semantic import Analyzer as BaseAnalyzer, STD_FILE_ERROR
-from .syntax import CallExpr, IndexExpr, MemberExpr, NameExpr
+from .syntax import CallExpr, ForStmt, IndexExpr, MemberExpr, NameExpr
 from .typesys import (
     BOOL,
     INT,
@@ -11,13 +12,26 @@ from .typesys import (
     TEXT_BYTES,
     TEXT_CHARACTERS,
     TEXT_SCALARS,
+    ListType,
+    NoValueType,
     TextViewType,
+    TypeVar,
     resolve,
+    unify,
 )
 
 
 class Analyzer(BaseAnalyzer):
     """Frontend extensions for pinned Unicode/Text and small stdlib additions."""
+
+    def _statement(self, stmt):
+        if isinstance(stmt, ForStmt):
+            raw_iterable = self._expr(stmt.iterable, True, False)
+            iterable = resolve(raw_iterable)
+            if isinstance(iterable, TypeVar):
+                element = TypeVar("element")
+                unify(raw_iterable, ListType(element))
+        return super()._statement(stmt)
 
     def _member(self, expr, allow_checked):
         bt = resolve(self._expr(expr.base, True, allow_checked))
@@ -42,6 +56,59 @@ class Analyzer(BaseAnalyzer):
         return super()._member(expr, allow_checked)
 
     def _call(self, expr: CallExpr, value_required, allow_checked):
+        if (isinstance(expr.callee, MemberExpr)
+                and isinstance(expr.callee.base, NameExpr)
+                and self.imports.get(expr.callee.base.name) == ("std", "unicode")):
+            contract = UNICODE_FUNCTIONS.get(expr.callee.name)
+            if contract is None:
+                raise SemanticError(f"unknown std.unicode function {expr.callee.name!r}", expr.location)
+            argument_type, result_type = contract
+            if len(expr.arguments) != 1:
+                raise SemanticError(f"unicode.{expr.callee.name} requires one argument", expr.location)
+            argument = expr.arguments[0]
+            actual = self._expr(argument, True, allow_checked)
+            self._require_type(actual, argument_type, argument.location,
+                               f"unicode.{expr.callee.name} requires {argument_type.name}")
+            return self._record(expr, result_type, self.expr_failures.get(id(argument), set()))
+
+        if (
+            isinstance(expr.callee, MemberExpr)
+            and isinstance(expr.callee.base, NameExpr)
+            and expr.callee.base.name in self.imported_modules
+        ):
+            mod = self.imported_modules[expr.callee.base.name]
+            fn = mod.analyzer.functions.get(expr.callee.name)
+            if fn is None or not fn.declaration.public:
+                raise SemanticError(
+                    f"module {expr.callee.base.name!r} does not expose public function {expr.callee.name!r}",
+                    expr.location,
+                )
+            if len(expr.arguments) != len(fn.typed_parameters):
+                raise SemanticError(
+                    f"function {expr.callee.name!r} expects {len(fn.typed_parameters)} argument(s), got {len(expr.arguments)}",
+                    expr.location,
+                )
+            args = []
+            failures = set()
+            for i, (argument, declared_type) in enumerate(zip(expr.arguments, fn.typed_parameters), 1):
+                actual_type = self._expr(argument, True, allow_checked)
+                failures |= self.expr_failures.get(id(argument), set())
+                if declared_type is not None:
+                    self._assign_or_error(declared_type, actual_type, argument.location, f"argument {i}")
+                    args.append(declared_type)
+                else:
+                    args.append(actual_type)
+            failures |= fn.fails
+            if fn.fails and not allow_checked:
+                raise SemanticError(
+                    f"call to {expr.callee.base.name}.{expr.callee.name} may fail with {', '.join(sorted(fn.fails))}; handle it or use try",
+                    expr.location,
+                )
+            result_type = mod.analyzer._ensure_function(fn, args, value_required)
+            if value_required and isinstance(resolve(result_type), NoValueType):
+                raise SemanticError("a no-value function call cannot be used where a value is required", expr.location)
+            return self._record(expr, result_type, failures)
+
         if (
             isinstance(expr.callee, MemberExpr)
             and isinstance(expr.callee.base, NameExpr)
@@ -84,7 +151,8 @@ class Analyzer(BaseAnalyzer):
 
     def _target_type(self, target, for_write=False):
         if isinstance(target, IndexExpr):
-            bt = resolve(self._expr(target.base, True, False))
+            raw_bt = self._expr(target.base, True, False)
+            bt = resolve(raw_bt)
             if isinstance(bt, TextViewType):
                 self._require_type(
                     self._expr(target.index, True, False),
@@ -95,6 +163,19 @@ class Analyzer(BaseAnalyzer):
                 if for_write:
                     raise SemanticError("Text views are read-only", target.location)
                 return INT if bt.kind == "bytes" else TEXT
+
+            if isinstance(bt, TypeVar):
+                element = TypeVar("element")
+                shaped = ListType(element)
+                unify(raw_bt, shaped)
+                self._require_type(
+                    self._expr(target.index, True, False),
+                    INT,
+                    target.index.location,
+                    "List index must have type Int",
+                )
+                return element
+
         if isinstance(target, MemberExpr):
             bt = resolve(self._expr(target.base, True, False))
             if isinstance(bt, TextViewType):

@@ -4,6 +4,35 @@
 >
 > **Scope:** frozen pre-0.1 source contract, bootstrap/reference runtime, generated-C path, verified Universal IR, direct x86-64 GC/runtime with contract-driven physical register allocation and spill-frame compaction, native ARM64 runtime, module artifacts/caching, JavaScript/WebAssembly consumers, Unicode conformance and hosted CI.
 
+## Self-hosting frontend update
+
+The current change set repairs the Stage-2 parser recursion failure by identifying
+inferred specializations by alpha-equivalent type relationships, not fresh internal
+variable ids. Recursive result inference still requires an explicit result contract.
+Shared relationships are retained when cloning a signature, and concrete inferred
+specializations are emitted only once. Typed call lookup respects declared optional
+parameter coercions.
+
+The Eristavi lexer now checks numeric separators, decimal leading zeroes, Float
+syntax, Unicode identifiers/NFC, scalar escapes, comments and BOM placement.
+`std.unicode` supplies pinned identifier predicates, NFC and scalar construction in
+the reference/C paths. Its C data is generated from pinned dependencies and tested
+against every canonical decomposition and Hangul syllable, identifier-range
+boundaries and ordering/composition edge cases. This library has not yet been
+implemented by direct native, JS or Wasm backends; `erist build` is the supported
+compiled migration route.
+
+The Eristavi lexer and parser both compile and execute through C. Tests compare
+lexical output/rejections/locations and expression precedence against Stage-0.
+The suite also covers no-value `try` propagation and correct lowering of ordinary
+fields named `count`. Mutable AST links use local optional snapshots and the
+existing presence checks; compiler convenience does not introduce new field
+narrowing semantics. Python remains Stage-0, and full self-building remains open.
+
+The suite now contains **300 tests**. Hosted results for this revision are tracked
+in the pull request; historical baseline results below are not a substitute for
+checking the current commit.
+
 ## 1. Executive result
 
 Eristavi is now a **broad working pre-0.1 compiler/toolchain with two native CPU backends, a portable C path, JavaScript/WebAssembly consumers, reusable module artifacts, automatic memory reclamation on the primary x86-64 direct runtime and a verified contract-driven physical-register allocation path**.
@@ -28,7 +57,7 @@ At this audit point:
 - ES2020 JavaScript supports ordinary aggregate/value semantics in addition to scalars/functions;
 - WebAssembly text supports the scalar/function/control slice plus Text through an explicit UTF-8/`externref` host ABI;
 - CI runs the complete official Unicode-17 `GraphemeBreakTest` fixture against the pinned reference segmenter;
-- the repository suite contains **272 tests** and passes in all four hosted CI jobs.
+- the repository suite contains **300 tests**; current-commit results are recorded in GitHub Actions.
 
 The governing target rule remains:
 
@@ -301,7 +330,7 @@ Remaining Wasm work includes aggregate values, checked failures, resources, Text
 The current suite contains:
 
 ```text
-272 tests
+300 tests
 ```
 
 The audited matrix is:
@@ -311,7 +340,7 @@ The audited matrix is:
 - Clang / ARM64 Ubuntu / `-O2`;
 - Clang / ARM64 macOS / `-O2`.
 
-All four jobs pass on the verified allocator/frame-compaction change set.
+The allocator/frame-compaction baseline passed all four jobs. The expanded self-hosting change set must pass the same matrix before promotion.
 
 On x86-64 Linux, ARM-native tests are skipped because the ABI does not match. The ARM64 Linux job executes those same native cases. The matrix also runs the official Unicode-17 grapheme vectors.
 
@@ -380,7 +409,7 @@ The following remain outside the frozen pre-0.1 source scope unless real program
 - reflection/macros;
 - package registry;
 - stable bytecode/JIT;
-- self-hosting;
+- a complete self-hosted toolchain (the lexer/parser migration is active);
 - advanced low-level/unsafe features.
 
 ## 16. Audit verdict
@@ -402,6 +431,6 @@ Eristavi now has:
 - expanded JavaScript ordinary-value semantics;
 - an explicit Text-aware WebAssembly host contract;
 - full official Unicode-17 grapheme reference conformance;
-- a **272-test four-platform CI matrix**.
+- a **300-test four-platform CI matrix**.
 
 The project has moved firmly from language-prototype construction into **compiler/runtime maturation and cross-target conformance work**. The remaining gaps are engineering depth and target parity, not evidence that the core source-language contract needs to be reopened.

@@ -147,11 +147,18 @@ class Lowerer:
     def _specialized_name(self,name:str,param_names:list[str])->str:
         base=self._function_name(name); return base+"$"+"$".join(param_names)
     def _concrete_specs(self,fn):
-        out=[]
+        out=[]; seen={}
         for spec in fn.specializations.values():
             if spec.state!="done": continue
             params=[resolve(t) for t in spec.parameter_types]; ret=resolve(spec.return_type or NO_VALUE)
             if any(has_unresolved(t) for t in params) or has_unresolved(ret): continue
+            key=tuple(describe(t) for t in params)
+            result=describe(ret)
+            if key in seen:
+                if seen[key]!=result:
+                    raise SemanticError(f"inconsistent inferred results for function {fn.declaration.name!r}",fn.declaration.location)
+                continue
+            seen[key]=result
             out.append(spec)
         return out
     def _functions(self,f:FunctionDecl)->list[IRFunction]:
@@ -263,7 +270,7 @@ class Lowerer:
             bt=resolve(self._expr_type(e.base))
             if isinstance(bt,ListType): return resolve(bt.element)
         if isinstance(e,MemberExpr):
-            if e.name=="count": return INT
+            if e.name=="count" and isinstance(resolve(self._expr_type(e.base)),ListType): return INT
             return self._ast_type(e)
         if isinstance(e,ConstructionExpr):
             known=self.a.expr_types.get(id(e))
@@ -296,7 +303,8 @@ class Lowerer:
         raise SemanticError("cannot derive concrete expression type for generic IR specialization",getattr(e,"location",None))
 
     def _spec_return(self,fn,arg_types,loc):
-        key=tuple(describe(resolve(t)) for t in arg_types); spec=fn.specializations.get(key)
+        key=tuple(describe(resolve(declared if declared is not None else actual))
+                  for declared,actual in zip(fn.typed_parameters,arg_types)); spec=fn.specializations.get(key)
         if spec is None or spec.state!="done" or spec.return_type is None: raise SemanticError(f"no analyzed concrete specialization for function {fn.declaration.name!r} with ({', '.join(key)})",loc)
         return resolve(spec.return_type)
 
@@ -345,7 +353,7 @@ class Lowerer:
         if isinstance(e,ListExpr): return IRList(semantic_t,e.location,[self._expr(x) for x in e.elements])
         if isinstance(e,IndexExpr): return IRIndex(semantic_t,e.location,self._expr(e.base),self._expr(e.index))
         if isinstance(e,MemberExpr):
-            if e.name=="count": return IRCount(semantic_t,e.location,self._expr(e.base))
+            if e.name=="count" and isinstance(resolve(self._expr_type(e.base)),ListType): return IRCount(semantic_t,e.location,self._expr(e.base))
             return self._member_expr(e)
         if isinstance(e,ConstructionExpr):
             info=self.a.structs.get(semantic_t); fs=[]

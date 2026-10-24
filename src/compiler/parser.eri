@@ -1,0 +1,686 @@
+import compiler.ast;
+import compiler.token;
+import compiler.diagnostic;
+import compiler.parser_state;
+
+function tokenAt(tokens, index Int) returns token.Token {
+    return tokens[index];
+}
+
+function current(tokens, state identity parser_state.ParserState) returns token.Token {
+    return tokenAt(tokens, state.index);
+}
+
+function peek(tokens, state identity parser_state.ParserState, offset Int) returns token.Token {
+    let index be state.index + offset;
+    if index >= tokens.count {
+        index = tokens.count - 1;
+    }
+    return tokenAt(tokens, index);
+}
+
+function check(tokens, state identity parser_state.ParserState, kind Int) returns Bool {
+    return current(tokens, state).kind == kind;
+}
+
+function advance(tokens, state identity parser_state.ParserState) returns token.Token {
+    let value be current(tokens, state);
+    if value.kind != token.eof() {
+        state.index = state.index + 1;
+    }
+    return value;
+}
+
+function match(tokens, state identity parser_state.ParserState, kind Int) returns Bool {
+    if check(tokens, state, kind) {
+        advance(tokens, state);
+        return true;
+    }
+    return false;
+}
+
+function consume(tokens, state identity parser_state.ParserState, kind Int, message Text) returns token.Token fails diagnostic.ParseError {
+    if check(tokens, state, kind) {
+        return advance(tokens, state);
+    }
+    let found be current(tokens, state);
+    fail diagnostic.ParseError {
+        message = message;
+        line = found.line;
+        column = found.column;
+    };
+}
+
+function containsText(values, wanted Text) returns Bool {
+    for value in values {
+        if value == wanted {
+            return true;
+        }
+    }
+    return false;
+}
+
+function knownTypes(tokens) {
+    let names be [];
+    let index be 0;
+    while index < tokens.count - 1 {
+        let item be tokenAt(tokens, index);
+        let nextItem be tokenAt(tokens, index + 1);
+        if item.kind == token.typeKeyword() and nextItem.kind == token.identifier() {
+            names.add(nextItem.value);
+        }
+        if item.kind == token.errorKeyword() and nextItem.kind == token.identifier() {
+            let declaration be true;
+            if index > 0 and tokenAt(tokens, index - 1).kind == token.elseKeyword() {
+                declaration = false;
+            }
+            if declaration {
+                names.add(nextItem.value);
+            }
+        }
+        index = index + 1;
+    }
+    return names;
+}
+
+function importAliases(tokens) {
+    let aliases be [];
+    let index be 0;
+    while index < tokens.count {
+        if tokenAt(tokens, index).kind == token.importKeyword() {
+            let cursor be index + 1;
+            let lastName be "";
+            let aliasName be "";
+            while cursor < tokens.count and tokenAt(tokens, cursor).kind != token.semicolon() {
+                let item be tokenAt(tokens, cursor);
+                if item.kind == token.asKeyword() and cursor + 1 < tokens.count {
+                    let aliasToken be tokenAt(tokens, cursor + 1);
+                    if aliasToken.kind == token.identifier() {
+                        aliasName = aliasToken.value;
+                    }
+                    cursor = tokens.count;
+                }
+                if cursor < tokens.count and item.kind == token.identifier() {
+                    lastName = item.value;
+                }
+                cursor = cursor + 1;
+            }
+            if aliasName != "" {
+                aliases.add(aliasName);
+            }
+            if aliasName == "" and lastName != "" {
+                aliases.add(lastName);
+            }
+        }
+        index = index + 1;
+    }
+    return aliases;
+}
+
+function qualifiedIdentifier(tokens, state identity parser_state.ParserState, message Text) returns Text fails diagnostic.ParseError {
+    let first be try consume(tokens, state, token.identifier(), message);
+    let path be first.value;
+    while match(tokens, state, token.dot()) {
+        let part be try consume(tokens, state, token.identifier(), "expected identifier after '.'");
+        path = path + "." + part.value;
+    }
+    return path;
+}
+
+function parseTypeRef(tokens, state identity parser_state.ParserState) returns identity ast.Node fails diagnostic.ParseError {
+    let start be state.index;
+    let isMaybe be match(tokens, state, token.maybeKeyword());
+    let isIdentity be match(tokens, state, token.identityKeyword());
+    if isIdentity and check(tokens, state, token.maybeKeyword()) {
+        let found be current(tokens, state);
+        fail diagnostic.ParseError {
+            message = "use 'maybe identity T', not 'identity maybe T'";
+            line = found.line;
+            column = found.column;
+        };
+    }
+    let path be try qualifiedIdentifier(tokens, state, "expected type name");
+    let flags be 0;
+    if isMaybe { flags = flags + 1; }
+    if isIdentity { flags = flags + 2; }
+    return ast.make(ast.typeRef(), start, none, none, none, path, flags, false);
+}
+
+function parseErrorTypeRef(tokens, state identity parser_state.ParserState) returns identity ast.Node fails diagnostic.ParseError {
+    let start be state.index;
+    let path be try qualifiedIdentifier(tokens, state, "expected checked error type");
+    return ast.make(ast.typeRef(), start, none, none, none, path, 0, false);
+}
+
+function expressionRootName(root identity ast.Node) returns Text {
+    if root.kind == ast.memberExpr() {
+        let base be root.first;
+        if base != none { return expressionRootName(base); }
+    }
+    if root.kind == ast.nameExpr() { return root.text; }
+    return "";
+}
+
+function expressionQualifiedPath(root identity ast.Node) returns Text {
+    if root.kind == ast.nameExpr() { return root.text; }
+    if root.kind == ast.memberExpr() {
+        let parent be root.first;
+        if parent != none {
+            let base be expressionQualifiedPath(parent);
+            if base != "" { return base + "." + root.text; }
+        }
+    }
+    return "";
+}
+
+function parsePrimary(tokens, state identity parser_state.ParserState, types, aliases) returns identity ast.Node fails diagnostic.ParseError {
+    let start be state.index;
+    let item be current(tokens, state);
+
+    if match(tokens, state, token.integer()) {
+        return ast.make(ast.literalExpr(), start, none, none, none, item.lexeme, token.integer(), false);
+    }
+    if match(tokens, state, token.float()) {
+        return ast.make(ast.literalExpr(), start, none, none, none, item.lexeme, token.float(), false);
+    }
+    if match(tokens, state, token.text()) {
+        return ast.make(ast.literalExpr(), start, none, none, none, item.value, token.text(), false);
+    }
+    if match(tokens, state, token.trueKeyword()) {
+        return ast.make(ast.literalExpr(), start, none, none, none, "true", token.trueKeyword(), true);
+    }
+    if match(tokens, state, token.falseKeyword()) {
+        return ast.make(ast.literalExpr(), start, none, none, none, "false", token.falseKeyword(), false);
+    }
+    if match(tokens, state, token.noneKeyword()) {
+        return ast.make(ast.noneExpr(), start, none, none, none, "", 0, false);
+    }
+    if match(tokens, state, token.leftBracket()) {
+        let elements be ast.emptyChain();
+        let more be not check(tokens, state, token.rightBracket());
+        while more {
+            ast.add(elements, try parseExpression(tokens, state, types, aliases));
+            if not match(tokens, state, token.comma()) {
+                more = false;
+            }
+        }
+        try consume(tokens, state, token.rightBracket(), "expected ']' after List literal");
+        return ast.make(ast.listExpr(), start, elements.first, none, none, "", 0, false);
+    }
+    if match(tokens, state, token.identifier()) {
+        return ast.make(ast.nameExpr(), start, none, none, none, item.value, 0, false);
+    }
+    if match(tokens, state, token.errorKeyword()) {
+        return ast.make(ast.nameExpr(), start, none, none, none, "error", 0, false);
+    }
+    if match(tokens, state, token.leftParen()) {
+        let grouped be try parseExpression(tokens, state, types, aliases);
+        try consume(tokens, state, token.rightParen(), "expected ')' after grouped expression");
+        return grouped;
+    }
+
+    fail diagnostic.ParseError {
+        message = "expected expression";
+        line = item.line;
+        column = item.column;
+    };
+}
+
+function parseConstruction(tokens, state identity parser_state.ParserState, types, aliases, path Text, start Int) returns identity ast.Node fails diagnostic.ParseError {
+    try consume(tokens, state, token.leftBrace(), "expected '{' for construction");
+    let fields be ast.emptyChain();
+    while not check(tokens, state, token.rightBrace()) {
+        if check(tokens, state, token.eof()) {
+            let found be current(tokens, state);
+            fail diagnostic.ParseError {
+                message = "unterminated construction";
+                line = found.line;
+                column = found.column;
+            };
+        }
+        let fieldStart be state.index;
+        let name be try consume(tokens, state, token.identifier(), "expected field name in construction");
+        try consume(tokens, state, token.equal(), "expected '=' after field name");
+        let value be try parseExpression(tokens, state, types, aliases);
+        try consume(tokens, state, token.semicolon(), "expected ';' after field initializer");
+        ast.add(fields, ast.make(ast.fieldInit(), fieldStart, value, none, none, name.value, 0, false));
+    }
+    advance(tokens, state);
+    return ast.make(ast.constructionExpr(), start, fields.first, none, none, path, 0, false);
+}
+
+function parsePostfix(tokens, state identity parser_state.ParserState, types, aliases) returns identity ast.Node fails diagnostic.ParseError {
+    let root be try parsePrimary(tokens, state, types, aliases);
+    let keepGoing be true;
+    while keepGoing {
+        let handled be false;
+        if check(tokens, state, token.leftBrace()) {
+            let path be expressionQualifiedPath(root);
+            let rootName be expressionRootName(root);
+            if path != "" and (containsText(types, rootName) or containsText(aliases, rootName)) {
+                root = try parseConstruction(tokens, state, types, aliases, path, root.token);
+                handled = true;
+            }
+        }
+        if not handled and match(tokens, state, token.leftParen()) {
+            let callStart be state.index - 1;
+            let arguments be ast.emptyChain();
+            let more be not check(tokens, state, token.rightParen());
+            while more {
+                ast.add(arguments, try parseExpression(tokens, state, types, aliases));
+                if not match(tokens, state, token.comma()) {
+                    more = false;
+                }
+            }
+            try consume(tokens, state, token.rightParen(), "expected ')' after arguments");
+            root = ast.make(ast.callExpr(), callStart, root, arguments.first, none, "", 0, false);
+            handled = true;
+        }
+        if not handled and match(tokens, state, token.dot()) {
+            let memberStart be state.index;
+            let name be try consume(tokens, state, token.identifier(), "expected member name after '.'");
+            root = ast.make(ast.memberExpr(), memberStart, root, none, none, name.value, 0, false);
+            handled = true;
+        }
+        if not handled and match(tokens, state, token.leftBracket()) {
+            let indexStart be state.index - 1;
+            let indexNode be try parseExpression(tokens, state, types, aliases);
+            try consume(tokens, state, token.rightBracket(), "expected ']' after index");
+            root = ast.make(ast.indexExpr(), indexStart, root, indexNode, none, "", 0, false);
+            handled = true;
+        }
+        if not handled {
+            keepGoing = false;
+        }
+    }
+    return root;
+}
+
+function parsePrefix(tokens, state identity parser_state.ParserState, types, aliases) returns identity ast.Node fails diagnostic.ParseError {
+    let start be state.index;
+    if match(tokens, state, token.minus()) {
+        return ast.make(ast.unaryExpr(), start, try parsePrefix(tokens, state, types, aliases), none, none, "-", 0, false);
+    }
+    if match(tokens, state, token.tryKeyword()) {
+        return ast.make(ast.tryExpr(), start, try parsePrefix(tokens, state, types, aliases), none, none, "", 0, false);
+    }
+    if match(tokens, state, token.identityKeyword()) {
+        return ast.make(ast.identityExpr(), start, try parsePrefix(tokens, state, types, aliases), none, none, "", 0, false);
+    }
+    return try parsePostfix(tokens, state, types, aliases);
+}
+
+function parseMultiplicative(tokens, state identity parser_state.ParserState, types, aliases) returns identity ast.Node fails diagnostic.ParseError {
+    let left be try parsePrefix(tokens, state, types, aliases);
+    while check(tokens, state, token.star()) or check(tokens, state, token.slash()) or check(tokens, state, token.percent()) {
+        let op be advance(tokens, state);
+        let right be try parsePrefix(tokens, state, types, aliases);
+        left = ast.make(ast.binaryExpr(), state.index - 1, left, right, none, op.lexeme, 0, false);
+    }
+    return left;
+}
+
+function parseAdditive(tokens, state identity parser_state.ParserState, types, aliases) returns identity ast.Node fails diagnostic.ParseError {
+    let left be try parseMultiplicative(tokens, state, types, aliases);
+    while check(tokens, state, token.plus()) or check(tokens, state, token.minus()) {
+        let op be advance(tokens, state);
+        let right be try parseMultiplicative(tokens, state, types, aliases);
+        left = ast.make(ast.binaryExpr(), state.index - 1, left, right, none, op.lexeme, 0, false);
+    }
+    return left;
+}
+
+function isComparisonKind(kind Int) returns Bool {
+    return kind == token.equalEqual() or kind == token.bangEqual() or kind == token.less() or kind == token.lessEqual() or kind == token.greater() or kind == token.greaterEqual();
+}
+
+function parseComparison(tokens, state identity parser_state.ParserState, types, aliases) returns identity ast.Node fails diagnostic.ParseError {
+    let left be try parseAdditive(tokens, state, types, aliases);
+    if isComparisonKind(current(tokens, state).kind) {
+        let op be advance(tokens, state);
+        let right be try parseAdditive(tokens, state, types, aliases);
+        left = ast.make(ast.binaryExpr(), state.index - 1, left, right, none, op.lexeme, 0, false);
+        if isComparisonKind(current(tokens, state).kind) {
+            let found be current(tokens, state);
+            fail diagnostic.ParseError {
+                message = "comparison chaining is not part of pre-0.1; use 'and' explicitly";
+                line = found.line;
+                column = found.column;
+            };
+        }
+    }
+    return left;
+}
+
+function parseNot(tokens, state identity parser_state.ParserState, types, aliases) returns identity ast.Node fails diagnostic.ParseError {
+    let start be state.index;
+    if match(tokens, state, token.notKeyword()) {
+        return ast.make(ast.unaryExpr(), start, try parseNot(tokens, state, types, aliases), none, none, "not", 0, false);
+    }
+    return try parseComparison(tokens, state, types, aliases);
+}
+
+function parseAnd(tokens, state identity parser_state.ParserState, types, aliases) returns identity ast.Node fails diagnostic.ParseError {
+    let left be try parseNot(tokens, state, types, aliases);
+    while match(tokens, state, token.andKeyword()) {
+        let right be try parseNot(tokens, state, types, aliases);
+        left = ast.make(ast.binaryExpr(), state.index - 1, left, right, none, "and", 0, false);
+    }
+    return left;
+}
+
+function parseOr(tokens, state identity parser_state.ParserState, types, aliases) returns identity ast.Node fails diagnostic.ParseError {
+    let left be try parseAnd(tokens, state, types, aliases);
+    while match(tokens, state, token.orKeyword()) {
+        let right be try parseAnd(tokens, state, types, aliases);
+        left = ast.make(ast.binaryExpr(), state.index - 1, left, right, none, "or", 0, false);
+    }
+    return left;
+}
+
+function parseExpression(tokens, state identity parser_state.ParserState, types, aliases) returns identity ast.Node fails diagnostic.ParseError {
+    return try parseOr(tokens, state, types, aliases);
+}
+
+function parseBlockAfterOpen(tokens, state identity parser_state.ParserState, types, aliases, start Int) returns identity ast.Node fails diagnostic.ParseError {
+    let statements be ast.emptyChain();
+    while not check(tokens, state, token.rightBrace()) {
+        if check(tokens, state, token.eof()) {
+            let found be current(tokens, state);
+            fail diagnostic.ParseError {
+                message = "unterminated block; expected '}'";
+                line = found.line;
+                column = found.column;
+            };
+        }
+        ast.add(statements, try parseStatement(tokens, state, types, aliases));
+    }
+    advance(tokens, state);
+    return ast.make(ast.block(), start, statements.first, none, none, "", 0, false);
+}
+
+function parseHandledTail(tokens, state identity parser_state.ParserState, types, aliases, expression identity ast.Node) returns identity ast.Node fails diagnostic.ParseError {
+    let handlers be ast.emptyChain();
+    while check(tokens, state, token.elseKeyword()) and peek(tokens, state, 1).kind == token.errorKeyword() {
+        let handlerStart be state.index;
+        advance(tokens, state);
+        advance(tokens, state);
+        let errorType maybe identity ast.Node be none;
+        if not check(tokens, state, token.leftBrace()) {
+            errorType = try parseErrorTypeRef(tokens, state);
+        }
+        let blockStart be state.index;
+        try consume(tokens, state, token.leftBrace(), "expected '{' after else error handler");
+        let body be try parseBlockAfterOpen(tokens, state, types, aliases, blockStart);
+        ast.add(handlers, ast.make(ast.errorHandler(), handlerStart, errorType, body, none, "", 0, false));
+    }
+    if handlers.first != none {
+        return ast.make(ast.handledExpr(), expression.token, expression, handlers.first, none, "", 0, false);
+    }
+    return expression;
+}
+
+function parseValueExpression(tokens, state identity parser_state.ParserState, types, aliases) returns identity ast.Node fails diagnostic.ParseError {
+    let expression be try parseExpression(tokens, state, types, aliases);
+    return try parseHandledTail(tokens, state, types, aliases, expression);
+}
+
+function parseImport(tokens, state identity parser_state.ParserState, start Int) returns identity ast.Node fails diagnostic.ParseError {
+    let path be try qualifiedIdentifier(tokens, state, "expected module path after 'import'");
+    let aliasNode maybe identity ast.Node be none;
+    if match(tokens, state, token.asKeyword()) {
+        let aliasStart be state.index;
+        let aliasName be try consume(tokens, state, token.identifier(), "expected alias after 'as'");
+        aliasNode = ast.make(ast.nameExpr(), aliasStart, none, none, none, aliasName.value, 0, false);
+    }
+    try consume(tokens, state, token.semicolon(), "expected ';' after import");
+    return ast.make(ast.importDecl(), start, aliasNode, none, none, path, 0, false);
+}
+
+function parseTypeDeclaration(tokens, state identity parser_state.ParserState, start Int, exported Bool) returns identity ast.Node fails diagnostic.ParseError {
+    let name be try consume(tokens, state, token.identifier(), "expected type name");
+    try consume(tokens, state, token.leftBrace(), "expected '{' after type name");
+    let fields be ast.emptyChain();
+    while not check(tokens, state, token.rightBrace()) {
+        if check(tokens, state, token.eof()) {
+            let found be current(tokens, state);
+            fail diagnostic.ParseError { message = "unterminated type declaration"; line = found.line; column = found.column; };
+        }
+        let fieldStart be state.index;
+        let isFixed be match(tokens, state, token.fixedKeyword());
+        let fieldName be try consume(tokens, state, token.identifier(), "expected field name");
+        let fieldType be try parseTypeRef(tokens, state);
+        try consume(tokens, state, token.semicolon(), "expected ';' after field declaration");
+        ast.add(fields, ast.make(ast.fieldDecl(), fieldStart, fieldType, none, none, fieldName.value, 0, isFixed));
+    }
+    advance(tokens, state);
+    return ast.make(ast.typeDecl(), start, fields.first, none, none, name.value, 0, exported);
+}
+
+function parseErrorDeclaration(tokens, state identity parser_state.ParserState, start Int, exported Bool) returns identity ast.Node fails diagnostic.ParseError {
+    let name be try consume(tokens, state, token.identifier(), "expected error name");
+    try consume(tokens, state, token.leftBrace(), "expected '{' after error name");
+    let fields be ast.emptyChain();
+    while not check(tokens, state, token.rightBrace()) {
+        if check(tokens, state, token.eof()) {
+            let found be current(tokens, state);
+            fail diagnostic.ParseError { message = "unterminated error declaration"; line = found.line; column = found.column; };
+        }
+        let fieldStart be state.index;
+        let fieldName be try consume(tokens, state, token.identifier(), "expected error field name");
+        let fieldType be try parseTypeRef(tokens, state);
+        try consume(tokens, state, token.semicolon(), "expected ';' after error field");
+        ast.add(fields, ast.make(ast.fieldDecl(), fieldStart, fieldType, none, none, fieldName.value, 0, false));
+    }
+    advance(tokens, state);
+    return ast.make(ast.errorDecl(), start, fields.first, none, none, name.value, 0, exported);
+}
+
+function parseFunctionDeclaration(tokens, state identity parser_state.ParserState, types, aliases, start Int, exported Bool) returns identity ast.Node fails diagnostic.ParseError {
+    let name be try consume(tokens, state, token.identifier(), "expected function name");
+    try consume(tokens, state, token.leftParen(), "expected '(' after function name");
+    let parameters be ast.emptyChain();
+    let more be not check(tokens, state, token.rightParen());
+    while more {
+        let parameterStart be state.index;
+        let parameterName be try consume(tokens, state, token.identifier(), "expected parameter name");
+        let parameterType maybe identity ast.Node be none;
+        if not check(tokens, state, token.comma()) and not check(tokens, state, token.rightParen()) {
+            parameterType = try parseTypeRef(tokens, state);
+        }
+        ast.add(parameters, ast.make(ast.parameter(), parameterStart, parameterType, none, none, parameterName.value, 0, false));
+        if not match(tokens, state, token.comma()) {
+            more = false;
+        }
+    }
+    try consume(tokens, state, token.rightParen(), "expected ')' after parameters");
+
+    let returnType maybe identity ast.Node be none;
+    if match(tokens, state, token.returnsKeyword()) {
+        returnType = try parseTypeRef(tokens, state);
+    }
+
+    if match(tokens, state, token.failsKeyword()) {
+        let failuresMore be true;
+        while failuresMore {
+            let failureType be try parseErrorTypeRef(tokens, state);
+            failureType.flag = true;
+            ast.add(parameters, failureType);
+            if not match(tokens, state, token.comma()) {
+                failuresMore = false;
+            }
+        }
+    }
+
+    let bodyStart be state.index;
+    try consume(tokens, state, token.leftBrace(), "expected '{' before function body");
+    let body be try parseBlockAfterOpen(tokens, state, types, aliases, bodyStart);
+    return ast.make(ast.functionDecl(), start, parameters.first, returnType, body, name.value, 0, exported);
+}
+
+function parseReturn(tokens, state identity parser_state.ParserState, types, aliases, start Int) returns identity ast.Node fails diagnostic.ParseError {
+    if match(tokens, state, token.semicolon()) {
+        return ast.make(ast.returnStmt(), start, none, none, none, "", 0, false);
+    }
+    let value be try parseValueExpression(tokens, state, types, aliases);
+    try consume(tokens, state, token.semicolon(), "expected ';' after return value");
+    return ast.make(ast.returnStmt(), start, value, none, none, "", 0, false);
+}
+
+function parseFail(tokens, state identity parser_state.ParserState, types, aliases, start Int) returns identity ast.Node fails diagnostic.ParseError {
+    let value be try parseExpression(tokens, state, types, aliases);
+    try consume(tokens, state, token.semicolon(), "expected ';' after failure value");
+    return ast.make(ast.failStmt(), start, value, none, none, "", 0, false);
+}
+
+function parseLet(tokens, state identity parser_state.ParserState, types, aliases, start Int) returns identity ast.Node fails diagnostic.ParseError {
+    let isFixed be match(tokens, state, token.fixedKeyword());
+    let name be try consume(tokens, state, token.identifier(), "expected binding name after 'let'");
+    let typeNode maybe identity ast.Node be none;
+    if not check(tokens, state, token.beKeyword()) {
+        typeNode = try parseTypeRef(tokens, state);
+    }
+    try consume(tokens, state, token.beKeyword(), "expected 'be' after binding declaration");
+    let value be try parseValueExpression(tokens, state, types, aliases);
+    try consume(tokens, state, token.semicolon(), "expected ';' after binding declaration");
+    return ast.make(ast.letStmt(), start, typeNode, value, none, name.value, 0, isFixed);
+}
+
+function parseIf(tokens, state identity parser_state.ParserState, types, aliases, start Int) returns identity ast.Node fails diagnostic.ParseError {
+    let condition be try parseExpression(tokens, state, types, aliases);
+    let thenStart be state.index;
+    try consume(tokens, state, token.leftBrace(), "expected '{' after if condition");
+    let thenBlock be try parseBlockAfterOpen(tokens, state, types, aliases, thenStart);
+    let elseBlock maybe identity ast.Node be none;
+    if match(tokens, state, token.elseKeyword()) {
+        let elseStart be state.index;
+        try consume(tokens, state, token.leftBrace(), "expected '{' after else");
+        elseBlock = try parseBlockAfterOpen(tokens, state, types, aliases, elseStart);
+    }
+    return ast.make(ast.ifStmt(), start, condition, thenBlock, elseBlock, "", 0, false);
+}
+
+function parseWhile(tokens, state identity parser_state.ParserState, types, aliases, start Int) returns identity ast.Node fails diagnostic.ParseError {
+    let condition be try parseExpression(tokens, state, types, aliases);
+    let bodyStart be state.index;
+    try consume(tokens, state, token.leftBrace(), "expected '{' after while condition");
+    let body be try parseBlockAfterOpen(tokens, state, types, aliases, bodyStart);
+    return ast.make(ast.whileStmt(), start, condition, body, none, "", 0, false);
+}
+
+function parseFor(tokens, state identity parser_state.ParserState, types, aliases, start Int) returns identity ast.Node fails diagnostic.ParseError {
+    let name be try consume(tokens, state, token.identifier(), "expected loop binding after 'for'");
+    try consume(tokens, state, token.inKeyword(), "expected 'in' after loop binding");
+    let iterable be try parseExpression(tokens, state, types, aliases);
+    let bodyStart be state.index;
+    try consume(tokens, state, token.leftBrace(), "expected '{' after for iterable");
+    let body be try parseBlockAfterOpen(tokens, state, types, aliases, bodyStart);
+    return ast.make(ast.forStmt(), start, iterable, body, none, name.value, 0, false);
+}
+
+function parseWith(tokens, state identity parser_state.ParserState, types, aliases, start Int) returns identity ast.Node fails diagnostic.ParseError {
+    let name be try consume(tokens, state, token.identifier(), "expected resource binding after 'with'");
+    let typeNode maybe identity ast.Node be none;
+    if not check(tokens, state, token.beKeyword()) {
+        typeNode = try parseTypeRef(tokens, state);
+    }
+    try consume(tokens, state, token.beKeyword(), "expected 'be' in with statement");
+    let resource be try parseExpression(tokens, state, types, aliases);
+    let bodyStart be state.index;
+    try consume(tokens, state, token.leftBrace(), "expected '{' after resource expression");
+    let body be try parseBlockAfterOpen(tokens, state, types, aliases, bodyStart);
+    return ast.make(ast.withStmt(), start, typeNode, resource, body, name.value, 0, false);
+}
+
+function writableKind(kind Int) returns Bool {
+    return kind == ast.nameExpr() or kind == ast.memberExpr() or kind == ast.indexExpr();
+}
+
+function parseStatement(tokens, state identity parser_state.ParserState, types, aliases) returns identity ast.Node fails diagnostic.ParseError {
+    let start be state.index;
+
+    if match(tokens, state, token.importKeyword()) {
+        return try parseImport(tokens, state, start);
+    }
+
+    if match(tokens, state, token.publicKeyword()) {
+        if match(tokens, state, token.functionKeyword()) {
+            return try parseFunctionDeclaration(tokens, state, types, aliases, start, true);
+        }
+        if match(tokens, state, token.typeKeyword()) {
+            return try parseTypeDeclaration(tokens, state, start, true);
+        }
+        if match(tokens, state, token.errorKeyword()) {
+            return try parseErrorDeclaration(tokens, state, start, true);
+        }
+        let found be current(tokens, state);
+        fail diagnostic.ParseError {
+            message = "'public' must precede a function, type, or error declaration";
+            line = found.line;
+            column = found.column;
+        };
+    }
+
+    if match(tokens, state, token.functionKeyword()) {
+        return try parseFunctionDeclaration(tokens, state, types, aliases, start, false);
+    }
+    if match(tokens, state, token.typeKeyword()) {
+        return try parseTypeDeclaration(tokens, state, start, false);
+    }
+    if match(tokens, state, token.errorKeyword()) {
+        return try parseErrorDeclaration(tokens, state, start, false);
+    }
+    if match(tokens, state, token.returnKeyword()) {
+        return try parseReturn(tokens, state, types, aliases, start);
+    }
+    if match(tokens, state, token.failKeyword()) {
+        return try parseFail(tokens, state, types, aliases, start);
+    }
+    if match(tokens, state, token.letKeyword()) {
+        return try parseLet(tokens, state, types, aliases, start);
+    }
+    if match(tokens, state, token.ifKeyword()) {
+        return try parseIf(tokens, state, types, aliases, start);
+    }
+    if match(tokens, state, token.whileKeyword()) {
+        return try parseWhile(tokens, state, types, aliases, start);
+    }
+    if match(tokens, state, token.forKeyword()) {
+        return try parseFor(tokens, state, types, aliases, start);
+    }
+    if match(tokens, state, token.withKeyword()) {
+        return try parseWith(tokens, state, types, aliases, start);
+    }
+
+    let expression be try parseExpression(tokens, state, types, aliases);
+    if match(tokens, state, token.equal()) {
+        if not writableKind(expression.kind) {
+            let found be tokenAt(tokens, expression.token);
+            fail diagnostic.ParseError {
+                message = "left side of assignment must be a writable name/member/index path";
+                line = found.line;
+                column = found.column;
+            };
+        }
+        let value be try parseValueExpression(tokens, state, types, aliases);
+        try consume(tokens, state, token.semicolon(), "expected ';' after assignment");
+        return ast.make(ast.assignStmt(), start, expression, value, none, "", 0, false);
+    }
+
+    expression = try parseHandledTail(tokens, state, types, aliases, expression);
+    try consume(tokens, state, token.semicolon(), "expected ';' after expression");
+    return ast.make(ast.expressionStmt(), start, expression, none, none, "", 0, false);
+}
+
+public function parse(tokens) returns identity ast.Node fails diagnostic.ParseError {
+    let state be parser_state.make();
+    let types be knownTypes(tokens);
+    let aliases be importAliases(tokens);
+    let statements be ast.emptyChain();
+
+    while not check(tokens, state, token.eof()) {
+        ast.add(statements, try parseStatement(tokens, state, types, aliases));
+    }
+
+    return ast.make(ast.program(), state.index, statements.first, none, none, "", 0, false);
+}

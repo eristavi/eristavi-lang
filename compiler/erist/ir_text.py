@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .diagnostics import SemanticError
+from .stdlib import UNICODE_FUNCTIONS
 from .ir import IRExpr, IRIndex, Lowerer as BaseLowerer, STD_FILE, STD_FILE_ERROR
 from .syntax import CallExpr, IndexExpr, MemberExpr, NameExpr
 from .typesys import (
@@ -49,6 +50,12 @@ class IRFileRemove(IRExpr):
     path: IRExpr
 
 
+@dataclass(frozen=True)
+class IRUnicodeCall(IRExpr):
+    name: str
+    argument: IRExpr
+
+
 class Lowerer(BaseLowerer):
     """Typed-IR extension for Unicode Text views and small stdlib operations."""
 
@@ -88,7 +95,14 @@ class Lowerer(BaseLowerer):
             return NO_VALUE
         return NamedType(t)
 
+    def _unicode_call(self, e):
+        return (isinstance(e, CallExpr) and isinstance(e.callee, MemberExpr)
+                and isinstance(e.callee.base, NameExpr)
+                and self.a.imports.get(e.callee.base.name) == ("std", "unicode"))
+
     def _expr_type(self, e):
+        if self._unicode_call(e):
+            return UNICODE_FUNCTIONS[e.callee.name][1]
         if isinstance(e, IndexExpr):
             bt = resolve(self._expr_type(e.base))
             if isinstance(bt, TextViewType):
@@ -126,6 +140,9 @@ class Lowerer(BaseLowerer):
         return super()._ast_type(e)
 
     def _expr(self, e):
+        if self._unicode_call(e):
+            result = UNICODE_FUNCTIONS[e.callee.name][1].name
+            return IRUnicodeCall(result, e.location, e.callee.name, self._expr(e.arguments[0]))
         if isinstance(e, MemberExpr):
             bt = resolve(self._expr_type(e.base))
             if bt == TEXT and e.name in ("characters", "scalars", "bytes"):

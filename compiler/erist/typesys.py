@@ -186,3 +186,28 @@ def unresolved_ids(t: TypeLike) -> set[int]:
     if isinstance(t,(MaybeType,IdentityType)): return unresolved_ids(t.inner)
     if isinstance(t,ListType): return unresolved_ids(t.element)
     return set()
+
+
+def specialization_key(types: list[TypeLike]) -> tuple[str, ...]:
+    """Identify inferred relationships independently of fresh variable ids.
+
+    Concrete keys retain the spelling consumed by IR lowering. Unbound variables
+    are numbered across the whole signature, preserving repeated relationships.
+    """
+    variables: dict[int, int] = {}
+
+    def key(t):
+        t = resolve(t)
+        if isinstance(t, TypeVar):
+            index = variables.setdefault(t.id, len(variables))
+            constraints = "" if t.allowed_names is None else ":" + ",".join(sorted(t.allowed_names))
+            return f"${index}{constraints}"
+        if isinstance(t, ListType):
+            return "List of " + key(t.element)
+        if isinstance(t, MaybeType):
+            return "maybe " + key(t.inner)
+        if isinstance(t, IdentityType):
+            return "identity " + key(t.inner)
+        return describe(t)
+
+    return tuple(key(t) for t in types)

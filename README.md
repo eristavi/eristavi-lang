@@ -19,6 +19,23 @@ The **pre-0.1 source-language/frontend contract is frozen for implementation**. 
 
 Unicode identifier, normalization and grapheme behavior is pinned to Unicode **17.0.0**. CI executes the complete official Unicode-17 `GraphemeBreakTest` fixture against the pinned reference segmenter in addition to compiled/direct grapheme tests.
 
+## Self-hosting progress
+
+The trusted Stage-0 toolchain is still written in Python. `src/compiler/` now
+contains an Eristavi-written lexer and parser with an explicit identity AST.
+Recursive result contracts remain explicit; generic relationships remain inferred.
+Differential tests check lexical tokens, locations, rejection behavior and parser
+precedence against Stage-0. The Eristavi lexer and parser also compile and execute
+through the portable C route.
+
+The new `std.unicode` library exposes pinned Unicode-17 identifier checks, NFC
+normalization and scalar construction. It currently executes in the reference
+runtime and generated-C backend. Direct native, JavaScript and Wasm support for
+this library remains pending; those routes reject its use with guidance to use
+`erist build`. Existing direct-native functionality remains available.
+
+See [`SELF_HOSTING.md`](SELF_HOSTING.md). This is not yet a compiler that can build itself.
+
 ## Compiler architecture
 
 ```text
@@ -181,7 +198,7 @@ erist build-wat examples/hello.eri -o hello.wat
 python -m unittest discover -s tests -v
 ```
 
-The current suite contains **272 tests** and passes in all four hosted CI jobs:
+The current suite contains **300 tests**. The hosted CI matrix runs:
 
 - GCC / x86-64 Ubuntu / `-O2`;
 - Clang / x86-64 Ubuntu / `-O2`;
