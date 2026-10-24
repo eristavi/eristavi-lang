@@ -8,7 +8,7 @@ from .parser import Parser
 from .semantic import Analyzer
 from .runtime import Interpreter
 from .project import compile_entry
-from .ir import Lowerer
+from .ir import ProjectLowerer
 from .c_backend import CBackend
 
 def analyze_frontend(source:str):
@@ -29,13 +29,13 @@ def check_file(path:Path,source_root:Path|None=None)->int:
 
 def build_c_file(path:Path,output:Path,source_root:Path|None=None)->int:
     try:
-        mod=compile_entry(path,source_root); ir=Lowerer(mod.analyzer).lower(mod.program); output.write_text(CBackend().emit(ir),encoding='utf-8'); return 0
-    except (EristaviError,OSError) as e:
+        mod=compile_entry(path,source_root); ir=ProjectLowerer(mod).lower(); output.write_text(CBackend().emit(ir),encoding='utf-8'); return 0
+    except (EristaviError,OSError,ValueError) as e:
         print(e.format() if isinstance(e,EristaviError) else f'error: {e}',file=sys.stderr); return 1
 
 def build_native(path:Path,output:Path,source_root:Path|None=None,cc:str='cc')->int:
     try:
-        mod=compile_entry(path,source_root); ir=Lowerer(mod.analyzer).lower(mod.program); c=CBackend().emit(ir)
+        mod=compile_entry(path,source_root); ir=ProjectLowerer(mod).lower(); c=CBackend().emit(ir)
         with tempfile.TemporaryDirectory() as td:
             cp=Path(td)/'program.c'; cp.write_text(c,encoding='utf-8')
             proc=subprocess.run([cc,'-std=c11',str(cp),'-lm','-o',str(output)],capture_output=True,text=True)
@@ -44,7 +44,7 @@ def build_native(path:Path,output:Path,source_root:Path|None=None,cc:str='cc')->
                 if proc.stderr: print(proc.stderr,file=sys.stderr,end='')
                 return proc.returncode or 1
         return 0
-    except (EristaviError,OSError) as e:
+    except (EristaviError,OSError,ValueError) as e:
         print(e.format() if isinstance(e,EristaviError) else f'error: {e}',file=sys.stderr); return 1
 
 def build_parser():
