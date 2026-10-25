@@ -1,6 +1,6 @@
 # Eristavi-written typed IR and C compilation
 
-> Experimental Stage-4 executable milestone. Stage-0 remains the default compiler.
+> Historical scalar milestone, extended by OFFLINE_TOOLCHAIN.md. The developer CLI retains Stage-0.
 
 The Eristavi-written frontend can now analyze a source project, lower its checked
 expressions into Eristavi-owned typed IR, independently verify that IR, and emit a

@@ -1,0 +1,74 @@
+// x86-64 System V consumer of verified, optimized Universal IR.
+import compiler.typed_ir as ir;
+import compiler.universal_model as u;
+import compiler.universal_lower;
+import compiler.universal_verify;
+import compiler.universal_optimize;
+import compiler.semantic_model as m;
+import compiler.format;
+type Emitter { body Text; data Text; labels Int; program identity u.Program; }
+function line(e identity Emitter,text Text) { e.body=e.body+text+"\n"; }
+function datum(e identity Emitter,text Text) { e.data=e.data+text+"\n"; }
+function slot(index Int) returns Text { return "-"+format.integer((index+1)*8)+"(%rbp)"; }
+function label(e identity Emitter) returns Text { let name be ".Ldata_"+format.integer(e.labels); e.labels=e.labels+1; return name; }
+function blockName(name Text,index Int) returns Text { return ".L"+name+"_b"+format.integer(index); }
+function operands(value maybe identity u.Operand) { let result be []; let cursor be value; while cursor != none { result.add(cursor.value); cursor=cursor.next; } return result; }
+function call(e identity Emitter,value identity u.Instruction) {
+    let arguments be operands(value.arguments); let registers be ["%rdi","%rsi","%rdx","%rcx","%r8","%r9"]; let index be 0;
+    while index < arguments.count and index < 6 { line(e,"movq "+slot(arguments[index])+", "+registers[index]); index=index+1; }
+    let extra be arguments.count-6; if extra<0 { extra=0; } let padding be extra%2; if padding == 1 { line(e,"subq $8, %rsp"); }
+    index=arguments.count-1; while index>=6 { line(e,"pushq "+slot(arguments[index])); index=index-1; }
+    let name be "evn_"+value.text; if value.text.scalars.count>0 and value.text.scalars[0] == "f" { let id be universal_verify.functionId(value.text); if id>=0 { name=value.text; } }
+    line(e,"call "+name+"@PLT"); if extra+padding>0 { line(e,"addq $"+format.integer((extra+padding)*8)+", %rsp"); } line(e,"movq %rax, "+slot(value.result));
+}
+function instruction(e identity Emitter,value identity u.Instruction,registerCount Int) {
+    if value.op == 1 { line(e,"movabsq $"+format.integer(value.number)+", %rax"); line(e,"movq %rax, "+slot(value.result)); }
+    if value.op == 2 {
+        let name be label(e); datum(e,".section .rodata\n"+name+":"); let bytes be ""; let index be 0; while index<value.text.bytes.count { bytes=bytes+format.integer(value.text.bytes[index])+","; index=index+1; } datum(e,".byte "+bytes+"0"); line(e,"leaq "+name+"(%rip), %rax"); line(e,"movq %rax, "+slot(value.result));
+    }
+    if value.op == 3 { call(e,value); }
+    if value.op == 4 { let first be value.arguments; if first != none { line(e,"movq "+slot(first.value)+", %rax"); line(e,"movq %rax, "+slot(value.result)); } }
+    if value.op == 5 { line(e,"movq "+slot(registerCount+value.number)+", %rax"); line(e,"movq %rax, "+slot(value.result)); }
+    if value.op == 11 { let arguments be operands(value.arguments); line(e,"movq "+slot(arguments[0])+", %rax"); line(e,"cmpq "+slot(arguments[1])+", %rax\nsetl %al\nmovzbq %al, %rax"); line(e,"movq %rax, "+slot(value.result)); }
+    if value.op == 12 { line(e,"addq $1, "+slot(value.result)); }
+}
+function terminator(e identity Emitter,value identity u.Instruction,name Text) {
+    let first be value.arguments;
+    if value.op == 6 { line(e,"jmp "+blockName(name,value.first)); }
+    if value.op == 7 { if first != none { line(e,"cmpq $0, "+slot(first.value)); line(e,"je "+blockName(name,value.second)); line(e,"jmp "+blockName(name,value.first)); } }
+    if value.op == 8 { if first != none { line(e,"movq "+slot(first.value)+", %rax\nleave\nret"); } }
+    if value.op == 9 { if first != none { line(e,"movq "+slot(first.value)+", %rdi\ncall setjmp@PLT\ntestl %eax, %eax"); line(e,"jne "+blockName(name,value.second)); line(e,"jmp "+blockName(name,value.first)); } }
+    if value.op == 10 { line(e,"ud2"); }
+}
+function routine(e identity Emitter,routine identity u.Function,name Text) {
+    let count be 0; let register be routine.registers; while register != none { count=count+1; register=register.next; }
+    let size be ((8*(count+routine.parameters)+15)/16)*16;
+    line(e,".text\n.p2align 4\n.type "+name+", @function\n"+name+":\npushq %rbp\nmovq %rsp, %rbp\nsubq $"+format.integer(size)+", %rsp");
+    let registers be ["%rdi","%rsi","%rdx","%rcx","%r8","%r9"]; let index be 0;
+    while index<routine.parameters { if index<6 { line(e,"movq "+registers[index]+", "+slot(count+index)); } else { line(e,"movq "+format.integer(16+(index-6)*8)+"(%rbp), %rax"); line(e,"movq %rax, "+slot(count+index)); } index=index+1; }
+    line(e,"jmp "+blockName(name,0)); let block be routine.blocks;
+    while block != none { line(e,blockName(name,block.index)+":"); let cursor be block.instructions; while cursor != none { instruction(e,cursor,count); cursor=cursor.next; } let ending be block.terminator; if ending != none { terminator(e,ending,name); } block=block.next; }
+    line(e,".size "+name+", .-"+name);
+}
+function descriptors(e identity Emitter) {
+    let cursor be e.program.types.types; let count be 6;
+    while cursor != none { count=count+1; cursor=cursor.next; }
+    datum(e,".section .data.rel.ro\n.p2align 3\n.globl ev_types\nev_types:"); let index be 0;
+    while index < count {
+        let kind be index; let inner be 0; let name be ""; let size be 0; let descriptor be ir.typeAt(e.program.types,index);
+        if descriptor != none { kind=descriptor.kind; inner=descriptor.inner; name=descriptor.name; let field be descriptor.fields; while field != none { size=size+1; field=field.next; } }
+        let nameLabel be ".Ltype_name_"+format.integer(index); let fields be "0"; if size > 0 { fields=".Ltype_fields_"+format.integer(index); }
+        datum(e,".long "+format.integer(kind)+","+format.integer(inner)+"\n.quad "+nameLabel+"\n.quad "+format.integer(size)+"\n.quad "+fields); index=index+1;
+    }
+    index=0;
+    while index < count {
+        datum(e,".Ltype_name_"+format.integer(index)+":"); let descriptor be ir.typeAt(e.program.types,index); let name be ""; if descriptor != none { name=descriptor.name; }
+        let values be ""; let offset be 0; while offset < name.bytes.count { values=values+format.integer(name.bytes[offset])+","; offset=offset+1; } datum(e,".byte "+values+"0");
+        if descriptor != none { let field be descriptor.fields; if field != none { datum(e,".p2align 2\n.Ltype_fields_"+format.integer(index)+":"); } while field != none { datum(e,".long "+format.integer(field.valueType)); field=field.next; } } index=index+1;
+    }
+}
+public function emit(source identity ir.Program) returns Text fails m.SemanticError {
+    let program be try universal_lower.lower(source); try universal_optimize.optimize(program);
+    let e be identity Emitter { body=".globl erist_entry\n"; data=""; labels=0; program=program; };
+    let cursor be program.functions; while cursor != none { routine(e,cursor,"f"+format.integer(cursor.index)); cursor=cursor.next; } routine(e,program.entry,"erist_entry"); descriptors(e); return e.body+e.data+".section .note.GNU-stack,\"\",@progbits\n";
+}

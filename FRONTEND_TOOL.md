@@ -121,3 +121,13 @@ repeatable compiler builds and equivalent
 semantic/conformance results. The final offline native toolchain must also bundle
 or implement its assembler/linker functionality before external build tools can
 be removed from normal native compilation.
+
+## Native/offline extension
+
+The compiler now also provides `uir` and `emit-asm`, with `--target x86_64-linux`
+or `--target arm64-linux` for assembly. Semantic/IR commands accept source-root
+flags; native assembly may combine root and target flags. `emit-c` reads the pinned
+`runtime/value_runtime.c` bootstrap asset. The packaged wrapper supplies the native
+build/check CLI and bundled assembler/linker/runtime. See OFFLINE_TOOLCHAIN.md for
+full structural coverage, self-build evidence, commands and limitations. Earlier
+sections above describe the original frontend/scalar milestones.

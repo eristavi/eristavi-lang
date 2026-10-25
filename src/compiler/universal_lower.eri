@@ -1,0 +1,146 @@
+// Flatten structured typed IR into machine-neutral register operations and CFG.
+import compiler.typed_ir as ir;
+import compiler.ir_verify;
+import compiler.universal_model as u;
+import compiler.semantic_model as m;
+import compiler.format;
+type Cleanup { index Int; frame Int; next maybe identity Cleanup; }
+type State { builder identity u.Builder; scope Int; cleanups maybe identity Cleanup; }
+function immediate(e identity State,value Int) returns Int { return u.number(e.builder,value); }
+function bytes(e identity State,text Text) returns Int { return u.bytes(e.builder,text); }
+function call(e identity State,name Text,arguments) returns Int { return u.call(e.builder,name,arguments); }
+function zero(e identity State,name Text) returns Int { return u.zero(e.builder,name); }
+function local(e identity State,index Int) returns Int { return u.local(e.builder,index); }
+function required(value maybe identity ir.Node) returns identity ir.Node { if value != none { return value; } return ir.node(-1,5,identity m.Location { path=""; line=0; column=0; next=none; }); }
+function binary(op Text) returns Int { if op == "+" { return 0; } if op == "-" { return 1; } if op == "*" { return 2; } if op == "/" { return 3; } if op == "%" { return 4; } if op == "==" { return 5; } if op == "!=" { return 6; } if op == "<" { return 7; } if op == "<=" { return 8; } if op == ">" { return 9; } return 10; }
+function place(e identity State,node identity ir.Node) returns Int {
+    if node.kind == 2 { return local(e,node.index); }
+    let base be place(e,required(node.first));
+    if node.kind == 29 { return call(e,"get_ref",[base]); }
+    if node.kind == 22 { let field be immediate(e,node.index); return call(e,"member_ref",[base,field]); }
+    let indexValue be expression(e,required(node.second)); let index be call(e,"truth",[indexValue]); return call(e,"index_ref",[base,index]);
+}
+function expression(e identity State,node identity ir.Node) returns Int {
+    let kind be node.kind;
+    if kind == 1 {
+        if node.valueType == 1 { let number be immediate(e,node.number); return call(e,"int",[number]); }
+        if node.valueType == 3 { let number be immediate(e,node.number); return call(e,"bool",[number]); }
+        if node.valueType == 2 { let spelling be ""; let index be 0; while index < node.text.scalars.count { let ch be node.text.scalars[index]; if ch != "_" { spelling=spelling+ch; } index=index+1; } let text be bytes(e,spelling); return call(e,"float",[text]); }
+        let text be bytes(e,node.text); let count be immediate(e,node.text.bytes.count); return call(e,"text",[text,count]);
+    }
+    if kind == 2 { return call(e,"copy",[local(e,node.index)]); }
+    if kind == 3 { let first be expression(e,required(node.first)); let operation be 0; if node.text == "not" { operation=1; } let op be immediate(e,operation); return call(e,"unary",[op,first]); }
+    if kind == 4 {
+        let first be expression(e,required(node.first));
+        if node.text == "and" or node.text == "or" {
+            let result be u.allocate(e.builder,1); u.copy(e.builder,result,first);
+            let evaluate be u.block(e.builder); let done be u.block(e.builder); let test be call(e,"truth",[first]);
+            if node.text == "and" { u.branch(e.builder,test,evaluate,done); } else { u.branch(e.builder,test,done,evaluate); }
+            e.builder.current=evaluate; let second be expression(e,required(node.second)); u.copy(e.builder,result,second); u.jump(e.builder,done); e.builder.current=done; return result;
+        }
+        let second be expression(e,required(node.second)); let op be immediate(e,binary(node.text)); return call(e,"binary",[op,first,second]);
+    }
+    if kind == 5 or kind == 6 or kind == 31 {
+        let arguments be []; let cursor be node.first; while cursor != none { arguments.add(expression(e,cursor)); cursor=cursor.next; }
+        if kind == 5 { return call(e,"f"+format.integer(node.index),arguments); }
+        if kind == 6 { let ignored be call(e,"output",arguments); return zero(e,"void"); }
+        let name be bytes(e,node.text); let valueType be immediate(e,node.valueType); let actual be [name,valueType]; let index be 0;
+        while index < arguments.count { actual.add(arguments[index]); index=index+1; } return call(e,"builtin"+format.integer(arguments.count),actual);
+    }
+    if kind == 20 or kind == 21 {
+        let count be 0; let cursor be node.first; while cursor != none { count=count+1; cursor=cursor.next; }
+        let valueType be immediate(e,node.valueType); let size be immediate(e,count); let result be call(e,"object",[valueType,size]); cursor=node.first; let index be 0;
+        while cursor != none { let item be cursor; let offset be index; if kind == 21 { item=required(cursor.first); offset=cursor.index; } let value be expression(e,item); let field be immediate(e,offset); let ignored be call(e,"init",[result,field,value]); index=index+1; cursor=cursor.next; } return result;
+    }
+    if kind == 22 { let first be expression(e,required(node.first)); let field be immediate(e,node.index); return call(e,"member",[first,field]); }
+    if kind == 23 { let first be expression(e,required(node.first)); let indexValue be expression(e,required(node.second)); let index be call(e,"truth",[indexValue]); return call(e,"index",[first,index]); }
+    if kind == 24 { let first be expression(e,required(node.first)); return call(e,"count",[first]); }
+    if kind == 25 { let base be place(e,required(node.first)); let value be expression(e,required(node.second)); let ignored be call(e,"add",[base,value]); return zero(e,"void"); }
+    if kind == 26 or kind == 28 or kind == 30 { let first be expression(e,required(node.first)); let valueType be immediate(e,node.valueType); let name be "wrap"; if kind == 30 { name="view"; } return call(e,name,[valueType,first]); }
+    if kind == 27 { let valueType be immediate(e,node.valueType); return call(e,"none",[valueType]); }
+    if kind == 29 or kind == 36 { let first be expression(e,required(node.first)); return call(e,"get",[first]); }
+    if kind == 40 { return expression(e,required(node.first)); }
+    if kind == 41 {
+        let frame be zero(e,"frame"); let success be u.block(e.builder); let failure be u.block(e.builder); let done be u.block(e.builder); let result be u.allocate(e.builder,1);
+        let boundary be u.instruction(9); boundary.arguments=identity u.Operand { value=frame; next=none; }; boundary.first=success.index; boundary.second=failure.index; u.end(e.builder,boundary);
+        e.builder.current=success; let first be expression(e,required(node.first)); u.copy(e.builder,result,first); let popped be call(e,"pop",[frame]); u.jump(e.builder,done);
+        e.builder.current=failure; let ignored be call(e,"pop",[frame]); let saved be zero(e,"saved"); let handler be node.second;
+        while handler != none {
+            let body be u.block(e.builder); let next be u.block(e.builder); let valueType be immediate(e,handler.valueType);
+            if ir.kind(e.builder.program.types,handler.valueType) == 11 { u.jump(e.builder,body); }
+            else { let matches be call(e,"match",[saved,valueType]); u.branch(e.builder,matches,body,next); }
+            e.builder.current=body; let payload be call(e,"error",[saved,valueType]); let stored be call(e,"store",[local(e,handler.index),payload]); block(e,required(handler.first));
+            if e.builder.current.terminator == none { let empty be zero(e,"void"); u.copy(e.builder,result,empty); u.jump(e.builder,done); }
+            e.builder.current=next; handler=handler.next;
+        }
+        let propagated be call(e,"propagate",[saved]); u.end(e.builder,u.instruction(10)); e.builder.current=done; return result;
+    }
+    return zero(e,"void");
+}
+function cleanup(e identity State) {
+    let cursor be e.cleanups; if cursor == none { return; }
+    let primary be zero(e,"empty_failure"); let last be -1;
+    while cursor != none { let ignored be call(e,"cleanup_accumulate",[local(e,cursor.index),primary]); last=cursor.frame; cursor=cursor.next; }
+    let popped be call(e,"pop",[last]); let propagated be call(e,"propagate_if",[primary]);
+}
+function block(e identity State,node identity ir.Node) {
+    let cursor be node.first;
+    while cursor != none {
+        let current be cursor; let kind be current.kind;
+        if e.builder.current.terminator != none { return; }
+        if kind == 10 or kind == 11 { let value be expression(e,required(current.first)); let ignored be call(e,"store",[local(e,current.index),value]); }
+        if kind == 33 { let value be expression(e,required(current.second)); let target be place(e,required(current.first)); let ignored be call(e,"store",[target,value]); }
+        if kind == 12 { let ignored be expression(e,required(current.first)); }
+        if kind == 15 { let returned be current.first; let value be -1; if returned != none { value=expression(e,returned); } else { value=zero(e,"void"); } cleanup(e); let final be call(e,"scope_leave",[e.scope,value]); u.returnValue(e.builder,final); }
+        if kind == 43 {
+            let first be required(current.first); let value be expression(e,first); let descriptor be ir.typeAt(e.builder.program.types,first.valueType); let index be 0;
+            if descriptor != none { let field be descriptor.fields; while field != none { if field.name == "message" { index=field.index; } field=field.next; } }
+            let message be immediate(e,index); let ignored be call(e,"fail",[value,message]); u.end(e.builder,u.instruction(10));
+        }
+        if kind == 13 {
+            let condition be expression(e,required(current.first)); let test be call(e,"truth",[condition]); let first be u.block(e.builder); let second be u.block(e.builder); let done be u.block(e.builder); u.branch(e.builder,test,first,second);
+            e.builder.current=first; block(e,required(current.second)); if e.builder.current.terminator == none { u.jump(e.builder,done); }
+            e.builder.current=second; let other be current.third; if other != none { block(e,other); } if e.builder.current.terminator == none { u.jump(e.builder,done); } e.builder.current=done;
+        }
+        if kind == 14 {
+            let testBlock be u.block(e.builder); let body be u.block(e.builder); let done be u.block(e.builder); u.jump(e.builder,testBlock); e.builder.current=testBlock;
+            let condition be expression(e,required(current.first)); let test be call(e,"truth",[condition]); u.branch(e.builder,test,body,done); e.builder.current=body; block(e,required(current.second)); if e.builder.current.terminator == none { u.jump(e.builder,testBlock); } e.builder.current=done;
+        }
+        if kind == 34 {
+            let snapshot be expression(e,required(current.first)); let counter be u.allocate(e.builder,2); let initial be immediate(e,0); u.copy(e.builder,counter,initial);
+            let testBlock be u.block(e.builder); let body be u.block(e.builder); let done be u.block(e.builder); u.jump(e.builder,testBlock); e.builder.current=testBlock;
+            let countValue be call(e,"count",[snapshot]); let count be call(e,"truth",[countValue]); let test be u.instruction(11); test.result=u.allocate(e.builder,2); test.valueClass=2; test.arguments=u.operands([counter,count]); u.append(e.builder,test); u.branch(e.builder,test.result,body,done);
+            e.builder.current=body; let item be call(e,"index",[snapshot,counter]); let stored be call(e,"store",[local(e,current.index),item]); block(e,required(current.second));
+            if e.builder.current.terminator == none { let increment be u.instruction(12); increment.result=counter; increment.valueClass=2; increment.arguments=u.operands([counter]); u.append(e.builder,increment); u.jump(e.builder,testBlock); } e.builder.current=done;
+        }
+        if kind == 44 {
+            let resource be expression(e,required(current.first)); let stored be call(e,"store",[local(e,current.index),resource]); let frame be zero(e,"frame"); let success be u.block(e.builder); let failure be u.block(e.builder); let done be u.block(e.builder);
+            let boundary be u.instruction(9); boundary.arguments=u.operands([frame]); boundary.first=success.index; boundary.second=failure.index; u.end(e.builder,boundary);
+            e.builder.current=success; let saved be e.cleanups; e.cleanups=identity Cleanup { index=current.index; frame=frame; next=saved; }; block(e,required(current.second)); e.cleanups=saved;
+            if e.builder.current.terminator == none { let normal be call(e,"cleanup_normal",[local(e,current.index),frame]); u.jump(e.builder,done); }
+            e.builder.current=failure; let unwound be call(e,"unwind",[local(e,current.index),frame]); u.end(e.builder,u.instruction(10)); e.builder.current=done;
+        }
+        cursor=current.next;
+    }
+}
+
+function routine(program identity u.Program,source identity ir.Function) returns identity u.Function {
+    let result be identity u.Function { index=source.index; parameters=0; registers=none; registerTail=none; blocks=none; next=none; };
+    let first be identity u.Block { index=0; instructions=none; tail=none; terminator=none; live=false; next=none; }; result.blocks=first;
+    let builder be identity u.Builder { program=program; routine=result; current=first; registerCount=0; blockCount=1; locals=none; };
+    let scope be u.zero(builder,"scope_enter"); let e be identity State { builder=builder; scope=scope; cleanups=none; }; let cursor be source.locals;
+    while cursor != none {
+        let value be -1;
+        if cursor.parameter { let parameter be u.instruction(5); parameter.result=u.allocate(builder,1); parameter.valueClass=1; parameter.number=result.parameters; result.parameters=result.parameters+1; u.append(builder,parameter); value=call(e,"copy",[parameter.result]); }
+        else { value=zero(e,"void"); }
+        builder.locals=identity u.Local { index=cursor.index; value=value; next=builder.locals; }; cursor=cursor.next;
+    }
+    block(e,source.body); if builder.current.terminator == none { let empty be zero(e,"void"); let final be call(e,"scope_leave",[e.scope,empty]); u.returnValue(builder,final); } return result;
+}
+public function lower(source identity ir.Program) returns identity u.Program fails m.SemanticError {
+    try ir_verify.verify(source);
+    let placeholder be identity u.Function { index=-1; parameters=0; registers=none; registerTail=none; blocks=none; next=none; };
+    let result be identity u.Program { types=source; functions=none; entry=placeholder; };
+    result.entry=routine(result,source.entry); let cursor be source.functions;
+    while cursor != none { let value be routine(result,cursor); value.next=result.functions; result.functions=value; cursor=cursor.next; } return result;
+}

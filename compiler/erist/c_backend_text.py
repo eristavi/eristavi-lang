@@ -115,7 +115,20 @@ def _text_runtime() -> str:
     return r
 
 
-TEXT_RUNTIME = _text_runtime()
+from .text_builder_c import TEXT_APPEND_RUNTIME
+
+TEXT_RUNTIME = _replace_once(
+    _text_runtime(),
+    "static eri_text eri_text_add(eri_text a,eri_text b){ eri_text r={a.len+b.len,NULL}; if(r.len){r.data=(unsigned char*)eri_alloc(r.len); if(a.len)memcpy(r.data,a.data,a.len); if(b.len)memcpy(r.data+a.len,b.data,b.len);} return r; }",
+    TEXT_APPEND_RUNTIME,
+)
+TEXT_RUNTIME = TEXT_RUNTIME.replace(
+    "eri_list_##NAME##_detach(v); v->data=(TYPE*)eri_realloc(v->data,sizeof(TYPE)*(v->count+1)); v->data[v->count++]=x;",
+    "if(v->count>=SIZE_MAX/sizeof(TYPE))eri_fault(\"List size overflow\"); v->data=(TYPE*)eri_prefix_append((const unsigned char*)v->data,v->count*sizeof(TYPE),(const unsigned char*)&x,sizeof(TYPE)); v->count++;",
+).replace(
+    "eri_list_text_detach(v); v->data=(eri_text*)eri_realloc(v->data,sizeof(eri_text)*(v->count+1)); v->data[v->count++]=x;",
+    "if(v->count>=SIZE_MAX/sizeof(eri_text))eri_fault(\"List size overflow\"); v->data=(eri_text*)eri_prefix_append((const unsigned char*)v->data,v->count*sizeof(eri_text),(const unsigned char*)&x,sizeof(eri_text)); v->count++;",
+)
 
 
 def _text_literal(value: str) -> str:

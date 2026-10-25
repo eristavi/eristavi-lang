@@ -1,0 +1,35 @@
+// Target-independent register/control IR. Classes: void 0, value 1,
+// machine-neutral signed integer 2, immutable bytes 3, handler 4, failure 5.
+import compiler.typed_ir as typed;
+import compiler.semantic_model as m;
+public type Operand { value Int; next maybe identity Operand; }
+public type Register { index Int; valueClass Int; next maybe identity Register; }
+public type Instruction { op Int; result Int; valueClass Int; number Int; text Text; arguments maybe identity Operand; first Int; second Int; next maybe identity Instruction; }
+public type Block { index Int; instructions maybe identity Instruction; tail maybe identity Instruction; terminator maybe identity Instruction; live Bool; next maybe identity Block; }
+public type Local { index Int; value Int; next maybe identity Local; }
+public type Function { index Int; parameters Int; registers maybe identity Register; registerTail maybe identity Register; blocks maybe identity Block; next maybe identity Function; }
+public type Program { types identity typed.Program; functions maybe identity Function; entry identity Function; }
+public type Builder { program identity Program; routine identity Function; current identity Block; registerCount Int; blockCount Int; locals maybe identity Local; }
+public function instruction(op Int) returns identity Instruction { return identity Instruction { op=op; result=-1; valueClass=0; number=0; text=""; arguments=none; first=-1; second=-1; next=none; }; }
+public function allocate(builder identity Builder,valueClass Int) returns Int { let index be builder.registerCount; builder.registerCount=index+1; let value be identity Register { index=index; valueClass=valueClass; next=none; }; let tail be builder.routine.registerTail; if tail == none { builder.routine.registers=value; } else { tail.next=value; } builder.routine.registerTail=value; return index; }
+public function block(builder identity Builder) returns identity Block { let result be identity Block { index=builder.blockCount; instructions=none; tail=none; terminator=none; live=false; next=builder.routine.blocks; }; builder.blockCount=builder.blockCount+1; builder.routine.blocks=result; return result; }
+public function append(builder identity Builder,value identity Instruction) { let tail be builder.current.tail; if tail == none { builder.current.instructions=value; } else { tail.next=value; } builder.current.tail=value; }
+public function end(builder identity Builder,value identity Instruction) { builder.current.terminator=value; }
+public function operands(values) returns maybe identity Operand { let result maybe identity Operand be none; let index be values.count-1; while index>=0 { result=identity Operand { value=values[index]; next=result; }; index=index-1; } return result; }
+public function number(builder identity Builder,number Int) returns Int { let value be instruction(1); value.result=allocate(builder,2); value.valueClass=2; value.number=number; append(builder,value); return value.result; }
+public function bytes(builder identity Builder,text Text) returns Int { let value be instruction(2); value.result=allocate(builder,3); value.valueClass=3; value.text=text; append(builder,value); return value.result; }
+public function copy(builder identity Builder,target Int,source Int) { let value be instruction(4); value.result=target; value.valueClass=registerClass(builder.routine,target); value.arguments=identity Operand { value=source; next=none; }; append(builder,value); }
+public function jump(builder identity Builder,target identity Block) { let value be instruction(6); value.first=target.index; end(builder,value); }
+public function branch(builder identity Builder,test Int,first identity Block,second identity Block) { let value be instruction(7); value.arguments=identity Operand { value=test; next=none; }; value.first=first.index; value.second=second.index; end(builder,value); }
+public function returnValue(builder identity Builder,result Int) { let value be instruction(8); value.arguments=identity Operand { value=result; next=none; }; end(builder,value); }
+public function local(builder identity Builder,index Int) returns Int { let cursor be builder.locals; while cursor != none { if cursor.index == index { return cursor.value; } cursor=cursor.next; } return -1; }
+public function resultClass(name Text) returns Int {
+    if name == "scope_enter" { return 6; }
+    if name == "truth" or name == "match" { return 2; } if name == "frame" { return 4; } if name == "saved" or name == "empty_failure" { return 5; }
+    if name == "store" or name == "output" or name == "init" or name == "add" or name == "pop" or name == "propagate" or name == "fail" or name == "cleanup_accumulate" or name == "propagate_if" or name == "cleanup_normal" or name == "unwind" { return 0; } return 1;
+}
+public function call(builder identity Builder,name Text,arguments) returns Int { let value be instruction(3); value.text=name; value.valueClass=resultClass(name); value.result=allocate(builder,value.valueClass); value.arguments=operands(arguments); append(builder,value); return value.result; }
+public function zero(builder identity Builder,name Text) returns Int { let value be instruction(3); value.text=name; value.valueClass=resultClass(name); value.result=allocate(builder,value.valueClass); append(builder,value); return value.result; }
+public function blockAt(routine identity Function,index Int) returns maybe identity Block { let cursor be routine.blocks; while cursor != none { if cursor.index == index { return cursor; } cursor=cursor.next; } return none; }
+public function registerClass(routine identity Function,index Int) returns Int { let cursor be routine.registers; while cursor != none { if cursor.index == index { return cursor.valueClass; } cursor=cursor.next; } return -1; }
+public function routineAt(program identity Program,index Int) returns maybe identity Function { if index == -1 { return program.entry; } let cursor be program.functions; while cursor != none { if cursor.index == index { return cursor; } cursor=cursor.next; } return none; }

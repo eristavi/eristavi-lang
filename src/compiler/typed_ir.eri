@@ -7,14 +7,17 @@ import compiler.semantic_model as m;
 public type Node {
     kind Int; valueType Int; text Text; number Int; index Int; immutable Bool;
     first maybe identity Node; second maybe identity Node; third maybe identity Node;
-    next maybe identity Node; location identity m.Location;
+    next maybe identity Node; location identity m.Location; effects maybe identity Failure; marked Bool;
 }
 public type Local { index Int; name Text; valueType Int; immutable Bool; parameter Bool; next maybe identity Local; }
-public type Function { index Int; name Text; result Int; locals maybe identity Local; body identity Node; next maybe identity Function; }
-public type Program { functions maybe identity Function; entry identity Function; }
+public type Failure { valueType Int; next maybe identity Failure; }
+public type Field { index Int; name Text; valueType Int; immutable Bool; next maybe identity Field; }
+public type Type { index Int; kind Int; name Text; inner Int; fields maybe identity Field; checked Bool; next maybe identity Type; }
+public type Function { index Int; name Text; result Int; locals maybe identity Local; body identity Node; failures maybe identity Failure; next maybe identity Function; }
+public type Program { functions maybe identity Function; entry identity Function; types maybe identity Type; }
 public function node(kind Int, valueType Int, location identity m.Location) returns identity Node {
     return identity Node { kind=kind; valueType=valueType; text=""; number=0; index=-1; immutable=false;
-        first=none; second=none; third=none; next=none; location=location; };
+        first=none; second=none; third=none; next=none; location=location; effects=none; marked=false; };
 }
 public function scalar(kind Int) returns Bool { return kind >= 1 and kind <= 4; }
 public function functionAt(program identity Program, index Int) returns maybe identity Function {
@@ -29,4 +32,26 @@ public function localAt(routine identity Function, index Int) returns maybe iden
 }
 public function require(condition Bool, location identity m.Location, message Text) returns Bool fails m.SemanticError {
     if not condition { return try m.reject(location,"ir-verify",message); } return true;
+}
+
+public function typeAt(program identity Program, index Int) returns maybe identity Type {
+    let cursor be program.types; while cursor != none { if cursor.index == index { return cursor; } cursor=cursor.next; } return none;
+}
+public function kind(program identity Program, index Int) returns Int {
+    if index >= 1 and index <= 5 { return index; } let value be typeAt(program,index); if value != none { return value.kind; } return -1;
+}
+public function inner(program identity Program, index Int) returns Int {
+    let value be typeAt(program,index); if value != none { return value.inner; } return -1;
+}
+public function fieldAt(program identity Program, index Int, field Int) returns maybe identity Field {
+    let value be typeAt(program,index); if value != none { let cursor be value.fields; while cursor != none { if cursor.index == field { return cursor; } cursor=cursor.next; } } return none;
+}
+public function ordinary(program identity Program, index Int) returns Bool {
+    let actual be kind(program,index); return actual >= 1 and actual != 5 and actual != 10;
+}
+public function failureHas(failures maybe identity Failure, valueType Int) returns Bool {
+    let cursor be failures; while cursor != none { if cursor.valueType == valueType { return true; } cursor=cursor.next; } return false;
+}
+public function failureSubset(first maybe identity Failure, second maybe identity Failure) returns Bool {
+    let cursor be first; while cursor != none { if not failureHas(second,cursor.valueType) { return false; } cursor=cursor.next; } return true;
 }

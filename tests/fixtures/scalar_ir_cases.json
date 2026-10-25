@@ -427,5 +427,205 @@
       "math.eri": "public function square(value Float) { return value*value; }"
     },
     "stdout": "true\n"
+  },
+  {
+    "name": "list_copy_add_set",
+    "files": {
+      "app.eri": "let first be [1,2]; let second be first; second.add(3); second[0]=9; output(first.count); output(first[0]); output(second.count); output(second[0]);"
+    },
+    "stdout": "2\n1\n3\n9\n"
+  },
+  {
+    "name": "list_iteration_snapshot",
+    "files": {
+      "app.eri": "let items be [1,2]; for item in items { output(item); items.add(3); } output(items.count);"
+    },
+    "stdout": "1\n2\n4\n"
+  },
+  {
+    "name": "list_nested_copy",
+    "files": {
+      "app.eri": "let a be [[1,2],[3]]; let b be a; b[0][0]=9; output(a[0][0]); output(b[0][0]); output(a==[[1,2],[3]]);"
+    },
+    "stdout": "1\n9\ntrue\n",
+    "referenceC": false
+  },
+  {
+    "name": "list_generic",
+    "files": {
+      "app.eri": "function first(items) { return items[0]; } function append(items,item) { items.add(item); return items; } let items be [1,2]; let longer be append(items,3); output(first(items)); output(longer.count); output(items.count); output(first([\"ok\"]));"
+    },
+    "stdout": "1\n3\n2\nok\n"
+  },
+  {
+    "name": "list_empty_inference",
+    "files": {
+      "app.eri": "let items be []; items.add(42); output(items[0]); output(items.count);"
+    },
+    "stdout": "42\n1\n"
+  },
+  {
+    "name": "ordinary_fields",
+    "files": {
+      "app.eri": "type User { name Text; age Int; } let first be User { age=44; name=\"Revaz\"; }; let second be first; second.name=\"Changed\"; output(first.name); output(second.name); output(first.age);"
+    },
+    "stdout": "Revaz\nChanged\n44\n"
+  },
+  {
+    "name": "ordinary_nested",
+    "files": {
+      "app.eri": "type Point { x Int; } type Shape { point Point; } let a be Shape { point=Point { x=1; }; }; let b be a; b.point.x=9; output(a.point.x); output(b.point.x);"
+    },
+    "stdout": "1\n9\n"
+  },
+  {
+    "name": "ordinary_count_field",
+    "files": {
+      "app.eri": "type Counter { count Text; } let a be Counter { count=\"before\"; }; a.count=\"after\"; output(a.count);"
+    },
+    "stdout": "after\n"
+  },
+  {
+    "name": "ordinary_list_elements",
+    "files": {
+      "app.eri": "type User { name Text; } let a be [User { name=\"A\"; }]; let b be a; b[0].name=\"B\"; b.add(User { name=\"C\"; }); output(a[0].name); output(b[0].name); output(b.count);"
+    },
+    "stdout": "A\nB\n2\n",
+    "referenceC": false
+  },
+  {
+    "name": "ordinary_generic",
+    "files": {
+      "app.eri": "type Point { x Int; } function echo(value) { return value; } let a be Point { x=1; }; let b be echo(a); b.x=2; output(a.x); output(b.x); output(a==Point { x=1; });"
+    },
+    "stdout": "1\n2\ntrue\n"
+  },
+  {
+    "name": "identity_alias",
+    "files": {
+      "app.eri": "type Counter { value Int; } let a be identity Counter { value=1; }; let b be a; b.value=42; output(a.value); output(a==b); output(a==identity Counter { value=42; });"
+    },
+    "stdout": "42\ntrue\nfalse\n"
+  },
+  {
+    "name": "identity_nested_value",
+    "files": {
+      "app.eri": "type Counter { value Int; } type Holder { counter identity Counter; } let counter be identity Counter { value=1; }; let a be Holder { counter=counter; }; let b be a; b.counter.value=42; output(a.counter.value); output(counter.value);"
+    },
+    "stdout": "42\n42\n"
+  },
+  {
+    "name": "identity_generic",
+    "files": {
+      "app.eri": "type Counter { value Int; } function echo(value) { return value; } let a be identity Counter { value=1; }; let b be echo(a); b.value=2; output(a.value);"
+    },
+    "stdout": "2\n"
+  },
+  {
+    "name": "maybe_narrow",
+    "files": {
+      "app.eri": "type User { name Text; } let user maybe User be none; output(user==none); user=User { name=\"Revaz\"; }; output(user.name); output(user!=none);"
+    },
+    "stdout": "true\nRevaz\ntrue\n"
+  },
+  {
+    "name": "maybe_return_argument",
+    "files": {
+      "app.eri": "function find(ok Bool) returns maybe Int { if ok { return 42; } return none; } function unwrap(value maybe Int) returns Int { if value==none { return 0; } return value; } output(unwrap(find(true))); output(unwrap(find(false))); output(unwrap(7));"
+    },
+    "stdout": "42\n0\n7\n"
+  },
+  {
+    "name": "maybe_identity_links",
+    "files": {
+      "app.eri": "type Link { value Int; next maybe identity Link; } let second be identity Link { value=2; next=none; }; let first be identity Link { value=1; next=second; }; let cursor maybe identity Link be first; while cursor!=none { output(cursor.value); cursor=cursor.next; }"
+    },
+    "stdout": "1\n2\n"
+  },
+  {
+    "name": "fixed_value",
+    "files": {
+      "app.eri": "type Point { fixed x Int; y Int; } let fixed points be [Point { x=1; y=2; }]; output(points[0].x);"
+    },
+    "stdout": "1\n"
+  },
+  {
+    "name": "text_views",
+    "files": {
+      "app.eri": "let text be \"A😀e\\u{301}\\0\"; output(text.bytes.count); output(text.scalars.count); output(text.characters.count); output(text.scalars[1]); output(text.bytes[0]);"
+    },
+    "stdout": "9\n5\n4\n😀\n65\n"
+  },
+  {
+    "name": "checked_typed",
+    "files": {
+      "app.eri": "error Problem { code Int; message Text; } function failer() returns Int fails Problem { fail Problem { message=\"expected\"; code=7; }; } function run() { let value be failer() else error Problem { output(error.code); output(error.message); return; }; output(value); } run();"
+    },
+    "stdout": "7\nexpected\n"
+  },
+  {
+    "name": "checked_propagation",
+    "files": {
+      "app.eri": "error Problem { message Text; } function inner() fails Problem { fail Problem { message=\"expected\"; }; } function outer() fails Problem { try inner(); } outer() else error Problem { output(error.message); };"
+    },
+    "stdout": "expected\n"
+  },
+  {
+    "name": "checked_catchall",
+    "files": {
+      "app.eri": "error Problem { code Int; message Text; } function inner() returns Int fails Problem { fail Problem { code=3; message=\"caught\"; }; } inner() else error { output(error.message); };"
+    },
+    "stdout": "caught\n"
+  },
+  {
+    "name": "checked_success",
+    "files": {
+      "app.eri": "error Problem { message Text; } function value() returns Int fails Problem { return 42; } function run() { let result be value() else error Problem { output(error.message); return; }; output(result); } run();"
+    },
+    "stdout": "42\n"
+  },
+  {
+    "name": "file_read_cleanup",
+    "files": {
+      "app.eri": "import std.files; function read() returns Text fails files.FileError { with file be try files.openRead(\"$ROOT/data.txt\") { return try file.readText(); } } function run() { let text be read() else error files.FileError { output(error.message); return; }; output(text); } run();",
+      "data.txt": "hello 😀"
+    },
+    "stdout": "hello 😀\n"
+  },
+  {
+    "name": "file_write_cleanup",
+    "files": {
+      "app.eri": "import std.files; function write() fails files.FileError { with file be try files.create(\"$ROOT/result.txt\") { try file.writeText(\"written\"); } } function read() returns Text fails files.FileError { with file be try files.openRead(\"$ROOT/result.txt\") { return try file.readText(); } } function run() fails files.FileError { try write(); output(try read()); try files.remove(\"$ROOT/result.txt\"); } run() else error files.FileError { output(error.message); };"
+    },
+    "stdout": "written\n"
+  },
+  {
+    "name": "file_error_handler",
+    "files": {
+      "app.eri": "import std.files; function read() returns Text fails files.FileError { with file be try files.openRead(\"$ROOT/missing.txt\") { return try file.readText(); } } read() else error files.FileError { output(error.path==\"$ROOT/missing.txt\"); output(error.message!=\"\"); };"
+    },
+    "stdout": "true\ntrue\n"
+  },
+  {
+    "name": "unicode_stdlib",
+    "files": {
+      "app.eri": "import std.unicode; output(unicode.normalizeNfc(\"cafe\\u{301}\")); output(unicode.isIdentifierStart(\"λ\")); output(unicode.fromScalar(128512));"
+    },
+    "stdout": "café\ntrue\n😀\n"
+  },
+  {
+    "name": "native_stack_arguments",
+    "files": {
+      "app.eri": "function sum(a Int,b Int,c Int,d Int,e Int,f Int,g Int,h Int) { return a+b+c+d+e+f+g+h; } output(sum(1,2,3,4,5,6,7,8));"
+    },
+    "stdout": "36\n"
+  },
+  {
+    "name": "identity_list_count",
+    "files": {
+      "app.eri": "let value be identity [1,2]; output(value.count);"
+    },
+    "stdout": "2\n",
+    "referenceC": false
   }
 ]

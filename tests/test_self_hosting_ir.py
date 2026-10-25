@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import platform
 import shlex
 import subprocess
 import tempfile
@@ -18,7 +19,7 @@ CASES=json.loads((ROOT/'tests/fixtures/scalar_ir_cases.json').read_text())
 
 def materialize(root,files):
     for name,source in files.items():
-        path=root/name;path.parent.mkdir(parents=True,exist_ok=True);path.write_text(source,encoding='utf-8')
+        path=root/name;path.parent.mkdir(parents=True,exist_ok=True);path.write_text(source.replace('$ROOT',str(root)),encoding='utf-8')
     return root/'app.eri'
 
 
@@ -28,13 +29,20 @@ class SelfHostedIRTests(unittest.TestCase):
         cls.temp=tempfile.TemporaryDirectory();cls.binary=Path(cls.temp.name)/'erist-frontend'
         if build_native(ROOT/'src/frontend.eri',cls.binary,ROOT/'src'):
             cls.temp.cleanup();raise AssertionError('IR frontend failed to compile')
+        cls.native=platform.system()=='Linux' and platform.machine().lower() in ('x86_64','amd64','aarch64','arm64')
+        cls.target='x86_64-linux' if platform.machine().lower() in ('x86_64','amd64') else 'arm64-linux'
+        cls.runtime=Path(cls.temp.name)/'runtime.o'
+        if cls.native:
+            result=subprocess.run([*shlex.split(os.environ.get('CC','cc')),'-std=c11','-O2','-DERIST_NATIVE_RUNTIME','-c',str(ROOT/'runtime/value_runtime.c'),'-o',str(cls.runtime)],capture_output=True,text=True)
+            if result.returncode: raise AssertionError(result.stderr)
+
 
     @classmethod
     def tearDownClass(cls):
         cls.temp.cleanup()
 
     def invoke(self,entry,root,command='emit-c'):
-        return subprocess.run([str(self.binary),command,str(entry),'--source-root',str(root)],
+        return subprocess.run([str(self.binary),command,str(entry),'--source-root',str(root),*(['--target',self.target] if command=='emit-asm' else [])],
                               capture_output=True,text=True,timeout=120,env={'PATH':'','LANG':'C'})
 
     def compile_c(self,text,root,*,sanitize=False):
@@ -56,10 +64,22 @@ class SelfHostedIRTests(unittest.TestCase):
                 self.assertEqual(emitted.stderr,'')
                 actual=self.compile_c(emitted.stdout,root)
                 self.assertEqual((actual.returncode,actual.stdout,actual.stderr),(0,case['stdout'],''))
+                if self.native:
+                    native=self.invoke(entry,root,'emit-asm')
+                    self.assertEqual(native.returncode,0,native.stderr)
+                    assembly=root/'generated.s';assembly.write_text(native.stdout)
+                    executable=root/'native'
+                    linked=subprocess.run([*shlex.split(os.environ.get('CC','cc')),str(assembly),str(self.runtime),'-lm','-o',str(executable)],capture_output=True,text=True)
+                    self.assertEqual(linked.returncode,0,linked.stderr)
+                    executed=subprocess.run([str(executable)],capture_output=True,text=True,timeout=10,env={'PATH':'','LANG':'C'})
+                    self.assertEqual((executed.returncode,executed.stdout,executed.stderr),(0,case['stdout'],''))
+
                 module=compile_entry(entry,root);lines=[]
                 interpreter=Interpreter(lines.append,module.module_id,module.imports)
                 interpreter.run(module.program)
                 self.assertEqual(''.join(line+'\n' for line in lines),case['stdout'])
+                if case.get('referenceC') is False:
+                    continue  # Stage-0 C does not lower these nested mutation paths.
                 reference=root/'reference'
                 self.assertEqual(build_native(entry,reference,root),0)
                 expected=subprocess.run([str(reference)],capture_output=True,text=True,timeout=10)
@@ -97,23 +117,6 @@ class SelfHostedIRTests(unittest.TestCase):
             self.assertEqual(routine['body']['location']['path'],str(entry.resolve()))
             a=self.invoke(entry,root);b=self.invoke(entry,root);self.assertEqual(a.stdout,b.stdout)
 
-    def test_unsupported_features_are_located_without_partial_output(self):
-        sources=[
-            'let items be [1,2]; output(items.count);',
-            'let x maybe Int be none;','type Box { value Int; } let x be Box { value=1; };',
-            'let x be identity 1;',
-            'error Oops { message Text; } function f() fails Oops { fail Oops { message="x"; }; }',
-            'import std.process; output(process.arguments().count);',
-        ]
-        for source in sources:
-            with self.subTest(source=source),tempfile.TemporaryDirectory() as td:
-                root=Path(td);entry=materialize(root,{'app.eri':source})
-                for command in ('ir','emit-c'):
-                    result=self.invoke(entry,root,command)
-                    self.assertEqual(result.returncode,1,result.stderr);self.assertEqual(result.stdout,'')
-                    self.assertRegex(result.stderr,r'app\.eri:\d+:\d+: compiler error \[lower\]:')
-                    self.assertEqual(sorted(p.name for p in root.iterdir()),['app.eri'])
-
     def test_semantic_errors_precede_lowering_and_never_execute_the_program(self):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);entry=materialize(root,{'app.eri':'output("must not run"); let fixed x be 1; x=2;'})
@@ -146,15 +149,15 @@ import compiler.semantic_model as m;
 function location() returns identity m.Location { return identity m.Location { path="test.eri"; line=4; column=2; next=none; }; }
 function node(kind Int,valueType Int) returns identity ir.Node { return ir.node(kind,valueType,location()); }
 function empty() returns identity ir.Program {
-    let entry be identity ir.Function { index=-1; name="entry"; result=5; locals=none; body=node(0,5); next=none; };
-    return identity ir.Program { functions=none; entry=entry; };
+    let entry be identity ir.Function { index=-1; name="entry"; result=5; locals=none; body=node(0,5); failures=none; next=none; };
+    return identity ir.Program { functions=none; entry=entry; types=none; };
 }
 function item(immutable Bool) returns identity ir.Local { return identity ir.Local { index=0; name="x"; valueType=1; immutable=immutable; parameter=false; next=none; }; }
 function discard(value identity ir.Node) returns identity ir.Node { let result be node(12,5); result.first=value; return result; }
 function declare() returns identity ir.Node { let result be node(10,5); result.index=0; result.first=node(1,1); return result; }
 function read() returns identity ir.Node { let result be node(2,1); result.index=0; return result; }
 function routine(p identity ir.Program) returns identity ir.Function {
-    let result be identity ir.Function { index=0; name="f"; result=1; locals=none; body=node(0,5); next=none; };
+    let result be identity ir.Function { index=0; name="f"; result=1; locals=none; body=node(0,5); failures=none; next=none; };
     let returned be node(15,5); returned.first=node(1,1); result.body.first=returned; p.functions=result; return result;
 }
 function check(p identity ir.Program) {
@@ -258,8 +261,8 @@ function backendRejected(p identity ir.Program) {
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);entry=materialize(root,{'app.eri':source})
             result=self.invoke(entry,root);self.assertEqual(result.returncode,0,result.stderr)
-            text=result.stdout.replace('int main(void) {','int eri_application(void) {')
-            text+='\nint main(void) { if(fesetround(FE_DOWNWARD)) return 2; return eri_application(); }\n'
+            text=result.stdout.replace('int main(int argc,char **argv) {','int eri_application(int argc,char **argv) {')
+            text+='\nint main(void) { if(fesetround(FE_DOWNWARD)) return 2; return eri_application(0,NULL); }\n'
             c_source=root/'rounding.c';c_source.write_text(text);binary=root/'rounding'
             for flags in (['-O0'],['-O3','-ffp-contract=fast']):
                 with self.subTest(flags=flags):
@@ -276,3 +279,47 @@ function backendRejected(p identity ir.Program) {
             compiled=subprocess.run([*shlex.split(os.environ.get('CC','cc')),'-std=c11','-O3','-ffast-math',str(source),'-lm','-o',str(root/'unsafe')],capture_output=True,text=True)
             self.assertNotEqual(compiled.returncode,0)
             self.assertIn('fast-math is unsupported',compiled.stderr)
+
+    def test_all_accepted_semantic_projects_lower_without_python_fallback(self):
+        semantic=json.loads((ROOT/'tests/fixtures/semantic_cases.json').read_text())
+        for case in semantic:
+            if not case['accept']: continue
+            with self.subTest(case=case['name']),tempfile.TemporaryDirectory() as td:
+                root=Path(td)
+                for name,source in case['files'].items():
+                    path=root/name;path.parent.mkdir(parents=True,exist_ok=True);path.write_text(source)
+                result=self.invoke(root/case['entry'],root)
+                self.assertEqual(result.returncode,0,result.stderr)
+                self.assertIn('int main(',result.stdout)
+
+    def test_cleanup_failure_preserves_primary_and_secondary_order(self):
+        prefix='import std.files; error Problem { message Text; } '
+        for failure,expected in [('return 42;','inner\nouter\n'),('fail Problem { message="body"; };','body\ninner\nouter\n')]:
+            with self.subTest(failure=failure),tempfile.TemporaryDirectory() as td:
+                root=Path(td)
+                for name in ('outer','inner'): (root/name).write_text('')
+                source=(prefix+'function run() returns Int fails files.FileError, Problem { '
+                        f'with outer be try files.openRead("{root}/outer") {{ '
+                        f'with inner be try files.openRead("{root}/inner") {{ '+failure+' } } } '
+                        'function main() { let ignored be run() else error { output(error.message); return; }; } main();')
+                entry=materialize(root,{'app.eri':source});emitted=self.invoke(entry,root)
+                self.assertEqual(emitted.returncode,0,emitted.stderr)
+                text=emitted.stdout
+                start=text.index('static bool eri_file_cleanup(');end=text.index('\n',start)
+                original=text[start:end].replace('eri_file_cleanup(','eri_file_cleanup_real(',1)
+                injected='''
+static bool eri_file_cleanup(eri_file *file,eri_failure_value *failure){
+    bool closed=!file||file->closed;
+    bool actual=eri_file_cleanup_real(file,failure);
+    if(actual||closed)return actual;
+    const char *name=strrchr(file->c_path,'/');name=name?name+1:file->c_path;
+    *failure=eri_make_file_failure(name,file->path);return true;
+}
+'''
+                text=text[:start]+original+injected+text[end:]
+                text=text.replace('int main(int argc,char **argv) {','int erist_application(int argc,char **argv) {')
+                text+='''
+int main(int argc,char **argv){int code=erist_application(argc,argv);eri_secondary_failure *next=eri_failure.secondary;while(next){eri_out_text(next->message);next=next->next;}return code;}
+'''
+                actual=self.compile_c(text,root)
+                self.assertEqual((actual.returncode,actual.stdout,actual.stderr),(0,expected,''))
