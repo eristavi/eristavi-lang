@@ -20,6 +20,8 @@ import sys
 import tempfile
 
 ROOT=Path(__file__).resolve().parents[1]
+OFFLINE_HEAP_GC_INTERVAL=65536
+RUNTIME_FLAGS=['-std=c11','-O2','-DERIST_NATIVE_RUNTIME',f'-DERIST_HEAP_GC_INTERVAL={OFFLINE_HEAP_GC_INTERVAL}']
 
 def run(args,**kwargs):
     result=subprocess.run(list(map(str,args)),capture_output=True,text=True,timeout=900,**kwargs)
@@ -150,7 +152,7 @@ def build(destination,compiler=None,self_build=True):
     copy_file(ROOT/'runtime/value_runtime.c',destination/'runtime/value_runtime.c',inventory)
     copy_file(ROOT/'runtime/native_gc_runtime.c',destination/'runtime/native_gc_runtime.c',inventory)
     runtime=destination/'lib/erist-runtime.o'
-    run([*cc,'-std=c11','-O2','-DERIST_NATIVE_RUNTIME','-c',ROOT/'runtime/native_gc_runtime.c','-o',runtime])
+    run([*cc,*RUNTIME_FLAGS,'-c',ROOT/'runtime/native_gc_runtime.c','-o',runtime])
     inventory.append({'file':str(runtime),'sha256':digest(runtime),'source':'runtime/native_gc_runtime.c'})
     source_hashes={str(path.relative_to(ROOT)):digest(path) for path in sorted((ROOT/'src').rglob('*.eri'))}
     source_hashes['runtime/value_runtime.c']=digest(ROOT/'runtime/value_runtime.c')
@@ -161,7 +163,7 @@ def build(destination,compiler=None,self_build=True):
         actual={name:digest(ROOT/name) for name in source_hashes}
         if actual!=source_hashes:
             raise RuntimeError('compiler source changed during self-build; rerun on a fixed snapshot')
-    (destination/'build-toolchain.json').write_text(json.dumps({'compiler':run([*cc,'--version']).stdout.splitlines()[0],'runtime_flags':['-std=c11','-O2','-DERIST_NATIVE_RUNTIME'],'runtime_source':'runtime/native_gc_runtime.c','target':target},indent=2)+'\n')
+    (destination/'build-toolchain.json').write_text(json.dumps({'compiler':run([*cc,'--version']).stdout.splitlines()[0],'runtime_flags':RUNTIME_FLAGS,'runtime_source':'runtime/native_gc_runtime.c','target':target},indent=2)+'\n')
     with tempfile.TemporaryDirectory() as td:
         scratch=Path(td)
         bootstrap=compiler
