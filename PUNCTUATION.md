@@ -1,18 +1,16 @@
 # Eristavi Punctuation and Operators
 
-> **Status: Locked for pre-0.1**
+> **Status: Pre-0.1 punctuation contract; collection extension qualification pending**
 
-This document defines the symbolic punctuation and operator vocabulary of Eristavi pre-0.1.
+This document defines Eristavi's symbolic punctuation and operator vocabulary.
 
-The design goal is deliberately small: use symbols where they are universally clear, use words where symbols reduce readability, and do not add shorthand until real programs justify it.
+The design goal is deliberately small: use symbols where their structural meaning is immediately readable, use words where symbols reduce readability, and avoid redundant shorthand.
 
 ## 1. Complete pre-0.1 symbolic vocabulary
 
-Pre-0.1 defines exactly these symbolic punctuation and operator tokens:
-
 ```text
 Punctuation:
-; , . ( ) { } [ ]
+; , : . ( ) { } [ ]
 
 Assignment:
 =
@@ -24,7 +22,7 @@ Comparison:
 == != < <= > >=
 ```
 
-Boolean operators remain the already-locked word operators:
+Boolean operators remain words:
 
 ```text
 and
@@ -32,23 +30,27 @@ or
 not
 ```
 
+`:` is punctuation, not a keyword and not a general-purpose operator.
+
 ## 2. Structural punctuation
 
 ### Semicolon
 
-`;` terminates simple statements, field declarations, and named-field initializers according to grammar context.
+`;` terminates simple statements, field declarations, named-field initializers, and Map entries according to grammar context.
 
 ```eri
 let price be 50;
 price = 60;
-return price;
-```
 
-Structural blocks end with `}` rather than an additional semicolon unless the surrounding construct itself requires a terminating `;`.
+let ages be [
+    "Anna" : 32;
+    "John" : 41;
+];
+```
 
 ### Comma
 
-`,` separates items in grammar contexts such as function parameters, arguments, error contracts, and collection elements.
+`,` separates items in grammar contexts such as function parameters, arguments, error contracts, and List elements.
 
 ```eri
 function add(a Int, b Int) returns Int {
@@ -56,6 +58,35 @@ function add(a Int, b Int) returns Int {
 }
 
 let names be ["Anna", "Maria", "John"];
+```
+
+A Map deliberately does not reuse comma as its entry terminator; `:` expresses the key/value relationship and `;` closes that relationship.
+
+### Colon
+
+`:` has one pre-0.1 source meaning: it separates a Map key from its value inside a Map literal.
+
+```eri
+let ages be [
+    "Anna" : 32;
+    "John" : 41;
+];
+```
+
+The empty Map spelling is:
+
+```eri
+let values be [:];
+```
+
+`:` is not used for type annotations, return types, namespace qualification, slicing, or a ternary operator.
+
+Therefore forms such as these remain invalid:
+
+```text
+let age: Int be 32;
+condition ? first : second
+module::name
 ```
 
 ### Dot
@@ -69,20 +100,13 @@ text.characters.count
 models.user
 ```
 
-Because pre-0.1 floating-point literals require digits on both sides of a decimal point, forms such as `.5` are invalid and do not create ambiguity with the dot token.
-
 ### Parentheses
 
 `(` and `)` are used for grouping, function calls, and parameter lists.
 
-```eri
-let result be (a + b) * c;
-let total be add(a, b);
-```
-
 ### Braces
 
-`{` and `}` delimit blocks and named-field construction bodies according to grammar context.
+`{` and `}` delimit blocks and named-field construction bodies.
 
 ```eri
 if ready {
@@ -95,21 +119,23 @@ let user be User {
 };
 ```
 
+Braces are not Map literal punctuation.
+
 ### Square brackets
 
-`[` and `]` are used for collection literals and indexing where the type supports indexing.
+`[` and `]` are the visual family for collection literals and supported indexing.
 
 ```eri
-let names be ["Anna", "Maria", "John"];
+let names be ["Anna", "Maria"];
+let ages be ["Anna" : 32; "John" : 41;];
+let data Bytes be [72, 101, 108];
+
 let first be names[0];
+let age be ages["Anna"];
+let byte be data[0];
 ```
 
-Square-bracket syntax does not imply that every type is directly indexable. For example, the locked `Text` model still rejects direct integer indexing:
-
-```eri
-text[0]               // compile-time error
-text.characters[0]    // valid character-view indexing
-```
+The contained punctuation/type context determines whether the literal denotes List, Map or Bytes. Square brackets do not make arbitrary types indexable; direct `Text` integer indexing remains invalid.
 
 ## 3. Assignment
 
@@ -124,26 +150,13 @@ Examples:
 ```eri
 price = 50;
 user.name = "Maria";
-
-let user be User {
-    id = 1;
-    name = "Anna";
-};
+numbers[0] = 10;
+ages["Anna"] = 33;
 ```
 
-The grammar determines whether `=` is an ordinary assignment or a named-field initializer.
+The grammar determines whether `=` is ordinary assignment or a named-field initializer. It remains a statement/construction form, not an expression operator.
 
-Pre-0.1 does not define compound-assignment operators such as:
-
-```text
-+= -= *= /= %=
-```
-
-Programs use the explicit form:
-
-```eri
-price = price + 10;
-```
+Compound-assignment operators such as `+=`, `-=`, `*=`, `/=` and `%=` are not defined.
 
 ## 4. Arithmetic operators
 
@@ -153,34 +166,9 @@ Pre-0.1 defines:
 + - * / %
 ```
 
-Examples:
+`-` also serves as unary numeric negation. The lexer does not include the minus sign inside numeric literal tokens.
 
-```eri
-let total be price + tax;
-let difference be a - b;
-let area be width * height;
-let average be total / count;
-let remainder be value % 10;
-```
-
-The `-` token also serves as unary numeric negation:
-
-```eri
-let temperature be -5;
-let result be -(a + b);
-```
-
-The lexer does not include the minus sign inside integer or floating-point literal tokens.
-
-Pre-0.1 does not define symbolic exponentiation, increment, or decrement operators such as:
-
-```text
-**
-++
---
-```
-
-Exponentiation may be provided through ordinary numeric APIs unless later language experience proves dedicated syntax valuable.
+No symbolic exponentiation, increment or decrement syntax is defined.
 
 ## 5. Comparison operators
 
@@ -195,35 +183,11 @@ Pre-0.1 defines:
 >=
 ```
 
-Examples:
+The semantic meaning of equality follows the operand types. `identity T == identity T` compares logical identity under the existing identity contract.
 
-```eri
-if age >= 18 {
-    ...
-}
-
-if user == none {
-    ...
-}
-
-if first != second {
-    ...
-}
-```
-
-The semantic meaning of equality follows the operand types. In particular, the already-locked `identity T` rule means `==` compares logical identity for identity values.
-
-The standalone symbol `!` is not an Eristavi operator. Boolean negation uses the word operator:
-
-```eri
-not ready
-```
-
-`!=` remains one complete comparison token.
+Standalone `!` is not an Eristavi operator; Boolean negation is `not`. `!=` remains one complete comparison token.
 
 ## 6. Boolean operators remain words
-
-Boolean operations use the already-locked keywords:
 
 ```text
 and
@@ -231,43 +195,11 @@ or
 not
 ```
 
-Examples:
-
-```eri
-if active and verified {
-    ...
-}
-
-if not connected {
-    ...
-}
-
-if admin or owner {
-    ...
-}
-```
-
-Pre-0.1 does not define symbolic aliases:
-
-```text
-&&
-||
-!
-```
+There are no symbolic aliases `&&`, `||` or standalone `!`.
 
 ## 7. Longest-token recognition
 
-When one valid symbolic token is a prefix of another, the lexer recognizes the longest valid token.
-
-For example:
-
-```eri
-a >= b
-```
-
-contains the single comparison token `>=`, not separate `>` and `=` tokens.
-
-The same rule applies to:
+When one valid symbolic token is a prefix of another, the lexer recognizes the longest valid token. This applies to:
 
 ```text
 ==
@@ -276,31 +208,23 @@ The same rule applies to:
 >=
 ```
 
-This longest-token rule is lexical and does not define operator precedence.
+The rule is lexical and does not define operator precedence.
 
-## 8. Slash and comment recognition
+## 8. Slash and comments
 
-The `/` symbol participates in three lexical possibilities:
-
-```text
-/     division operator
-//    line-comment opener
-/*    block-comment opener
-```
-
-When the lexer encounters `/`, it checks the following source character:
+`/` participates in three lexical possibilities:
 
 ```text
-"//"  -> line comment
-"/*"  -> block comment
-"/"   -> division operator when neither comment opener matches
+/     division
+//    line comment
+/*    block comment
 ```
 
-Comment recognition therefore takes priority over treating the first `/` as division.
+Comment opener recognition takes priority over treating the first slash as division.
 
 ## 9. Deliberately absent symbolic syntax
 
-Pre-0.1 does not define the following symbolic forms:
+Pre-0.1 does not define:
 
 ```text
 += -= *= /= %=
@@ -308,7 +232,7 @@ Pre-0.1 does not define the following symbolic forms:
 **
 && || !
 & | ^ ~ << >>
-? :
+?
 -> =>
 ::
 @
@@ -316,13 +240,11 @@ Pre-0.1 does not define the following symbolic forms:
 `
 ```
 
-Their absence is intentional. They must not acquire language meaning without a separate future design decision justified by real Eristavi programs.
+The colon itself is no longer absent; its meaning is narrowly fixed to Map entry punctuation. There is still no punctuation-based ternary operator or colon-based type annotation.
 
-This also means pre-0.1 has no punctuation-based ternary operator, arrow-return syntax, annotation prefix, namespace separator, bitwise operator family, or escaped-identifier delimiter.
+## 10. Whitespace
 
-## 10. Whitespace around punctuation
-
-Whitespace is not required around punctuation or symbolic operators when token boundaries are otherwise unambiguous.
+Whitespace is not required around punctuation/operators where token boundaries are unambiguous.
 
 These are lexically valid:
 
@@ -330,10 +252,11 @@ These are lexically valid:
 add(a,b);
 a+b;
 user.name;
+["a":1;]
 ```
 
-Canonical spacing is a formatter/style concern rather than a lexical rule.
+Canonical spacing remains a formatter/style concern. Documentation prefers spaces around `:` in Map entries for readability.
 
 ## Governing rule
 
-> Eristavi pre-0.1 keeps its symbolic vocabulary small: `; , . ( ) { } [ ]`, `=`, `+ - * / %`, and `== != < <= > >=`. Boolean logic remains `and`, `or`, and `not`; speculative shorthand and redundant symbolic aliases are excluded until real programs justify them.
+> Eristavi keeps its symbolic vocabulary small. `:` exists because an associative key/value relationship needs a clear visual separator; it has no unrelated secondary meaning. Boolean logic remains `and`, `or`, and `not`, and redundant shorthand stays excluded.
