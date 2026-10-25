@@ -1,7 +1,7 @@
 import compiler.semantic_model as m;
 
 // Kinds: variable, Int, Float, Bool, Text, no-value, nominal, List,
-// maybe, identity, resource, catch-all error, Text view.
+// maybe, identity, resource, catch-all error, Text view, Bytes, Map.
 public function resolve(value identity m.Type) returns identity m.Type {
     let cursor be value; let link be cursor.link;
     while link != none { cursor=link; link=cursor.link; }
@@ -12,11 +12,18 @@ public function inner(value identity m.Type) returns identity m.Type {
     if child != none { return resolve(child); }
     return m.makeType(5, "");
 }
+public function other(value identity m.Type) returns identity m.Type {
+    let child be resolve(value).other;
+    if child != none { return resolve(child); }
+    return m.makeType(5, "");
+}
 public function occurs(variable identity m.Type, value identity m.Type) returns Bool {
     let actual be resolve(value);
     if variable == actual { return true; }
     let child be actual.inner;
-    if child != none { return occurs(variable, child); }
+    if child != none { if occurs(variable, child) { return true; } }
+    let second be actual.other;
+    if second != none { if occurs(variable, second) { return true; } }
     return false;
 }
 function mask(kind Int) returns Int { if kind == 1 { return 1; } if kind == 2 { return 2; } if kind == 4 { return 4; } return 0; }
@@ -55,6 +62,8 @@ public function unify(first identity m.Type, second identity m.Type, location id
     if left.kind != right.kind or left.name != right.name { try m.reject(location,"type","incompatible static types; explicit conversion is required"); }
     let leftChild be left.inner; let rightChild be right.inner;
     if leftChild != none { if rightChild != none { try unify(leftChild,rightChild,location); } }
+    let leftOther be left.other; let rightOther be right.other;
+    if leftOther != none { if rightOther != none { try unify(leftOther,rightOther,location); } }
     return left;
 }
 public function assign(expected identity m.Type, actual identity m.Type, location identity m.Location) returns identity m.Type fails m.SemanticError {
@@ -76,15 +85,20 @@ public function clone(value identity m.Type, map identity m.Clone) returns ident
         let fresh be m.makeType(0,""); fresh.allowed=actual.allowed; fresh.mustFixed=actual.mustFixed; fresh.mustEqual=actual.mustEqual;
         map.head=identity m.Pair { source=actual; target=fresh; next=map.head; }; return fresh;
     }
-    let child be actual.inner;
-    if child != none { return m.wrap(actual.kind,clone(child,map)); }
+    let child be actual.inner; let second be actual.other;
+    if child != none {
+        if second != none { return m.pairType(actual.kind,clone(child,map),clone(second,map)); }
+        return m.wrap(actual.kind,clone(child,map));
+    }
     return actual;
 }
 public function unresolved(value identity m.Type) returns Bool {
     let actual be resolve(value);
     if actual.kind == 0 { return true; }
     let child be actual.inner;
-    if child != none { return unresolved(child); }
+    if child != none { if unresolved(child) { return true; } }
+    let second be actual.other;
+    if second != none { if unresolved(second) { return true; } }
     return false;
 }
 public function variablesWithin(value identity m.Type, parameters maybe identity m.Binding) returns Bool {
@@ -95,6 +109,8 @@ public function variablesWithin(value identity m.Type, parameters maybe identity
         return false;
     }
     let child be actual.inner;
-    if child != none { return variablesWithin(child,parameters); }
+    if child != none { if not variablesWithin(child,parameters) { return false; } }
+    let second be actual.other;
+    if second != none { if not variablesWithin(second,parameters) { return false; } }
     return true;
 }
