@@ -48,6 +48,8 @@ public function literalExpr() returns Int { return 29; }
 public function noneExpr() returns Int { return 30; }
 public function listExpr() returns Int { return 31; }
 public function nameExpr() returns Int { return 32; }
+public function mapEntry() returns Int { return 33; }
+public function mapExpr() returns Int { return 34; }
 
 public function make(kind Int, token Int, first maybe identity Node, second maybe identity Node, third maybe identity Node, text Text, extra Int, flag Bool) returns identity Node {
     return identity Node {
