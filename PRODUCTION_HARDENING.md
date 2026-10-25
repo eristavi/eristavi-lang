@@ -132,7 +132,7 @@ failures, and 10,000 transient allocation iterations. Normal and sanitizer build
 must return to zero tracked live blocks after all roots are released. The offline
 bundle itself links the collector-enabled runtime, so compiler B/C repeated
 self-build and the no-Python/no-C-compiler audit exercise the same implementation;
-the audit additionally executes 10,000 iterations of ordinary Eristavi Text/List
+the audit additionally executes 100,000 iterations of ordinary Eristavi Text/List
 allocation.
 
 See `NATIVE_HEAP_GC.md` for the root/traversal contract and remaining qualification

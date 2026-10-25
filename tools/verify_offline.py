@@ -33,7 +33,7 @@ function read(path Text) returns Text fails files.FileError { with file be try f
 function failer() fails Expected { fail Expected { message="handled"; }; }
 function churn() {
     let i be 0;
-    while i < 10000 {
+    while i < 100000 {
         let text be "a"+"b";
         let values be [i,i+1];
         if text != "ab" or values.count != 2 { output("collector mismatch"); return; }
@@ -72,7 +72,7 @@ run();
         if calls.exists(): raise RuntimeError('a forbidden bootstrap executable was invoked')
         evidence={'native_application':True,'python_or_c_compiler_invoked':False,'bundled_assembler_linker':True,
                   'unicode_paths':True,'source_preserved':True,'failed_build_preserves_output':True,
-                  'heap_stress_iterations':10000,
+                  'heap_stress_iterations':100000,
                   'expected_stdout':expected,'target':json.loads((bundle/'platform.json').read_text())['target']}
         (bundle/'offline-tests.json').write_text(json.dumps(evidence,indent=2)+'\n')
         print(json.dumps(evidence,indent=2))

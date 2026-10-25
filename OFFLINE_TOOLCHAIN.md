@@ -209,7 +209,7 @@ A qualified bundle records:
   Unicode paths, source preservation, failed-build output preservation and the
   collector stress-iteration count.
 
-The offline application audit executes 10,000 iterations of transient Text/List
+The offline application audit executes 100,000 iterations of transient Text/List
 allocation before its existing ordinary-value, identity, file and checked-error
 checks. This makes the packaged runtime cross real collector safe points during a
 normal `.eri` application build/run rather than validating reclamation only from a

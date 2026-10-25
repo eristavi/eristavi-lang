@@ -126,7 +126,7 @@ nearly every opportunity and cover:
 
 The Linux offline bundle is also built with this runtime candidate so repeated compiler
 self-build and the no-Python/no-C-compiler application audit exercise the collector. The
-offline `.eri` audit itself runs 10,000 transient Text/List iterations before its
+offline `.eri` audit itself runs 100,000 transient Text/List iterations before its
 ordinary-value, identity, file and checked-error checks.
 
 ## Current boundaries

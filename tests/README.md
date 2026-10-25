@@ -84,6 +84,6 @@ checking live nested Text, weak prefix-index removal, an unreachable identity
 cycle, saved checked-failure payloads, and 10,000 iterations of transient
 Text/object allocation. The same fixture runs under AddressSanitizer and
 UndefinedBehaviorSanitizer and requires zero tracked live blocks after all roots
-are released. The offline application audit separately executes 10,000 iterations
+are released. The offline application audit separately executes 100,000 iterations
 of ordinary Eristavi Text/List allocation using the packaged collector-enabled
 runtime before its existing value/identity/file/error checks.
