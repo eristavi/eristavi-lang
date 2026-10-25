@@ -3,6 +3,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import re
 import shlex
 import shutil
 import subprocess
@@ -61,6 +62,26 @@ class SelfHostedUniversalTests(unittest.TestCase):
                     compiled=subprocess.run([clang,'--target='+triple,'-c',str(assembly),'-o',str(obj)],capture_output=True,text=True)
                     self.assertEqual(compiled.returncode,0,compiled.stderr)
                     data=obj.read_bytes();self.assertEqual(data[:4],b'\x7fELF');self.assertEqual(int.from_bytes(data[18:20],'little'),machine)
+
+    def test_native_root_maps_cover_verified_registers_and_stack_parameters(self):
+        source=('function sum(a Int,b Int,c Int,d Int,e Int,f Int,g Int,h Int,i Int) { return a+b+c+d+e+f+g+h+i; } '
+                'let n be 0; while n<3 { n=sum(n,1,2,3,4,5,6,7,8); } output(n);')
+        with tempfile.TemporaryDirectory() as td:
+            entry=Path(td)/'app.eri';entry.write_text(source)
+            report=subprocess.run([str(self.binary),'uir',str(entry)],capture_output=True,text=True,timeout=60)
+            self.assertEqual(report.returncode,0,report.stderr);data=json.loads(report.stdout)
+            expected={}
+            for routine in [*data['functions'],data['entry']]:
+                name='erist_entry' if routine is data['entry'] else 'f'+str(routine['index'])
+                # Physical spill words ascend from saved parameters to reversed registers.
+                expected[name]=[1]*routine['parameters']+list(reversed(routine['registers']))+[0]
+            for target in ('x86_64-linux','arm64-linux'):
+                with self.subTest(target=target):
+                    emitted=subprocess.run([str(self.binary),'emit-asm',str(entry),'--target',target],capture_output=True,text=True,timeout=60)
+                    self.assertEqual(emitted.returncode,0,emitted.stderr)
+                    actual={name:list(map(int,values.split(','))) for name,values in
+                            re.findall(r'\.Lroots_(\w+):\n\.byte ([0-9,]+)',emitted.stdout)}
+                    self.assertEqual(actual,expected)
 
     def test_universal_verifier_rejects_bad_calls_classes_cfg_and_initialization(self):
         helper='''

@@ -11,7 +11,10 @@ restores abandoned call scopes/temporary slots at a checked catch boundary. Stre
 and address/undefined sanitizer tests cover these lifetimes; injected cleanup
 failures now execute through both candidate C and native paths. See
 PRODUCTION_HARDENING.md for the review and remaining P0 allocation work. General
-object/Text collection and bounded temporary storage in ordinary loops remain open.
+object/Text collection remains open. The next patch adds verified-register root
+maps to both native consumers and periodic temporary-slot collection, with bounded
+loop allocation and forced-collection sanitizer tests. This is not general heap
+collection; the explicit generated-C export keeps its arena behavior.
 
 The older audit sections below retain historical Stage-0 capabilities and counts.
 In particular, Stage-0's tracing collector/register allocator must not be confused
@@ -28,7 +31,7 @@ The offline packaging gate compares fixed-snapshot native assembly/B-C binaries
 and audits application builds with unusable Python/C compiler shims. The runtime
 remains a prebuilt C bootstrap artifact and GNU assembler/linker tools are packaged;
 this is not a production release or a source-compatible Stage-0 artifact ABI port.
-The suite contains **353 tests**. Current-commit CI/self-build results belong to the
+The suite contains **356 tests**. Current-commit CI/self-build results belong to the
 PR. OFFLINE_TOOLCHAIN.md records the architecture, audit/evidence formats and gates.
 Frozen philosophy, grammar and semantic specifications remain unchanged.
 

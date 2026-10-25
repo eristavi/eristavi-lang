@@ -18,7 +18,7 @@ class NativeRuntimeLifetimeTests(unittest.TestCase):
                      '-lm','-o',str(binary)]
             built=subprocess.run(command,capture_output=True,text=True,timeout=60)
             self.assertEqual(built.returncode,0,built.stderr)
-            for mode in ('normal','failure','resource'):
+            for mode in ('normal','failure','resource','collection'):
                 with self.subTest(mode=mode):
                     result=subprocess.run([str(binary),mode],capture_output=True,text=True,timeout=30)
                     self.assertEqual((result.returncode,result.stdout,result.stderr),(0,'',''))

@@ -99,11 +99,38 @@ static void resource_unwind(void) {
     assert(live_allocations==0);
 }
 
+static void collected_slots(void) {
+    ev_scope *scope=ev_scope_enter();
+    uintptr_t roots[3]={0};const unsigned char classes[]={1,1,2};
+    evn_bind_roots(scope,roots,classes,3);
+    ev_value *kept=evn_int(7);roots[0]=(uintptr_t)kept;roots[1]=(uintptr_t)kept;
+    roots[2]=(uintptr_t)evn_int(8); /* integer-class bits are not a value root */
+    ev_collect_slots();
+    assert(ev_live_slots==1 && kept->i==7);
+    ev_scope *nested=ev_scope_enter();
+    uintptr_t nested_roots[1]={0};const unsigned char nested_classes[]={1};
+    evn_bind_roots(nested,nested_roots,nested_classes,1);
+    roots[0]=0;roots[1]=0;
+    for(int i=0;i<10000;i++){
+        (void)evn_int(i);
+        assert(ev_live_slots<=ERIST_SLOT_GC_INTERVAL+8);
+    }
+    /* The nested scope's boundary retains its node even without a value root. */
+    ev_collect_slots();
+    assert(ev_live_slots==1 && kept->i==7);
+    ev_scope_leave(nested,ev_void());
+    ev_collect_slots();
+    assert(ev_live_slots==0); /* stale integer bits must not retain that node */
+    ev_scope_leave(scope,ev_void());
+    assert(ev_next_slot_gc==ERIST_SLOT_GC_INTERVAL && live_allocations==0);
+}
+
 int main(int argc,char **argv) {
     assert(argc==2);
     if(strcmp(argv[1],"normal")==0)normal_frames();
     else if(strcmp(argv[1],"failure")==0)failed_calls();
     else if(strcmp(argv[1],"resource")==0)resource_unwind();
+    else if(strcmp(argv[1],"collection")==0)collected_slots();
     else abort();
     return 0;
 }

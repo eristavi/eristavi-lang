@@ -103,10 +103,13 @@ function exits. Object/Text buffers still use a process-lifetime bootstrap pool,
 not a production tracing collector. Long-running allocation-heavy applications
 need further memory/runtime qualification.
 
-Native checked handlers now release their frames on completion and immediately
-restore abandoned call scopes/temporary slots on an exceptional pop. Successful
-expression results and caller locals survive. This does not yet reclaim ordinary
-loop temporaries or general value/failure buffers; see PRODUCTION_HARDENING.md.
+Native checked handlers release their frames on completion and immediately
+restore abandoned call scopes/temporary slots on an exceptional pop. Both native
+consumers initialize their spills and bind root maps derived from verified
+register classes. Periodic slot collection preserves active value spills,
+parameters and scope/handler boundaries, bounding temporary storage in ordinary
+loops. General value/failure buffers remain process-owned. The explicit C export
+retains its existing arena behavior; see PRODUCTION_HARDENING.md.
 
 Optional extraction is a distinct IR operation requiring a proven local presence
 fact. Presence comparisons inspect optional storage itself, including repeated loop
@@ -198,5 +201,5 @@ The semantic corpus independently freezes 175 accepted/rejected projects, and al
 sanitized arithmetic faults, malformed typed IR, malformed Universal calls/CFG/
 classes/initialization, deterministic reports, cross-assembly for both ELF targets,
 Float rounding/non-contraction, fixed/value/identity behavior, and checked cleanup
-failure composition. The full suite contains 353 tests; hosted results and native
+failure composition. The full suite contains 356 tests; hosted results and native
 self-build audits are recorded on the change's CI run.

@@ -377,3 +377,85 @@ run();
                 self.assertEqual(compiled.returncode,0,compiled.stderr)
                 result=subprocess.run([str(executable)],capture_output=True,text=True,timeout=10)
                 self.assertEqual((result.returncode,result.stdout,result.stderr),(0,'10000\n10000\n',''))
+
+    def test_native_scalar_loop_temporary_slots_are_bounded(self):
+        if not self.native:self.skipTest('matching native ELF host required')
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td)
+            runtime=(ROOT/'runtime/value_runtime.c').read_text()
+            runtime=runtime.replace('static size_t ev_live_slots,','static size_t test_peak_slots;\nstatic size_t ev_live_slots,')
+            runtime=runtime.replace('ev_live_slots++;','ev_live_slots++;if(ev_live_slots>test_peak_slots)test_peak_slots=ev_live_slots;')
+            runtime=runtime.replace('erist_entry();return eri_process_exit_code;',
+                'erist_entry();fprintf(stderr,"%zu\\n",test_peak_slots);return eri_process_exit_code;')
+            c=root/'runtime.c';c.write_text(runtime);obj=root/'runtime.o'
+            compiled=subprocess.run([*shlex.split(os.environ.get('CC','cc')),'-std=c11','-O2',
+                '-DERIST_NATIVE_RUNTIME','-c',str(c),'-o',str(obj)],capture_output=True,text=True)
+            self.assertEqual(compiled.returncode,0,compiled.stderr)
+            peaks=[]
+            for iterations in (1000,100000):
+                entry=materialize(root,{'app.eri':f'let i be 0; while i<{iterations} {{ i=i+1; }} output(i);'})
+                emitted=self.invoke(entry,root,'emit-asm')
+                self.assertEqual(emitted.returncode,0,emitted.stderr)
+                asm=root/'loop.s';asm.write_text(emitted.stdout);binary=root/'loop'
+                built=subprocess.run([*shlex.split(os.environ.get('CC','cc')),str(asm),str(obj),'-lm','-o',str(binary)],capture_output=True,text=True)
+                self.assertEqual(built.returncode,0,built.stderr)
+                result=subprocess.run([str(binary)],capture_output=True,text=True,timeout=30)
+                self.assertEqual((result.returncode,result.stdout),(0,str(iterations)+'\n'))
+                peaks.append(int(result.stderr.strip()))
+            self.assertLess(max(peaks),4200)
+            self.assertLessEqual(peaks[1],peaks[0]+32)
+
+    def test_native_forced_slot_collection_preserves_snapshots_calls_and_failures(self):
+        if not self.native:self.skipTest('matching native ELF host required')
+        source='''
+import std.files;
+error Problem { message Text; number Int; }
+type Counter { value Int; }
+function plus(a Int,b Int,c Int,d Int,e Int,f Int,g Int,h Int,i Int) { return a+b+c+d+e+f+g+h+i; }
+function recurse(n Int) returns Int { if n==0 { return 0; } return n+recurse(n-1); }
+function failer(counter identity Counter) fails Problem {
+    let i be 0; while i<20 { counter.value=counter.value+1; i=i+1; }
+    fail Problem { message="expected"; number=counter.value; };
+}
+function read(path Text) returns Text fails files.FileError {
+    with file be try files.openRead(path) {
+        let i be 0; while i<20 { i=i+1; }
+        return try file.readText();
+    }
+}
+function resourceFailure(path Text) fails files.FileError,Problem {
+    with file be try files.openRead(path) {
+        let i be 0; while i<20 { i=i+1; }
+        fail Problem { message="resource"; number=1; };
+    }
+}
+function run() {
+    let original be [1,2,3]; let copy be original; let count be 0;
+    for item in original { copy[0]=9; count=count+item; }
+    let counter be identity Counter { value=0; }; let alias be counter; let last be 0;
+    let index be 0; while index<100 {
+        failer(counter) else error Problem { last=error.number; };
+        let test be index<50 and index<99 or index==99;
+        if test { alias.value=alias.value+1; }
+        index=index+1;
+    }
+    output(original[0]); output(copy[0]); output(count); output(counter.value==last);
+    output(plus(1,2,3,4,5,6,7,8,9)); output(recurse(20));
+    let text be read("$ROOT/data.txt") else error files.FileError { output(error.message); return; }; output(text);
+    resourceFailure("$ROOT/data.txt") else error { output(error.message); };
+}
+run();
+'''
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);entry=materialize(root,{'app.eri':source,'data.txt':'kept'})
+            emitted=self.invoke(entry,root,'emit-asm')
+            self.assertEqual(emitted.returncode,0,emitted.stderr)
+            asm=root/'forced.s';asm.write_text(emitted.stdout);binary=root/'forced'
+            flags=['-std=c11','-O2','-DERIST_NATIVE_RUNTIME','-DERIST_SLOT_GC_INTERVAL=1',
+                   '-fsanitize=address,undefined','-fno-sanitize-recover=all']
+            built=subprocess.run([*shlex.split(os.environ.get('CC','cc')),*flags,str(asm),str(ROOT/'runtime/value_runtime.c'),
+                                  '-lm','-o',str(binary)],capture_output=True,text=True)
+            self.assertEqual(built.returncode,0,built.stderr)
+            environment={**os.environ,'ASAN_OPTIONS':'detect_leaks=0'} # general value buffers remain process-owned
+            result=subprocess.run([str(binary)],capture_output=True,text=True,timeout=30,env=environment)
+            self.assertEqual((result.returncode,result.stdout,result.stderr),(0,'1\n9\n6\nfalse\n45\n210\nkept\nresource\n',''))

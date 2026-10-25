@@ -6,7 +6,7 @@ Run the full suite from the repository root:
 python -m unittest discover -s tests -v
 ```
 
-The current suite contains **353 tests**.
+The current suite contains **356 tests**.
 
 The scalar compiler corpus freezes 60 executable projects, with 10 additional
 runtime-fault comparisons under undefined-behavior sanitization and 28 malformed
@@ -67,3 +67,8 @@ normal exits and checked unwinds, including nested scopes/resources, and repeat
 under address/undefined sanitizers. Generated-program tests retain caller state
 and typed error payloads across repeated catches. Cleanup-failure injection runs
 through both the candidate C and native consumers.
+
+Native temporary-slot tests check bounded storage at 1,000/100,000 loop iterations,
+forced collection with snapshots/calls/failures/resources under address/undefined
+sanitizers, and emitted root-map coverage against independently reported IR for
+both ELF targets. The runtime fixture also checks scope marks and non-value words.
