@@ -26,6 +26,7 @@
 typedef struct eri_native_gc_block {
     unsigned char *base;
     size_t size;
+    size_t traced_values;
     bool marked;
     bool traced;
     bool weak_index;
@@ -327,8 +328,14 @@ static void eri_native_gc_mark_object(ev_object *object,eri_native_gc_value_queu
     if(!fresh&&block&&block->traced)return;
     if(block)block->traced=true;
     if(object->data){
-        eri_native_gc_mark_pointer(object->data);
-        for(size_t index=0;index<object->count;index++)eri_native_gc_queue_value(queue,object->data[index]);
+        eri_native_gc_block *data=eri_native_gc_find_exact(object->data);
+        eri_native_gc_mark_block(data);
+        /* Persistent List snapshots may share a backing prefix. Trace each
+           initialized cell once, extending the visited prefix if a longer
+           snapshot is discovered later. A boolean alone would lose that tail. */
+        size_t start=data?data->traced_values:0;
+        if(data&&object->count>start)data->traced_values=object->count;
+        for(size_t index=start;index<object->count;index++)eri_native_gc_queue_value(queue,object->data[index]);
     }
 }
 
@@ -375,7 +382,7 @@ static void eri_native_gc_mark_failure(eri_failure_value *failure,eri_native_gc_
 }
 
 static void eri_native_gc_prepare_weak_indexes(void){
-    for(eri_native_gc_block *block=eri_native_gc_blocks;block;block=block->next){block->marked=false;block->traced=false;block->weak_index=false;}
+    for(eri_native_gc_block *block=eri_native_gc_blocks;block;block=block->next){block->marked=false;block->traced=false;block->traced_values=0;block->weak_index=false;}
     for(size_t bucket=0;bucket<sizeof(eri_text_append_buckets)/sizeof(eri_text_append_buckets[0]);bucket++)
         for(eri_text_append_buffer *cursor=eri_text_append_buckets[bucket];cursor;cursor=cursor->next){
             eri_native_gc_block *block=eri_native_gc_find_exact(cursor);
@@ -458,7 +465,7 @@ static void eri_native_gc_sweep(void){
             eri_native_gc_reclaimed_blocks=eri_native_gc_add_size(eri_native_gc_reclaimed_blocks,1);
             eri_native_gc_reclaimed_bytes=eri_native_gc_add_size(eri_native_gc_reclaimed_bytes,bytes);
             free(block->base);free(block);
-        }else{block->marked=false;block->traced=false;block->weak_index=false;}
+        }else{block->marked=false;block->traced=false;block->traced_values=0;block->weak_index=false;}
         block=next;
     }
 }

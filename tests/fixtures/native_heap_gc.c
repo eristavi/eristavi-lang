@@ -36,6 +36,37 @@ static void clear_slots(void){
     eri_native_heap_collect();
 }
 
+static void shared_snapshot_tracing_is_linear(void){
+    enum {COUNT=1000};
+    ev_value *data=eri_alloc_kind(COUNT*sizeof(*data),ERI_HEAP_OBJECT_DATA);
+    for(size_t i=0;i<COUNT;i++)data[i]=ev_text(eri_text_from_cstr("alive"));
+    /* Discover successively longer snapshots, then repeat shorter ones. The
+       backing storage must expose every live tail without quadratic visits. */
+    eri_native_gc_value_queue queue={0};
+    for(size_t i=1;i<=COUNT;i++){
+        ev_object snapshot={i,data};
+        eri_native_gc_mark_object(&snapshot,&queue);
+    }
+    assert(queue.count==COUNT);
+    for(size_t i=COUNT;i>0;i--){
+        ev_object snapshot={i,data};
+        eri_native_gc_mark_object(&snapshot,&queue);
+    }
+    assert(queue.count==COUNT);
+    for(size_t i=0;i<queue.count;i++)eri_native_gc_mark_value(queue.items[i],&queue);
+    eri_native_gc_sweep();
+    for(size_t i=0;i<COUNT;i++)assert(data[i].text.len==5&&memcmp(data[i].text.data,"alive",5)==0);
+    free(queue.items);
+    /* The visited-prefix state must reset for the next collection. */
+    queue=(eri_native_gc_value_queue){0};
+    ev_object whole={COUNT,data};
+    eri_native_gc_mark_object(&whole,&queue);
+    assert(queue.count==COUNT);
+    free(queue.items);
+    eri_native_heap_collect();
+    assert(eri_native_heap_live_blocks()==0);
+}
+
 static void reachable_values_and_weak_prefixes(void){
     ev_scope *scope=evn_scope_enter();
     uintptr_t roots[5]={0};
@@ -264,6 +295,7 @@ static void long_running_allocation_plateaus(void){
 }
 
 int main(void){
+    shared_snapshot_tracing_is_linear();
     reachable_values_and_weak_prefixes();
     list_maybe_and_text_view_survive_collection();
     interior_value_roots_survive_collection();

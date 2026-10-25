@@ -83,6 +83,15 @@ payload bytes.
 - `std.files.FileError` marks its concrete message/path Text payload.
 - secondary cleanup failures are traversed in order.
 
+Multiple ordinary List snapshots can share an append-only backing prefix. The
+tracer records the longest visited initialized prefix for each data allocation
+and queues only newly discovered cells. A longer snapshot discovered later must
+extend that prefix; a boolean visited flag would miss its tail. This state resets
+each collection. Ordinary mutations still detach value storage, and shared
+identity semantics remain unchanged. A regression with 1,000 shared snapshots
+checks 1,000 element visits rather than 500,500, preserves nested Text through
+sweep, and checks that a later collection visits the storage again.
+
 The collector is non-moving. Interior references used by mutation therefore remain
 stable for the duration of an operation.
 
