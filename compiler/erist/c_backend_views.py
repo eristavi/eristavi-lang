@@ -150,6 +150,8 @@ class CBackend(TextBackend):
     """Length-aware C backend with Unicode Text views and stdlib path operations."""
 
     def emit(self, program):
+        from .collection_codegen import require_collection_codegen
+        require_collection_codegen(program, "C")
         self._ordered_declarations = []
         old_runtime, old_ctype = base.RUNTIME, base.ctype
         def uses_unicode(value):

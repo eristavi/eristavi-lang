@@ -15,6 +15,7 @@ from .typesys import (
     AnyErrorType,
     IdentityType,
     ListType,
+    MapType,
     MaybeType,
     NamedType,
     NoValueType,
@@ -55,6 +56,8 @@ def _type_to_data(t: TypeLike, variables: dict[int, str]) -> dict[str, Any]:
         return {"kind": "identity", "inner": _type_to_data(t.inner, variables)}
     if isinstance(t, ListType):
         return {"kind": "list", "element": _type_to_data(t.element, variables)}
+    if isinstance(t, MapType):
+        return {"kind": "map", "key": _type_to_data(t.key, variables), "value": _type_to_data(t.value, variables)}
     if isinstance(t, ResourceType):
         return {"kind": "resource", "name": t.name, "cleanup_errors": list(t.cleanup_errors)}
     if isinstance(t, AnyErrorType):
@@ -83,6 +86,8 @@ def _type_from_data(data: dict[str, Any], variables: dict[str, TypeVar] | None =
         return IdentityType(_type_from_data(data["inner"], variables))
     if kind == "list":
         return ListType(_type_from_data(data["element"], variables))
+    if kind == "map":
+        return MapType(_type_from_data(data["key"], variables), _type_from_data(data["value"], variables))
     if kind == "resource":
         return ResourceType(str(data["name"]), tuple(str(x) for x in data.get("cleanup_errors", ())))
     if kind == "any-error":

@@ -117,6 +117,7 @@ def _install_semantics() -> None:
     old_target_type = BaseAnalyzer._target_type
     old_equality = BaseAnalyzer._equality_comparable
     old_deep_fixable = BaseAnalyzer._deep_fixable
+    old_argument_type = BaseAnalyzer._argument_type
 
     def with_expected(self, expected, action):
         previous = getattr(self, "_collection_expected_type", None)
@@ -262,14 +263,12 @@ def _install_semantics() -> None:
                 raise SemanticError(f"output does not support {describe(actual)}", expression.location)
             return self._record(expression, NO_VALUE, self.expr_failures.get(id(expression.arguments[0]), set()))
 
-        # Give an explicitly Bytes-typed parameter enough context to interpret a
-        # square-bracket literal as Bytes rather than the default List<Int>.
-        if isinstance(expression.callee, NameExpr) and expression.callee.name in self.functions:
-            fn = self.functions[expression.callee.name]
-            for argument, declared in zip(expression.arguments, fn.typed_parameters):
-                if declared is not None and resolve(declared) == BYTES and isinstance(argument, ListExpr):
-                    with_expected(self, BYTES, lambda argument=argument: self._expr(argument, True, allow_checked))
         return old_call(self, expression, value_required, allow_checked)
+
+    def argument_type(self, expression, declared_type, allow_checked):
+        if declared_type is not None and resolve(declared_type) == BYTES and isinstance(expression, ListExpr):
+            return with_expected(self, BYTES, lambda: self._expr(expression, True, allow_checked))
+        return old_argument_type(self, expression, declared_type, allow_checked)
 
     def target_type(self, target, for_write=False):
         if isinstance(target, IndexExpr):
@@ -311,6 +310,7 @@ def _install_semantics() -> None:
     BaseAnalyzer._target_type = target_type
     BaseAnalyzer._equality_comparable = equality
     BaseAnalyzer._deep_fixable = deep_fixable
+    BaseAnalyzer._argument_type = argument_type
     BaseAnalyzer._eristavi_collections_installed = True
 
 
@@ -322,9 +322,9 @@ def _install_runtime() -> None:
     old_equal = runtime_base.equal_value
     old_statement = BaseInterpreter._statement
     old_expr = BaseInterpreter._expr
-    old_member = BaseInterpreter._member_value
-    old_assign = BaseInterpreter._assign
-    old_eval_ref = BaseInterpreter._eval_ref
+    old_member = BaseInterpreter._member_from_value
+    old_assign_index = BaseInterpreter._assign_index
+    old_index_reference = BaseInterpreter._index_reference
     old_call_function = BaseInterpreter._call_function
 
     def map_index(value: MapValue, key) -> int:
@@ -393,22 +393,9 @@ def _install_runtime() -> None:
                     raise RuntimeFault("duplicate Map key in literal", entry.location)
                 result.entries.append((copy_value(key), copy_value(value)))
             return result
-        if isinstance(expression, IndexExpr):
-            base = self._expr(expression.base)
-            index = self._expr(expression.index)
-            if isinstance(base, MapValue):
-                position = map_index(base, index)
-                if position < 0:
-                    raise RuntimeFault("Map key not found", expression.location)
-                return copy_value(base.entries[position][1])
-            if isinstance(base, BytesValue):
-                if not isinstance(index, int) or isinstance(index, bool) or index < 0 or index >= len(base.data):
-                    raise RuntimeFault("Bytes index out of bounds", expression.location)
-                return int(base.data[index])
         return old_expr(self, expression)
 
-    def member(self, expression):
-        base = self._expr(expression.base)
+    def member(self, base, expression):
         if isinstance(base, MapValue):
             if expression.name == "count":
                 return len(base.entries)
@@ -417,43 +404,37 @@ def _install_runtime() -> None:
             if expression.name == "count":
                 return len(base.data)
             raise RuntimeFault(f"Bytes has no member {expression.name!r}", expression.location)
-        return old_member(self, expression)
+        return old_member(self, base, expression)
 
-    def assign(self, target, value):
-        if isinstance(target, IndexExpr):
-            base = self._eval_ref(target.base)
-            index = self._expr(target.index)
-            if isinstance(base, MapValue):
-                position = map_index(base, index)
-                if position < 0:
-                    base.entries.append((copy_value(index), copy_value(value)))
-                else:
-                    key = base.entries[position][0]
-                    base.entries[position] = (key, copy_value(value))
-                return
-            if isinstance(base, BytesValue):
-                if not isinstance(index, int) or isinstance(index, bool) or index < 0 or index >= len(base.data):
-                    raise RuntimeFault("Bytes index out of bounds", target.location)
-                if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= 255:
-                    raise RuntimeFault("Bytes elements must be Int values between 0 and 255", target.location)
-                base.data[index] = value
-                return
-        return old_assign(self, target, value)
+    def assign_index(self, base, index, value, location):
+        if isinstance(base, MapValue):
+            position = map_index(base, index)
+            if position < 0:
+                base.entries.append((copy_value(index), copy_value(value)))
+            else:
+                key = base.entries[position][0]
+                base.entries[position] = (key, copy_value(value))
+            return
+        if isinstance(base, BytesValue):
+            if not isinstance(index, int) or isinstance(index, bool) or index < 0 or index >= len(base.data):
+                raise RuntimeFault("Bytes index out of bounds", location)
+            if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= 255:
+                raise RuntimeFault("Bytes elements must be Int values between 0 and 255", location)
+            base.data[index] = value
+            return
+        return old_assign_index(self, base, index, value, location)
 
-    def eval_ref(self, expression):
-        if isinstance(expression, IndexExpr):
-            base = self._eval_ref(expression.base)
-            index = self._expr(expression.index)
-            if isinstance(base, MapValue):
-                position = map_index(base, index)
-                if position < 0:
-                    raise RuntimeFault("Map key not found", expression.location)
-                return base.entries[position][1]
-            if isinstance(base, BytesValue):
-                if not isinstance(index, int) or isinstance(index, bool) or index < 0 or index >= len(base.data):
-                    raise RuntimeFault("Bytes index out of bounds", expression.location)
-                return int(base.data[index])
-        return old_eval_ref(self, expression)
+    def index_reference(self, base, index, location):
+        if isinstance(base, MapValue):
+            position = map_index(base, index)
+            if position < 0:
+                raise RuntimeFault("Map key not found", location)
+            return base.entries[position][1]
+        if isinstance(base, BytesValue):
+            if not isinstance(index, int) or isinstance(index, bool) or index < 0 or index >= len(base.data):
+                raise RuntimeFault("Bytes index out of bounds", location)
+            return int(base.data[index])
+        return old_index_reference(self, base, index, location)
 
     def call_function(self, fn, args):
         converted = []
@@ -491,9 +472,9 @@ def _install_runtime() -> None:
 
     BaseInterpreter._statement = statement
     BaseInterpreter._expr = expr
-    BaseInterpreter._member_value = member
-    BaseInterpreter._assign = assign
-    BaseInterpreter._eval_ref = eval_ref
+    BaseInterpreter._member_from_value = member
+    BaseInterpreter._assign_index = assign_index
+    BaseInterpreter._index_reference = index_reference
     BaseInterpreter._call_function = call_function
     BaseInterpreter._format = format_value
     BaseInterpreter._eristavi_collections_installed = True

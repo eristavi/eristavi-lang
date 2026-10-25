@@ -30,6 +30,8 @@ class ResourceUniversalLowerer(CheckedUniversalLowerer):
         self.external_types = list(external_types)
 
     def lower(self, program):
+        from .collection_codegen import require_collection_codegen
+        require_collection_codegen(program, "Universal IR")
         source_types = [
             UType(
                 item.name,

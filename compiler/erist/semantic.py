@@ -500,7 +500,7 @@ class Analyzer:
             if len(expr.arguments)!=len(fn.typed_parameters): raise SemanticError(f"function {expr.callee.name!r} expects {len(fn.typed_parameters)} argument(s), got {len(expr.arguments)}",expr.location)
             args=[]; failures=set()
             for i,(a,decl_t) in enumerate(zip(expr.arguments,fn.typed_parameters),1):
-                at=self._expr(a,True,allow_checked); failures|=self.expr_failures.get(id(a),set())
+                at=self._argument_type(a,decl_t,allow_checked); failures|=self.expr_failures.get(id(a),set())
                 if decl_t is not None: self._assign_or_error(decl_t,at,a.location,f"argument {i}"); args.append(decl_t)
                 else: args.append(at)
             failures|=fn.fails
@@ -515,7 +515,7 @@ class Analyzer:
         if len(expr.arguments)!=len(fn.typed_parameters): raise SemanticError(f"function {fn.declaration.name!r} expects {len(fn.typed_parameters)} argument(s), got {len(expr.arguments)}",expr.location)
         args=[]; failures=set()
         for i,(a,decl_t) in enumerate(zip(expr.arguments,fn.typed_parameters),1):
-            at=self._expr(a,True,allow_checked); failures|=self.expr_failures.get(id(a),set())
+            at=self._argument_type(a,decl_t,allow_checked); failures|=self.expr_failures.get(id(a),set())
             if isinstance(resolve(at),NoValueType): raise SemanticError(f"argument {i} cannot be a no-value expression",a.location)
             if isinstance(resolve(at),ResourceType): raise SemanticError("resource handles cannot be passed as ordinary value parameters",a.location)
             if decl_t is not None: self._assign_or_error(decl_t,at,a.location,f"argument {i}"); args.append(decl_t)
@@ -525,6 +525,9 @@ class Analyzer:
         rt=self._ensure_function(fn,args,value_required)
         if value_required and isinstance(resolve(rt),NoValueType): raise SemanticError("a no-value function call cannot be used where a value is required",expr.location)
         return self._record(expr,rt,failures)
+
+    def _argument_type(self,expression,declared_type,allow_checked):
+        return self._expr(expression,True,allow_checked)
 
     def _handled(self,expr:HandledExpr,value_required):
         t=self._expr(expr.value,value_required,True); possible=set(self.expr_failures.get(id(expr.value),set()))

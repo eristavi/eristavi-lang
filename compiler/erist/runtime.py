@@ -142,9 +142,7 @@ class Interpreter:
         if isinstance(e,MemberExpr): return self._member_value(e)
         if isinstance(e,IndexExpr):
             base=self._expr(e.base); idx=self._expr(e.index)
-            if not isinstance(base,ListValue): raise RuntimeFault("indexing requires List",e.location)
-            if idx<0 or idx>=len(base.items): raise RuntimeFault("List index out of bounds",e.location)
-            return copy_value(base.items[idx])
+            return self._index_value(base,idx,e.location)
         if isinstance(e,ConstructionExpr):
             return UserValue(self._runtime_type_name(e.type_path),{f.name:copy_value(self._expr(f.value)) for f in e.fields})
         if isinstance(e,CallExpr): return self._call(e)
@@ -175,6 +173,21 @@ class Interpreter:
     def _member_value(self,e):
         if isinstance(e.base,NameExpr) and e.base.name in self.imports: return ("module-member",e.base.name,e.name)
         base=self._expr(e.base)
+        return self._member_from_value(base,e)
+
+    def _index_value(self,base,index,location):
+        return copy_value(self._index_reference(base,index,location))
+
+    def _index_reference(self,base,index,location):
+        if not isinstance(base,ListValue): raise RuntimeFault("indexing requires List",location)
+        if index<0 or index>=len(base.items): raise RuntimeFault("List index out of bounds",location)
+        return base.items[index]
+
+    def _assign_index(self,base,index,value,location):
+        self._index_reference(base,index,location)
+        base.items[index]=copy_value(value)
+
+    def _member_from_value(self,base,e):
         if isinstance(base,IdentityValue): base=base.value
         if isinstance(base,ListValue):
             if e.name=="count": return len(base.items)
@@ -260,9 +273,7 @@ class Interpreter:
             cell.value=copy_value(value); return
         if isinstance(target,IndexExpr):
             base=self._eval_ref(target.base); idx=self._expr(target.index)
-            if not isinstance(base,ListValue): raise RuntimeFault("indexed assignment requires List",target.location)
-            if idx<0 or idx>=len(base.items): raise RuntimeFault("List index out of bounds",target.location)
-            base.items[idx]=copy_value(value); return
+            self._assign_index(base,idx,value,target.location); return
         if isinstance(target,MemberExpr):
             base=self._eval_ref(target.base)
             if isinstance(base,IdentityValue): base=base.value
@@ -282,9 +293,7 @@ class Interpreter:
             raise RuntimeFault("member reference requires user-defined value",e.location)
         if isinstance(e,IndexExpr):
             base=self._eval_ref(e.base); idx=self._expr(e.index)
-            if not isinstance(base,ListValue): raise RuntimeFault("index reference requires List",e.location)
-            if idx<0 or idx>=len(base.items): raise RuntimeFault("List index out of bounds",e.location)
-            return base.items[idx]
+            return self._index_reference(base,idx,e.location)
         return self._expr(e)
 
     def _resolve_cell(self,name):

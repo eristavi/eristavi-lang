@@ -1,8 +1,9 @@
 # Heap accounting foundation
 
 This is an opt-in diagnostic build facility for `runtime/value_runtime.c`.
-It measures allocations; it does not implement general heap reclamation.
-The frozen language philosophy, source syntax and ownership semantics are unchanged.
+It measures allocations; it is deliberately separate from the native tracing
+collector in `runtime/native_gc_runtime.c`. The frozen language philosophy, source
+syntax and ownership semantics are unchanged.
 
 ## Use
 
@@ -72,12 +73,21 @@ integration compares ordinary and diagnostic builds of the same assembly and
 forces frequent temporary-slot collection while checking unchanged stdout.
 
 The raw-runtime stress fixture runs two batches of 100 ordinary value/List/Text
-and checked-failure operations. On the tested 64-bit host, retained payload bytes
-grow from 55,100 to 110,200; object/data/Text/failure families grow independently,
-while slot/scope/handler/normalization scratch storage is released. Test-only
-shutdown frees all remaining blocks after every application value is dead and
-checks a zero live balance. That teardown is not a proposed garbage collector.
+and checked-failure operations. On the tested 64-bit host, the pre-collector
+baseline retained payload bytes from 55,100 to 110,200; object/data/Text/failure
+families grew independently, while slot/scope/handler/normalization scratch storage
+was released. Test-only shutdown freed all remaining blocks after every application
+value was dead and checked a zero live balance. That teardown was measurement
+infrastructure, not a proposed collector.
 
-The next memory milestone needs tracing layouts, root coverage for heap payloads,
-interior references and saved failures, and safe treatment of prefix indexes.
-No diagnostic registry or category label alone is sufficient to reclaim objects.
+## Relationship to native reclamation
+
+The native collector described in `NATIVE_HEAP_GC.md` uses its own allocation
+registry and typed reachability rules. It is intentionally not compiled together
+with `ERIST_HEAP_STATS`: the diagnostic registry above keeps references to every
+tracked allocation and would therefore corrupt a tracing reachability test.
+
+The accounting fixture remains useful as an independent historical baseline and
+for allocator/category diagnostics. The tracing collector is validated separately
+with forced collection, typed root maps, identity cycles, saved failures, weak
+prefix indexes and long-running allocation stress.
