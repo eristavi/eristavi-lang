@@ -3,10 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .diagnostics import SemanticError
-from .ir import IRCount, IRExpr, IRIndex
+from .ir import IRCount, IRExpr, IRIndex, IRStmt
 from .ir_text import Lowerer as TextLowerer
-from .syntax import IndexExpr, ListExpr, MapExpr, MemberExpr
-from .typesys import BYTES, INT, MapType, resolve
+from .syntax import AssignStmt, IndexExpr, ListExpr, MapExpr, MemberExpr, NameExpr
+from .typesys import BYTES, INT, MapType, describe, resolve
 
 
 @dataclass(frozen=True)
@@ -23,6 +23,15 @@ class IRMap(IRExpr):
 @dataclass(frozen=True)
 class IRBytes(IRExpr):
     elements: tuple[IRExpr, ...]
+
+
+@dataclass(frozen=True)
+class IRCollectionIndexAssign(IRStmt):
+    name: str
+    base_type: str
+    index: IRExpr
+    value: IRExpr
+    location: object
 
 
 class Lowerer(TextLowerer):
@@ -99,6 +108,21 @@ class Lowerer(TextLowerer):
                 return INT
         return super()._ast_type(e)
 
+    def _stmt(self, s):
+        if isinstance(s, AssignStmt) and isinstance(s.target, IndexExpr) and isinstance(s.target.base, NameExpr):
+            base = resolve(self._expr_type(s.target.base))
+            if base == BYTES or isinstance(base, MapType):
+                target_name = describe(self._ast_type(s.target))
+                value = self._coerce(self._expr(s.value), target_name, s.location)
+                return IRCollectionIndexAssign(
+                    s.target.base.name,
+                    describe(base),
+                    self._expr(s.target.index),
+                    value,
+                    s.location,
+                )
+        return super()._stmt(s)
+
     def _expr(self, e):
         semantic_type = self._expr_type(e)
         semantic_name = self._describe_collection_type(semantic_type)
@@ -132,8 +156,4 @@ class Lowerer(TextLowerer):
         actual = resolve(t)
         if actual == BYTES:
             return "Bytes"
-        if isinstance(actual, MapType):
-            from .typesys import describe
-            return describe(actual)
-        from .typesys import describe
         return describe(actual)
