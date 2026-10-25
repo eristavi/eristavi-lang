@@ -22,8 +22,8 @@ public function calculateTotal(price Float, tax Float) returns Float {
 }
 
 function describe(customer Customer) returns Text {
-    if customer.middleName != none {
-        return customer.name + " \u{2014} " + customer.middleName;
+    if customer.middleName == none {
+        return customer.name;
     } else {
         return customer.name;
     }
@@ -36,11 +36,13 @@ let customers be [1, 2, 3];
 let имя Text be "Anna";
 let greeting Text be "Hello\nEristavi";
 let optionalName maybe Text be none;
+let remaining Int be 1;
 
 for customer in customers {
     output(customer);
 }
 
-while retryLimit > 0 and true {
+while remaining > 0 and true {
     output(greeting);
+    remaining = remaining - 1;
 }
