@@ -47,6 +47,10 @@ class MapBytesCollectionTests(unittest.TestCase):
             ["42"],
         )
 
+    def test_empty_map_still_enforces_stable_key_contract(self):
+        self.bad('let values be [:]; values[1.5] = 2;')
+        self.bad('let values be [:]; output(values[1.5]);')
+
     def test_map_value_semantics(self):
         source = '''
         let first be ["a" : 1;];
