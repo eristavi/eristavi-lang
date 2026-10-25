@@ -6,7 +6,7 @@ from .ir_text import IRProcessCall, IRFileAcquire, IRUnicodeCall, IRFileExists, 
 from .unicode_c import grapheme_runtime_c
 from .unicode_library_c import unicode_library_c
 from .process_c import PROCESS_RUNTIME
-from dataclasses import fields, is_dataclass
+from dataclasses import dataclass, fields, is_dataclass, replace
 
 
 def _view_ctype(t: str) -> str:
@@ -141,10 +141,16 @@ _HOSTED_TEXT_RUNTIME = _replace_once(
 VIEW_RUNTIME = _HOSTED_TEXT_RUNTIME + _VIEW_PREFIX + grapheme_runtime_c() + _VIEW_SUFFIX + _HOSTED_FILES + PROCESS_RUNTIME
 
 
+@dataclass(frozen=True)
+class _CValue(base.IRExpr):
+    code: str
+
+
 class CBackend(TextBackend):
     """Length-aware C backend with Unicode Text views and stdlib path operations."""
 
     def emit(self, program):
+        self._ordered_declarations = []
         old_runtime, old_ctype = base.RUNTIME, base.ctype
         def uses_unicode(value):
             if isinstance(value, IRUnicodeCall):
@@ -164,14 +170,47 @@ class CBackend(TextBackend):
         finally:
             base.RUNTIME, base.ctype = old_runtime, old_ctype
 
+    def _function(self, routine):
+        self._ordered_declarations = []
+        result = super()._function(routine)
+        declarations = self._ordered_declarations
+        self._ordered_declarations = []
+        if declarations:
+            before, separator, after = result.partition("{\n")
+            result = before + separator + self._indent_text("".join(declarations), 1) + after
+        return result
+
+    def _ordered(self, children, rebuild):
+        assignments = []
+        values = []
+        for child in children:
+            code = self._expr(child)
+            self.temp += 1
+            name = f"_eri_order_{self.temp}"
+            self._ordered_declarations.append(f"{base.ctype(child.type_name)} {name};\n")
+            assignments.append(f"{name} = ({code})")
+            values.append(_CValue(child.type_name, child.location, name))
+        result = super()._expr(rebuild(values))
+        return "(" + ", ".join([*assignments, result]) + ")"
+
     def _entry_function(self, body):
         # Hosted argc/argv do not change Eristavi's implicit source entry body.
         return ("int main(int argc,char **argv) {\n"
                 "    eri_process_argc=argc; eri_process_argv=argv;\n"
-                "    fesetround(FE_TONEAREST);\n" + self._indent_text(body, 1)
+                "    fesetround(FE_TONEAREST);\n" + self._indent_text("".join(self._ordered_declarations) + body, 1)
                 + "    return eri_process_exit_code;\n}\n")
 
     def _expr(self, e):
+        if isinstance(e, _CValue):
+            return e.code
+        # Standard C comma expressions sequence operand evaluations without
+        # GNU statement expressions. Only declarations are hoisted; evaluation
+        # stays inside its original loop/short-circuit/failure-handler boundary.
+        if isinstance(e, base.IRBinary) and e.operator not in ("and", "or"):
+            return self._ordered([e.left, e.right],
+                                 lambda values: replace(e, left=values[0], right=values[1]))
+        if isinstance(e, base.IRCall) and len(e.arguments) > 1:
+            return self._ordered(e.arguments, lambda values: replace(e, arguments=values))
         if isinstance(e, IRProcessCall):
             arguments = ", ".join(self._expr(arg) for arg in e.arguments)
             return f"eri_process_{e.name}({arguments})"

@@ -6,7 +6,11 @@ Run the full suite from the repository root:
 python -m unittest discover -s tests -v
 ```
 
-The current suite contains **333 tests**.
+The current suite contains **340 tests**.
+
+The scalar compiler corpus freezes 32 executable projects, with 10 additional
+runtime-fault comparisons under undefined-behavior sanitization and 22 malformed
+IR checks against both verifier and C emitter. See SCALAR_COMPILATION.md.
 
 The semantic corpus freezes 175 projects (67 accepted, 108 rejected). Acceptance
 and inferred contracts are compared independently with Stage-0; 10 documented

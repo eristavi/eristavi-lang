@@ -5,7 +5,7 @@ The repository now contains a usable **syntax frontend written in Eristavi** at
 and checks syntax or writes a machine-readable token/AST report.
 
 The syntax commands do not resolve imports or check types. Experimental semantic
-commands now do; application code generation remains Stage-0.
+commands now do; `ir` and `emit-c` add an experimental scalar compilation path.
 `erist check` remains the Stage-0 semantic checker; `erist-frontend check` checks
 syntax only. An unknown function name can therefore pass the frontend and still
 be rejected by Stage-0 semantic analysis.
@@ -113,8 +113,11 @@ JavaScript and Wasm support for these new library operations is pending and thei
 use is rejected explicitly. No language syntax or implicit ownership rules were
 added for this phase.
 
-Experimental semantic analysis is now implemented in Eristavi. Verified IR and
-code generation are the next stages. Full self-building requires repeatable compiler builds and equivalent
+Experimental semantic analysis, source-close typed IR, verification and scalar C
+emission are now implemented in Eristavi. See SCALAR_COMPILATION.md for `ir` and
+`emit-c`, supported source coverage and build dependencies. Broader lowering,
+Universal IR and native backends remain later stages. Full self-building requires
+repeatable compiler builds and equivalent
 semantic/conformance results. The final offline native toolchain must also bundle
 or implement its assembler/linker functionality before external build tools can
 be removed from normal native compilation.

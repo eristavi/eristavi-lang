@@ -70,9 +70,16 @@ own module graph offline. Expression type/effect facts are retained for Stage 4.
 See [`SEMANTIC_ANALYSIS.md`](SEMANTIC_ANALYSIS.md). Complete equivalence and promotion
 require continued differential coverage; this is not full self-building.
 
-### Stage 4 — IR and verification
+### Stage 4 — experimental typed IR and C executable slice
 
-Typed IR and Universal IR construction, verification and basic optimization move to Eristavi.
+Source-close typed IR construction, an independent verifier, JSON inspection and
+C11 emission are now written in Eristavi for concrete Int/Bool/Text programs.
+The emitted applications cover functions, recursion, source imports, scopes,
+control flow, checked arithmetic and length-aware Text. See
+[`SCALAR_COMPILATION.md`](SCALAR_COMPILATION.md). Float, generic specialization,
+aggregates, optional/identity values, errors/resources, Universal IR construction
+and optimization remain later work. This stage cannot yet compile the compiler
+itself; Stage-0 is still the default.
 
 ### Stage 5 — native lowering
 

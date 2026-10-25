@@ -1,0 +1,231 @@
+[
+  {
+    "name": "hello",
+    "files": {
+      "app.eri": "output(\"Hello from Eristavi!\");"
+    },
+    "stdout": "Hello from Eristavi!\n"
+  },
+  {
+    "name": "unicode_nul",
+    "files": {
+      "app.eri": "output(\"ქართული 😀\\0end\");"
+    },
+    "stdout": "ქართული 😀\u0000end\n"
+  },
+  {
+    "name": "literal_bases",
+    "files": {
+      "app.eri": "output(0x7f_ff); output(0b1010_0101); output(1_000);"
+    },
+    "stdout": "32767\n165\n1000\n"
+  },
+  {
+    "name": "arithmetic",
+    "files": {
+      "app.eri": "let a be 37; let b be 6; output(a+b); output(a-b); output(a*b); output(a/b); output(a%b);"
+    },
+    "stdout": "43\n31\n222\n6\n1\n"
+  },
+  {
+    "name": "negative_division",
+    "files": {
+      "app.eri": "let a be -37; output(a/6); output(a%6); output(37/-6); output(37%-6);"
+    },
+    "stdout": "-6\n-1\n-6\n1\n"
+  },
+  {
+    "name": "boundaries",
+    "files": {
+      "app.eri": "let max be 9223372036854775807; let min be -max-1; output(max); output(min); output(min/1); output(min%1);"
+    },
+    "stdout": "9223372036854775807\n-9223372036854775808\n-9223372036854775808\n0\n"
+  },
+  {
+    "name": "comparison",
+    "files": {
+      "app.eri": "output(1<2); output(2<=2); output(3>2); output(3>=3); output(1==2); output(1!=2); output(true==false); output(not false);"
+    },
+    "stdout": "true\ntrue\ntrue\ntrue\nfalse\ntrue\nfalse\ntrue\n"
+  },
+  {
+    "name": "precedence",
+    "files": {
+      "app.eri": "output(2+3*4); output((2+3)*4); output(not false and true or false);"
+    },
+    "stdout": "14\n20\ntrue\n"
+  },
+  {
+    "name": "fixed_scalar",
+    "files": {
+      "app.eri": "let fixed café be 42; output(café);"
+    },
+    "stdout": "42\n"
+  },
+  {
+    "name": "mutation",
+    "files": {
+      "app.eri": "let n be 1; n=n+4; n=n*3; output(n);"
+    },
+    "stdout": "15\n"
+  },
+  {
+    "name": "branch_scopes",
+    "files": {
+      "app.eri": "let b be true; if b { let x be 10; output(x); } else { let x be 20; output(x); } if not b { output(99); } else { output(30); }"
+    },
+    "stdout": "10\n30\n"
+  },
+  {
+    "name": "loop",
+    "files": {
+      "app.eri": "let i be 1; let total be 0; while i<=10 { total=total+i; i=i+1; } output(total);"
+    },
+    "stdout": "55\n"
+  },
+  {
+    "name": "loop_locals",
+    "files": {
+      "app.eri": "let i be 0; while i<3 { let item be i*2; output(item); i=i+1; }"
+    },
+    "stdout": "0\n2\n4\n"
+  },
+  {
+    "name": "zero_iterations",
+    "files": {
+      "app.eri": "while false { output(999); } output(1);"
+    },
+    "stdout": "1\n"
+  },
+  {
+    "name": "factorial",
+    "files": {
+      "app.eri": "function factorial(n Int) returns Int { if n<=1 { return 1; } return n*factorial(n-1); } output(factorial(10));"
+    },
+    "stdout": "3628800\n"
+  },
+  {
+    "name": "mutual",
+    "files": {
+      "app.eri": "function even(n Int) returns Bool { if n==0 { return true; } return odd(n-1); } function odd(n Int) returns Bool { if n==0 { return false; } return even(n-1); } output(even(20)); output(odd(7));"
+    },
+    "stdout": "true\ntrue\n"
+  },
+  {
+    "name": "inferred_result",
+    "files": {
+      "app.eri": "function twice(n Int) { return n*2; } output(twice(21));"
+    },
+    "stdout": "42\n"
+  },
+  {
+    "name": "parameter_mutation",
+    "files": {
+      "app.eri": "function advance(n Int) { n=n+1; return n; } let n be 5; output(advance(n)); output(n);"
+    },
+    "stdout": "6\n5\n"
+  },
+  {
+    "name": "bare_return",
+    "files": {
+      "app.eri": "function greet(b Bool) { if b { output(1); return; } output(2); } greet(true); greet(false);"
+    },
+    "stdout": "1\n2\n"
+  },
+  {
+    "name": "all_path_returns",
+    "files": {
+      "app.eri": "function select(b Bool) returns Text { if b { return \"yes\"; } else { return \"no\"; } output(\"unreachable\"); } output(select(true)); output(select(false));"
+    },
+    "stdout": "yes\nno\n"
+  },
+  {
+    "name": "argument_order",
+    "files": {
+      "app.eri": "function mark(n Int) { output(n); return n; } function sum(a Int,b Int) { return a+b; } output(sum(mark(1),mark(2)));"
+    },
+    "stdout": "1\n2\n3\n"
+  },
+  {
+    "name": "binary_order",
+    "files": {
+      "app.eri": "function mark(n Int) { output(n); return n; } output(mark(4)*mark(5));"
+    },
+    "stdout": "4\n5\n20\n"
+  },
+  {
+    "name": "short_circuit",
+    "files": {
+      "app.eri": "function mark(b Bool) { output(b); return b; } output(false and mark(true)); output(true or mark(false)); output(true and mark(true)); output(false or mark(false));"
+    },
+    "stdout": "false\ntrue\ntrue\ntrue\nfalse\nfalse\n"
+  },
+  {
+    "name": "short_circuit_faults",
+    "files": {
+      "app.eri": "let zero be 0; output(false and (1/zero==1)); output(true or (1/zero==1));"
+    },
+    "stdout": "false\ntrue\n"
+  },
+  {
+    "name": "condition_recomputed",
+    "files": {
+      "app.eri": "function below(n Int) { output(n); return n<2; } let n be 0; while below(n) { n=n+1; }"
+    },
+    "stdout": "0\n1\n2\n"
+  },
+  {
+    "name": "text_values",
+    "files": {
+      "app.eri": "function greet(name Text) returns Text { return \"Hello, \"+name+\"!\"; } let name be \"Revaz\"; output(greet(name)); output(name);"
+    },
+    "stdout": "Hello, Revaz!\nRevaz\n"
+  },
+  {
+    "name": "text_equality",
+    "files": {
+      "app.eri": "let a be \"A\\0B\"; output(a==\"A\\0B\"); output(a!=\"A\"); output(\"é\"==\"e\\u{301}\"); output(\"\"+\"😀\"+\"\" == \"😀\");"
+    },
+    "stdout": "true\ntrue\nfalse\ntrue\n"
+  },
+  {
+    "name": "text_reassignment",
+    "files": {
+      "app.eri": "let a be \"α\"; let b be a; a=a+\"β\"; output(a); output(b);"
+    },
+    "stdout": "αβ\nα\n"
+  },
+  {
+    "name": "unicode_identifiers",
+    "files": {
+      "app.eri": "function διπλό(τιμή Int) { return τιμή+τιμή; } let café be 21; output(διπλό(café));"
+    },
+    "stdout": "42\n"
+  },
+  {
+    "name": "source_module",
+    "files": {
+      "app.eri": "import math as m; output(m.square(9));",
+      "math.eri": "public function square(n Int) returns Int { return n*n; }"
+    },
+    "stdout": "81\n"
+  },
+  {
+    "name": "diamond_imports",
+    "files": {
+      "app.eri": "import left; import right; output(left.value()); output(right.value());",
+      "left.eri": "import shared; public function value() { return shared.value(); }",
+      "right.eri": "import shared; public function value() { return shared.value(); }",
+      "shared.eri": "public function value() returns Int { return 7; }"
+    },
+    "stdout": "7\n7\n"
+  },
+  {
+    "name": "module_qualifiers",
+    "files": {
+      "app.eri": "import math as first; import math as second; output(first.add(1,2)); output(second.add(3,4));",
+      "math.eri": "public function add(a Int,b Int) { return a+b; }"
+    },
+    "stdout": "3\n7\n"
+  }
+]

@@ -22,9 +22,15 @@ semantic_types.eri   unification and inferred relationships
 semantic.eri         name/type/safety analysis
 semantic_project.eri source module graph and root validation
 semantic_report.eri  inferred contract inspection
+typed_ir.eri         source-close typed IR records
+ir_lower.eri         semantic facts to scalar typed IR
+ir_verify.eri        independent structural/type/scope verification
+ir_report.eri        deterministic IR JSON inspection
+ir_c.eri             verified IR to C11
+scalar_runtime.eri   bootstrap C runtime source
 ```
 
-Experimental semantic analysis is available through the executable. Later stages add IR, verifier/optimizer and native lowerings. The lexer/parser execute under Stage-0 and as generated-C executables; they do not yet form a self-hosted compiler. `std.unicode` currently requires the reference or C route.
+Experimental semantic analysis, scalar typed IR, verification and C emission are available through the executable. Later stages extend typed lowering, Universal IR, optimization and native backends. See SCALAR_COMPILATION.md at the repository root. The lexer/parser execute under Stage-0 and as generated-C executables; they do not yet form a self-hosted compiler. `std.unicode` currently requires the reference or C route.
 
 Compiler code must stay inside the frozen pre-0.1 language. When the compiler needs a data structure not yet present in the standard library, prefer a simple List/arena implementation first; do not add source syntax merely because another implementation language offers a convenient feature.
 

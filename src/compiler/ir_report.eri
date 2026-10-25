@@ -1,0 +1,20 @@
+import compiler.typed_ir as ir;
+import compiler.ir_verify;
+import compiler.semantic_model as m;
+import compiler.format;
+
+function node(value maybe identity ir.Node) returns Text {
+    if value == none { return "null"; }
+    return "{\"op\":"+format.integer(value.kind)+",\"type\":"+format.integer(value.valueType)+",\"text\":"+format.quote(value.text)+",\"number\":"+format.integer(value.number)+",\"index\":"+format.integer(value.index)+",\"fixed\":"+format.boolean(value.immutable)+",\"location\":{\"path\":"+format.quote(value.location.path)+",\"line\":"+format.integer(value.location.line)+",\"column\":"+format.integer(value.location.column)+"},\"first\":"+node(value.first)+",\"second\":"+node(value.second)+",\"third\":"+node(value.third)+",\"next\":"+node(value.next)+"}";
+}
+function routine(value identity ir.Function) returns Text {
+    let result be "{\"index\":"+format.integer(value.index)+",\"name\":"+format.quote(value.name)+",\"result\":"+format.integer(value.result)+",\"locals\":["; let separator be ""; let cursor be value.locals;
+    while cursor != none { result=result+separator+"{\"index\":"+format.integer(cursor.index)+",\"name\":"+format.quote(cursor.name)+",\"type\":"+format.integer(cursor.valueType)+",\"fixed\":"+format.boolean(cursor.immutable)+",\"parameter\":"+format.boolean(cursor.parameter)+"}"; separator=","; cursor=cursor.next; }
+    return result+"],\"body\":"+node(value.body)+"}";
+}
+public function report(program identity ir.Program) returns Text fails m.SemanticError {
+    try ir_verify.verify(program);
+    let result be "{\"format\":\"eristavi-typed-ir-v1\",\"experimental\":true,\"functions\":["; let separator be ""; let cursor be program.functions;
+    while cursor != none { result=result+separator+routine(cursor); separator=","; cursor=cursor.next; }
+    return result+"],\"entry\":"+routine(program.entry)+"}";
+}

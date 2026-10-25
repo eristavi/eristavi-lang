@@ -1,8 +1,23 @@
 # Eristavi pre-0.1 Implementation Audit
 
-> **Audit date: 2026-10-24**
+> **Audit date: 2026-10-25**
 >
 > **Scope:** frozen pre-0.1 source contract, bootstrap/reference runtime, generated-C path, verified Universal IR, direct x86-64 GC/runtime with contract-driven physical register allocation and spill-frame compaction, native ARM64 runtime, module artifacts/caching, JavaScript/WebAssembly consumers, Unicode conformance and hosted CI.
+
+## Eristavi-written executable compiler slice
+
+The candidate now lowers concrete Int/Bool/Text programs into its own source-close
+typed IR, independently verifies that IR and emits C11. Functions/recursion,
+imports, scopes, branching/loops, checked Int and exact Text are covered by 32
+saved-output differential projects, 10 sanitized runtime-fault cases and 22
+malformed-IR rejection projects. Stage-0 C binary/call evaluation order was
+corrected to agree with the reference interpreter using C11 sequencing.
+See SCALAR_COMPILATION.md for commands, evidence and precise boundaries.
+
+The suite contains **340 tests**. The full native compiler, broader lowering,
+Universal IR migration, optimization, repeated self-build and independent offline
+toolchain packaging remain promotion gates. Source philosophy/specifications are
+unchanged. Earlier update sections below record prior milestones.
 
 ## Eristavi-written semantic analyzer update
 
