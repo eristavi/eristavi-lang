@@ -1,0 +1,46 @@
+/*
+    Eristavi TextMate highlighting fixture.
+
+    /* Nested block comments are part of the language. */
+*/
+
+import models.customer as customerModels;
+
+public type Customer {
+    fixed id Int;
+    name Text;
+    middleName maybe Text;
+}
+
+public error LoadError {
+    message Text;
+    code Int;
+}
+
+public function calculateTotal(price Float, tax Float) returns Float {
+    return price + tax;
+}
+
+function describe(customer Customer) returns Text {
+    if customer.middleName != none {
+        return customer.name + " \u{2014} " + customer.middleName;
+    } else {
+        return customer.name;
+    }
+}
+
+let fixed retryLimit Int be 0x03;
+let binaryFlags Int be 0b1010_0011;
+let scientific Float be 6.022_140_76e23;
+let customers be [1, 2, 3];
+let имя Text be "Anna";
+let greeting Text be "Hello\nEristavi";
+let optionalName maybe Text be none;
+
+for customer in customers {
+    output(customer);
+}
+
+while retryLimit > 0 and true {
+    output(greeting);
+}
