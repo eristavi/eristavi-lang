@@ -27,6 +27,11 @@ class ListType:
     element: TypeLike
 
 @dataclass(frozen=True)
+class MapType:
+    key: TypeLike
+    value: TypeLike
+
+@dataclass(frozen=True)
 class ResourceType:
     name: str
     cleanup_errors: tuple[str, ...] = ()
@@ -49,12 +54,13 @@ class TypeVar:
         if not self.id:
             self.id = next(_counter)
 
-TypeLike = Union[NamedType, TextViewType, MaybeType, IdentityType, ListType, ResourceType, AnyErrorType, NoValueType, TypeVar]
+TypeLike = Union[NamedType, TextViewType, MaybeType, IdentityType, ListType, MapType, ResourceType, AnyErrorType, NoValueType, TypeVar]
 
 INT = NamedType("Int")
 FLOAT = NamedType("Float")
 BOOL = NamedType("Bool")
 TEXT = NamedType("Text")
+BYTES = NamedType("Bytes")
 NO_VALUE = NoValueType()
 ANY_ERROR = AnyErrorType()
 TEXT_CHARACTERS = TextViewType("characters")
@@ -77,6 +83,8 @@ def occurs(v: TypeVar, t: TypeLike) -> bool:
         return occurs(v, t.inner)
     if isinstance(t, ListType):
         return occurs(v, t.element)
+    if isinstance(t, MapType):
+        return occurs(v, t.key) or occurs(v, t.value)
     return False
 
 
@@ -125,6 +133,10 @@ def unify(a: TypeLike, b: TypeLike) -> TypeLike:
     if isinstance(a, ListType):
         unify(a.element, b.element)  # type: ignore[attr-defined]
         return a
+    if isinstance(a, MapType):
+        unify(a.key, b.key)  # type: ignore[attr-defined]
+        unify(a.value, b.value)  # type: ignore[attr-defined]
+        return a
     if isinstance(a, (AnyErrorType, NoValueType)):
         return a
     raise TypeError(f"cannot unify {describe(a)} with {describe(b)}")
@@ -153,6 +165,7 @@ def clone_type(t: TypeLike, vars_map: dict[int, TypeVar] | None = None) -> TypeL
     if isinstance(t, MaybeType): return MaybeType(clone_type(t.inner, vars_map))
     if isinstance(t, IdentityType): return IdentityType(clone_type(t.inner, vars_map))
     if isinstance(t, ListType): return ListType(clone_type(t.element, vars_map))
+    if isinstance(t, MapType): return MapType(clone_type(t.key, vars_map), clone_type(t.value, vars_map))
     if isinstance(t, AnyErrorType): return ANY_ERROR
     if isinstance(t, NoValueType): return NO_VALUE
     raise AssertionError(t)
@@ -163,6 +176,7 @@ def has_unresolved(t: TypeLike) -> bool:
     if isinstance(t, TypeVar): return True
     if isinstance(t, (MaybeType, IdentityType)): return has_unresolved(t.inner)
     if isinstance(t, ListType): return has_unresolved(t.element)
+    if isinstance(t, MapType): return has_unresolved(t.key) or has_unresolved(t.value)
     return False
 
 
@@ -173,8 +187,8 @@ def describe(t: TypeLike) -> str:
     if isinstance(t, ResourceType): return t.name
     if isinstance(t, MaybeType): return f"maybe {describe(t.inner)}"
     if isinstance(t, IdentityType): return f"identity {describe(t.inner)}"
-    if isinstance(t, ListType):
-        return f"List of {describe(t.element)}"
+    if isinstance(t, ListType): return f"List of {describe(t.element)}"
+    if isinstance(t, MapType): return f"Map from {describe(t.key)} to {describe(t.value)}"
     if isinstance(t, TypeVar): return f"{t.label}{t.id}"
     if isinstance(t, AnyErrorType): return "checked error"
     if isinstance(t, NoValueType): return "no-value"
@@ -185,6 +199,7 @@ def unresolved_ids(t: TypeLike) -> set[int]:
     if isinstance(t,TypeVar): return {t.id}
     if isinstance(t,(MaybeType,IdentityType)): return unresolved_ids(t.inner)
     if isinstance(t,ListType): return unresolved_ids(t.element)
+    if isinstance(t,MapType): return unresolved_ids(t.key) | unresolved_ids(t.value)
     return set()
 
 
@@ -202,12 +217,10 @@ def specialization_key(types: list[TypeLike]) -> tuple[str, ...]:
             index = variables.setdefault(t.id, len(variables))
             constraints = "" if t.allowed_names is None else ":" + ",".join(sorted(t.allowed_names))
             return f"${index}{constraints}"
-        if isinstance(t, ListType):
-            return "List of " + key(t.element)
-        if isinstance(t, MaybeType):
-            return "maybe " + key(t.inner)
-        if isinstance(t, IdentityType):
-            return "identity " + key(t.inner)
+        if isinstance(t, ListType): return "List of " + key(t.element)
+        if isinstance(t, MapType): return "Map from " + key(t.key) + " to " + key(t.value)
+        if isinstance(t, MaybeType): return "maybe " + key(t.inner)
+        if isinstance(t, IdentityType): return "identity " + key(t.inner)
         return describe(t)
 
     return tuple(key(t) for t in types)
