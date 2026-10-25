@@ -193,5 +193,5 @@ The semantic corpus independently freezes 175 accepted/rejected projects, and al
 sanitized arithmetic faults, malformed typed IR, malformed Universal calls/CFG/
 classes/initialization, deterministic reports, cross-assembly for both ELF targets,
 Float rounding/non-contraction, fixed/value/identity behavior, and checked cleanup
-failure composition. The full suite contains 349 tests; hosted results and native
+failure composition. The full suite contains 350 tests; hosted results and native
 self-build audits are recorded on the change's CI run.

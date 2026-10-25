@@ -46,16 +46,18 @@ def dependencies(binary):
     return {Path(name).resolve() for name in re.findall(r'(?:=>\s*)?(/[^\s]+)',text) if Path(name).is_file()}
 
 def link(bundle,assembly,output,runtime):
-    obj=output.with_suffix('.o')
     environment={**os.environ,'LD_LIBRARY_PATH':str(bundle/'tool-libs')}
     metadata=json.loads((bundle/'platform.json').read_text())
     assembler_flags=['--64'] if metadata['target']=='x86_64-linux' else []
-    run([bundle/'bin/as',*assembler_flags,assembly,'-o',obj],env=environment)
     libraries=bundle/'lib'
-    run([bundle/'bin/ld','-o',output,'-dynamic-linker',metadata['loader'],
-         libraries/'crt1.o',libraries/'crti.o',libraries/'crtbegin.o',obj,runtime,
-         libraries/'libm.so.6',libraries/'libc.so.6',libraries/'crtend.o',libraries/'crtn.o'],env=environment)
-    obj.unlink()
+    # GNU ld can synthesize a FILE symbol from the input object's basename.
+    # Keep that name stable across B/C and caller-selected executable names.
+    with tempfile.TemporaryDirectory() as td:
+        obj=Path(td)/'program.o'
+        run([bundle/'bin/as',*assembler_flags,assembly,'-o',obj],env=environment)
+        run([bundle/'bin/ld','-o',output,'-dynamic-linker',metadata['loader'],
+             libraries/'crt1.o',libraries/'crti.o',libraries/'crtbegin.o',obj,runtime,
+             libraries/'libm.so.6',libraries/'libc.so.6',libraries/'crtend.o',libraries/'crtn.o'],env=environment)
 
 WRAPPER=r'''#!/bin/sh
 set -eu

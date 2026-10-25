@@ -6,7 +6,7 @@ Run the full suite from the repository root:
 python -m unittest discover -s tests -v
 ```
 
-The current suite contains **349 tests**.
+The current suite contains **350 tests**.
 
 The scalar compiler corpus freezes 60 executable projects, with 10 additional
 runtime-fault comparisons under undefined-behavior sanitization and 28 malformed

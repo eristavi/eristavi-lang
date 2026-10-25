@@ -222,7 +222,7 @@ erist build-wat examples/hello.eri -o hello.wat
 python -m unittest discover -s tests -v
 ```
 
-The current suite contains **349 tests**. The hosted CI matrix runs:
+The current suite contains **350 tests**. The hosted CI matrix runs:
 
 - GCC / x86-64 Ubuntu / `-O2`;
 - Clang / x86-64 Ubuntu / `-O2`;
