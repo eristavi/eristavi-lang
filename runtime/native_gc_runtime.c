@@ -182,13 +182,16 @@ static void eri_native_gc_release_range_index(void){
 
 /* Native value roots normally name slot allocations exactly. member_ref/index_ref
    are the intentional exception: they may name an ev_value inside object data.
-   Exact addresses stay O(1) through the hash; during collection, interior roots
-   use a sorted address-range index so a miss never degrades into a whole-heap scan. */
+   Exact addresses stay O(1) through the hash; the sorted address-range index is
+   built lazily only after a genuine exact-pointer miss needs containment. */
 static eri_native_gc_block *eri_native_gc_find_value_owner(const void *pointer){
     if(!pointer)return NULL;
     eri_native_gc_block *exact=eri_native_gc_find_exact(pointer);
     if(exact)return exact;
-    if(!eri_native_gc_range_count)return NULL;
+    if(!eri_native_gc_range_count){
+        if(!eri_native_gc_live_blocks)return NULL;
+        eri_native_gc_build_range_index();
+    }
     uintptr_t value=(uintptr_t)pointer;
     size_t low=0,high=eri_native_gc_range_count;
     while(low<high){
@@ -423,7 +426,6 @@ static void eri_native_gc_collect(const ev_value *temporary_value,const eri_fail
     if(eri_native_gc_collecting)return;
     eri_native_gc_collecting=true;
     eri_native_gc_prepare_weak_indexes();
-    eri_native_gc_build_range_index();
     eri_native_gc_value_queue queue={0};
     eri_native_gc_mark_roots(&queue,temporary_value,temporary_failure);
     size_t cursor=0;
