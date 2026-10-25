@@ -75,7 +75,7 @@ constraints are compared against Stage-0's inferred type data.
 
 The report is an inspection contract, not the production module-interface/object
 format or a new public IR. Expression facts are retained in the analyzed module
-model for the later IR implementation; they do not yet constitute code generation.
+model for the later IR implementation; they now feed the experimental scalar typed-IR/C path in SCALAR_COMPILATION.md.
 
 ## Conformance evidence
 
@@ -105,8 +105,8 @@ ordinary-value and single-owner resource contracts.
 
 ## Next promotion gates
 
-Continue extending differential coverage, then port typed/source-close IR generation
-and verification to consume this analysis. Eristavi-written code generation and a
+Continue extending differential coverage and the initial typed/source-close IR
+and verification implemented in SCALAR_COMPILATION.md. Full code generation and a
 repeatable self-build follow. Python remains Stage-0 until those gates are met.
 A fully standalone native toolchain must additionally own or bundle its assembler
 and linker; this frontend milestone does not remove that requirement.

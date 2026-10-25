@@ -1,0 +1,167 @@
+import compiler.ast;
+import compiler.semantic_model as m;
+import compiler.semantic_types as types;
+import compiler.typed_ir as ir;
+
+type Source { declaration identity m.Declaration; routine identity ir.Function; next maybe identity Source; }
+type Seen { owner identity m.Module; next maybe identity Seen; }
+type Builder { program identity ir.Program; sources maybe identity Source; seen maybe identity Seen; count Int; }
+type Binding { name Text; local identity ir.Local; next maybe identity Binding; }
+type Context { builder identity Builder; owner identity m.Module; routine identity ir.Function; bindings maybe identity Binding; count Int; }
+
+function reject(owner identity m.Module, source identity ast.Node, message Text) returns Bool fails m.SemanticError {
+    return try m.reject(m.at(owner,source.token),"lower",message);
+}
+function concrete(owner identity m.Module, source identity ast.Node, value identity m.Type, allowVoid Bool) returns Int fails m.SemanticError {
+    let kind be types.resolve(value).kind;
+    if ir.scalar(kind) or (allowVoid and kind == 5) { return kind; }
+    try reject(owner,source,"experimental IR supports concrete Int, Bool and Text; this type requires a later lowering stage"); return 5;
+}
+function fact(context identity Context, source identity ast.Node) returns Int fails m.SemanticError {
+    let cursor be context.owner.facts;
+    while cursor != none {
+        if cursor.node == source {
+            if cursor.failures != none { try reject(context.owner,source,"checked failures require a later IR lowering stage"); }
+            return try concrete(context.owner,source,cursor.value,true);
+        }
+        cursor=cursor.next;
+    }
+    try reject(context.owner,source,"missing semantic expression fact"); return 5;
+}
+function local(context identity Context, name Text, kind Int, immutable Bool, parameter Bool) returns identity ir.Local {
+    let result be identity ir.Local { index=context.count; name=name; valueType=kind; immutable=immutable; parameter=parameter; next=none; };
+    context.count=context.count+1;
+    let tail be context.routine.locals;
+    if tail == none { context.routine.locals=result; }
+    else { let last be tail; let next be last.next; while next != none { last=next; next=last.next; } last.next=result; }
+    context.bindings=identity Binding { name=name; local=result; next=context.bindings; }; return result;
+}
+function binding(context identity Context, source identity ast.Node) returns identity ir.Local fails m.SemanticError {
+    let cursor be context.bindings;
+    while cursor != none { if cursor.name == source.text { return cursor.local; } cursor=cursor.next; }
+    try reject(context.owner,source,"missing lowered local binding"); return local(context,"",1,false,false);
+}
+function collect(builder identity Builder, owner identity m.Module) returns Bool fails m.SemanticError {
+    let seen be builder.seen;
+    while seen != none { if seen.owner == owner { return true; } seen=seen.next; }
+    builder.seen=identity Seen { owner=owner; next=builder.seen; };
+    let imported be owner.imports;
+    while imported != none { let target be imported.target; if target != none { try collect(builder,target); } imported=imported.next; }
+    let declaration be owner.declarations;
+    while declaration != none {
+        if declaration.node.kind == ast.functionDecl() {
+            if declaration.failures != none { try reject(owner,declaration.node,"checked routine contracts require a later IR lowering stage"); }
+            let result be try concrete(owner,declaration.node,declaration.result,true);
+            let body be ir.node(0,5,m.at(owner,declaration.node.token));
+            let routine be identity ir.Function { index=builder.count; name=owner.name+"."+declaration.node.text; result=result; locals=none; body=body; next=builder.program.functions; };
+            builder.count=builder.count+1; builder.program.functions=routine;
+            builder.sources=identity Source { declaration=declaration; routine=routine; next=builder.sources; };
+            let parameter be declaration.parameters;
+            let context be identity Context { builder=builder; owner=owner; routine=routine; bindings=none; count=0; };
+            while parameter != none { let kind be try concrete(owner,declaration.node,parameter.value,false); local(context,parameter.name,kind,false,true); parameter=parameter.next; }
+        }
+        declaration=declaration.next;
+    }
+    return true;
+}
+function target(context identity Context, callee identity ast.Node) returns identity ir.Function fails m.SemanticError {
+    let owner be context.owner; let name be callee.text;
+    if callee.kind == ast.memberExpr() {
+        let base be m.child(callee.first);
+        if base.kind != ast.nameExpr() { try reject(owner,callee,"member calls require a later IR lowering stage"); }
+        let imported be m.imported(owner,base.text);
+        if imported != none { let module be imported.target; if module != none { owner=module; } else { try reject(owner,callee,"standard-library calls require a later IR lowering stage"); } }
+    }
+    let cursor be context.builder.sources;
+    while cursor != none { if cursor.declaration.owner == owner and cursor.declaration.node.text == name { return cursor.routine; } cursor=cursor.next; }
+    try reject(owner,callee,"missing lowered routine"); return context.routine;
+}
+function integer(raw Text) returns Int {
+    let base be 10; let index be 0; let result be 0;
+    if raw.scalars.count > 1 { let ch be raw.scalars[1]; if ch == "x" or ch == "X" { base=16; index=2; } if ch == "b" or ch == "B" { base=2; index=2; } }
+    while index < raw.scalars.count {
+        let ch be raw.scalars[index];
+        if ch != "_" { let code be ch.bytes[0]; let digit be code-48; if code >= 65 and code <= 70 { digit=code-55; } if code >= 97 and code <= 102 { digit=code-87; } result=result*base+digit; }
+        index=index+1;
+    } return result;
+}
+function expression(context identity Context, source identity ast.Node) returns identity ir.Node fails m.SemanticError {
+    let kind be try fact(context,source); let result be ir.node(-1,kind,m.at(context.owner,source.token));
+    if source.kind == ast.literalExpr() {
+        result.kind=1; result.text=source.text;
+        if kind == 1 { result.number=integer(source.text); } if kind == 3 and source.flag { result.number=1; }
+        return result;
+    }
+    if source.kind == ast.nameExpr() { result.kind=2; result.index=(try binding(context,source)).index; return result; }
+    if source.kind == ast.unaryExpr() { result.kind=3; result.text=source.text; result.first=try expression(context,m.child(source.first)); return result; }
+    if source.kind == ast.binaryExpr() { result.kind=4; result.text=source.text; result.first=try expression(context,m.child(source.first)); result.second=try expression(context,m.child(source.second)); return result; }
+    if source.kind == ast.callExpr() {
+        let callee be m.child(source.first); result.kind=5;
+        if callee.kind == ast.nameExpr() and callee.text == "output" { result.kind=6; }
+        else { result.index=(try target(context,callee)).index; }
+        let argument be source.second; let tail maybe identity ir.Node be none;
+        while argument != none {
+            let lowered be try expression(context,argument);
+            if tail == none { result.first=lowered; } else { tail.next=lowered; } tail=lowered; argument=argument.next;
+        }
+        return result;
+    }
+    try reject(context.owner,source,"expression requires a later IR lowering stage"); return result;
+}
+function statement(context identity Context, source identity ast.Node) returns identity ir.Node fails m.SemanticError {
+    let result be ir.node(-1,5,m.at(context.owner,source.token));
+    if source.kind == ast.letStmt() {
+        let value be try expression(context,m.child(source.second));
+        let item be local(context,source.text,value.valueType,source.flag,false);
+        result.kind=10; result.index=item.index; result.first=value; result.immutable=source.flag; return result;
+    }
+    if source.kind == ast.assignStmt() {
+        let destination be m.child(source.first);
+        if destination.kind != ast.nameExpr() { try reject(context.owner,destination,"aggregate mutation requires a later IR lowering stage"); }
+        result.kind=11; result.index=(try binding(context,destination)).index; result.first=try expression(context,m.child(source.second)); return result;
+    }
+    if source.kind == ast.expressionStmt() { result.kind=12; result.first=try expression(context,m.child(source.first)); return result; }
+    if source.kind == ast.returnStmt() { result.kind=15; let value be source.first; if value != none { result.first=try expression(context,value); } return result; }
+    if source.kind == ast.ifStmt() {
+        result.kind=13; result.first=try expression(context,m.child(source.first)); result.second=try block(context,m.child(source.second));
+        let other be source.third; if other != none { result.third=try block(context,other); } return result;
+    }
+    if source.kind == ast.whileStmt() { result.kind=14; result.first=try expression(context,m.child(source.first)); result.second=try block(context,m.child(source.second)); return result; }
+    try reject(context.owner,source,"statement requires a later IR lowering stage"); return result;
+}
+function terminated(node identity ir.Node) returns Bool {
+    if node.kind == 15 { return true; }
+    if node.kind == 0 { let cursor be node.first; while cursor != none { if terminated(cursor) { return true; } cursor=cursor.next; } }
+    if node.kind == 13 { let first be node.second; let second be node.third; if first != none { if second != none { return terminated(first) and terminated(second); } } }
+    return false;
+}
+function block(context identity Context, source identity ast.Node) returns identity ir.Node fails m.SemanticError {
+    let saved be context.bindings; let result be ir.node(0,5,m.at(context.owner,source.token));
+    let cursor be source.first; let tail maybe identity ir.Node be none; let done be false;
+    while cursor != none {
+        if not done {
+            let kind be cursor.kind;
+            if kind != ast.functionDecl() and kind != ast.importDecl() and kind != ast.typeDecl() and kind != ast.errorDecl() {
+                let lowered be try statement(context,cursor); if tail == none { result.first=lowered; } else { tail.next=lowered; } tail=lowered; done=terminated(lowered);
+            }
+        }
+        cursor=cursor.next;
+    }
+    context.bindings=saved; return result;
+}
+public function lower(owner identity m.Module) returns identity ir.Program fails m.SemanticError {
+    let entry be identity ir.Function { index=-1; name=owner.name; result=5; locals=none; body=ir.node(0,5,m.at(owner,0)); next=none; };
+    let program be identity ir.Program { functions=none; entry=entry; };
+    let builder be identity Builder { program=program; sources=none; seen=none; count=0; };
+    try collect(builder,owner);
+    let cursor be builder.sources;
+    while cursor != none {
+        let current be cursor; let source be current.declaration;
+        let context be identity Context { builder=builder; owner=source.owner; routine=current.routine; bindings=none; count=0; };
+        let parameter be current.routine.locals;
+        while parameter != none { context.bindings=identity Binding { name=parameter.name; local=parameter; next=context.bindings; }; context.count=context.count+1; parameter=parameter.next; }
+        current.routine.body=try block(context,m.child(source.node.third)); cursor=current.next;
+    }
+    let context be identity Context { builder=builder; owner=owner; routine=entry; bindings=none; count=0; };
+    entry.body=try block(context,owner.root); return program;
+}

@@ -8,6 +8,9 @@ import compiler.report;
 import compiler.semantic_project;
 import compiler.semantic_model;
 import compiler.semantic_report;
+import compiler.ir_lower;
+import compiler.ir_c;
+import compiler.ir_report;
 
 function read(path Text) returns Text fails files.FileError {
     with file be try files.openRead(path) { return try file.readText(); }
@@ -19,7 +22,7 @@ function write(path Text, text Text) fails files.FileError {
 
 function usage() {
     process.writeError("Usage: erist-frontend check|ast|tokens SOURCE.eri [--output REPORT.json]");
-    process.writeError("       erist-frontend analyze|analyze-report SOURCE.eri [--source-root DIRECTORY]");
+    process.writeError("       erist-frontend analyze|analyze-report|ir|emit-c SOURCE.eri [--source-root DIRECTORY]");
     process.writeError("check is syntax-only; analyze is experimental. --output preserves existing files.");
     process.setExitCode(2);
 }
@@ -29,16 +32,16 @@ function run() {
     if arguments.count == 1 {
         if arguments[0] == "--help" {
             output("Usage: erist-frontend check|ast|tokens SOURCE.eri [--output REPORT.json]");
-            output("       erist-frontend analyze|analyze-report SOURCE.eri [--source-root DIRECTORY]");
-            output("check checks syntax only. analyze runs experimental Eristavi semantic analysis; code generation remains Stage-0.");
+            output("       erist-frontend analyze|analyze-report|ir|emit-c SOURCE.eri [--source-root DIRECTORY]");
+            output("check checks syntax only. analyze runs experimental Eristavi semantic analysis; ir and emit-c use the experimental scalar compiler.");
             return;
         }
     }
     if arguments.count != 2 and arguments.count != 4 { usage(); return; }
     let command be arguments[0];
-    if command != "check" and command != "ast" and command != "tokens" and command != "analyze" and command != "analyze-report" { usage(); return; }
+    if command != "check" and command != "ast" and command != "tokens" and command != "analyze" and command != "analyze-report" and command != "ir" and command != "emit-c" { usage(); return; }
     if arguments.count == 4 {
-        if command == "analyze" or command == "analyze-report" { if arguments[2] != "--source-root" { usage(); return; } }
+        if command == "analyze" or command == "analyze-report" or command == "ir" or command == "emit-c" { if arguments[2] != "--source-root" { usage(); return; } }
         else { if arguments[2] != "--output" or command == "check" { usage(); return; } }
     }
     let path be arguments[1];
@@ -58,7 +61,7 @@ function run() {
             process.setExitCode(1); return;
         };
         if command == "check" { return; }
-        if command == "analyze" or command == "analyze-report" {
+        if command == "analyze" or command == "analyze-report" or command == "ir" or command == "emit-c" {
             let root be semantic_project.parent(path);
             if arguments.count == 4 { root=arguments[3]; }
             let analyzed be semantic_project.analyze(tree,tokens,path,root) else error semantic_model.SemanticError {
@@ -68,6 +71,25 @@ function run() {
                 process.setExitCode(1); return;
             };
             if command == "analyze-report" { output(semantic_report.report(analyzed)); }
+            if command == "ir" or command == "emit-c" {
+                let lowered be ir_lower.lower(analyzed) else error semantic_model.SemanticError {
+                    process.writeError(error.path+":"+format.integer(error.line)+":"+format.integer(error.column)+": compiler error ["+error.category+"]: "+error.message);
+                    process.setExitCode(1); return;
+                };
+                let generated be "";
+                if command == "ir" {
+                    generated=ir_report.report(lowered) else error semantic_model.SemanticError {
+                        process.writeError(error.path+":"+format.integer(error.line)+":"+format.integer(error.column)+": compiler error ["+error.category+"]: "+error.message);
+                        process.setExitCode(1); return;
+                    };
+                } else {
+                    generated=ir_c.emit(lowered) else error semantic_model.SemanticError {
+                        process.writeError(error.path+":"+format.integer(error.line)+":"+format.integer(error.column)+": compiler error ["+error.category+"]: "+error.message);
+                        process.setExitCode(1); return;
+                    };
+                }
+                output(generated);
+            }
             return;
         }
         text = report.tree(tree, tokens);

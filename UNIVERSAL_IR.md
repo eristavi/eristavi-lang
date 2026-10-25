@@ -95,3 +95,10 @@ The main work is maturation rather than semantic invention:
 5. additional OS/ABI and future native consumers such as RISC-V.
 
 > **Universal IR carries Eristavi semantics downward; target backends do not invent them.**
+
+## Self-hosting migration
+
+The Python Stage-0 implementations above remain the broad Universal IR path.
+The Eristavi-written candidate now builds and verifies its first source-close
+typed IR slice and emits scalar C applications. It does not yet build Universal
+IR basic blocks. See [SCALAR_COMPILATION.md](SCALAR_COMPILATION.md).

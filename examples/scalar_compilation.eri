@@ -1,0 +1,15 @@
+// First executable slice of the Eristavi-written compiler.
+function factorial(n Int) returns Int {
+    if n <= 1 { return 1; }
+    return n * factorial(n - 1);
+}
+
+let total be 0;
+let n be 1;
+while n <= 5 {
+    total = total + factorial(n);
+    n = n + 1;
+}
+output("Eristavi compiler milestone");
+output(total);
+output(total == 153);
