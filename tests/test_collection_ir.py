@@ -3,8 +3,8 @@ from __future__ import annotations
 import unittest
 
 from compiler.erist.cli import analyze_frontend
-from compiler.erist.ir import IRCount, IRIndex, IRIndexAssign, IRLet
-from compiler.erist.ir_collections import IRBytes, IRMap, Lowerer
+from compiler.erist.ir import IRCount, IRIndex, IRLet
+from compiler.erist.ir_collections import IRBytes, IRCollectionIndexAssign, IRMap, Lowerer
 
 
 class CollectionIRTests(unittest.TestCase):
@@ -25,7 +25,8 @@ class CollectionIRTests(unittest.TestCase):
         self.assertIsInstance(program.entry[1].value, IRIndex)
         self.assertEqual(program.entry[1].type_name, "Int")
         self.assertIsInstance(program.entry[2].value, IRCount)
-        self.assertIsInstance(program.entry[3], IRIndexAssign)
+        self.assertIsInstance(program.entry[3], IRCollectionIndexAssign)
+        self.assertEqual(program.entry[3].base_type, "Map from Text to Int")
 
     def test_bytes_remains_distinct_in_typed_ir(self):
         program = self.lower('''
@@ -40,7 +41,8 @@ class CollectionIRTests(unittest.TestCase):
         self.assertIsInstance(program.entry[1].value, IRIndex)
         self.assertEqual(program.entry[1].type_name, "Int")
         self.assertIsInstance(program.entry[2].value, IRCount)
-        self.assertIsInstance(program.entry[3], IRIndexAssign)
+        self.assertIsInstance(program.entry[3], IRCollectionIndexAssign)
+        self.assertEqual(program.entry[3].base_type, "Bytes")
 
     def test_plain_int_literal_sequence_is_still_list_ir(self):
         program = self.lower('let data be [72, 101, 108];')
