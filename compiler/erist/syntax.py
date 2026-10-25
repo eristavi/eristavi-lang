@@ -64,6 +64,11 @@ class NoneExpr(Expr): location: SourceLocation
 @dataclass(frozen=True)
 class ListExpr(Expr): elements: list[Expr]; location: SourceLocation
 @dataclass(frozen=True)
+class MapEntry:
+    key: Expr; value: Expr; location: SourceLocation
+@dataclass(frozen=True)
+class MapExpr(Expr): entries: list[MapEntry]; location: SourceLocation
+@dataclass(frozen=True)
 class NameExpr(Expr): name: str; location: SourceLocation
 @dataclass(frozen=True)
 class UnaryExpr(Expr): operator: str; operand: Expr; location: SourceLocation
