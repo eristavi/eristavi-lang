@@ -38,8 +38,8 @@ this library remains pending; those routes reject its use with guidance to use
 checks syntax and emits token/AST JSON reports. The compiled executable runs
 offline without Python or a C compiler at runtime. Building it still uses Stage-0
 and a C toolchain. Syntax commands retain their existing behavior; experimental
-semantic commands are described below. The experimental `ir` and `emit-c` commands now compile a concrete Int/Bool/Text
-slice through an Eristavi-written typed IR and verified C emitter. See
+semantic commands are described below. The experimental `ir` and `emit-c` commands now compile a concrete Int/Float/Bool/Text
+slice with inferred scalar specialization through an Eristavi-written typed IR and verified C emitter. See
 [`SCALAR_COMPILATION.md`](SCALAR_COMPILATION.md) for executable examples and boundaries.
 Stage-0 remains the normal compiler.
 
@@ -232,7 +232,7 @@ erist build-wat examples/hello.eri -o hello.wat
 python -m unittest discover -s tests -v
 ```
 
-The current suite contains **340 tests**. The hosted CI matrix runs:
+The current suite contains **344 tests**. The hosted CI matrix runs:
 
 - GCC / x86-64 Ubuntu / `-O2`;
 - Clang / x86-64 Ubuntu / `-O2`;

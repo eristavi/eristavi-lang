@@ -21,7 +21,7 @@ python -m pip install -e .
 erist build src/frontend.eri --source-root src -o erist-frontend
 ./erist-frontend ir examples/scalar_compilation.eri
 ./erist-frontend emit-c examples/scalar_compilation.eri > application.c
-cc -std=c11 -O2 application.c -o application
+cc -std=c11 -O2 application.c -lm -o application
 ./application
 ```
 
@@ -49,23 +49,23 @@ assembler/linker functionality and repeatable self-builds.
 
 ## Implemented slice
 
-- Concrete `Int`, `Bool`, `Text` and no-value function results.
+- Concrete `Int`, `Float`, `Bool`, `Text` and no-value function results.
 - Decimal/binary/hexadecimal Int literals and Unicode-17 identifiers.
 - Scalar locals, fixed bindings, assignment and lexical block scope.
 - Checked signed 64-bit arithmetic, comparisons and Boolean short-circuit logic.
 - Text constants, concatenation and exact length-aware equality, including NUL.
-- Named functions with concrete parameter/result relationships, recursion, mutual
-  recursion, inferred concrete results and bare/value returns.
+- Named functions with inferred scalar specialization, concrete parameter/result
+  relationships, recursion, mutual recursion, inferred results and bare/value returns.
 - `if`/`else`, `while` and predeclared scalar `output`.
 - Source module imports/aliases, shared dependency graphs and public function calls.
 
-Unresolved generic relationships, Float, Lists, nominal values, maybe/identity,
-Text views, checked failures, deterministic resources and standard-library calls
+Collections, nominal values, maybe/identity, Text views, checked failures, deterministic resources and standard-library calls
 are explicitly rejected by lowering when they require code generation. They remain
 available in Stage-0 and in the broader semantic analyzer. The compiler does not
-silently change their meaning or fall back to Python. All declared functions in
-the reachable source modules must fit the current lowering slice, including unused
-functions; unused type/error declarations do not themselves generate code.
+silently change their meaning or fall back to Python. Concrete declarations in
+reachable source modules must fit the current lowering slice. Inferred generic functions specialize on demand, while unused type/error
+declarations do not themselves generate code. Checked-failure declarations still
+require a later lowering stage. See SCALAR_SPECIALIZATION.md for the extension.
 
 ## Architecture and verification
 
@@ -86,7 +86,7 @@ contracts, not language syntax or a frozen public bytecode/object format.
 
 Node opcodes are block `0`, constant `1`, local read `2`, unary `3`, binary `4`,
 call `5`, output `6`, declaration `10`, store `11`, discard `12`, branch `13`,
-loop `14`, return `15`. Types reuse semantic tags: Int `1`, Bool `3`, Text `4`,
+loop `14`, return `15`. Types reuse semantic tags: Int `1`, Float `2`, Bool `3`, Text `4`,
 no-value `5`. Nodes retain source path/line/column. Numeric local and function IDs
 are independent of CPU registers and source identifier spellings.
 
@@ -112,13 +112,13 @@ no allocation/free syntax or manual memory obligations.
 
 ## Evidence
 
-`tests/fixtures/scalar_ir_cases.json` freezes 32 executable projects. Generated-C
+`tests/fixtures/scalar_ir_cases.json` freezes 60 executable projects. Generated-C
 results match their saved outputs, the Stage-0 interpreter and the Stage-0 C
 compiler. Coverage includes recursion, module diamonds, lexical scopes, Unicode,
 NUL, evaluation order, short-circuiting and loop-condition side effects.
 
 Ten runtime-fault programs compare exit status/stdout/stderr against Stage-0 while
-the new emitted C runs with undefined-behavior sanitization. Twenty-two malformed
+the new emitted C runs with undefined-behavior sanitization. Twenty-eight malformed
 IR programs must be rejected by both the verifier and the C-emission entry point.
 Tests also compare interpreted versus compiled execution of the Eristavi-written
 lowerer/emitter, deterministic IR/C output, unsupported-feature diagnostics and
@@ -134,7 +134,7 @@ it does not change the language grammar or source contract.
 
 ## Next promotion gates
 
-Extend typed lowering to Float, generic specialization, values/collections,
+Extend typed lowering beyond the scalar specialization milestone to values/collections,
 maybe/identity, checked failures and explicit deterministic cleanup. Lower that IR
 to Eristavi-owned Universal IR with independent verification and semantics-preserving
 optimization. Then port native consumers, establish repeated compiler A/B/C builds,

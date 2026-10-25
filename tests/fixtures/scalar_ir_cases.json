@@ -227,5 +227,205 @@
       "math.eri": "public function add(a Int,b Int) { return a+b; }"
     },
     "stdout": "3\n7\n"
+  },
+  {
+    "name": "generic_echo_scalar_kinds",
+    "files": {
+      "app.eri": "function echo(value) { return value; } output(echo(42)); output(echo(true)); output(echo(\"ქართული\\0😀\")); output(echo(1.25));"
+    },
+    "stdout": "42\ntrue\nქართული\u0000😀\n1.25\n"
+  },
+  {
+    "name": "generic_add",
+    "files": {
+      "app.eri": "function double(value) { return value+value; } output(double(21)); output(double(1.25)); output(double(\"Eri\"));"
+    },
+    "stdout": "42\n2.5\nEriEri\n"
+  },
+  {
+    "name": "generic_nested_calls",
+    "files": {
+      "app.eri": "function echo(x) { return x; } function wrap(x) { return echo(echo(x)); } output(wrap(42)); output(wrap(\"hello\")); output(wrap(false)); output(wrap(1.25));"
+    },
+    "stdout": "42\nhello\nfalse\n1.25\n"
+  },
+  {
+    "name": "generic_relationships",
+    "files": {
+      "app.eri": "function choose(flag Bool,first,second) { if flag { return first; } return second; } output(choose(true,1,2)); output(choose(false,\"a\",\"b\")); output(choose(true,1.25,2.5)); output(choose(false,true,false));"
+    },
+    "stdout": "1\nb\n1.25\nfalse\n"
+  },
+  {
+    "name": "generic_independent_parameters",
+    "files": {
+      "app.eri": "function first(a,b) { return a; } output(first(1,\"text\")); output(first(\"text\",1)); output(first(true,1.25)); output(first(1.25,false));"
+    },
+    "stdout": "1\ntext\ntrue\n1.25\n"
+  },
+  {
+    "name": "generic_local_types",
+    "files": {
+      "app.eri": "function addOne(x,one) { let copy be x; copy=copy+one; return copy; } output(addOne(41,1)); output(addOne(1.25,1.25)); output(addOne(\"Eri\",\"stavi\"));"
+    },
+    "stdout": "42\n2.5\nEristavi\n"
+  },
+  {
+    "name": "generic_recursion",
+    "files": {
+      "app.eri": "function count(n Int,x) returns Int { if n==0 { return 0; } return 1+count(n-1,x); } output(count(4,\"text\")); output(count(3,true));"
+    },
+    "stdout": "4\n3\n"
+  },
+  {
+    "name": "generic_mutual_recursion",
+    "files": {
+      "app.eri": "function a(n Int,x) returns Int { if n==0 { return 0; } return 1+b(n-1,x); } function b(n Int,x) returns Int { if n==0 { return 0; } return 1+a(n-1,x); } output(a(5,\"text\")); output(b(4,false));"
+    },
+    "stdout": "5\n4\n"
+  },
+  {
+    "name": "generic_fixed_local",
+    "files": {
+      "app.eri": "function freeze(x) { let fixed local be x; return local; } output(freeze(42)); output(freeze(\"ok\"));"
+    },
+    "stdout": "42\nok\n"
+  },
+  {
+    "name": "generic_remainder",
+    "files": {
+      "app.eri": "function remainder(a,b) { return a%b; } output(remainder(-37,6));"
+    },
+    "stdout": "-1\n"
+  },
+  {
+    "name": "generic_order",
+    "files": {
+      "app.eri": "function echo(x) { return x; } function mark(x Int) { output(x); return x; } function add(a,b) { return a+b; } output(add(echo(mark(1)),echo(mark(2))));"
+    },
+    "stdout": "1\n2\n3\n"
+  },
+  {
+    "name": "generic_unused",
+    "files": {
+      "app.eri": "function unused(x) { return x; } output(42);"
+    },
+    "stdout": "42\n"
+  },
+  {
+    "name": "generic_module_aliases",
+    "files": {
+      "app.eri": "import values as first; import values as second; output(first.echo(1)); output(second.echo(\"text\")); output(first.echo(2));",
+      "values.eri": "public function echo(value) { return value; }"
+    },
+    "stdout": "1\ntext\n2\n"
+  },
+  {
+    "name": "generic_module_chain",
+    "files": {
+      "app.eri": "import helpers; output(helpers.wrap(42)); output(helpers.wrap(\"ok\"));",
+      "helpers.eri": "import values; public function wrap(value) { return values.echo(value); }",
+      "values.eri": "public function echo(value) { return value; }"
+    },
+    "stdout": "42\nok\n"
+  },
+  {
+    "name": "float_arithmetic",
+    "files": {
+      "app.eri": "output(1.25+2.5); output(2.5-1.25); output(1.25*2.0); output(2.5/2.0); output(-1.25);"
+    },
+    "stdout": "3.75\n1.25\n2.5\n1.25\n-1.25\n"
+  },
+  {
+    "name": "float_signed_zero",
+    "files": {
+      "app.eri": "let positive be 0.0; let negative be -0.0; output(positive==negative); output(1.0/positive>0.0); output(1.0/negative<0.0); output(1.0/(-negative)>0.0);"
+    },
+    "stdout": "true\ntrue\ntrue\ntrue\n"
+  },
+  {
+    "name": "float_nan_comparisons",
+    "files": {
+      "app.eri": "let value be 0.0/0.0; output(value==value); output(value!=value); output(value<1.0); output(value<=1.0); output(value>1.0); output(value>=1.0);"
+    },
+    "stdout": "false\ntrue\nfalse\nfalse\nfalse\nfalse\n"
+  },
+  {
+    "name": "float_infinity",
+    "files": {
+      "app.eri": "let positive be 1.0/0.0; let negative be -1.0/0.0; output(positive>1.0e308); output(negative < -1.0e308); output(positive+negative != positive+negative);"
+    },
+    "stdout": "true\ntrue\ntrue\n"
+  },
+  {
+    "name": "float_infinity_division_sign",
+    "files": {
+      "app.eri": "let positive be 1.0/0.0; let negative be -positive; output(positive/0.0>0.0); output(positive/(-0.0)<0.0); output(negative/0.0<0.0); output(negative/(-0.0)>0.0);"
+    },
+    "stdout": "true\ntrue\ntrue\ntrue\n"
+  },
+  {
+    "name": "float_gradual_underflow",
+    "files": {
+      "app.eri": "let tiny be 4.9406564584124654e-324; let normal be 2.2250738585072014e-308; output(tiny>0.0); output(tiny/2.0==0.0); output(normal/2.0>0.0); output((normal/2.0)*2.0==normal);"
+    },
+    "stdout": "true\ntrue\ntrue\ntrue\n"
+  },
+  {
+    "name": "float_overflow_underflow_literals",
+    "files": {
+      "app.eri": "let large be 1.0e9999; let tiny be 1.0e-9999; output(large>1.0e308); output(tiny==0.0); output((-tiny)==0.0); output(1.0/(-tiny)<0.0);"
+    },
+    "stdout": "true\ntrue\ntrue\ntrue\n"
+  },
+  {
+    "name": "float_rounding_even",
+    "files": {
+      "app.eri": "let a be 9007199254740992.0; let b be 1.0; let c be 9007199254740994.0; output(a+b==a); output(c+b==9007199254740996.0);"
+    },
+    "stdout": "true\ntrue\n"
+  },
+  {
+    "name": "float_decimal_literal_ties",
+    "files": {
+      "app.eri": "output(1.00000000000000011102230246251565404236316680908203125==1.0); output(1.00000000000000033306690738754696212708950042724609375==1.0000000000000004);"
+    },
+    "stdout": "true\ntrue\n"
+  },
+  {
+    "name": "float_no_contraction",
+    "files": {
+      "app.eri": "let a be 1.0000000000000002; let b be 1.0000000000000002; let c be -1.0000000000000004; output(a*b+c==0.0);"
+    },
+    "stdout": "true\n"
+  },
+  {
+    "name": "float_literal_separators",
+    "files": {
+      "app.eri": "output(01.2_5E+0==1.25); output(1_0e-1==1.0); output(1.0e+0_0==1.0);"
+    },
+    "stdout": "true\ntrue\ntrue\n"
+  },
+  {
+    "name": "float_loop",
+    "files": {
+      "app.eri": "let value be 0.0; while value<1.0 { value=value+0.25; } output(value==1.0);"
+    },
+    "stdout": "true\n"
+  },
+  {
+    "name": "float_function",
+    "files": {
+      "app.eri": "function half(value Float) returns Float { return value/2.0; } output(half(2.5));"
+    },
+    "stdout": "1.25\n"
+  },
+  {
+    "name": "float_module",
+    "files": {
+      "app.eri": "import math; output(math.square(1.5)==2.25);",
+      "math.eri": "public function square(value Float) { return value*value; }"
+    },
+    "stdout": "true\n"
   }
 ]

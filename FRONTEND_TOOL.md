@@ -115,8 +115,8 @@ added for this phase.
 
 Experimental semantic analysis, source-close typed IR, verification and scalar C
 emission are now implemented in Eristavi. See SCALAR_COMPILATION.md for `ir` and
-`emit-c`, supported source coverage and build dependencies. Broader lowering,
-Universal IR and native backends remain later stages. Full self-building requires
+`emit-c`, supported source coverage and build dependencies. Float and inferred scalar specialization are documented in
+SCALAR_SPECIALIZATION.md. Broader lowering, Universal IR and native backends remain later stages. Full self-building requires
 repeatable compiler builds and equivalent
 semantic/conformance results. The final offline native toolchain must also bundle
 or implement its assembler/linker functionality before external build tools can

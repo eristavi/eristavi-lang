@@ -73,11 +73,13 @@ require continued differential coverage; this is not full self-building.
 ### Stage 4 — experimental typed IR and C executable slice
 
 Source-close typed IR construction, an independent verifier, JSON inspection and
-C11 emission are now written in Eristavi for concrete Int/Bool/Text programs.
+C11 emission are now written in Eristavi for Int/Float/Bool/Text programs with
+inferred scalar specialization.
 The emitted applications cover functions, recursion, source imports, scopes,
 control flow, checked arithmetic and length-aware Text. See
-[`SCALAR_COMPILATION.md`](SCALAR_COMPILATION.md). Float, generic specialization,
-aggregates, optional/identity values, errors/resources, Universal IR construction
+[`SCALAR_COMPILATION.md`](SCALAR_COMPILATION.md). Scalar generic and binary64
+details are documented in SCALAR_SPECIALIZATION.md.
+Aggregates, optional/identity values, errors/resources, Universal IR construction
 and optimization remain later work. This stage cannot yet compile the compiler
 itself; Stage-0 is still the default.
 

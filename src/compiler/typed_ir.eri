@@ -3,7 +3,7 @@ import compiler.semantic_model as m;
 
 // Node kinds: block 0; constant 1, local 2, unary 3, binary 4, call 5,
 // output 6; declare 10, store 11, discard 12, branch 13, loop 14, return 15.
-// Types use the semantic model tags: Int 1, Bool 3, Text 4, no-value 5.
+// Types use the semantic model tags: Int 1, Float 2, Bool 3, Text 4, no-value 5.
 public type Node {
     kind Int; valueType Int; text Text; number Int; index Int; immutable Bool;
     first maybe identity Node; second maybe identity Node; third maybe identity Node;
@@ -16,7 +16,7 @@ public function node(kind Int, valueType Int, location identity m.Location) retu
     return identity Node { kind=kind; valueType=valueType; text=""; number=0; index=-1; immutable=false;
         first=none; second=none; third=none; next=none; location=location; };
 }
-public function scalar(kind Int) returns Bool { return kind == 1 or kind == 3 or kind == 4; }
+public function scalar(kind Int) returns Bool { return kind >= 1 and kind <= 4; }
 public function functionAt(program identity Program, index Int) returns maybe identity Function {
     let cursor be program.functions;
     while cursor != none { if cursor.index == index { return cursor; } cursor=cursor.next; }

@@ -7,12 +7,17 @@ import compiler.format;
 
 type Emitter { text Text; temporary Int; }
 function append(emitter identity Emitter, text Text) { emitter.text=emitter.text+text+"\n"; }
-function typeName(kind Int) returns Text { if kind == 1 { return "int64_t"; } if kind == 3 { return "bool"; } if kind == 4 { return "eri_text"; } return "void"; }
-function suffix(kind Int) returns Text { if kind == 1 { return "int"; } if kind == 3 { return "bool"; } return "text"; }
+function typeName(kind Int) returns Text { if kind == 1 { return "int64_t"; } if kind == 2 { return "double"; } if kind == 3 { return "bool"; } if kind == 4 { return "eri_text"; } return "void"; }
+function suffix(kind Int) returns Text { if kind == 1 { return "int"; } if kind == 2 { return "float"; } if kind == 3 { return "bool"; } return "text"; }
 function temp(emitter identity Emitter) returns Text { let name be "t"+format.integer(emitter.temporary); emitter.temporary=emitter.temporary+1; return name; }
 function required(node maybe identity ir.Node) returns identity ir.Node { if node != none { return node; } return ir.node(-1,5,identity m.Location { path=""; line=0; column=0; next=none; }); }
 function literal(node identity ir.Node) returns Text {
     if node.valueType == 1 { if node.number == -9223372036854775807-1 { return "INT64_MIN"; } return "INT64_C("+format.integer(node.number)+")"; }
+    if node.valueType == 2 {
+        let spelling be ""; let index be 0;
+        while index < node.text.scalars.count { let ch be node.text.scalars[index]; if ch != "_" { spelling=spelling+ch; } index=index+1; }
+        return "eri_float_literal("+format.quote(spelling)+")";
+    }
     if node.valueType == 3 { if node.number == 1 { return "true"; } return "false"; }
     // Escape every UTF-8 byte using exactly three octal digits: no C source,
     // escape-sequence, trigraph, embedded NUL or execution-charset ambiguity.
@@ -26,7 +31,7 @@ function expression(emitter identity Emitter, node identity ir.Node) returns Tex
     if node.kind == 2 { value="v"+format.integer(node.index); }
     if node.kind == 3 {
         let first be expression(emitter,required(node.first));
-        if node.text == "not" { value="(!"+first+")"; } else { value="eri_ineg("+first+")"; }
+        if node.text == "not" { value="(!"+first+")"; } else { let helper be "eri_ineg"; if node.valueType == 2 { helper="eri_fneg"; } value=helper+"("+first+")"; }
     }
     if node.kind == 4 {
         let firstNode be required(node.first); let first be expression(emitter,firstNode);
@@ -38,6 +43,7 @@ function expression(emitter identity Emitter, node identity ir.Node) returns Tex
         let second be expression(emitter,required(node.second)); let op be node.text;
         if op == "+" or op == "-" or op == "*" or op == "/" or op == "%" {
             let helper be "eri_iadd"; if op == "-" { helper="eri_isub"; } if op == "*" { helper="eri_imul"; } if op == "/" { helper="eri_idiv"; } if op == "%" { helper="eri_irem"; }
+            if firstNode.valueType == 2 { helper="eri_fadd"; if op == "-" { helper="eri_fsub"; } if op == "*" { helper="eri_fmul"; } if op == "/" { helper="eri_fdiv"; } }
             if firstNode.valueType == 4 { helper="eri_text_add"; } value=helper+"("+first+","+second+")";
         } else {
             if firstNode.valueType == 4 { value="eri_text_equal("+first+","+second+")"; if op == "!=" { value="(!"+value+")"; } }
@@ -89,5 +95,5 @@ public function emit(program identity ir.Program) returns Text fails m.SemanticE
     while cursor != none { append(emitter,signature(cursor)+";"); cursor=cursor.next; }
     cursor=program.functions;
     while cursor != none { emitter.temporary=0; append(emitter,signature(cursor)+" {"); block(emitter,cursor.body); if cursor.result == 5 { append(emitter,"return;"); } append(emitter,"}"); cursor=cursor.next; }
-    emitter.temporary=0; append(emitter,"int main(void) {"); append(emitter,"if (atexit(eri_cleanup) != 0) eri_fault(\"cannot register runtime cleanup\");"); block(emitter,program.entry.body); append(emitter,"return 0;\n}"); return emitter.text;
+    emitter.temporary=0; append(emitter,"int main(void) {"); append(emitter,"if (fesetround(FE_TONEAREST) != 0) eri_fault(\"cannot establish Float rounding mode\");"); append(emitter,"if (atexit(eri_cleanup) != 0) eri_fault(\"cannot register runtime cleanup\");"); block(emitter,program.entry.body); append(emitter,"return 0;\n}"); return emitter.text;
 }

@@ -237,6 +237,8 @@ static bool {h}_eq({h} a,{h} b){{ if(a.count!=b.count)return false; for(size_t i
             if e.type_name=='Float':
                 v=float(e.value)
                 if v!=v: return 'NAN'
+                if v==float('inf'): return 'INFINITY'
+                if v==float('-inf'): return '(-INFINITY)'
                 return repr(v)
             return str(e.value)
         if isinstance(e,IRVar): return cname(e.name)
@@ -378,7 +380,7 @@ static int64_t eri_ineg(int64_t a){ if(a==INT64_MIN)eri_fault("Int overflow"); r
 static double eri_fadd(double a,double b){ volatile double r=a+b; return r; }
 static double eri_fsub(double a,double b){ volatile double r=a-b; return r; }
 static double eri_fmul(double a,double b){ volatile double r=a*b; return r; }
-static double eri_fdiv(double a,double b){ volatile double r; if(b==0.0){if(a==0.0||isnan(a))r=NAN;else r=copysign(INFINITY,a*b);}else r=a/b; return r; }
+static double eri_fdiv(double a,double b){ volatile double r; if(b==0.0){if(a==0.0||isnan(a))r=NAN;else r=copysign(INFINITY,copysign(1.0,a)*copysign(1.0,b));}else r=a/b; return r; }
 static double eri_fneg(double a){ volatile double r=-a; return r; }
 static void eri_out_int(int64_t v){ printf("%" PRId64 "\n",v); }
 static void eri_out_float(double v){ printf("%.17g\n",v); }
