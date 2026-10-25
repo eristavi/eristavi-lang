@@ -6,7 +6,7 @@ import compiler.universal_verify;
 import compiler.universal_optimize;
 import compiler.semantic_model as m;
 import compiler.format;
-type Emitter { body Text; data Text; labels Int; program identity u.Program; }
+type Emitter { body Text; data Text; labels Int; program identity u.Program; roots Text; rootCount Int; }
 function line(e identity Emitter,text Text) { e.body=e.body+text+"\n"; }
 function datum(e identity Emitter,text Text) { e.data=e.data+text+"\n"; }
 function slot(index Int) returns Text { return "-"+format.integer((index+1)*8)+"(%rbp)"; }
@@ -20,6 +20,9 @@ function call(e identity Emitter,value identity u.Instruction) {
     index=arguments.count-1; while index>=6 { line(e,"pushq "+slot(arguments[index])); index=index-1; }
     let name be "evn_"+value.text; if value.text.scalars.count>0 and value.text.scalars[0] == "f" { let id be universal_verify.functionId(value.text); if id>=0 { name=value.text; } }
     line(e,"call "+name+"@PLT"); if extra+padding>0 { line(e,"addq $"+format.integer((extra+padding)*8)+", %rsp"); } line(e,"movq %rax, "+slot(value.result));
+    if value.text == "scope_enter" {
+        line(e,"movq %rax, %rdi\nleaq "+slot(e.rootCount-1)+", %rsi\nleaq "+e.roots+"(%rip), %rdx\nmovq $"+format.integer(e.rootCount)+", %rcx\ncall evn_bind_roots@PLT");
+    }
 }
 function instruction(e identity Emitter,value identity u.Instruction,registerCount Int) {
     if value.op == 1 { line(e,"movabsq $"+format.integer(value.number)+", %rax"); line(e,"movq %rax, "+slot(value.result)); }
@@ -41,11 +44,16 @@ function terminator(e identity Emitter,value identity u.Instruction,name Text) {
     if value.op == 10 { line(e,"ud2"); }
 }
 function routine(e identity Emitter,routine identity u.Function,name Text) {
-    let count be 0; let register be routine.registers; while register != none { count=count+1; register=register.next; }
+    let count be 0; let classes be []; let register be routine.registers; while register != none { classes.add(register.valueClass); count=count+1; register=register.next; }
+    e.roots=".Lroots_"+name; e.rootCount=count+routine.parameters;
+    let description be ""; let parameter be 0; while parameter<routine.parameters { description=description+"1,"; parameter=parameter+1; }
+    let position be count-1; while position>=0 { description=description+format.integer(classes[position])+","; position=position-1; }
+    datum(e,".section .rodata\n"+e.roots+":\n.byte "+description+"0");
     let size be ((8*(count+routine.parameters)+15)/16)*16;
     line(e,".text\n.p2align 4\n.type "+name+", @function\n"+name+":\npushq %rbp\nmovq %rsp, %rbp\nsubq $"+format.integer(size)+", %rsp");
     let registers be ["%rdi","%rsi","%rdx","%rcx","%r8","%r9"]; let index be 0;
     while index<routine.parameters { if index<6 { line(e,"movq "+registers[index]+", "+slot(count+index)); } else { line(e,"movq "+format.integer(16+(index-6)*8)+"(%rbp), %rax"); line(e,"movq %rax, "+slot(count+index)); } index=index+1; }
+    line(e,"leaq "+slot(count-1)+", %rdi\nmovq $"+format.integer(count)+", %rcx\nxorl %eax, %eax\nrep stosq");
     line(e,"jmp "+blockName(name,0)); let block be routine.blocks;
     while block != none { line(e,blockName(name,block.index)+":"); let cursor be block.instructions; while cursor != none { instruction(e,cursor,count); cursor=cursor.next; } let ending be block.terminator; if ending != none { terminator(e,ending,name); } block=block.next; }
     line(e,".size "+name+", .-"+name);
@@ -69,6 +77,6 @@ function descriptors(e identity Emitter) {
 }
 public function emit(source identity ir.Program) returns Text fails m.SemanticError {
     let program be try universal_lower.lower(source); try universal_optimize.optimize(program);
-    let e be identity Emitter { body=".globl erist_entry\n"; data=""; labels=0; program=program; };
+    let e be identity Emitter { body=".globl erist_entry\n"; data=""; labels=0; program=program; roots=""; rootCount=0; };
     let cursor be program.functions; while cursor != none { routine(e,cursor,"f"+format.integer(cursor.index)); cursor=cursor.next; } routine(e,program.entry,"erist_entry"); descriptors(e); return e.body+e.data+".section .note.GNU-stack,\"\",@progbits\n";
 }

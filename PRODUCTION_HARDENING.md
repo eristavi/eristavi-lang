@@ -57,11 +57,44 @@ application heap usage. Locally, LeakSanitizer cannot inspect tasks in the sandb
 allocation counts still enforce administrative reclamation. Hosted CI can retain
 LeakSanitizer's default behavior.
 
+## Second patch: bounded native temporary slots
+
+The x86-64 and ARM64 consumers now emit root maps from the independently verified
+Universal register table. Every value-class spill and saved parameter is a root;
+other register classes are excluded. Spills are zero-initialized before helper
+calls, and each native function binds its map to its runtime scope. Root words are
+read as address bits, without dereferencing heap-field references or stale dead
+register values. This is conservative register rooting, not a new liveness pass.
+
+Before allocating another temporary slot, the runtime periodically retains slots
+named by active root maps and scope/handler boundaries, then frees the rest.
+Collection starts at 4,096 slots and allows another 4,096 allocations beyond the
+survivor count. Scope exits lower that threshold again. Temporary storage therefore
+depends on active register frames/boundaries plus the collection allowance, rather
+than the number of loop iterations. Snapshot pointers are retained until no root
+names them; cells are never blindly reused while aliases can still observe them.
+
+Checked unwinding removes abandoned root frames with their scopes before any
+subsequent collection. Successful returns copy their result before releasing the
+callee's scope. The native runtime/helper boundary is private; a matching consumer
+and runtime object must be packaged together. Unregistered C embedding scopes and
+the explicit generated-C export retain their existing arena behavior.
+
+Validation adds a bounded-slot test at 1,000 and 100,000 iterations, both below
+4,200 live temporary slots, plus collection at every allocation opportunity under
+address/undefined sanitizers. The forced cases exercise snapshots, identity,
+short-circuiting, recursion, nine arguments, checked failures and normal/failing
+resource scopes. Independent reported IR classes are cross-checked against both
+emitted root maps. Runtime unit tests check duplicate roots, non-value words,
+scope-boundary retention and allocation balance.
+
+This collector handles **temporary value slots only**. Aggregate/Text buffers,
+saved failures and prefix-append bookkeeping still need managed reclamation.
+
 ## Remaining priorities
 
 | Priority | Finding | Completion evidence |
 | --- | --- | --- |
-| P0 | Temporary value slots in ordinary loops still accumulate until function exit. | Reuse or reclaim dead slots using verified lifetime/root facts; long-running scalar loops have bounded live storage. |
 | P0 | Aggregate/Text buffers and saved failure state still use process-lifetime allocations. | Managed reclamation preserves snapshots, identity cycles, Text views and primary/secondary payloads under allocation stress and forced collection. |
 | P1 | Compiler/runtime performance is unqualified beyond correctness and self-build. | Repeatable timing and peak/live-memory baselines; profile before changing representation or register allocation. |
 | P1 | Target/runtime/release qualification is narrower than production support. | Address/undefined checks, malformed-input and allocation-failure cases, runtime/loader compatibility and complete package integrity/provenance checks. |

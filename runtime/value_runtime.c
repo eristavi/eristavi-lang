@@ -5083,18 +5083,109 @@ static ev_value ev_builtin(const char *name,int type,size_t count,ev_value *args
  eri_fault("unknown internal builtin");return ev_void();
 }
 typedef struct ev_slot_node {ev_value value;struct ev_slot_node *next;} ev_slot_node;
-typedef struct ev_scope {ev_slot_node *mark;struct ev_scope *previous;} ev_scope;
+typedef struct ev_scope {
+    ev_slot_node *mark;struct ev_scope *previous;
+#ifdef ERIST_NATIVE_RUNTIME
+    const unsigned char *roots,*classes;size_t root_count;
+#endif
+} ev_scope;
 static ev_slot_node *ev_slots=NULL;
 static ev_scope *ev_scopes=NULL;
-static ev_value *ev_slot(ev_value value){ev_slot_node *node=malloc(sizeof(*node));if(!node)eri_fault("out of memory");node->value=value;node->next=ev_slots;ev_slots=node;return &node->value;}
-static ev_scope *ev_scope_enter(void){ev_scope *scope=malloc(sizeof(*scope));if(!scope)eri_fault("out of memory");scope->mark=ev_slots;scope->previous=ev_scopes;ev_scopes=scope;return scope;}
-static void ev_restore_slots(ev_slot_node *mark){while(ev_slots!=mark){ev_slot_node *node=ev_slots;ev_slots=node->next;free(node);}}
+#ifdef ERIST_NATIVE_RUNTIME
+#ifndef ERIST_SLOT_GC_INTERVAL
+#define ERIST_SLOT_GC_INTERVAL 4096
+#endif
+_Static_assert(ERIST_SLOT_GC_INTERVAL>0,"slot collection interval must be positive");
+_Static_assert(sizeof(uintptr_t)==8,"native root maps require a 64-bit target");
+_Static_assert(offsetof(ev_slot_node,value)==0,"slot address must equal value address");
+static size_t ev_live_slots,ev_next_slot_gc=ERIST_SLOT_GC_INTERVAL;
+static void ev_collect_slots(void);
+#endif
+static ev_value *ev_slot(ev_value value){
+#ifdef ERIST_NATIVE_RUNTIME
+    if(ev_live_slots>=ev_next_slot_gc)ev_collect_slots();
+#endif
+    ev_slot_node *node=malloc(sizeof(*node));if(!node)eri_fault("out of memory");
+    node->value=value;node->next=ev_slots;ev_slots=node;
+#ifdef ERIST_NATIVE_RUNTIME
+    ev_live_slots++;
+#endif
+    return &node->value;
+}
+static ev_scope *ev_scope_enter(void){ev_scope *scope=malloc(sizeof(*scope));if(!scope)eri_fault("out of memory");*scope=(ev_scope){0};scope->mark=ev_slots;scope->previous=ev_scopes;ev_scopes=scope;return scope;}
+static void ev_free_slot(ev_slot_node *node){
+#ifdef ERIST_NATIVE_RUNTIME
+    ev_live_slots--;
+#endif
+    free(node);
+}
+static void ev_restore_slots(ev_slot_node *mark){
+    while(ev_slots!=mark){ev_slot_node *node=ev_slots;ev_slots=node->next;ev_free_slot(node);}
+#ifdef ERIST_NATIVE_RUNTIME
+    if(ev_live_slots<=SIZE_MAX-ERIST_SLOT_GC_INTERVAL && ev_next_slot_gc>ev_live_slots+ERIST_SLOT_GC_INTERVAL)
+        ev_next_slot_gc=ev_live_slots+ERIST_SLOT_GC_INTERVAL;
+#endif
+}
 static void ev_restore_scopes(ev_scope *mark){while(ev_scopes!=mark){ev_scope *scope=ev_scopes;ev_scopes=scope->previous;free(scope);}}
 static ev_value ev_scope_leave(ev_scope *scope,ev_value value){ev_restore_slots(scope->mark);ev_restore_scopes(scope->previous);return value;}
 
 /* Pointer ABI for Eristavi's native x86-64 consumer. Runtime object only. */
 #ifdef ERIST_NATIVE_RUNTIME
+static size_t ev_root_hash(uintptr_t key,size_t mask){return ((key>>4)^(key>>19))&mask;}
+static void ev_root_insert(uintptr_t *table,size_t mask,uintptr_t key){
+    if(!key)return;
+    size_t index=ev_root_hash(key,mask);
+    while(table[index]&&table[index]!=key)index=(index+1)&mask;
+    table[index]=key;
+}
+static bool ev_root_contains(const uintptr_t *table,size_t mask,uintptr_t key){
+    size_t index=ev_root_hash(key,mask);
+    while(table[index]){if(table[index]==key)return true;index=(index+1)&mask;}
+    return false;
+}
+static void ev_collect_slots(void){
+    /* C embedders without registered frames retain the legacy arena behavior.
+       Never inspect a stack frame whose root map has not been installed. */
+    if(!ev_scopes)return;
+    size_t count=1;
+    for(ev_scope *scope=ev_scopes;scope;scope=scope->previous){
+        if(!scope->roots)return;
+        if(count==SIZE_MAX||scope->root_count>SIZE_MAX-count-1)eri_fault("native root table too large");
+        count+=scope->root_count+1;
+    }
+    for(eri_handler_frame *frame=eri_handler_top;frame;frame=frame->prev){
+        if(count==SIZE_MAX)eri_fault("native root table too large");count++;
+    }
+    if(count>SIZE_MAX/2)eri_fault("native root table too large");
+    size_t capacity=16;
+    while(capacity<count*2){if(capacity>SIZE_MAX/2)eri_fault("native root table too large");capacity*=2;}
+    if(capacity>SIZE_MAX/sizeof(uintptr_t))eri_fault("native root table too large");
+    uintptr_t *table=eri_alloc(capacity*sizeof(*table));memset(table,0,capacity*sizeof(*table));
+    size_t mask=capacity-1;
+    for(ev_scope *scope=ev_scopes;scope;scope=scope->previous){
+        ev_root_insert(table,mask,(uintptr_t)scope->mark);
+        for(size_t i=0;i<scope->root_count;i++)if(scope->classes[i]==1){
+            uintptr_t key;memcpy(&key,scope->roots+i*sizeof(key),sizeof(key));
+            ev_root_insert(table,mask,key);
+        }
+    }
+    for(eri_handler_frame *frame=eri_handler_top;frame;frame=frame->prev)
+        ev_root_insert(table,mask,(uintptr_t)frame->slot_mark);
+    ev_slot_node **link=&ev_slots;
+    while(*link){
+        ev_slot_node *node=*link;
+        if(ev_root_contains(table,mask,(uintptr_t)node))link=&node->next;
+        else {*link=node->next;ev_free_slot(node);}
+    }
+    free(table);
+    if(ev_live_slots>SIZE_MAX-ERIST_SLOT_GC_INTERVAL)eri_fault("native slot count overflow");
+    ev_next_slot_gc=ev_live_slots+ERIST_SLOT_GC_INTERVAL;
+}
 ev_scope *evn_scope_enter(void){return ev_scope_enter();}
+void evn_bind_roots(ev_scope *scope,const void *roots,const unsigned char *classes,size_t count){
+    if(!roots||!classes||count>SIZE_MAX/sizeof(uintptr_t))eri_fault("invalid native root frame");
+    scope->roots=roots;scope->classes=classes;scope->root_count=count;
+}
 ev_value *evn_scope_leave(ev_scope *scope,ev_value *value){ev_value copy=*value;copy=ev_scope_leave(scope,copy);return ev_slot(copy);}
 ev_value *evn_void(void){return ev_slot(ev_void());}
 ev_value *evn_copy(ev_value *value){return ev_slot(*value);}
