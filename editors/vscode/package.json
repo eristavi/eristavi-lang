@@ -4,7 +4,7 @@
   "description": "Syntax highlighting and language configuration for the Eristavi programming language.",
   "version": "0.0.1",
   "publisher": "eristavi",
-  "license": "MIT",
+  "license": "SEE LICENSE IN LICENSE",
   "repository": {
     "type": "git",
     "url": "https://github.com/eristavi/eristavi-lang.git"
