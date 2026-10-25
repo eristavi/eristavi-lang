@@ -45,6 +45,7 @@ class TokenKind(Enum):
 
     SEMICOLON = auto()
     COMMA = auto()
+    COLON = auto()
     DOT = auto()
     LPAREN = auto()
     RPAREN = auto()
@@ -345,6 +346,7 @@ class Lexer:
         one_map = {
             ";": TokenKind.SEMICOLON,
             ",": TokenKind.COMMA,
+            ":": TokenKind.COLON,
             ".": TokenKind.DOT,
             "(": TokenKind.LPAREN,
             ")": TokenKind.RPAREN,
