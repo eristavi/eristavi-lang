@@ -106,6 +106,39 @@ static void list_maybe_and_text_view_survive_collection(void){
     eri_native_heap_collect();
 }
 
+static void interior_value_roots_survive_collection(void){
+    ev_scope *scope=evn_scope_enter();
+    uintptr_t roots[2]={0};unsigned char classes[2]={1,1};
+    evn_bind_roots(scope,roots,classes,2);
+
+    ev_value *box=evn_object(8,1);roots[0]=(uintptr_t)box;
+    ev_value *text=evn_text((const unsigned char*)"interior",8);roots[1]=(uintptr_t)text;
+    evn_init(box,0,text);
+    ev_value *field=evn_member_ref(box,0);
+    roots[0]=0;roots[1]=(uintptr_t)field;
+    ev_collect_slots();
+    eri_native_heap_collect();
+    assert(field->type==4&&field->text.len==8);
+    assert(memcmp(field->text.data,"interior",8)==0);
+
+    roots[1]=0;
+    eri_native_heap_collect();
+
+    ev_value *list=evn_object(9,2);roots[0]=(uintptr_t)list;
+    ev_value *one=evn_int(17);roots[1]=(uintptr_t)one;evn_init(list,0,one);
+    ev_value *two=evn_int(23);roots[1]=(uintptr_t)two;evn_init(list,1,two);
+    ev_value *element=evn_index_ref(list,1);
+    roots[0]=0;roots[1]=(uintptr_t)element;
+    ev_collect_slots();
+    eri_native_heap_collect();
+    assert(element->type==1&&element->i==23);
+
+    roots[1]=0;
+    eri_native_heap_collect();
+    ev_scope_leave(scope,ev_void());
+    eri_native_heap_collect();
+}
+
 static void file_resource_survives_collection(void){
     ev_scope *scope=evn_scope_enter();
     uintptr_t roots[2]={0};unsigned char classes[2]={1,1};
@@ -203,6 +236,7 @@ static void long_running_allocation_plateaus(void){
 int main(void){
     reachable_values_and_weak_prefixes();
     list_maybe_and_text_view_survive_collection();
+    interior_value_roots_survive_collection();
     file_resource_survives_collection();
     unreachable_identity_cycle();
     saved_failure_survives_collection();
