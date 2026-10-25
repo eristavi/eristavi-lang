@@ -25,7 +25,8 @@ Unicode identifier, normalization and grapheme behavior is pinned to Unicode **1
 typed IR, verification, Universal IR, unreachable-block removal and native x86-64/
 ARM64 instruction consumers. The separate Linux offline bundle uses these components
 without Python or a C compiler during normal application builds. Its runtime is
-still a prebuilt C bootstrap artifact; GNU assembler/linker tools are packaged.
+still a prebuilt C bootstrap artifact, now wrapped by a native-only typed
+non-moving heap collector; GNU assembler/linker tools are still packaged.
 
 ```sh
 python -m pip install -e .
@@ -40,8 +41,9 @@ including its existing artifacts and JS/Wasm routes; the native bundle is opt-in
 The frozen language philosophy and source specifications are unchanged.
 
 [PRODUCTION_HARDENING.md](PRODUCTION_HARDENING.md) records the runtime review,
-native checked-unwind lifetime fix, and remaining memory/release gates.
-Optional runtime allocation profiling is documented in
+checked-unwind/temporary-slot fixes, native heap reclamation and remaining
+qualification gates. [NATIVE_HEAP_GC.md](NATIVE_HEAP_GC.md) records the collector's
+root/traversal contract. Optional allocation profiling remains available through
 [HEAP_DIAGNOSTICS.md](HEAP_DIAGNOSTICS.md).
 
 The lower-level frontend still offers syntax/token/AST inspection plus semantic,
@@ -90,13 +92,28 @@ Universal IR is verified before/after bootstrap optimization. Current passes inc
 
 The direct x86-64 route executes a broad pre-0.1 implementation without generated C: functions/recursion, Int/Bool/Float/Text, all explicit Text views, Lists, ordinary values, maybe, identity, checked failures, inferred generic specializations, deterministic file resources and module-object linkage.
 
-The runtime includes a non-moving mark-and-sweep collector. Compiler root frames are **liveness-aware** and pair stable heap root addresses with static type descriptors. Typed traversal handles Text leaves, nominal fields, Lists, maybe/identity wrappers and file-resource records; conservative exact-pointer scanning remains only as a fallback for dynamic runtime state.
+The Stage-0 direct runtime includes a non-moving mark-and-sweep collector. Compiler root frames are **liveness-aware** and pair stable heap root addresses with static type descriptors. Typed traversal handles Text leaves, nominal fields, Lists, maybe/identity wrappers and file-resource records; conservative exact-pointer scanning remains only as a fallback for dynamic runtime state.
 
 Physical register allocation now uses CFG interference together with explicit x86 lowering use/clobber contracts. The audited allocation pools currently include two GP registers (`r10`, `r11`) and two XMM registers (`xmm8`, `xmm9`). Values that cross helper/PLT/GC clobbers remain spilled, while audited call-free scalar operations, safe extraction operations and scalar call results may stay register-resident. Unknown lowerings default to conservative full caller-saved clobbers. Register-resident scalars no longer reserve redundant spill slots in the precise x86 frame; pinned heap/root slots remain stable and take precedence over compaction.
 
 ### ARM64 Linux
 
 ARM64 consumes the same Universal IR and covers Int/Bool/Float, functions, Text, ordinary values, Lists, maybe, identity, checked failures and deterministic file resources. The hosted CI matrix includes a native ARM64 Linux runner, so aggregate/error/resource behavior is executed rather than only cross-assembled. Mixed scalar/Text output also preserves source order through the composed ARM64 direct backend.
+
+### Offline native runtime
+
+The Eristavi-written offline compiler's boxed native runtime now uses a separate
+non-moving typed tracing layer on both supported Linux architectures. It starts
+from active value slots/scopes, verified Universal-IR value/failure roots, handlers
+and checked-failure state; it traverses Text/Text views, ordinary values, Lists,
+maybe/identity, resources and error payloads. Prefix-append indexes are weak
+metadata and do not keep otherwise dead backing buffers alive. Identity cycles are
+collectable. Deterministic files remain governed by `with`, not GC finalizers.
+
+Collection occurs only at native pointer-ABI safe points. The collector is a
+bootstrap production-hardening implementation: stop-the-world and single-runtime,
+not generational/concurrent/compacting. The underlying runtime source is still C
+and remains a later toolchain-independence boundary.
 
 ## Module artifacts and incremental compilation
 
@@ -227,14 +244,14 @@ erist build-wat examples/hello.eri -o hello.wat
 python -m unittest discover -s tests -v
 ```
 
-The current suite contains **359 tests**. The hosted CI matrix runs:
+The current suite contains **361 tests**. The hosted CI matrix runs:
 
 - GCC / x86-64 Ubuntu / `-O2`;
 - Clang / x86-64 Ubuntu / `-O2`;
 - Clang / ARM64 Ubuntu / `-O2`;
 - Clang / ARM64 macOS / `-O2`.
 
-The matrix also downloads an immutable-revision copy of the official Unicode 17 `GraphemeBreakTest` fixture and executes all of its vectors. Platform-specific direct-native cases run on their matching Linux architecture.
+The matrix also downloads an immutable-revision copy of the official Unicode 17 `GraphemeBreakTest` fixture and executes all of its vectors. Platform-specific direct-native cases run on their matching Linux architecture. Linux packaging jobs additionally repeat the native compiler self-build and run the offline application audit against the collector-enabled runtime.
 
 See [`IMPLEMENTATION_AUDIT.md`](IMPLEMENTATION_AUDIT.md) for the audited boundary and remaining production work.
 
@@ -244,6 +261,9 @@ See [`IMPLEMENTATION_AUDIT.md`](IMPLEMENTATION_AUDIT.md) for the audited boundar
 - [`FRONTEND_TOOL.md`](FRONTEND_TOOL.md) — Eristavi-written frontend executable
 - [`PRE_0_1_FREEZE.md`](PRE_0_1_FREEZE.md) — frozen source-language/frontend boundary
 - [`IMPLEMENTATION_AUDIT.md`](IMPLEMENTATION_AUDIT.md) — current audited implementation status
+- [`PRODUCTION_HARDENING.md`](PRODUCTION_HARDENING.md) — production runtime hardening gates
+- [`NATIVE_HEAP_GC.md`](NATIVE_HEAP_GC.md) — offline/native heap tracing contract
+- [`HEAP_DIAGNOSTICS.md`](HEAP_DIAGNOSTICS.md) — opt-in allocation accounting baseline
 - [`DESIGN_PHILOSOPHY.md`](DESIGN_PHILOSOPHY.md) — governing design charter
 - [`LANGUAGE_SEMANTICS.md`](LANGUAGE_SEMANTICS.md) — consolidated semantics
 - [`GRAMMAR.md`](GRAMMAR.md) — consolidated surface grammar
