@@ -143,3 +143,12 @@ with failure according to the existing runtime contract.
 The reference CLI forwards arguments with `erist run SOURCE.eri -- ARGUMENTS`.
 These functions are library operations; Eristavi's implicit entry body and frozen
 keyword set are unchanged.
+
+### `files.canonicalPath(path)`
+
+Returns the canonical absolute Text path of an existing filesystem entry, resolving
+symbolic links and relative segments. Missing entries, embedded NUL and OS failures
+use checked `files.FileError`. This supports source-root identity in the semantic
+module loader without adding path syntax. Execution support is currently the
+reference/C route, verified on hosted Linux/macOS. Other backends reject the new
+operation explicitly, as with `openRead` and `create`.

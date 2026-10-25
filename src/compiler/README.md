@@ -17,10 +17,17 @@ parser_state.eri explicit identity parser cursor
 parser.eri       Stage-2 recursive-descent parser
 format.eri       integer/Bool/JSON Text formatting
 report.eri       versioned token/AST reports
+semantic_model.eri   explicit identity semantic state
+semantic_types.eri   unification and inferred relationships
+semantic.eri         name/type/safety analysis
+semantic_project.eri source module graph and root validation
+semantic_report.eri  inferred contract inspection
 ```
 
-Later stages add semantic analysis, IR, verifier/optimizer and native lowerings. The lexer/parser execute under Stage-0 and as generated-C executables; they do not yet form a self-hosted compiler. `std.unicode` currently requires the reference or C route.
+Experimental semantic analysis is available through the executable. Later stages add IR, verifier/optimizer and native lowerings. The lexer/parser execute under Stage-0 and as generated-C executables; they do not yet form a self-hosted compiler. `std.unicode` currently requires the reference or C route.
 
 Compiler code must stay inside the frozen pre-0.1 language. When the compiler needs a data structure not yet present in the standard library, prefer a simple List/arena implementation first; do not add source syntax merely because another implementation language offers a convenient feature.
 
 The executable entry is `src/frontend.eri`; see [`FRONTEND_TOOL.md`](../../FRONTEND_TOOL.md).
+
+See [`SEMANTIC_ANALYSIS.md`](../../SEMANTIC_ANALYSIS.md) for the candidate boundary.

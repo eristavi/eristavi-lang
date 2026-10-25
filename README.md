@@ -37,7 +37,8 @@ this library remains pending; those routes reject its use with guidance to use
 `src/frontend.eri` is now a usable syntax frontend: it reads a source file,
 checks syntax and emits token/AST JSON reports. The compiled executable runs
 offline without Python or a C compiler at runtime. Building it still uses Stage-0
-and a C toolchain; it does not yet check semantics or compile application code.
+and a C toolchain. Syntax commands retain their existing behavior; experimental
+semantic commands are described below. Application compilation remains Stage-0.
 
 ```text
 erist build src/frontend.eri --source-root src -o erist-frontend
@@ -48,6 +49,23 @@ erist build src/frontend.eri --source-root src -o erist-frontend
 See [`FRONTEND_TOOL.md`](FRONTEND_TOOL.md) for build/use/report contracts and
 [`SELF_HOSTING.md`](SELF_HOSTING.md) for the migration. This is not yet a compiler
 that can build itself.
+
+### Experimental semantic analysis
+
+The Eristavi-written frontend now also resolves source modules, names and scopes,
+infers static relationships, and checks fixed/maybe/identity, checked failures and
+resource contracts. It records expression type/effect facts and can explain inferred
+function signatures. Stage-0 remains the reference and normal compiler.
+
+```text
+./erist-frontend analyze project/src/application.eri --source-root project/src
+./erist-frontend analyze-report project/src/application.eri --source-root project/src
+```
+
+A shared 175-case corpus checks acceptance/rejection and inferred contracts against
+Stage-0. The compiled analyzer also analyzes its own frontend module graph offline.
+See [`SEMANTIC_ANALYSIS.md`](SEMANTIC_ANALYSIS.md) for evidence, diagnostic differences
+and remaining promotion gates. No frozen syntax or semantic specification changed.
 
 ## Compiler architecture
 
@@ -211,7 +229,7 @@ erist build-wat examples/hello.eri -o hello.wat
 python -m unittest discover -s tests -v
 ```
 
-The current suite contains **322 tests**. The hosted CI matrix runs:
+The current suite contains **333 tests**. The hosted CI matrix runs:
 
 - GCC / x86-64 Ubuntu / `-O2`;
 - Clang / x86-64 Ubuntu / `-O2`;
@@ -224,6 +242,7 @@ See [`IMPLEMENTATION_AUDIT.md`](IMPLEMENTATION_AUDIT.md) for the audited boundar
 
 ## Documentation
 
+- [`SEMANTIC_ANALYSIS.md`](SEMANTIC_ANALYSIS.md) — experimental Eristavi-written semantic analyzer
 - [`FRONTEND_TOOL.md`](FRONTEND_TOOL.md) — Eristavi-written frontend executable
 - [`PRE_0_1_FREEZE.md`](PRE_0_1_FREEZE.md) — frozen source-language/frontend boundary
 - [`IMPLEMENTATION_AUDIT.md`](IMPLEMENTATION_AUDIT.md) — current audited implementation status
