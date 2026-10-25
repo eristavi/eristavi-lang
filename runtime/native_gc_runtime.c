@@ -153,6 +153,22 @@ static eri_native_gc_block *eri_native_gc_find_exact(const void *pointer){
     return NULL;
 }
 
+/* Native value roots normally name slot allocations exactly. member_ref/index_ref
+   are the intentional exception: they may name an ev_value inside object data.
+   Keep the exact hash as the fast path and fall back to containment only for such
+   root/value-cell pointers. */
+static eri_native_gc_block *eri_native_gc_find_value_owner(const void *pointer){
+    if(!pointer)return NULL;
+    eri_native_gc_block *exact=eri_native_gc_find_exact(pointer);
+    if(exact)return exact;
+    uintptr_t value=(uintptr_t)pointer;
+    for(eri_native_gc_block *block=eri_native_gc_blocks;block;block=block->next){
+        uintptr_t start=(uintptr_t)block->base;
+        if(value>=start&&value-start<block->size)return block;
+    }
+    return NULL;
+}
+
 static void *eri_native_gc_malloc(size_t size){
     size_t actual=size?size:1;
     void *memory=malloc(actual);
@@ -315,9 +331,8 @@ static void eri_native_gc_mark_roots(eri_native_gc_value_queue *queue,const ev_v
                 uintptr_t key=0;memcpy(&key,scope->roots+index*sizeof(key),sizeof(key));
                 if(!key)continue;
                 if(scope->classes[index]==1){
-                    eri_native_gc_block *owner=eri_native_gc_find_exact((void*)key);
-                    if(owner)eri_native_gc_mark_block(owner);
-                    eri_native_gc_queue_value(queue,*(ev_value*)key);
+                    eri_native_gc_block *owner=eri_native_gc_find_value_owner((void*)key);
+                    if(owner){eri_native_gc_mark_block(owner);eri_native_gc_queue_value(queue,*(ev_value*)key);}
                 }else if(scope->classes[index]==5){
                     eri_native_gc_mark_failure((eri_failure_value*)key,queue,true);
                 }else if(scope->classes[index]==4||scope->classes[index]==6){
@@ -329,8 +344,8 @@ static void eri_native_gc_mark_roots(eri_native_gc_value_queue *queue,const ev_v
     for(eri_handler_frame *frame=eri_handler_top;frame;frame=frame->prev)eri_native_gc_mark_pointer(frame);
     eri_native_gc_mark_failure(&eri_failure,queue,false);
     if(temporary_value){
-        eri_native_gc_mark_pointer(temporary_value);
-        eri_native_gc_queue_value(queue,*temporary_value);
+        eri_native_gc_block *owner=eri_native_gc_find_value_owner(temporary_value);
+        if(owner){eri_native_gc_mark_block(owner);eri_native_gc_queue_value(queue,*temporary_value);}
     }
     if(temporary_failure)eri_native_gc_mark_failure((eri_failure_value*)temporary_failure,queue,false);
 }
