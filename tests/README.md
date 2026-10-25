@@ -6,7 +6,7 @@ Run the full suite from the repository root:
 python -m unittest discover -s tests -v
 ```
 
-The current suite contains **356 tests**.
+The current suite contains **359 tests**.
 
 The scalar compiler corpus freezes 60 executable projects, with 10 additional
 runtime-fault comparisons under undefined-behavior sanitization and 28 malformed
@@ -72,3 +72,8 @@ Native temporary-slot tests check bounded storage at 1,000/100,000 loop iteratio
 forced collection with snapshots/calls/failures/resources under address/undefined
 sanitizers, and emitted root-map coverage against independently reported IR for
 both ELF targets. The runtime fixture also checks scope marks and non-value words.
+
+Heap-accounting tests validate aligned/zero-size allocations, resize bookkeeping,
+category totals, retained object/Text/failure stress, overflow rejection, and a
+zero test-teardown balance under sanitizers. Native integration preserves stdout
+and verifies diagnostic counters alongside frequent slot collection.

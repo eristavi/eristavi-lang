@@ -41,6 +41,8 @@ The frozen language philosophy and source specifications are unchanged.
 
 [PRODUCTION_HARDENING.md](PRODUCTION_HARDENING.md) records the runtime review,
 native checked-unwind lifetime fix, and remaining memory/release gates.
+Optional runtime allocation profiling is documented in
+[HEAP_DIAGNOSTICS.md](HEAP_DIAGNOSTICS.md).
 
 The lower-level frontend still offers syntax/token/AST inspection plus semantic,
 typed-IR, Universal-IR, C and native-assembly commands. See
@@ -225,7 +227,7 @@ erist build-wat examples/hello.eri -o hello.wat
 python -m unittest discover -s tests -v
 ```
 
-The current suite contains **356 tests**. The hosted CI matrix runs:
+The current suite contains **359 tests**. The hosted CI matrix runs:
 
 - GCC / x86-64 Ubuntu / `-O2`;
 - Clang / x86-64 Ubuntu / `-O2`;

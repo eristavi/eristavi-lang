@@ -91,6 +91,16 @@ scope-boundary retention and allocation balance.
 This collector handles **temporary value slots only**. Aggregate/Text buffers,
 saved failures and prefix-append bookkeeping still need managed reclamation.
 
+## Third patch: allocation accounting foundation
+
+`ERIST_HEAP_STATS` enables an allocation registry and payload-byte counters by
+family, without changing ordinary builds or automatically reclaiming objects.
+The object/Text/failure stress baseline now measures retained growth separately
+from reclaimed native administrative storage. Resize, alignment, accounting and
+sanitizer checks are included. HEAP_DIAGNOSTICS.md defines the counters, private
+profiling workflow and limitations. This is measurement infrastructure for the
+remaining P0 heap work, not its completion.
+
 ## Remaining priorities
 
 | Priority | Finding | Completion evidence |

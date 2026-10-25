@@ -385,8 +385,8 @@ run();
             runtime=(ROOT/'runtime/value_runtime.c').read_text()
             runtime=runtime.replace('static size_t ev_live_slots,','static size_t test_peak_slots;\nstatic size_t ev_live_slots,')
             runtime=runtime.replace('ev_live_slots++;','ev_live_slots++;if(ev_live_slots>test_peak_slots)test_peak_slots=ev_live_slots;')
-            runtime=runtime.replace('erist_entry();return eri_process_exit_code;',
-                'erist_entry();fprintf(stderr,"%zu\\n",test_peak_slots);return eri_process_exit_code;')
+            runtime=runtime.replace('return eri_process_exit_code;',
+                'fprintf(stderr,"%zu\\n",test_peak_slots);return eri_process_exit_code;')
             c=root/'runtime.c';c.write_text(runtime);obj=root/'runtime.o'
             compiled=subprocess.run([*shlex.split(os.environ.get('CC','cc')),'-std=c11','-O2',
                 '-DERIST_NATIVE_RUNTIME','-c',str(c),'-o',str(obj)],capture_output=True,text=True)
@@ -404,6 +404,46 @@ run();
                 peaks.append(int(result.stderr.strip()))
             self.assertLess(max(peaks),4200)
             self.assertLessEqual(peaks[1],peaks[0]+32)
+
+    def test_native_heap_diagnostics_preserve_output_and_account_for_slot_collection(self):
+        if not self.native:self.skipTest('matching native ELF host required')
+        source='''
+error Problem { message Text; }
+function failer() fails Problem { fail Problem { message="caught"; }; }
+function run() {
+    let values be [1]; let copy be values; copy.add(2); copy.add(3);
+    output(values.count); output(copy.count); output("a"+"β");
+    failer() else error Problem { output(error.message); };
+    let i be 0; while i<10000 { i=i+1; } output(i);
+}
+run();
+'''
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);entry=materialize(root,{'app.eri':source})
+            emitted=self.invoke(entry,root,'emit-asm');self.assertEqual(emitted.returncode,0,emitted.stderr)
+            asm=root/'stats.s';asm.write_text(emitted.stdout);expected='1\n3\naβ\ncaught\n10000\n'
+            for diagnostic in (False,True):
+                with self.subTest(diagnostic=diagnostic):
+                    binary=root/('diagnostic' if diagnostic else 'normal')
+                    runtime=self.runtime;flags=[]
+                    if diagnostic:
+                        runtime=ROOT/'runtime/value_runtime.c'
+                        flags=['-std=c11','-O2','-DERIST_NATIVE_RUNTIME','-DERIST_HEAP_STATS','-DERIST_SLOT_GC_INTERVAL=32']
+                    built=subprocess.run([*shlex.split(os.environ.get('CC','cc')),*flags,str(asm),str(runtime),
+                        '-lm','-o',str(binary)],capture_output=True,text=True)
+                    self.assertEqual(built.returncode,0,built.stderr)
+                    result=subprocess.run([str(binary)],capture_output=True,text=True,timeout=30)
+                    self.assertEqual((result.returncode,result.stdout),(0,expected))
+                    if not diagnostic:self.assertEqual(result.stderr,'');continue
+                    report=json.loads(result.stderr)
+                    self.assertTrue(report['registry_consistent']);self.assertEqual(report['format'],'eristavi-heap-stats-v1')
+                    for kind in ('object','object_data','text','failure'):
+                        self.assertGreater(report['categories'][kind]['live_bytes'],0)
+                    for kind in ('scope','handler','root_table'):
+                        self.assertEqual(report['categories'][kind]['live_allocations'],0)
+                    slots=report['categories']['slot']
+                    self.assertGreater(slots['allocations'],50000);self.assertLess(slots['peak_allocations'],512)
+                    self.assertEqual(slots['live_allocations'],1)
 
     def test_native_forced_slot_collection_preserves_snapshots_calls_and_failures(self):
         if not self.native:self.skipTest('matching native ELF host required')

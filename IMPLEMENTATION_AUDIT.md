@@ -6,6 +6,10 @@
 
 ## Structural/native compiler and offline gate update
 
+The heap-accounting foundation adds opt-in allocation/category statistics and
+object/Text/failure stress baselines. Ordinary builds remain silent; general heap
+reclamation remains open. See HEAP_DIAGNOSTICS.md for metrics and their limits.
+
 The first production-hardening patch reclaims completed native handler frames and
 restores abandoned call scopes/temporary slots at a checked catch boundary. Stress
 and address/undefined sanitizer tests cover these lifetimes; injected cleanup
@@ -31,7 +35,7 @@ The offline packaging gate compares fixed-snapshot native assembly/B-C binaries
 and audits application builds with unusable Python/C compiler shims. The runtime
 remains a prebuilt C bootstrap artifact and GNU assembler/linker tools are packaged;
 this is not a production release or a source-compatible Stage-0 artifact ABI port.
-The suite contains **356 tests**. Current-commit CI/self-build results belong to the
+The suite contains **359 tests**. Current-commit CI/self-build results belong to the
 PR. OFFLINE_TOOLCHAIN.md records the architecture, audit/evidence formats and gates.
 Frozen philosophy, grammar and semantic specifications remain unchanged.
 
