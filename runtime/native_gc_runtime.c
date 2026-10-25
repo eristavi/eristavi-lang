@@ -21,6 +21,8 @@
 #error "ERIST_HEAP_GC_INTERVAL must be positive"
 #endif
 
+#define ERIST_NATIVE_GC_HASH_BUCKETS 65536u
+
 typedef struct eri_native_gc_block {
     unsigned char *base;
     size_t size;
@@ -29,13 +31,16 @@ typedef struct eri_native_gc_block {
     bool weak_index;
     struct eri_native_gc_block *previous;
     struct eri_native_gc_block *next;
+    struct eri_native_gc_block *hash_next;
 } eri_native_gc_block;
 
 static eri_native_gc_block *eri_native_gc_blocks;
+static eri_native_gc_block *eri_native_gc_hash[ERIST_NATIVE_GC_HASH_BUCKETS];
 static size_t eri_native_gc_live_blocks;
 static size_t eri_native_gc_live_bytes;
 static size_t eri_native_gc_peak_bytes;
 static size_t eri_native_gc_allocations_since_collection;
+static size_t eri_native_gc_next_collection=ERIST_HEAP_GC_INTERVAL;
 static size_t eri_native_gc_collections;
 static size_t eri_native_gc_reclaimed_blocks;
 static size_t eri_native_gc_reclaimed_bytes;
@@ -120,20 +125,31 @@ typedef struct {
 static void eri_native_gc_overflow(void){eri_fault("native heap accounting overflow");}
 static size_t eri_native_gc_add_size(size_t first,size_t second){if(first>SIZE_MAX-second)eri_native_gc_overflow();return first+second;}
 
-static eri_native_gc_block *eri_native_gc_find_exact(const void *pointer){
-    if(!pointer)return NULL;
-    for(eri_native_gc_block *block=eri_native_gc_blocks;block;block=block->next)
-        if(block->base==(const unsigned char*)pointer)return block;
-    return NULL;
+static size_t eri_native_gc_hash_index(const void *pointer){
+    uintptr_t value=(uintptr_t)pointer;
+    value^=value>>17;value^=value>>9;
+    return (size_t)((value>>4)&(ERIST_NATIVE_GC_HASH_BUCKETS-1u));
 }
 
-static eri_native_gc_block *eri_native_gc_find_containing(const void *pointer){
+static void eri_native_gc_hash_insert(eri_native_gc_block *block){
+    size_t bucket=eri_native_gc_hash_index(block->base);
+    block->hash_next=eri_native_gc_hash[bucket];
+    eri_native_gc_hash[bucket]=block;
+}
+
+static void eri_native_gc_hash_remove(eri_native_gc_block *block){
+    size_t bucket=eri_native_gc_hash_index(block->base);
+    eri_native_gc_block **link=&eri_native_gc_hash[bucket];
+    while(*link&&*link!=block)link=&(*link)->hash_next;
+    if(*link==block)*link=block->hash_next;
+    block->hash_next=NULL;
+}
+
+static eri_native_gc_block *eri_native_gc_find_exact(const void *pointer){
     if(!pointer)return NULL;
-    uintptr_t value=(uintptr_t)pointer;
-    for(eri_native_gc_block *block=eri_native_gc_blocks;block;block=block->next){
-        uintptr_t start=(uintptr_t)block->base;
-        if(value>=start && value-start<block->size)return block;
-    }
+    size_t bucket=eri_native_gc_hash_index(pointer);
+    for(eri_native_gc_block *block=eri_native_gc_hash[bucket];block;block=block->hash_next)
+        if(block->base==(const unsigned char*)pointer)return block;
     return NULL;
 }
 
@@ -143,9 +159,13 @@ static void *eri_native_gc_malloc(size_t size){
     if(!memory)eri_fault("out of memory");
     eri_native_gc_block *block=(eri_native_gc_block*)malloc(sizeof(*block));
     if(!block){free(memory);eri_fault("out of memory");}
-    *block=(eri_native_gc_block){(unsigned char*)memory,actual,false,false,false,NULL,eri_native_gc_blocks};
+    *block=(eri_native_gc_block){
+        .base=(unsigned char*)memory,.size=actual,.marked=false,.traced=false,.weak_index=false,
+        .previous=NULL,.next=eri_native_gc_blocks,.hash_next=NULL
+    };
     if(eri_native_gc_blocks)eri_native_gc_blocks->previous=block;
     eri_native_gc_blocks=block;
+    eri_native_gc_hash_insert(block);
     eri_native_gc_live_blocks=eri_native_gc_add_size(eri_native_gc_live_blocks,1);
     eri_native_gc_live_bytes=eri_native_gc_add_size(eri_native_gc_live_bytes,actual);
     if(eri_native_gc_live_bytes>eri_native_gc_peak_bytes)eri_native_gc_peak_bytes=eri_native_gc_live_bytes;
@@ -154,6 +174,7 @@ static void *eri_native_gc_malloc(size_t size){
 }
 
 static void eri_native_gc_unlink(eri_native_gc_block *block){
+    eri_native_gc_hash_remove(block);
     if(block->previous)block->previous->next=block->next;else eri_native_gc_blocks=block->next;
     if(block->next)block->next->previous=block->previous;
 }
@@ -178,6 +199,7 @@ static void *eri_native_gc_realloc(void *pointer,size_t size){
         return result;
     }
     size_t actual=size?size:1;
+    eri_native_gc_hash_remove(block);
     void *result=realloc(block->base,actual);
     if(!result)eri_fault("out of memory");
     eri_native_gc_live_bytes-=block->size;
@@ -185,6 +207,7 @@ static void *eri_native_gc_realloc(void *pointer,size_t size){
     if(eri_native_gc_live_bytes>eri_native_gc_peak_bytes)eri_native_gc_peak_bytes=eri_native_gc_live_bytes;
     block->base=(unsigned char*)result;
     block->size=actual;
+    eri_native_gc_hash_insert(block);
     eri_native_gc_allocations_since_collection=eri_native_gc_add_size(eri_native_gc_allocations_since_collection,1);
     return result;
 }
@@ -195,7 +218,7 @@ static bool eri_native_gc_mark_block(eri_native_gc_block *block){
     return true;
 }
 
-static bool eri_native_gc_mark_pointer(const void *pointer){return eri_native_gc_mark_block(eri_native_gc_find_containing(pointer));}
+static bool eri_native_gc_mark_pointer(const void *pointer){return eri_native_gc_mark_block(eri_native_gc_find_exact(pointer));}
 
 static void eri_native_gc_queue_value(eri_native_gc_value_queue *queue,ev_value value){
     if(queue->count==queue->capacity){
@@ -212,7 +235,7 @@ static void eri_native_gc_mark_text(eri_text text){if(text.data)eri_native_gc_ma
 
 static void eri_native_gc_mark_resource(eri_file *resource){
     if(!resource)return;
-    eri_native_gc_block *block=eri_native_gc_find_containing(resource);
+    eri_native_gc_block *block=eri_native_gc_find_exact(resource);
     bool fresh=eri_native_gc_mark_block(block);
     if(!fresh&&block&&block->traced)return;
     if(block)block->traced=true;
@@ -222,7 +245,7 @@ static void eri_native_gc_mark_resource(eri_file *resource){
 
 static void eri_native_gc_mark_object(ev_object *object,eri_native_gc_value_queue *queue){
     if(!object)return;
-    eri_native_gc_block *block=eri_native_gc_find_containing(object);
+    eri_native_gc_block *block=eri_native_gc_find_exact(object);
     bool fresh=eri_native_gc_mark_block(block);
     if(!fresh&&block&&block->traced)return;
     if(block)block->traced=true;
@@ -243,7 +266,7 @@ static void eri_native_gc_mark_value(ev_value value,eri_native_gc_value_queue *q
 
 static void eri_native_gc_mark_failure_payload(const char *type,void *payload,eri_native_gc_value_queue *queue){
     if(!payload)return;
-    eri_native_gc_block *block=eri_native_gc_find_containing(payload);
+    eri_native_gc_block *block=eri_native_gc_find_exact(payload);
     if(block)eri_native_gc_mark_block(block);
     if(type&&strcmp(type,"std.files.FileError")==0){
         eri_file_error *error=(eri_file_error*)payload;
@@ -257,7 +280,7 @@ static void eri_native_gc_mark_failure_payload(const char *type,void *payload,er
 static void eri_native_gc_mark_failure(eri_failure_value *failure,eri_native_gc_value_queue *queue,bool owned){
     if(!failure)return;
     if(owned){
-        eri_native_gc_block *block=eri_native_gc_find_containing(failure);
+        eri_native_gc_block *block=eri_native_gc_find_exact(failure);
         if(block)eri_native_gc_mark_block(block);
     }
     if(!failure->type)return;
@@ -265,7 +288,7 @@ static void eri_native_gc_mark_failure(eri_failure_value *failure,eri_native_gc_
     eri_native_gc_mark_failure_payload(failure->type,failure->payload,queue);
     eri_secondary_failure *secondary=failure->secondary;
     while(secondary){
-        eri_native_gc_block *block=eri_native_gc_find_containing(secondary);
+        eri_native_gc_block *block=eri_native_gc_find_exact(secondary);
         if(block&&block->traced)break;
         if(block){eri_native_gc_mark_block(block);block->traced=true;}
         eri_native_gc_mark_text(secondary->message);
@@ -292,8 +315,9 @@ static void eri_native_gc_mark_roots(eri_native_gc_value_queue *queue,const ev_v
                 uintptr_t key=0;memcpy(&key,scope->roots+index*sizeof(key),sizeof(key));
                 if(!key)continue;
                 if(scope->classes[index]==1){
-                    eri_native_gc_block *owner=eri_native_gc_find_containing((void*)key);
-                    if(owner){eri_native_gc_mark_block(owner);eri_native_gc_queue_value(queue,*(ev_value*)key);}
+                    eri_native_gc_block *owner=eri_native_gc_find_exact((void*)key);
+                    if(owner)eri_native_gc_mark_block(owner);
+                    eri_native_gc_queue_value(queue,*(ev_value*)key);
                 }else if(scope->classes[index]==5){
                     eri_native_gc_mark_failure((eri_failure_value*)key,queue,true);
                 }else if(scope->classes[index]==4||scope->classes[index]==6){
@@ -318,7 +342,7 @@ static void eri_native_gc_keep_live_prefix_indexes(void){
         eri_text_append_buffer **tail=&eri_text_append_buckets[bucket];
         while(cursor){
             eri_text_append_buffer *next=cursor->next;
-            eri_native_gc_block *data=eri_native_gc_find_containing(cursor->data);
+            eri_native_gc_block *data=eri_native_gc_find_exact(cursor->data);
             eri_native_gc_block *index=eri_native_gc_find_exact(cursor);
             if(data&&data->marked&&index){
                 eri_native_gc_mark_block(index);
@@ -359,12 +383,17 @@ static void eri_native_gc_collect(const ev_value *temporary_value,const eri_fail
     eri_native_gc_sweep();
     free(queue.items);
     eri_native_gc_allocations_since_collection=0;
+    eri_native_gc_next_collection=ERIST_HEAP_GC_INTERVAL;
+#if ERIST_HEAP_GC_INTERVAL > 1
+    if(eri_native_gc_live_blocks>eri_native_gc_next_collection)
+        eri_native_gc_next_collection=eri_native_gc_live_blocks;
+#endif
     eri_native_gc_collections=eri_native_gc_add_size(eri_native_gc_collections,1);
     eri_native_gc_collecting=false;
 }
 
 static void eri_native_gc_safe_point(const ev_value *temporary_value,const eri_failure_value *temporary_failure){
-    if(eri_native_gc_allocations_since_collection>=ERIST_HEAP_GC_INTERVAL)
+    if(eri_native_gc_allocations_since_collection>=eri_native_gc_next_collection)
         eri_native_gc_collect(temporary_value,temporary_failure);
 }
 
