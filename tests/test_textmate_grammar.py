@@ -6,6 +6,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 GRAMMAR_PATH = ROOT / "syntax" / "eristavi.tmLanguage.json"
 CONFIG_PATH = ROOT / "syntax" / "language-configuration.json"
+VSCODE_DIR = ROOT / "editors" / "vscode"
+VSCODE_MANIFEST_PATH = VSCODE_DIR / "package.json"
+VSCODE_GRAMMAR_PATH = VSCODE_DIR / "syntaxes" / "eristavi.tmLanguage.json"
+VSCODE_CONFIG_PATH = VSCODE_DIR / "language-configuration.json"
+VSCODE_LICENSE_PATH = VSCODE_DIR / "LICENSE"
 
 RESERVED_KEYWORDS = {
     "let",
@@ -73,11 +78,18 @@ def regex_text(node):
     return parts
 
 
+def manifest_path(base, value):
+    if value.startswith("./"):
+        value = value[2:]
+    return base / value
+
+
 class TextMateGrammarTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.grammar = json.loads(GRAMMAR_PATH.read_text(encoding="utf-8"))
         cls.config = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+        cls.manifest = json.loads(VSCODE_MANIFEST_PATH.read_text(encoding="utf-8"))
         cls.regexes = "\n".join(regex_text(cls.grammar))
 
     def test_identity(self):
@@ -114,6 +126,38 @@ class TextMateGrammarTests(unittest.TestCase):
         self.assertIn("output", builtins)
         keyword_rules = json.dumps(self.grammar["repository"]["keywords"], ensure_ascii=False)
         self.assertNotIn("output", keyword_rules)
+
+    def test_vscode_manifest_registers_eristavi(self):
+        self.assertEqual(self.manifest["name"], "eristavi-language")
+        self.assertEqual(self.manifest["displayName"], "Eristavi Language Support")
+        self.assertEqual(self.manifest["publisher"], "eristavi")
+        self.assertEqual(self.manifest["categories"], ["Programming Languages"])
+        self.assertNotIn("main", self.manifest)
+        self.assertNotIn("browser", self.manifest)
+
+        languages = self.manifest["contributes"]["languages"]
+        self.assertEqual(len(languages), 1)
+        self.assertEqual(languages[0]["id"], "eristavi")
+        self.assertIn("Eristavi", languages[0]["aliases"])
+        self.assertEqual(languages[0]["extensions"], [".eri"])
+        self.assertEqual(
+            manifest_path(VSCODE_DIR, languages[0]["configuration"]),
+            VSCODE_CONFIG_PATH,
+        )
+
+        grammars = self.manifest["contributes"]["grammars"]
+        self.assertEqual(len(grammars), 1)
+        self.assertEqual(grammars[0]["language"], "eristavi")
+        self.assertEqual(grammars[0]["scopeName"], "source.eristavi")
+        self.assertEqual(
+            manifest_path(VSCODE_DIR, grammars[0]["path"]),
+            VSCODE_GRAMMAR_PATH,
+        )
+
+    def test_vscode_package_mirrors_canonical_assets_exactly(self):
+        self.assertEqual(GRAMMAR_PATH.read_bytes(), VSCODE_GRAMMAR_PATH.read_bytes())
+        self.assertEqual(CONFIG_PATH.read_bytes(), VSCODE_CONFIG_PATH.read_bytes())
+        self.assertEqual((ROOT / "LICENSE").read_bytes(), VSCODE_LICENSE_PATH.read_bytes())
 
 
 if __name__ == "__main__":
