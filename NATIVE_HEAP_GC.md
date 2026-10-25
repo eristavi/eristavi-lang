@@ -96,6 +96,7 @@ nearly every opportunity and cover:
 - rooted List storage and elements;
 - a rooted `maybe` value whose ordinary payload reaches an identity cycle;
 - an explicit Text byte view remaining valid after the original Text slot is dropped;
+- a real `std.files.File` resource retaining its managed path/runtime-path storage across forced collection, followed by explicit deterministic cleanup;
 - prefix-backed Text remaining valid while rooted;
 - weak prefix-index removal after the value dies;
 - an unreachable `identity` cycle;
