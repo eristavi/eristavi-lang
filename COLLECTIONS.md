@@ -1,322 +1,435 @@
 # Eristavi Collections
 
-> **Status: Locked for pre-0.1**
+> **Status: Pre-0.1 collection contract; implementation qualification pending**
 
-This document defines the first concrete Eristavi collection model.
+This document defines Eristavi's fundamental collection/value families.
 
 The governing rule is:
 
-> Pre-0.1 has one ordinary ordered growable collection family: `List`. Its element relationship is statically inferred, indexing is zero-based and checked, mutation follows ordinary value semantics, and advanced collection families remain library/future work.
+> Write the value naturally. The compiler infers collection relationships where it can, explicit type context is used only where syntax cannot distinguish the value, and Eristavi does not add constructor APIs or exposed generic syntax merely to explain a literal the compiler can already understand.
 
-## 1. One default collection family
+Pre-0.1 has three fundamental collection-oriented value families:
 
-The canonical pre-0.1 collection family is `List`.
+- `List`: ordered growable homogeneous sequence;
+- Map: associative key/value collection inferred from `key : value;` entries;
+- `Bytes`: compact binary sequence selected by `Bytes` type context.
 
-A list is:
+`Set`, queue/deque, priority queue, ordered-map variants and other specialized collections remain standard-library/future work.
+
+## 1. One square-bracket collection family of syntax
+
+Square brackets are the visual syntax family for collections.
+
+A List uses comma-separated elements:
+
+```eri
+let names be ["Anna", "Maria", "John"];
+```
+
+A Map uses colon-separated key/value entries terminated by semicolons:
+
+```eri
+let ages be [
+    "Anna" : 32;
+    "John" : 41;
+];
+```
+
+Bytes reuses ordinary bracket element syntax only when static context requires `Bytes`:
+
+```eri
+let data Bytes be [72, 101, 108, 108, 111];
+```
+
+No constructor family is introduced:
+
+```text
+list(...)
+List(...)
+map(...)
+Map(...)
+bytes(...)
+Bytes(...)
+```
+
+These are not the canonical collection-construction model.
+
+Braces remain reserved for blocks and typed value construction.
+
+## 2. List
+
+A List is:
 
 - ordered;
 - growable;
 - homogeneous in its static element relationship;
 - an ordinary Eristavi value rather than shared identity by default.
 
-List literals use the already-locked bracket syntax:
-
-```eri
-let names be ["Anna", "Maria", "John"];
-```
-
-The compiler infers that `names` is a List whose element type is `Text`.
-
-Pre-0.1 does not introduce separate `Array`, `Vector`, `Sequence`, or linked-list language concepts merely to offer several names for the same everyday collection role.
-
-## 2. `List` is not a keyword
-
-`List` is a predeclared type-family name, not a reserved lexical keyword.
-
-The element type remains statically known to the compiler, but pre-0.1 still exposes no user-written generic argument syntax.
-
-Therefore this is not pre-0.1 Eristavi source syntax:
-
-```text
-List<Text>
-List[Int]
-List[User]
-```
-
-A bare `List` is not a complete explicit value-type annotation because the element relationship must be known. Ordinary pre-0.1 code obtains that relationship through inference from literals, use, parameters, return context, or other statically analyzable constraints.
-
-The compiler/tooling may describe the inferred type in diagnostics using human-readable wording such as "List of Text" without making that wording source syntax.
-
-## 3. Homogeneous element relationship
-
-A List has one statically coherent element type.
-
-Valid:
+The compiler infers the element relationship:
 
 ```eri
 let numbers be [1, 2, 3];
 let names be ["Anna", "Maria"];
 ```
 
-Invalid:
+Mixed incompatible element relationships are rejected:
 
 ```eri
-let mixed be [1, "one"];
+let mixed be [1, "one"]; // compile-time error
 ```
 
-Eristavi does not silently widen a mixed list to `dynamic`, `Any`, an implicit union, or another catch-all type.
+There is no implicit `Any`, dynamic widening or hidden union.
 
-The existing no-implicit-lossy-conversion rules also apply. For example, `Int` and `Float` are not silently mixed by converting one to the other:
+The pre-0.1 source language does not expose generic spelling such as:
 
-```eri
-let values be [1, 2.0]; // compile-time error
+```text
+List<Text>
+List<Int>
 ```
 
-## 4. Empty List inference
+Diagnostics may describe an inferred relationship as "List of Text" without making that diagnostic wording source syntax.
 
-An empty literal is valid only when the compiler can establish its element relationship from static context.
+### Empty List
 
-For example:
+`[]` is the empty List literal.
+
+Its element relationship must become known from static context or later statically analyzable use:
 
 ```eri
 let customers be [];
-
-customers.add(Customer {
-    name = "Anna";
-});
+customers.add(Customer { name = "Anna"; });
 ```
 
-may establish that `customers` is a List of `Customer` when the complete statically analyzable use makes that relationship unambiguous.
+If no complete element relationship can be inferred, compilation fails.
 
-Context may also come from a function parameter, return contract/inference relationship, assignment, or another ordinary static constraint.
+### Indexing and mutation
 
-If the compiler cannot determine one element type, compilation fails rather than creating an untyped or dynamically typed List.
+List indexing is zero-based and checked:
 
 ```eri
-let items be []; // error when no later/contextual constraint establishes the element type
+let names be ["Anna", "Maria"];
+output(names[0]);
+names[1] = "Mary";
 ```
 
-Conflicting constraints are likewise compile-time errors.
-
-## 5. Zero-based indexing
-
-List indexing is zero-based.
-
-```eri
-let names be ["Anna", "Maria", "John"];
-
-output(names[0]); // Anna
-output(names[1]); // Maria
-```
-
-The index expression must have static type `Int`.
-
-For a List with `count` elements, valid indexes satisfy:
+The index must have static type `Int` and satisfy:
 
 ```text
 0 <= index < count
 ```
 
-Negative indexing does not mean "from the end" in pre-0.1. A negative index is out of bounds.
+Provably invalid indexes are compile-time errors; otherwise an invalid index produces a defined runtime bounds fault.
 
-## 6. Bounds behavior
-
-Indexing is checked.
-
-If an index is provably out of range at compile time, the compiler should reject the program with a clear diagnostic.
-
-Otherwise, an out-of-range access produces a defined runtime bounds fault.
-
-A bounds fault is a runtime defect, not an ordinary checked `fails` value, matching the existing distinction used for arithmetic defects such as integer division by zero.
-
-Indexing does not silently clamp, wrap, return `none`, or choose another fallback behavior.
-
-A future safe lookup library API may return `maybe T` if real programs need that operation, but it is not alternate indexing syntax.
-
-## 7. Reading elements
-
-Reading:
+A mutable List supports:
 
 ```eri
-let first be items[0];
+items.add(value);
+items[index] = value;
 ```
 
-produces the element according to its normal Eristavi semantics.
+`.add(value)` is the single canonical append operation and returns no value.
 
-For an ordinary value element, the result behaves as an ordinary independent logical value.
+### Count
 
-For an `identity T` element, reading the element produces the same logical identity handle, because identity assignment/copying preserves identity.
+Every List exposes read-only `.count` of type `Int`.
 
-No separate reference-to-element concept is exposed in pre-0.1.
+### Value semantics
 
-## 8. Indexed mutation
-
-A mutable List supports indexed assignment:
-
-```eri
-let numbers be [10, 20, 30];
-numbers[1] = 25;
-```
-
-The assigned value must be compatible with the List's inferred element type.
-
-Indexed paths may participate in ordinary nested mutation where the complete path is mutable:
-
-```eri
-users[0].name = "Maria";
-```
-
-This updates the stored ordinary value while preserving Eristavi value semantics. The compiler/runtime may implement the operation through in-place optimization, copy-on-write, reconstruction, or another mechanism as long as observable behavior is the same.
-
-Conceptually, assignment targets may therefore contain member and index path segments. This extends the assignment-target semantic model without making `=` an expression operator.
-
-## 9. `.count`
-
-Every List exposes a read-only `count` property of type `Int`:
-
-```eri
-let names be ["Anna", "Maria"];
-output(names.count); // 2
-```
-
-`count` is the number of elements currently stored in the List.
-
-It is not assignable:
-
-```eri
-names.count = 10; // compile-time error
-```
-
-Pre-0.1 uses `count` rather than introducing synonymous `length` / `size` properties for the same concept.
-
-## 10. `.add(value)`
-
-A mutable List supports one canonical append operation:
-
-```eri
-names.add("John");
-```
-
-`add(value)` appends the value to the end of the List.
-
-The value must be compatible with the List's element type.
-
-`add` is a no-value operation in pre-0.1; it does not return the inserted element, the index, or the List.
-
-This keeps mutation explicit and prevents chaining from creating a second implicit collection-building model.
-
-## 11. Value semantics
-
-A List is an ordinary Eristavi value by default.
+Lists are ordinary values:
 
 ```eri
 let first be [1, 2];
 let second be first;
-
 second.add(3);
 
 output(first.count);  // 2
 output(second.count); // 3
 ```
 
-Mutating `second` must not mutate `first`.
+Mutation of one ordinary List value does not mutate another copied value.
 
-The compiler/runtime may use copy-on-write, shared backing storage, move optimization, escape analysis, or other representation techniques as long as observable List behavior remains value-based.
+### Equality and iteration
 
-Passing a List as an ordinary function parameter follows the same value-parameter rule: mutations to the parameter's List value do not mutate the caller-owned ordinary List.
+List equality is order-sensitive and element-wise. A List is equality-comparable only when its element relationship is equality-comparable.
 
-Shared mutable List state requires explicit identity at a containing semantic boundary rather than hidden aliasing.
+`for` traverses List elements from index zero upward using the stable logical sequence present when iteration begins.
 
-## 12. `fixed` Lists
+## 3. Map
 
-`fixed` applies deeply to Lists under the already-locked deep-fixable rule.
+A Map is an associative ordinary value with one statically coherent key relationship and one statically coherent value relationship.
+
+Map syntax is distinguished from List syntax by `:`:
 
 ```eri
-let fixed names be ["Anna", "Maria"];
+let ages be [
+    "Anna" : 32;
+    "John" : 41;
+];
 ```
 
-For such a List:
+The compiler infers this as a Map from `Text` to `Int` internally. Pre-0.1 does not require or expose generic source spelling such as `Map<Text, Int>`.
+
+### Empty Map
+
+The unambiguous empty Map literal is:
 
 ```eri
-names.add("John"); // compile-time error
-names[0] = "Ana"; // compile-time error
+let values be [:];
 ```
 
-The List's nested ordinary values are likewise immutable through the fixed value.
-
-A List whose element type contains `identity` at a reachable stored position is not deep-fixable and therefore cannot receive a `fixed` guarantee.
-
-## 13. Equality
-
-The already-locked ordinary value equality model applies.
-
-Two Lists are equal when:
-
-1. they contain the same number of elements; and
-2. every corresponding element compares equal using the element type's own equality semantics.
-
-Order matters:
+As with an empty List, its key and value relationships must become known from static constraints:
 
 ```eri
-[1, 2, 3] == [1, 2, 3] // true
-[1, 2, 3] == [3, 2, 1] // false
+let values be [:];
+values["answer"] = 42;
 ```
 
-A List is equality-comparable only when its element type is equality-comparable.
+If either relationship remains unresolved, compilation fails.
 
-## 14. `for` iteration
+### Homogeneous relationships
 
-`for` iterates List elements from index `0` upward in stored order.
+All Map keys must share one static type relationship and all values must share one static type relationship.
 
 ```eri
-for name in names {
-    output(name);
+let ages be [
+    "Anna" : 32;
+    "John" : 41;
+];
+```
+
+This is invalid:
+
+```eri
+let mixed be [
+    "answer" : 42;
+    "name" : "Anna";
+];
+```
+
+Eristavi does not silently widen the Map value relationship.
+
+### Key types
+
+The initial pre-0.1 Map contract accepts stable scalar keys:
+
+- `Int`;
+- `Bool`;
+- `Text`.
+
+`Float` is deliberately excluded initially because IEEE NaN equality makes a simple, unsurprising key contract harder to preserve.
+
+Lists, Maps and arbitrary mutable structured values are not Map keys in the initial contract. The key family may be widened later only if equality and hashing remain deterministic and obvious.
+
+### Duplicate literal keys
+
+A duplicate key that is statically obvious in a Map literal is a compile-time error:
+
+```eri
+let ages be [
+    "Anna" : 32;
+    "Anna" : 40;
+];
+```
+
+Map construction never silently chooses one duplicate literal entry over another.
+
+### Lookup and indexed assignment
+
+Map lookup uses ordinary index syntax:
+
+```eri
+output(ages["John"]);
+```
+
+The key expression must match the Map key relationship.
+
+Reading a missing key produces the defined runtime fault:
+
+```text
+Map key not found
+```
+
+It does not silently return `none`, insert a default value, or fabricate a value.
+
+Indexed assignment is the canonical update/insert operation:
+
+```eri
+ages["John"] = 42; // update
+ages["Maria"] = 28; // insert
+```
+
+The key and value must satisfy the inferred Map relationships.
+
+A future safe-lookup library operation may return `maybe T` if real programs demonstrate the need; it is not alternate indexing syntax.
+
+### Count
+
+Every Map exposes read-only `.count` of type `Int`.
+
+### Value semantics
+
+Maps are ordinary values. Assignment/copying creates an independent logical value:
+
+```eri
+let first be ["a" : 1;];
+let second be first;
+second["a"] = 2;
+
+output(first["a"]);  // 1
+output(second["a"]); // 2
+```
+
+Implementations may use copy-on-write, hashing, shared immutable backing storage or other optimizations as long as this observable value behavior is preserved.
+
+### Order and equality
+
+Map equality is based on key/value correspondence, not entry position. Two Maps compare equal when they contain the same keys and each key maps to an equal value.
+
+The initial implementation preserves insertion order for deterministic diagnostics/output, but source programs must not depend on Map traversal order because direct Map `for` iteration is not part of the initial contract.
+
+A native implementation should use associative lookup appropriate to production workloads; the source semantics do not require a particular hash-table representation.
+
+## 4. Bytes
+
+`Bytes` is a compact binary value, not an alias for `List<Int>`.
+
+The same bracket syntax is reused because the expected type already makes the intent unambiguous:
+
+```eri
+let data Bytes be [72, 101, 108, 108, 111];
+```
+
+Without Bytes context, the same literal remains a normal List of Int:
+
+```eri
+let numbers be [72, 101, 108]; // List of Int
+```
+
+Eristavi never guesses Bytes merely because every integer happens to fit in a byte.
+
+### Bytes context
+
+Bytes context may come from:
+
+- an explicit `Bytes` binding annotation;
+- a `Bytes` function parameter;
+- a `Bytes` return contract;
+- assignment where the destination is already statically `Bytes`.
+
+Examples:
+
+```eri
+function first(data Bytes) returns Int {
+    return data[0];
+}
+
+output(first([65, 66]));
+```
+
+```eri
+function greeting() returns Bytes {
+    return [72, 105];
 }
 ```
 
-The loop observes the logical List value present when iteration begins. Subsequent mutation of the source does not alter which element sequence that active loop is traversing.
+### Element range
 
-This is a semantic snapshot, not a requirement that the runtime eagerly copy the entire List. The compiler/runtime may implement stable iteration more efficiently as long as the observable sequence is unchanged.
+Each Bytes element has semantic type `Int` and must satisfy:
 
-Each loop binding receives the element according to ordinary value/identity semantics.
+```text
+0 <= value <= 255
+```
 
-## 15. Deliberately postponed operations
+An out-of-range constant is rejected at compile time. A nonconstant value that violates the range during mutation/construction produces a defined runtime fault.
 
-Pre-0.1 does not need dedicated core semantics for:
+### Indexing, mutation and count
 
-- slicing;
-- ranges;
-- negative/from-end indexing;
-- insertion at arbitrary positions;
-- removal APIs;
-- sorting APIs;
-- maps/dictionaries;
-- sets;
-- queues/deques;
-- linked lists;
-- lazy sequences;
+Bytes uses zero-based checked indexing:
+
+```eri
+let data Bytes be [72, 101];
+output(data[1]); // 101
+data[1] = 97;
+```
+
+Reading an element produces `Int`.
+
+Every Bytes value exposes read-only `.count` of type `Int`.
+
+### Representation
+
+A conforming implementation may store `Bytes` as compact contiguous octets. It must not be forced to represent each byte as a full general-purpose Eristavi `Int` value.
+
+This distinction matters for files, networking, encoding, cryptography and binary protocols.
+
+### Value semantics and equality
+
+Bytes is an ordinary value. Copies are logically independent under mutation.
+
+Equality is byte-for-byte and order-sensitive.
+
+## 5. `fixed`
+
+The existing deep-fixable rule applies to collections.
+
+A fixed List, Map or Bytes value cannot be mutated through that binding.
+
+For Maps and Lists, nested ordinary values must also satisfy the existing deep-fixable contract. Reachable identity/resource state prevents a deep `fixed` guarantee where the existing language rules already prohibit it.
+
+## 6. Output
+
+`output(...)` may display collection values using their canonical surface structure when their nested values are outputable.
+
+Examples:
+
+```text
+[1, 2, 3]
+[72, 101, 108]
+["Anna" : 32; "John" : 41;]
+```
+
+Text values nested inside a collection are quoted/escaped so structure remains unambiguous.
+
+Bytes output uses decimal byte values by default. Hexadecimal formatting is an explicit formatting concern rather than alternate Bytes semantics.
+
+## 7. Deliberately postponed collection families
+
+The core language does not need separate built-in syntax or compiler machinery for:
+
+- `Set`;
+- stack;
+- queue/deque;
+- priority queue;
+- ordered/sorted Map variants;
+- multi-map;
+- linked list;
+- lazy sequence;
 - comprehensions;
 - parallel collection operations.
 
-These may be added through the standard library or later language/library design when real programs demonstrate the need.
+These can be standard-library abstractions built from the fundamental runtime capabilities when real programs justify them.
 
-Their absence does not prevent implementations from providing ordinary library functions that operate on Lists where consistent with the frozen semantics.
+`Stack` in particular does not need to duplicate ordinary List behavior merely to add another name.
 
-## 16. Diagnostics
+## 8. Diagnostics
 
-Useful compiler diagnostics include:
+Useful diagnostics include:
 
-- mixed incompatible element types;
-- unresolved empty-List element type;
-- conflicting inferred element constraints;
-- non-`Int` index;
-- statically provable out-of-range index;
-- assignment of an incompatible element type;
-- mutation of a fixed List;
-- use of equality when the element type is not equality-comparable.
+- mixed incompatible List element types;
+- unresolved empty-List element relationship;
+- mixed incompatible Map key/value relationships;
+- unresolved empty-Map key/value relationships;
+- unsupported Map key type;
+- duplicate statically obvious Map key;
+- nonmatching Map lookup key;
+- non-`Int` List/Bytes index;
+- statically provable out-of-range List/Bytes index or byte value;
+- incompatible indexed assignment;
+- mutation through a fixed collection;
+- equality on a collection whose nested relationships are not equality-comparable.
 
-Diagnostics should identify the relevant element type or index constraint rather than reporting only a generic type error.
+Diagnostics should name the relevant relationship rather than collapsing these cases into a generic type failure.
 
 ## Governing principle
 
-> A List is one predictable ordered growable value: infer one element type, index from zero with checked bounds, use `count` for element count, `add` for append, preserve value semantics, and postpone additional collection families until they solve demonstrated problems.
+> Eristavi has a small collection foundation with one obvious notation: comma-separated `[]` for ordered sequences, `key : value;` entries inside `[]` for associative Maps, and the same sequence literal interpreted as `Bytes` only when static Bytes context makes that intent explicit. The types remain strong and distinct even when the syntax is shared.
