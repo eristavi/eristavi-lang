@@ -15,7 +15,7 @@
 #endif
 
 #ifndef ERIST_HEAP_GC_INTERVAL
-#define ERIST_HEAP_GC_INTERVAL 4096
+#define ERIST_HEAP_GC_INTERVAL 65536
 #endif
 #if ERIST_HEAP_GC_INTERVAL < 1
 #error "ERIST_HEAP_GC_INTERVAL must be positive"
@@ -400,8 +400,9 @@ static void eri_native_gc_collect(const ev_value *temporary_value,const eri_fail
     eri_native_gc_allocations_since_collection=0;
     eri_native_gc_next_collection=ERIST_HEAP_GC_INTERVAL;
 #if ERIST_HEAP_GC_INTERVAL > 1
-    if(eri_native_gc_live_blocks>eri_native_gc_next_collection)
-        eri_native_gc_next_collection=eri_native_gc_live_blocks;
+    size_t growth=eri_native_gc_live_blocks;
+    if(growth>SIZE_MAX/4)growth=SIZE_MAX;else growth*=4;
+    if(growth>eri_native_gc_next_collection)eri_native_gc_next_collection=growth;
 #endif
     eri_native_gc_collections=eri_native_gc_add_size(eri_native_gc_collections,1);
     eri_native_gc_collecting=false;
