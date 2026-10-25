@@ -50,15 +50,18 @@ static bool eri_native_gc_collecting;
 
 static void *eri_native_gc_malloc(size_t size);
 static void *eri_native_gc_allocate_kind(size_t size,int kind);
+static void eri_native_gc_deallocate_kind(void *pointer,int kind);
 static void *eri_native_gc_realloc(void *pointer,size_t size);
 static void eri_native_gc_free(void *pointer);
 
-/* Track every allocation made by the bootstrap runtime. Collection itself uses
-   the system allocator after these macros are removed below. */
+/* Track managed/unclassified bootstrap allocations. The private family hook
+   leaves explicitly owned native administration on its original allocator.
+   Collection itself uses the system allocator after these macros are removed. */
 #define malloc eri_native_gc_malloc
 #define realloc eri_native_gc_realloc
 #define free eri_native_gc_free
 #define ERIST_RUNTIME_ALLOCATE(size,kind) eri_native_gc_allocate_kind(size,kind)
+#define ERIST_RUNTIME_DEALLOCATE(pointer,kind) eri_native_gc_deallocate_kind(pointer,kind)
 
 /* A safe point must run only after the runtime has finished constructing the
    returned value/frame/scope. Rename selected pointer-ABI entries so wrappers can
@@ -120,6 +123,7 @@ static void eri_native_gc_free(void *pointer);
 #undef realloc
 #undef malloc
 #undef ERIST_RUNTIME_ALLOCATE
+#undef ERIST_RUNTIME_DEALLOCATE
 
 typedef struct {
     ev_value *items;
@@ -228,17 +232,22 @@ static void *eri_native_gc_malloc(size_t size){
     return memory;
 }
 
+static bool eri_native_gc_administrative_kind(int kind){
+    return kind==ERI_HEAP_SLOT||kind==ERI_HEAP_SCOPE||kind==ERI_HEAP_HANDLER||kind==ERI_HEAP_ROOT_TABLE;
+}
+
 static void *eri_native_gc_allocate_kind(size_t size,int kind){
-    void *memory=eri_native_gc_malloc(size);
-    /* These allocations are released explicitly by scope/unwind/slot cleanup.
-       Keep tracking them, but do not let
-       scalar-slot traffic repeatedly trigger scans of an unchanged managed heap.
-       Object/Text/failure allocations and unclassified requests still advance
-       the collection budget. */
-    if(kind==ERI_HEAP_SLOT||kind==ERI_HEAP_SCOPE||kind==ERI_HEAP_HANDLER||
-       kind==ERI_HEAP_ROOT_TABLE)
-        eri_native_gc_allocations_since_collection--;
+    /* Native administration has explicit scope/unwind/slot ownership. Its
+       values are roots, but its storage never needs tracing reclamation. */
+    if(!eri_native_gc_administrative_kind(kind))return eri_native_gc_malloc(size);
+    void *memory=malloc(size?size:1);
+    if(!memory)eri_fault("out of memory");
     return memory;
+}
+
+static void eri_native_gc_deallocate_kind(void *pointer,int kind){
+    if(eri_native_gc_administrative_kind(kind))free(pointer);
+    else eri_native_gc_free(pointer);
 }
 
 static void eri_native_gc_unlink(eri_native_gc_block *block){
@@ -375,7 +384,21 @@ static void eri_native_gc_prepare_weak_indexes(void){
 }
 
 static void eri_native_gc_mark_roots(eri_native_gc_value_queue *queue,const ev_value *temporary_value,const eri_failure_value *temporary_failure){
-    for(ev_slot_node *slot=ev_slots;slot;slot=slot->next){eri_native_gc_mark_pointer(slot);eri_native_gc_queue_value(queue,slot->value);}
+    /* Slot values are visited once here. A small exact-address set distinguishes
+       their untracked storage from member_ref/index_ref interior value roots.
+       Never interpret an unverified address from a root map as an allocation. */
+    size_t slot_count=0,capacity=16;
+    for(ev_slot_node *slot=ev_slots;slot;slot=slot->next)slot_count=eri_native_gc_add_size(slot_count,1);
+    if(slot_count>SIZE_MAX/2)eri_native_gc_overflow();
+    while(capacity<slot_count*2){if(capacity>SIZE_MAX/2)eri_native_gc_overflow();capacity*=2;}
+    if(capacity>SIZE_MAX/sizeof(uintptr_t))eri_native_gc_overflow();
+    uintptr_t *slots=(uintptr_t*)calloc(capacity,sizeof(*slots));
+    if(!slots)eri_fault("out of memory");
+    size_t mask=capacity-1;
+    for(ev_slot_node *slot=ev_slots;slot;slot=slot->next){
+        ev_root_insert(slots,mask,(uintptr_t)slot);
+        eri_native_gc_queue_value(queue,slot->value);
+    }
     for(ev_scope *scope=ev_scopes;scope;scope=scope->previous){
         eri_native_gc_mark_pointer(scope);
         if(scope->roots&&scope->classes){
@@ -383,6 +406,7 @@ static void eri_native_gc_mark_roots(eri_native_gc_value_queue *queue,const ev_v
                 uintptr_t key=0;memcpy(&key,scope->roots+index*sizeof(key),sizeof(key));
                 if(!key)continue;
                 if(scope->classes[index]==1){
+                    if(ev_root_contains(slots,mask,key))continue;
                     eri_native_gc_block *owner=eri_native_gc_find_value_owner((void*)key);
                     if(owner){eri_native_gc_mark_block(owner);eri_native_gc_queue_value(queue,*(ev_value*)key);}
                 }else if(scope->classes[index]==5){
@@ -396,10 +420,11 @@ static void eri_native_gc_mark_roots(eri_native_gc_value_queue *queue,const ev_v
     for(eri_handler_frame *frame=eri_handler_top;frame;frame=frame->prev)eri_native_gc_mark_pointer(frame);
     eri_native_gc_mark_failure(&eri_failure,queue,false);
     if(temporary_value){
-        eri_native_gc_block *owner=eri_native_gc_find_value_owner(temporary_value);
+        eri_native_gc_block *owner=ev_root_contains(slots,mask,(uintptr_t)temporary_value)?NULL:eri_native_gc_find_value_owner(temporary_value);
         if(owner){eri_native_gc_mark_block(owner);eri_native_gc_queue_value(queue,*temporary_value);}
     }
     if(temporary_failure)eri_native_gc_mark_failure((eri_failure_value*)temporary_failure,queue,false);
+    free(slots);
 }
 
 static void eri_native_gc_keep_live_prefix_indexes(void){

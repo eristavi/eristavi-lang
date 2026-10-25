@@ -221,8 +221,17 @@ static void scalar_administration_does_not_rescan_managed_heap(void){
     roots[0]=(uintptr_t)text;
     eri_native_heap_collect();
     size_t collections=eri_native_heap_collections();
-    for(int i=0;i<10000;i++)evn_int(i);
+    size_t managed_blocks=eri_native_heap_live_blocks();
+    for(int i=0;i<10000;i++){
+        eri_handler_frame *frame=evn_frame();
+        evn_int(i);
+        evn_pop(frame);
+        ev_scope *inner=evn_scope_enter();
+        evn_bind_roots(inner,roots,classes,1);
+        evn_scope_leave(inner,text);
+    }
     assert(eri_native_heap_collections()==collections);
+    assert(eri_native_heap_live_blocks()==managed_blocks);
     assert(text->text.len==8&&memcmp(text->text.data,"retained",8)==0);
     assert(eri_native_heap_live_bytes()<65536);
     /* Managed allocation must still trigger the interval-one collector. */

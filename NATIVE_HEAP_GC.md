@@ -33,14 +33,22 @@ can be reduced to one in hardening tests. It is not a source-language setting or
 ABI.
 
 The collection budget counts managed and unclassified allocation requests. Native
-temporary slots, scopes, handlers and root tables remain tracked and traced, but
-their explicitly released allocations do not advance that budget. Otherwise a
+temporary slots, scopes, handlers and root tables keep their existing explicit
+scope/unwind/slot cleanup and bypass the managed-allocation registry and budget.
+Slot values and registered frame roots are still fully traced. Otherwise a
 scalar-heavy compiler loop repeatedly scans the retained AST and compiler state
 even when it creates no managed values. The private `ERIST_RUNTIME_ALLOCATE` C
-hook carries allocation families into this decision; ordinary/reference builds
-continue to use their existing allocator. Resize requests still advance the
+hook and matching `ERIST_RUNTIME_DEALLOCATE` hook carry allocation families into
+this decision; ordinary/reference and diagnostic builds continue to use their
+existing allocators. A temporary exact-address set identifies active slot roots
+without treating them as managed blocks; interior member/index references still
+use the managed owner lookup and retain their backing storage. Tracked resize requests still advance the
 budget. Forced interval-one tests check both that scalar administration does not
 cause heap scans and that managed Text allocation still triggers collection.
+Private native-heap block/byte counters describe managed/unclassified allocations,
+excluding this explicitly owned administration, collector scratch storage and
+allocator overhead. They are not total runtime allocation counts or process RSS;
+the separate `ERIST_HEAP_STATS` diagnostic still measures all allocation families.
 
 ## Roots
 
