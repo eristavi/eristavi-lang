@@ -17,6 +17,7 @@ function dot(text Text) returns Int {
 function resolveName(owner identity m.Module, name Text, node identity ast.Node) returns identity m.Type fails m.SemanticError {
     if name == "Int" { return m.makeType(1,""); } if name == "Float" { return m.makeType(2,""); }
     if name == "Bool" { return m.makeType(3,""); } if name == "Text" { return m.makeType(4,""); }
+    if name == "Bytes" { return m.makeType(13,""); }
     let split be dot(name);
     if split >= 0 {
         let qualifier be part(name,0,split); let member be part(name,split+1,name.scalars.count);
@@ -71,9 +72,11 @@ function eligible(owner identity m.Module, value identity m.Type, fixedCheck Boo
     let actual be t.resolve(value);
     if actual.kind == 0 { return not fixedCheck; }
     if actual.kind >= 1 and actual.kind <= 4 { return true; }
+    if actual.kind == 13 { return true; }
     if actual.kind == 12 { return fixedCheck; }
     if actual.kind == 9 { if fixedCheck { return false; } return true; }
     if actual.kind == 7 or actual.kind == 8 { return eligible(owner,t.inner(actual),fixedCheck,seen); }
+    if actual.kind == 14 { return eligible(owner,t.inner(actual),fixedCheck,seen) and eligible(owner,t.other(actual),fixedCheck,seen); }
     if actual.kind == 6 {
         if actual.name == "std.files.FileError" { return true; }
         let declaration be layout(owner,actual.name);
@@ -84,6 +87,19 @@ function eligible(owner identity m.Module, value identity m.Type, fixedCheck Boo
             while fields != none { if not eligible(owner,fields.value,fixedCheck,nextSeen) { return false; } fields=fields.next; } return true;
         }
     }
+    return false;
+}
+function mapKey(value identity m.Type) returns Bool {
+    let actual be t.resolve(value);
+    if actual.kind == 0 { return true; }
+    return actual.kind == 1 or actual.kind == 3 or actual.kind == 4;
+}
+function outputable(value identity m.Type) returns Bool {
+    let actual be t.resolve(value);
+    if actual.kind >= 1 and actual.kind <= 4 { return true; }
+    if actual.kind == 13 { return true; }
+    if actual.kind == 7 { return outputable(t.inner(actual)); }
+    if actual.kind == 14 { return outputable(t.inner(actual)) and outputable(t.other(actual)); }
     return false;
 }
 function newContext(owner identity m.Module) returns identity m.Context {
@@ -153,9 +169,16 @@ function target(context identity m.Context, node identity ast.Node) returns iden
     if node.kind == ast.indexExpr() {
         let base be m.child(node.first); try mutable(context,base);
         let value be t.resolve((try expression(context,base,true,false)).value);
-        try t.unify((try expression(context,m.child(node.second),true,false)).value,m.makeType(1,""),location(context,m.child(node.second)));
+        let indexNode be m.child(node.second); let indexValue be try expression(context,indexNode,true,false);
+        if value.kind == 14 {
+            try t.assign(t.inner(value),indexValue.value,location(context,indexNode));
+            try require(mapKey(t.inner(value)),context,indexNode,"type","Map keys currently support only Int, Bool, and Text");
+            return t.other(value);
+        }
+        try t.unify(indexValue.value,m.makeType(1,""),location(context,indexNode));
+        if value.kind == 13 { return m.makeType(1,""); }
         if value.kind == 0 { value=try t.unify(value,m.wrap(7,m.makeType(0,"")),location(context,node)); }
-        try require(value.kind == 7,context,node,"type","indexed assignment requires a List"); return t.inner(value);
+        try require(value.kind == 7,context,node,"type","indexed assignment requires a List, Map, or Bytes value"); return t.inner(value);
     }
     if node.kind == ast.memberExpr() {
         let base be m.child(node.first); try mutable(context,base);
@@ -252,6 +275,23 @@ function integerLiteral(node identity ast.Node, context identity m.Context) retu
         index=index+1;
     } return result;
 }
+function bytesLiteral(context identity m.Context, node identity ast.Node, allowChecked Bool) returns m.Result fails m.SemanticError {
+    let failures maybe identity m.Name be none; let cursor be node.first;
+    while cursor != none {
+        let value be try expression(context,cursor,true,allowChecked);
+        try t.unify(value.value,m.makeType(1,""),location(context,cursor));
+        if cursor.kind == ast.literalExpr() and cursor.extra == 2 {
+            let constant be try integerLiteral(cursor,context);
+            try require(constant <= 255,context,cursor,"bounds","Bytes literal elements must be between 0 and 255");
+        }
+        if cursor.kind == ast.unaryExpr() and cursor.text == "-" {
+            let operand be cursor.first;
+            if operand != none { if operand.kind == ast.literalExpr() and operand.extra == 2 { try require(false,context,cursor,"bounds","Bytes literal elements must be between 0 and 255"); } }
+        }
+        failures=m.union(failures,value.failures); cursor=cursor.next;
+    }
+    return m.Result { value=m.makeType(13,""); failures=failures; };
+}
 function checkedResult(context identity m.Context, node identity ast.Node, result m.Result, valueRequired Bool, allowChecked Bool) returns m.Result fails m.SemanticError {
     if valueRequired { try require(t.resolve(result.value).kind != 5,context,node,"type","a no-value call cannot be used where a value is required"); }
     if not allowChecked { try require(result.failures == none,context,node,"failure","checked call must be handled or propagated with try"); }
@@ -323,9 +363,11 @@ function userCall(context identity m.Context, node identity ast.Node, declaratio
     while parameter != none {
         try require(argument != none,context,node,"type","not enough function arguments");
         if argument != none {
-            let value be try expression(context,argument,true,allowChecked);
-            try require(t.resolve(value.value).kind != 10 and t.resolve(value.value).kind != 5,context,argument,"resource","resources cannot be passed as ordinary value parameters");
             let expected be t.clone(parameter.value,map);
+            let value be m.result(m.makeType(5,""));
+            if t.resolve(expected).kind == 13 and argument.kind == ast.listExpr() { value=try bytesLiteral(context,argument,allowChecked); }
+            else { value=try expression(context,argument,true,allowChecked); }
+            try require(t.resolve(value.value).kind != 10 and t.resolve(value.value).kind != 5,context,argument,"resource","resources cannot be passed as ordinary value parameters");
             try t.assign(expected,value.value,location(context,argument)); failures=m.union(failures,value.failures); argument=argument.next;
         }
         parameter=parameter.next;
@@ -347,8 +389,8 @@ function call(context identity m.Context, node identity ast.Node, valueRequired 
             let argument be node.second; try require(argument != none,context,node,"type","output requires one argument");
             if argument != none {
                 try require(argument.next == none,context,node,"type","output requires one argument");
-                let value be try expression(context,argument,true,allowChecked); let kind be t.resolve(value.value).kind;
-                try require(kind >= 1 and kind <= 4,context,node,"type","output requires a scalar value");
+                let value be try expression(context,argument,true,allowChecked);
+                try require(outputable(value.value),context,node,"type","output requires an outputable scalar or collection value");
                 return m.Result { value=m.makeType(5,""); failures=value.failures; };
             }
         }
@@ -423,7 +465,7 @@ function member(context identity m.Context, node identity ast.Node, allowChecked
     if actual.kind == 0 and node.text == "count" { actual=try t.unify(actual,m.wrap(7,m.makeType(0,"")),location(context,node)); }
     if actual.kind == 9 { actual=t.inner(actual); }
     if actual.kind == 4 and (node.text == "bytes" or node.text == "scalars" or node.text == "characters") { return m.Result { value=m.makeType(12,node.text); failures=value.failures; }; }
-    if (actual.kind == 7 or actual.kind == 12) and node.text == "count" { return m.Result { value=m.makeType(1,""); failures=value.failures; }; }
+    if (actual.kind == 7 or actual.kind == 12 or actual.kind == 13 or actual.kind == 14) and node.text == "count" { return m.Result { value=m.makeType(1,""); failures=value.failures; }; }
     if actual.kind == 11 and node.text == "message" { return m.result(m.makeType(4,"")); }
     if actual.kind == 6 {
         if actual.name == "std.files.FileError" and (node.text == "message" or node.text == "path") { return m.result(m.makeType(4,"")); }
@@ -477,6 +519,19 @@ function evaluate(context identity m.Context, node identity ast.Node, valueRequi
         while cursor != none { let value be try expression(context,cursor,true,allowChecked); try require(t.resolve(value.value).kind != 5,context,cursor,"type","List elements require ordinary values"); try require(t.resolve(value.value).kind != 10,context,cursor,"resource","resources cannot be copied into Lists"); element=try t.join(element,value.value,location(context,cursor)); failures=m.union(failures,value.failures); cursor=cursor.next; }
         return m.Result { value=m.wrap(7,element); failures=failures; };
     }
+    if kind == ast.mapExpr() {
+        let keyType be m.makeType(0,""); let valueType be m.makeType(0,""); let cursor be node.first; let failures maybe identity m.Name be none;
+        while cursor != none {
+            let keyNode be m.child(cursor.first); let valueNode be m.child(cursor.second);
+            let key be try expression(context,keyNode,true,allowChecked); let item be try expression(context,valueNode,true,allowChecked);
+            try require(t.resolve(key.value).kind != 5 and t.resolve(key.value).kind != 10,context,keyNode,"type","Map keys require ordinary values");
+            try require(t.resolve(item.value).kind != 5 and t.resolve(item.value).kind != 10,context,valueNode,"type","Map values require ordinary values");
+            keyType=try t.join(keyType,key.value,location(context,keyNode)); valueType=try t.join(valueType,item.value,location(context,valueNode));
+            try require(mapKey(keyType),context,keyNode,"type","Map keys currently support only Int, Bool, and Text");
+            failures=m.union(failures,m.union(key.failures,item.failures)); cursor=cursor.next;
+        }
+        return m.Result { value=m.pairType(14,keyType,valueType); failures=failures; };
+    }
     if kind == ast.identityExpr() {
         let value be try expression(context,m.child(node.first),true,allowChecked); let actual be t.resolve(value.value);
         try require(actual.kind != 8 and actual.kind != 9 and actual.kind != 10 and actual.kind != 5,context,node,"type","identity requires an ordinary non-resource value");
@@ -495,11 +550,17 @@ function evaluate(context identity m.Context, node identity ast.Node, valueRequi
     if kind == ast.callExpr() { return try call(context,node,valueRequired,allowChecked); }
     if kind == ast.indexExpr() {
         let base be m.child(node.first); let index be m.child(node.second);
-        let value be try expression(context,base,true,allowChecked); let subscript be try expression(context,index,true,allowChecked);
-        try t.unify(subscript.value,m.makeType(1,""),location(context,index)); let actual be t.resolve(value.value);
+        let value be try expression(context,base,true,allowChecked); let subscript be try expression(context,index,true,allowChecked); let actual be t.resolve(value.value);
+        if actual.kind == 14 {
+            try t.assign(t.inner(actual),subscript.value,location(context,index));
+            try require(mapKey(t.inner(actual)),context,index,"type","Map keys currently support only Int, Bool, and Text");
+            return m.Result { value=t.other(actual); failures=m.union(value.failures,subscript.failures); };
+        }
+        try t.unify(subscript.value,m.makeType(1,""),location(context,index));
+        if actual.kind == 13 { return m.Result { value=m.makeType(1,""); failures=m.union(value.failures,subscript.failures); }; }
         if actual.kind == 0 { actual=try t.unify(actual,m.wrap(7,m.makeType(0,"")),location(context,node)); }
         if actual.kind == 12 { let element be m.makeType(4,""); if actual.name == "bytes" { element=m.makeType(1,""); } return m.Result { value=element; failures=m.union(value.failures,subscript.failures); }; }
-        try require(actual.kind == 7,context,node,"type","indexing requires a List or explicit Text view");
+        try require(actual.kind == 7,context,node,"type","indexing requires a List, Map, Bytes, or explicit Text view");
         if base.kind == ast.listExpr() and index.kind == ast.literalExpr() {
             let count be 0; let cursor be base.first; while cursor != none { count=count+1; cursor=cursor.next; }
             let constant be try integerLiteral(index,context); try require(constant < count,context,index,"bounds","List index is provably out of bounds");
@@ -542,17 +603,28 @@ function statement(context identity m.Context, node identity ast.Node) returns B
     if kind == ast.letStmt() {
         let prior be m.find(context.symbols,node.text);
         try require(prior == none,context,node,"scope","binding would redeclare or shadow a visible name: " + node.text);
-        let value be t.resolve((try expression(context,m.child(node.second),true,false)).value);
-        try require(value.kind != 5 and value.kind != 10,context,node,"resource","binding requires an ordinary value; resources belong to with");
-        let annotation be node.first;
-        if annotation != none { value=try t.assign(try typeRef(context.owner,annotation),value,location(context,node)); }
+        let initializer be m.child(node.second); let annotation be node.first;
+        let result be m.result(m.makeType(5,"")); let value be m.makeType(5,"");
+        if annotation != none {
+            let declared be try typeRef(context.owner,annotation);
+            if t.resolve(declared).kind == 13 and initializer.kind == ast.listExpr() { result=try bytesLiteral(context,initializer,false); }
+            else { result=try expression(context,initializer,true,false); }
+            value=t.resolve(result.value);
+            try require(value.kind != 5 and value.kind != 10,context,node,"resource","binding requires an ordinary value; resources belong to with");
+            value=try t.assign(declared,value,location(context,node));
+        } else {
+            result=try expression(context,initializer,true,false); value=t.resolve(result.value);
+            try require(value.kind != 5 and value.kind != 10,context,node,"resource","binding requires an ordinary value; resources belong to with");
+        }
         try declare(context,node,node.text,value,node.flag,false);
         if node.flag { try enforceFixed(context,value,node); }
         return false;
     }
     if kind == ast.assignStmt() {
-        let destination be m.child(node.first); let expected be try target(context,destination);
-        let value be try expression(context,m.child(node.second),true,false);
+        let destination be m.child(node.first); let expected be try target(context,destination); let source be m.child(node.second);
+        let value be m.result(m.makeType(5,""));
+        if t.resolve(expected).kind == 13 and source.kind == ast.listExpr() { value=try bytesLiteral(context,source,false); }
+        else { value=try expression(context,source,true,false); }
         try require(t.resolve(value.value).kind != 5,context,node,"type","cannot assign a no-value expression");
         try require(t.resolve(value.value).kind != 10,context,node,"resource","resources cannot be copied into ordinary storage");
         try t.assign(expected,value.value,location(context,node));
@@ -572,7 +644,10 @@ function statement(context identity m.Context, node identity ast.Node) returns B
             if active != none { try require(not active.explicitResult,context,node,"return","value function cannot return without a value"); }
             context.sawBare=true;
         } else {
-            let value be try expression(context,returned,true,false); let actual be t.resolve(value.value);
+            let result be m.result(m.makeType(5,""));
+            if active != none and active.explicitResult and t.resolve(active.result).kind == 13 and returned.kind == ast.listExpr() { result=try bytesLiteral(context,returned,false); }
+            else { result=try expression(context,returned,true,false); }
+            let actual be t.resolve(result.value);
             try require(actual.kind != 5 and actual.kind != 10 and not context.sawBare,context,node,"return","return requires an ordinary value and consistent result contract");
             if active != none { if active.explicitResult { try t.assign(active.result,actual,location(context,node)); actual=active.result; } }
             if context.sawValue { context.result=try t.join(context.result,actual,location(context,node)); }
@@ -635,12 +710,14 @@ function enforceFixed(context identity m.Context, value identity m.Type, node id
     let actual be t.resolve(value);
     if actual.kind == 0 { actual.mustFixed=true; return true; }
     if actual.kind == 7 or actual.kind == 8 { return try enforceFixed(context,t.inner(actual),node); }
+    if actual.kind == 14 { try enforceFixed(context,t.inner(actual),node); return try enforceFixed(context,t.other(actual),node); }
     return try require(eligible(context.owner,actual,true,none),context,node,"fixed","fixed requires a transitively immutable ordinary value");
 }
 function enforceEquality(context identity m.Context, value identity m.Type, node identity ast.Node) returns Bool fails m.SemanticError {
     let actual be t.resolve(value);
     if actual.kind == 0 { actual.mustEqual=true; return true; }
     if actual.kind == 7 or actual.kind == 8 { return try enforceEquality(context,t.inner(actual),node); }
+    if actual.kind == 14 { try enforceEquality(context,t.inner(actual),node); return try enforceEquality(context,t.other(actual),node); }
     return try require(eligible(context.owner,actual,false,none),context,node,"type","equality is not defined for this type");
 }
 public function analyze(owner identity m.Module) returns Bool fails m.SemanticError {
