@@ -31,7 +31,17 @@ error Expected { message Text; }
 function sum(items) { let total be 0; for item in items { total=total+item; } return total; }
 function read(path Text) returns Text fails files.FileError { with file be try files.openRead(path) { return try file.readText(); } }
 function failer() fails Expected { fail Expected { message="handled"; }; }
+function churn() {
+    let i be 0;
+    while i < 10000 {
+        let text be "a"+"b";
+        let values be [i,i+1];
+        if text != "ab" or values.count != 2 { output("collector mismatch"); return; }
+        i=i+1;
+    }
+}
 function run() {
+    churn();
     let original be [1,2]; let copy be original; copy.add(3); output(sum(copy)); output(original.count);
     let a be identity Counter { value=1; }; let b be a; b.value=42; output(a.value);
     let text be read("$ROOT/data.txt") else error files.FileError { output(error.message); return; }; output(text);
@@ -46,7 +56,7 @@ run();
         if checked.returncode: raise RuntimeError(checked.stderr)
         built=invoke('build',source,'-o',output)
         if built.returncode: raise RuntimeError(built.stderr)
-        run=subprocess.run([str(output)],capture_output=True,text=True,env=environment,timeout=20)
+        run=subprocess.run([str(output)],capture_output=True,text=True,env=environment,timeout=30)
         expected='6\n2\n42\noffline\nhandled\n'
         if (run.returncode,run.stdout,run.stderr)!=(0,expected,''):
             raise RuntimeError(f'offline program mismatch: {run}')
@@ -62,6 +72,7 @@ run();
         if calls.exists(): raise RuntimeError('a forbidden bootstrap executable was invoked')
         evidence={'native_application':True,'python_or_c_compiler_invoked':False,'bundled_assembler_linker':True,
                   'unicode_paths':True,'source_preserved':True,'failed_build_preserves_output':True,
+                  'heap_stress_iterations':10000,
                   'expected_stdout':expected,'target':json.loads((bundle/'platform.json').read_text())['target']}
         (bundle/'offline-tests.json').write_text(json.dumps(evidence,indent=2)+'\n')
         print(json.dumps(evidence,indent=2))
