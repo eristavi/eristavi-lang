@@ -42,7 +42,7 @@ class SelfHostedIRTests(unittest.TestCase):
         flags=['-std=c11','-pedantic-errors','-O2']
         if sanitize:
             flags+=['-fsanitize=undefined','-fno-sanitize-recover=all']
-        result=subprocess.run([*shlex.split(os.environ.get('CC','cc')),*flags,str(source),'-o',str(binary)],capture_output=True,text=True)
+        result=subprocess.run([*shlex.split(os.environ.get('CC','cc')),*flags,str(source),'-lm','-o',str(binary)],capture_output=True,text=True)
         self.assertEqual(result.returncode,0,result.stderr)
         return subprocess.run([str(binary)],capture_output=True,text=True,timeout=10,env={'PATH':'','LANG':'C'})
 
@@ -99,9 +99,9 @@ class SelfHostedIRTests(unittest.TestCase):
 
     def test_unsupported_features_are_located_without_partial_output(self):
         sources=[
-            'output(1.5);','let items be [1,2]; output(items.count);',
+            'let items be [1,2]; output(items.count);',
             'let x maybe Int be none;','type Box { value Int; } let x be Box { value=1; };',
-            'let x be identity 1;','function echo(x) { return x; } output(echo(1));',
+            'let x be identity 1;',
             'error Oops { message Text; } function f() fails Oops { fail Oops { message="x"; }; }',
             'import std.process; output(process.arguments().count);',
         ]
@@ -122,7 +122,7 @@ class SelfHostedIRTests(unittest.TestCase):
             self.assertIn('semantic error [fixed]',result.stderr)
 
     def test_interpreted_and_compiled_eristavi_lowering_agree(self):
-        case=next(c for c in CASES if c['name']=='text_values')
+        case=next(c for c in CASES if c['name']=='generic_echo_scalar_kinds')
         module=compile_entry(ROOT/'src/frontend.eri',ROOT/'src')
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);entry=materialize(root,case['files'])
@@ -193,6 +193,12 @@ function backendRejected(p identity ir.Program) {
             'let value be item(false); value.next=value; p.entry.locals=value;',
             'let a be node(1,1); let value be node(4,1); value.text="+"; value.first=a; value.second=a; p.entry.body.first=discard(value);',
             'p.entry.locals=item(false);',
+            'let value be node(1,2); value.text="1.25; exit(0)"; p.entry.body.first=discard(value);',
+            'let value be node(1,2); value.text="nan"; p.entry.body.first=discard(value);',
+            'let value be node(1,2); value.text="-1.25"; p.entry.body.first=discard(value);',
+            'let value be node(1,2); value.text="1.25 "; p.entry.body.first=discard(value);',
+            'let value be node(4,2); value.text="%"; let a be node(1,2); a.text="1.25"; let b be node(1,2); b.text="2.5"; value.first=a; value.second=b; p.entry.body.first=discard(value);',
+            'let value be node(4,2); value.text="+"; value.first=node(1,1); let b be node(1,2); b.text="2.5"; value.second=b; p.entry.body.first=discard(value);',
             'let value be discard(node(1,1)); value.valueType=1; p.entry.body.first=value;',
         ]
         cases=''
@@ -207,3 +213,66 @@ function backendRejected(p identity ir.Program) {
             result=subprocess.run([str(binary)],capture_output=True,text=True,timeout=10)
             self.assertEqual(result.returncode,0,result.stderr)
             self.assertEqual(result.stdout,'ok\nok\n'+('ir-verify\nir-verify\n'*len(mutations)))
+
+    def test_specializations_are_concrete_cached_and_deterministic(self):
+        source=('function echo(value) { return value; } '
+                'function wrap(value) { return echo(value); } '
+                'output(wrap(1)); output(wrap(2)); output(wrap(true)); '
+                'output(wrap("text")); output(wrap(1.25));')
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);entry=materialize(root,{'app.eri':source})
+            first=self.invoke(entry,root,'ir');second=self.invoke(entry,root,'ir')
+            self.assertEqual(first.returncode,0,first.stderr);self.assertEqual(first.stdout,second.stdout)
+            functions=json.loads(first.stdout)['functions']
+            self.assertEqual(len(functions),8)
+            self.assertEqual(len({f['index'] for f in functions}),8)
+            for name in ('app.echo','app.wrap'):
+                specializations=[f for f in functions if f['name'].startswith(name+'$')]
+                self.assertEqual({f['name'] for f in specializations},{name+'$'+str(kind) for kind in (1,2,3,4)})
+                for routine in specializations:
+                    kind=int(routine['name'].split('$')[-1])
+                    self.assertEqual(routine['result'],kind)
+                    self.assertEqual([p['type'] for p in routine['locals'] if p['parameter']],[kind])
+            emitted=self.invoke(entry,root);again=self.invoke(entry,root)
+            self.assertEqual(emitted.stdout,again.stdout)
+
+    def test_specialization_preserves_type_relationships_and_numeric_rules(self):
+        sources=[
+            'function choose(flag Bool,a,b) { if flag { return a; } return b; } output(choose(true,1,"text"));',
+            'function add(a,b) { return a+b; } output(add(1,2.5));',
+            'function remainder(a,b) { return a%b; } output(remainder(1.5,2.0));',
+            'function value(a) { let fixed b be a; b=a; return b; } output(value(1));',
+        ]
+        for source in sources:
+            with self.subTest(source=source),tempfile.TemporaryDirectory() as td:
+                root=Path(td);entry=materialize(root,{'app.eri':source})
+                result=self.invoke(entry,root)
+                self.assertEqual(result.returncode,1);self.assertEqual(result.stdout,'')
+                self.assertIn('semantic error',result.stderr)
+
+    def test_float_rounding_is_reset_and_operations_cannot_contract(self):
+        source=('let a be 1.0000000000000002; let b be 1.0000000000000002; '
+                'let c be -1.0000000000000004; output(a*b+c==0.0); '
+                'output(1.00000000000000011102230246251565404236316680908203125==1.0); '
+                'let huge be 9007199254740992.0; let one be 1.0; output(huge+one==huge);')
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);entry=materialize(root,{'app.eri':source})
+            result=self.invoke(entry,root);self.assertEqual(result.returncode,0,result.stderr)
+            text=result.stdout.replace('int main(void) {','int eri_application(void) {')
+            text+='\nint main(void) { if(fesetround(FE_DOWNWARD)) return 2; return eri_application(); }\n'
+            c_source=root/'rounding.c';c_source.write_text(text);binary=root/'rounding'
+            for flags in (['-O0'],['-O3','-ffp-contract=fast']):
+                with self.subTest(flags=flags):
+                    compiled=subprocess.run([*shlex.split(os.environ.get('CC','cc')),'-std=c11','-pedantic-errors',*flags,str(c_source),'-lm','-o',str(binary)],capture_output=True,text=True)
+                    self.assertEqual(compiled.returncode,0,compiled.stderr)
+                    run=subprocess.run([str(binary)],capture_output=True,text=True)
+                    self.assertEqual((run.returncode,run.stdout,run.stderr),(0,'true\ntrue\ntrue\n',''))
+
+    def test_float_backend_rejects_fast_math(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);entry=materialize(root,{'app.eri':'output(1.25);'})
+            emitted=self.invoke(entry,root);self.assertEqual(emitted.returncode,0,emitted.stderr)
+            source=root/'unsafe.c';source.write_text(emitted.stdout)
+            compiled=subprocess.run([*shlex.split(os.environ.get('CC','cc')),'-std=c11','-O3','-ffast-math',str(source),'-lm','-o',str(root/'unsafe')],capture_output=True,text=True)
+            self.assertNotEqual(compiled.returncode,0)
+            self.assertIn('fast-math is unsupported',compiled.stderr)

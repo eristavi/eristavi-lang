@@ -4,6 +4,23 @@
 >
 > **Scope:** frozen pre-0.1 source contract, bootstrap/reference runtime, generated-C path, verified Universal IR, direct x86-64 GC/runtime with contract-driven physical register allocation and spill-frame compaction, native ARM64 runtime, module artifacts/caching, JavaScript/WebAssembly consumers, Unicode conformance and hosted CI.
 
+## Float and inferred scalar specialization update
+
+The candidate now supports binary64 Float and specialization of inferred functions
+for Int/Float/Bool/Text arguments, with per-specialization type substitutions,
+implementation reuse and pending-body lowering for nested/recursive/imported calls.
+Float IR payloads are independently validated; the C bootstrap runtime converts
+literals under nearest rounding, preserves operation boundaries and rejects
+fast-math. Source philosophy, grammar and semantics are unchanged.
+
+The executable corpus contains 60 projects; 28 malformed IR projects are rejected
+by both verifier and backend. Additional tests inspect specialization reuse,
+reject incompatible relationships, reset non-nearest rounding and check separated
+operations under optimization/contraction settings. Stage-0 C infinity literal
+emission and infinity/signed-zero division were corrected under the locked rules.
+The suite now contains **344 tests**. Current-commit hosted results belong to its PR.
+See SCALAR_SPECIALIZATION.md for evidence, bootstrap boundaries and remaining gates.
+
 ## Eristavi-written executable compiler slice
 
 The candidate now lowers concrete Int/Bool/Text programs into its own source-close

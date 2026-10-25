@@ -1,6 +1,9 @@
 // Verify the typed IR independently of the semantic analyzer and lowerer.
 import compiler.typed_ir as ir;
 import compiler.semantic_model as m;
+import compiler.lexer;
+import compiler.token;
+import compiler.diagnostic;
 
 type Active { index Int; next maybe identity Active; }
 type State { program identity ir.Program; routine identity ir.Function; active maybe identity Active; declared maybe identity Active; }
@@ -14,11 +17,16 @@ function operand(state identity State, value maybe identity ir.Node, location id
     let node be try child(value,location); try expression(state,node);
     try ir.require(ir.scalar(node.valueType),location,"operand requires a scalar value"); return node;
 }
+function floatLiteral(node identity ir.Node) returns Bool fails m.SemanticError {
+    let tokens be lexer.lex(node.text) else error diagnostic.LexError { return try ir.require(false,node.location,"invalid Float literal spelling in IR"); };
+    return try ir.require(tokens.count == 2 and tokens[0].kind == token.float() and tokens[0].lexeme == node.text,node.location,"IR Float constant requires exactly one source Float token");
+}
 function expression(state identity State, node identity ir.Node) returns Bool fails m.SemanticError {
     try ir.require(ir.scalar(node.valueType) or node.valueType == 5,node.location,"unsupported IR value type");
     try ir.require(node.third == none,node.location,"unexpected third expression child");
     if node.kind == 1 {
         try ir.require(ir.scalar(node.valueType) and node.first == none and node.second == none,node.location,"invalid scalar constant");
+        if node.valueType == 2 { try floatLiteral(node); }
         if node.valueType == 3 { try ir.require(node.number == 0 or node.number == 1,node.location,"invalid Bool constant"); } return true;
     }
     if node.kind == 2 {
@@ -31,7 +39,7 @@ function expression(state identity State, node identity ir.Node) returns Bool fa
         let first be try operand(state,node.first,node.location);
         try ir.require(node.second == none and first.next == none,node.location,"invalid unary operands");
         if node.text == "not" { try ir.require(node.valueType == 3 and first.valueType == 3,node.location,"not requires Bool"); }
-        else { try ir.require(node.text == "-" and node.valueType == 1 and first.valueType == 1,node.location,"negation requires Int"); } return true;
+        else { try ir.require(node.text == "-" and (node.valueType == 1 or node.valueType == 2) and first.valueType == node.valueType,node.location,"negation requires Int or Float"); } return true;
     }
     if node.kind == 4 {
         let first be try operand(state,node.first,node.location); let second be try operand(state,node.second,node.location);
@@ -39,9 +47,9 @@ function expression(state identity State, node identity ir.Node) returns Bool fa
         let op be node.text; let kind be first.valueType;
         if op == "and" or op == "or" { return try ir.require(kind == 3 and node.valueType == 3,node.location,"logical operation requires Bool"); }
         if op == "==" or op == "!=" { return try ir.require(node.valueType == 3,node.location,"equality result requires Bool"); }
-        if op == "<" or op == "<=" or op == ">" or op == ">=" { return try ir.require(kind == 1 and node.valueType == 3,node.location,"ordering requires Int and a Bool result"); }
-        if op == "+" { return try ir.require((kind == 1 or kind == 4) and node.valueType == kind,node.location,"addition type mismatch"); }
-        return try ir.require((op == "-" or op == "*" or op == "/" or op == "%") and kind == 1 and node.valueType == 1,node.location,"unsupported binary operation");
+        if op == "<" or op == "<=" or op == ">" or op == ">=" { return try ir.require((kind == 1 or kind == 2) and node.valueType == 3,node.location,"ordering requires matching numeric types and a Bool result"); }
+        if op == "+" { return try ir.require((kind == 1 or kind == 2 or kind == 4) and node.valueType == kind,node.location,"addition type mismatch"); }
+        return try ir.require(((op == "-" or op == "*" or op == "/") and (kind == 1 or kind == 2) or (op == "%" and kind == 1)) and node.valueType == kind,node.location,"unsupported binary operation");
     }
     if node.kind == 6 {
         let first be try operand(state,node.first,node.location);

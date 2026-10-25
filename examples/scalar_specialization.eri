@@ -1,0 +1,10 @@
+// Inferred relationships remain ordinary Eristavi functions.
+function twice(value) {
+    return value + value;
+}
+
+output(twice(21));
+output(twice(1.25));
+output("Eri" + "stavi");
+let negativeZero be -0.0;
+output(1.0 / negativeZero < 0.0);
