@@ -6,6 +6,17 @@
 
 ## Structural/native compiler and offline gate update
 
+The first production-hardening patch reclaims completed native handler frames and
+restores abandoned call scopes/temporary slots at a checked catch boundary. Stress
+and address/undefined sanitizer tests cover these lifetimes; injected cleanup
+failures now execute through both candidate C and native paths. See
+PRODUCTION_HARDENING.md for the review and remaining P0 allocation work. General
+object/Text collection and bounded temporary storage in ordinary loops remain open.
+
+The older audit sections below retain historical Stage-0 capabilities and counts.
+In particular, Stage-0's tracing collector/register allocator must not be confused
+with the separate offline compiler's boxed bootstrap runtime.
+
 Eristavi now owns structural value/List/maybe/identity/error/resource lowering,
 its typed/effect verifier, Universal register/CFG lowering and verifier, a small
 unreachable-block pass, and native x86-64/ARM64 ELF consumers. The executable corpus
@@ -17,7 +28,7 @@ The offline packaging gate compares fixed-snapshot native assembly/B-C binaries
 and audits application builds with unusable Python/C compiler shims. The runtime
 remains a prebuilt C bootstrap artifact and GNU assembler/linker tools are packaged;
 this is not a production release or a source-compatible Stage-0 artifact ABI port.
-The suite contains **350 tests**. Current-commit CI/self-build results belong to the
+The suite contains **353 tests**. Current-commit CI/self-build results belong to the
 PR. OFFLINE_TOOLCHAIN.md records the architecture, audit/evidence formats and gates.
 Frozen philosophy, grammar and semantic specifications remain unchanged.
 

@@ -6,7 +6,7 @@ Run the full suite from the repository root:
 python -m unittest discover -s tests -v
 ```
 
-The current suite contains **350 tests**.
+The current suite contains **353 tests**.
 
 The scalar compiler corpus freezes 60 executable projects, with 10 additional
 runtime-fault comparisons under undefined-behavior sanitization and 28 malformed
@@ -61,3 +61,9 @@ ARM64 hosts; cross-assembly uses Clang where available. The Linux packaging CI s
 separately enforces fixed-snapshot self-build and offline executable audits. See
 OFFLINE_TOOLCHAIN.md for the reference-C limitations explicitly recorded by three
 projects and for bootstrap/runtime boundaries.
+
+Native runtime lifetime tests count administrative allocations across 10,000
+normal exits and checked unwinds, including nested scopes/resources, and repeat
+under address/undefined sanitizers. Generated-program tests retain caller state
+and typed error payloads across repeated catches. Cleanup-failure injection runs
+through both the candidate C and native consumers.
