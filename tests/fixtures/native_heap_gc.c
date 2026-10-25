@@ -19,7 +19,8 @@ const ev_type ev_types[]={
     {8,6,"maybe Node",0,NULL},
     {6,0,"Expected",2,error_fields},
     {11,0,"Error",1,NULL},
-    {12,4,"bytes",0,NULL}
+    {12,4,"bytes",0,NULL},
+    {10,0,"std.files.File",0,NULL}
 };
 ev_value *erist_entry(void){return NULL;}
 
@@ -105,6 +106,33 @@ static void list_maybe_and_text_view_survive_collection(void){
     eri_native_heap_collect();
 }
 
+static void file_resource_survives_collection(void){
+    ev_scope *scope=evn_scope_enter();
+    uintptr_t roots[2]={0};unsigned char classes[2]={1,1};
+    evn_bind_roots(scope,roots,classes,2);
+
+    const char *path_name="/tmp/eristavi-native-heap-gc-resource.tmp";
+    remove(path_name);
+    ev_value *path=evn_text((const unsigned char*)path_name,strlen(path_name));roots[0]=(uintptr_t)path;
+    ev_value *resource=evn_builtin1("std.files.create",14,path);roots[1]=(uintptr_t)resource;
+    roots[0]=0;
+    clear_slots();
+    assert(resource->resource);
+    assert(resource->resource->path.len==strlen(path_name));
+    assert(memcmp(resource->resource->path.data,path_name,strlen(path_name))==0);
+    assert(resource->resource->c_path);
+
+    eri_failure_value cleanup={0};
+    evn_cleanup_accumulate(resource,&cleanup);
+    assert(!cleanup.type);
+    assert(remove(path_name)==0);
+
+    roots[1]=0;
+    clear_slots();
+    ev_scope_leave(scope,ev_void());
+    eri_native_heap_collect();
+}
+
 static void unreachable_identity_cycle(void){
     ev_scope *scope=evn_scope_enter();
     uintptr_t roots[2]={0};unsigned char classes[2]={1,1};
@@ -175,6 +203,7 @@ static void long_running_allocation_plateaus(void){
 int main(void){
     reachable_values_and_weak_prefixes();
     list_maybe_and_text_view_survive_collection();
+    file_resource_survives_collection();
     unreachable_identity_cycle();
     saved_failure_survives_collection();
     long_running_allocation_plateaus();
