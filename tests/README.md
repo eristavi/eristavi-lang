@@ -87,7 +87,7 @@ UndefinedBehaviorSanitizer and requires zero tracked live blocks after all roots
 are released. The offline application audit separately executes 100,000 iterations
 of ordinary Eristavi Text/List allocation using the packaged collector-enabled
 runtime before its existing value/identity/file/error checks.
-# Preflight before full qualification
+## Preflight before full qualification
 
 Run `python tools/preflight.py` for the inexpensive integration set. Draft CI uses
 this check in one Linux job. Ready pull requests and main pushes additionally

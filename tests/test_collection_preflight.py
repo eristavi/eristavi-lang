@@ -13,6 +13,11 @@ from compiler.erist.runtime_ext import Interpreter
 
 
 class CollectionPreflightTests(unittest.TestCase):
+    def test_eristavi_frontend_sources_pass_analysis_and_c_emission_before_bootstrap(self):
+        root=Path(__file__).resolve().parents[1]
+        module=compile_entry(root/'src/frontend.eri',root/'src')
+        self.assertIn('int main(',CBackend().emit(lower_project(module)))
+
     def execute(self, source, interpreter=Interpreter):
         output=[]
         interpreter(output=output.append).run(compile_frontend(source))

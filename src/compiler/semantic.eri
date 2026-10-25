@@ -645,7 +645,9 @@ function statement(context identity m.Context, node identity ast.Node) returns B
             context.sawBare=true;
         } else {
             let result be m.result(m.makeType(5,""));
-            if active != none and active.explicitResult and t.resolve(active.result).kind == 13 and returned.kind == ast.listExpr() { result=try bytesLiteral(context,returned,false); }
+            let bytesResult be false;
+            if active != none { bytesResult=active.explicitResult and t.resolve(active.result).kind == 13 and returned.kind == ast.listExpr(); }
+            if bytesResult { result=try bytesLiteral(context,returned,false); }
             else { result=try expression(context,returned,true,false); }
             let actual be t.resolve(result.value);
             try require(actual.kind != 5 and actual.kind != 10 and not context.sawBare,context,node,"return","return requires an ordinary value and consistent result contract");

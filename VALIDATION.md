@@ -5,6 +5,10 @@ reference behavior, inferred contracts, interfaces, collection IR, evaluation
 order and focused C runtime accounting/collection cases. It does not rebuild the
 compiler through B/C or claim cross-platform qualification.
 
+The Eristavi-written frontend's source graph must also pass analysis and C
+emission before bootstrap compilation. This catches source-level optional-value
+guard mistakes without compiling the same broken frontend in several suites.
+
 Marking a pull request ready triggers `ready_for_review`. Ready PRs and main pushes
 first run `python tools/preflight.py --qualify`; only a successful preflight may
 start the four-platform full regression matrix and Linux repeated native
@@ -26,6 +30,10 @@ The review found and fixes duplicate evaluation in index/member/reference
 fallbacks, missing Map interface serialization, and missing Bytes parameter
 context across imported interfaces. Unimplemented collection backends now return
 source diagnostics instead of internal Python errors.
+
+The Bytes-return context check in the Eristavi-written analyzer now narrows its
+optional active function in a block before reading its fields. A combined Boolean
+guard previously prevented the compiler frontend itself from passing analysis.
 
 Full qualification remains blocked by unfinished Map/Bytes C emission, Universal
 IR operations, native consumers, runtime representations and corresponding GC
