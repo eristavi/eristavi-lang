@@ -45,7 +45,6 @@ class TokenKind(Enum):
 
     SEMICOLON = auto()
     COMMA = auto()
-    COLON = auto()
     DOT = auto()
     LPAREN = auto()
     RPAREN = auto()
@@ -65,6 +64,7 @@ class TokenKind(Enum):
     LESS_EQUAL = auto()
     GREATER = auto()
     GREATER_EQUAL = auto()
+    COLON = auto()
 
 
 KEYWORDS = {
