@@ -93,6 +93,9 @@ No finalizer semantics are introduced.
 nearly every opportunity and cover:
 
 - reachable Text nested inside a nominal value;
+- rooted List storage and elements;
+- a rooted `maybe` value whose ordinary payload reaches an identity cycle;
+- an explicit Text byte view remaining valid after the original Text slot is dropped;
 - prefix-backed Text remaining valid while rooted;
 - weak prefix-index removal after the value dies;
 - an unreachable `identity` cycle;
@@ -103,7 +106,9 @@ nearly every opportunity and cover:
 - AddressSanitizer and UndefinedBehaviorSanitizer execution.
 
 The Linux offline bundle is also built with this runtime candidate so repeated compiler
-self-build and the no-Python/no-C-compiler application audit exercise the collector.
+self-build and the no-Python/no-C-compiler application audit exercise the collector. The
+offline `.eri` audit itself runs 10,000 transient Text/List iterations before its
+ordinary-value, identity, file and checked-error checks.
 
 ## Current boundaries
 
