@@ -1,5 +1,5 @@
 /* Native-only heap reclamation layer for the pinned bootstrap runtime.
-   This file deliberately leaves runtime/value_runtime.c unchanged so the
+   The shared runtime's private allocation hook is enabled only here; the
    generated-C/reference path keeps its independent bootstrap behavior. */
 #include <stdint.h>
 #include <stdbool.h>
@@ -49,6 +49,7 @@ static size_t eri_native_gc_reclaimed_bytes;
 static bool eri_native_gc_collecting;
 
 static void *eri_native_gc_malloc(size_t size);
+static void *eri_native_gc_allocate_kind(size_t size,int kind);
 static void *eri_native_gc_realloc(void *pointer,size_t size);
 static void eri_native_gc_free(void *pointer);
 
@@ -57,6 +58,7 @@ static void eri_native_gc_free(void *pointer);
 #define malloc eri_native_gc_malloc
 #define realloc eri_native_gc_realloc
 #define free eri_native_gc_free
+#define ERIST_RUNTIME_ALLOCATE(size,kind) eri_native_gc_allocate_kind(size,kind)
 
 /* A safe point must run only after the runtime has finished constructing the
    returned value/frame/scope. Rename selected pointer-ABI entries so wrappers can
@@ -117,6 +119,7 @@ static void eri_native_gc_free(void *pointer);
 #undef free
 #undef realloc
 #undef malloc
+#undef ERIST_RUNTIME_ALLOCATE
 
 typedef struct {
     ev_value *items;
@@ -222,6 +225,19 @@ static void *eri_native_gc_malloc(size_t size){
     eri_native_gc_live_bytes=eri_native_gc_add_size(eri_native_gc_live_bytes,actual);
     if(eri_native_gc_live_bytes>eri_native_gc_peak_bytes)eri_native_gc_peak_bytes=eri_native_gc_live_bytes;
     eri_native_gc_allocations_since_collection=eri_native_gc_add_size(eri_native_gc_allocations_since_collection,1);
+    return memory;
+}
+
+static void *eri_native_gc_allocate_kind(size_t size,int kind){
+    void *memory=eri_native_gc_malloc(size);
+    /* These allocations are released explicitly by scope/unwind/slot cleanup.
+       Keep tracking them, but do not let
+       scalar-slot traffic repeatedly trigger scans of an unchanged managed heap.
+       Object/Text/failure allocations and unclassified requests still advance
+       the collection budget. */
+    if(kind==ERI_HEAP_SLOT||kind==ERI_HEAP_SCOPE||kind==ERI_HEAP_HANDLER||
+       kind==ERI_HEAP_ROOT_TABLE)
+        eri_native_gc_allocations_since_collection--;
     return memory;
 }
 

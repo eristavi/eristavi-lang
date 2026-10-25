@@ -213,6 +213,27 @@ static void saved_failure_survives_collection(void){
     eri_native_heap_collect();
 }
 
+static void scalar_administration_does_not_rescan_managed_heap(void){
+    ev_scope *scope=evn_scope_enter();
+    uintptr_t roots[1]={0};unsigned char classes[1]={1};
+    evn_bind_roots(scope,roots,classes,1);
+    ev_value *text=evn_text((const unsigned char*)"retained",8);
+    roots[0]=(uintptr_t)text;
+    eri_native_heap_collect();
+    size_t collections=eri_native_heap_collections();
+    for(int i=0;i<10000;i++)evn_int(i);
+    assert(eri_native_heap_collections()==collections);
+    assert(text->text.len==8&&memcmp(text->text.data,"retained",8)==0);
+    assert(eri_native_heap_live_bytes()<65536);
+    /* Managed allocation must still trigger the interval-one collector. */
+    evn_text((const unsigned char*)"transient",9);
+    assert(eri_native_heap_collections()>collections);
+    roots[0]=0;
+    clear_slots();
+    ev_scope_leave(scope,ev_void());
+    eri_native_heap_collect();
+}
+
 static void long_running_allocation_plateaus(void){
     ev_scope *scope=evn_scope_enter();
     uintptr_t roots[1]={0};unsigned char classes[1]={1};
@@ -240,6 +261,7 @@ int main(void){
     file_resource_survives_collection();
     unreachable_identity_cycle();
     saved_failure_survives_collection();
+    scalar_administration_does_not_rescan_managed_heap();
     long_running_allocation_plateaus();
     eri_failure=(eri_failure_value){0};
     eri_native_heap_collect();

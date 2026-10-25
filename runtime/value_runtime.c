@@ -90,7 +90,13 @@ static void *eri_alloc_kind(size_t n,int kind){
     if(eri_heap_blocks)eri_heap_blocks->info.previous=h;eri_heap_blocks=h;
     eri_heap_new(&eri_heap_total,n);eri_heap_new(&eri_heap_categories[kind],n);return h+1;
 #else
-    (void)kind;void *p=malloc(n?n:1);if(!p)eri_fault("out of memory");return p;
+    (void)kind;
+#ifdef ERIST_RUNTIME_ALLOCATE
+    void *p=ERIST_RUNTIME_ALLOCATE(n?n:1,kind);
+#else
+    void *p=malloc(n?n:1);
+#endif
+    if(!p)eri_fault("out of memory");return p;
 #endif
 }
 static void *eri_alloc(size_t n){return eri_alloc_kind(n,ERI_HEAP_OTHER);}
