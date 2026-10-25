@@ -36,6 +36,8 @@ typedef struct eri_native_gc_block {
 
 static eri_native_gc_block *eri_native_gc_blocks;
 static eri_native_gc_block *eri_native_gc_hash[ERIST_NATIVE_GC_HASH_BUCKETS];
+static eri_native_gc_block **eri_native_gc_ranges;
+static size_t eri_native_gc_range_count;
 static size_t eri_native_gc_live_blocks;
 static size_t eri_native_gc_live_bytes;
 static size_t eri_native_gc_peak_bytes;
@@ -153,20 +155,51 @@ static eri_native_gc_block *eri_native_gc_find_exact(const void *pointer){
     return NULL;
 }
 
+static int eri_native_gc_range_compare(const void *first,const void *second){
+    uintptr_t a=(uintptr_t)(*(eri_native_gc_block *const *)first)->base;
+    uintptr_t b=(uintptr_t)(*(eri_native_gc_block *const *)second)->base;
+    return a<b?-1:(a>b?1:0);
+}
+
+static void eri_native_gc_build_range_index(void){
+    free(eri_native_gc_ranges);
+    eri_native_gc_ranges=NULL;
+    eri_native_gc_range_count=0;
+    if(!eri_native_gc_live_blocks)return;
+    if(eri_native_gc_live_blocks>SIZE_MAX/sizeof(*eri_native_gc_ranges))eri_native_gc_overflow();
+    eri_native_gc_ranges=(eri_native_gc_block**)malloc(eri_native_gc_live_blocks*sizeof(*eri_native_gc_ranges));
+    if(!eri_native_gc_ranges)eri_fault("out of memory");
+    for(eri_native_gc_block *block=eri_native_gc_blocks;block;block=block->next)
+        eri_native_gc_ranges[eri_native_gc_range_count++]=block;
+    qsort(eri_native_gc_ranges,eri_native_gc_range_count,sizeof(*eri_native_gc_ranges),eri_native_gc_range_compare);
+}
+
+static void eri_native_gc_release_range_index(void){
+    free(eri_native_gc_ranges);
+    eri_native_gc_ranges=NULL;
+    eri_native_gc_range_count=0;
+}
+
 /* Native value roots normally name slot allocations exactly. member_ref/index_ref
    are the intentional exception: they may name an ev_value inside object data.
-   Keep the exact hash as the fast path and fall back to containment only for such
-   root/value-cell pointers. */
+   Exact addresses stay O(1) through the hash; during collection, interior roots
+   use a sorted address-range index so a miss never degrades into a whole-heap scan. */
 static eri_native_gc_block *eri_native_gc_find_value_owner(const void *pointer){
     if(!pointer)return NULL;
     eri_native_gc_block *exact=eri_native_gc_find_exact(pointer);
     if(exact)return exact;
+    if(!eri_native_gc_range_count)return NULL;
     uintptr_t value=(uintptr_t)pointer;
-    for(eri_native_gc_block *block=eri_native_gc_blocks;block;block=block->next){
-        uintptr_t start=(uintptr_t)block->base;
-        if(value>=start&&value-start<block->size)return block;
+    size_t low=0,high=eri_native_gc_range_count;
+    while(low<high){
+        size_t middle=low+(high-low)/2;
+        if((uintptr_t)eri_native_gc_ranges[middle]->base<=value)low=middle+1;
+        else high=middle;
     }
-    return NULL;
+    if(!low)return NULL;
+    eri_native_gc_block *block=eri_native_gc_ranges[low-1];
+    uintptr_t start=(uintptr_t)block->base;
+    return value>=start&&value-start<block->size?block:NULL;
 }
 
 static void *eri_native_gc_malloc(size_t size){
@@ -390,11 +423,13 @@ static void eri_native_gc_collect(const ev_value *temporary_value,const eri_fail
     if(eri_native_gc_collecting)return;
     eri_native_gc_collecting=true;
     eri_native_gc_prepare_weak_indexes();
+    eri_native_gc_build_range_index();
     eri_native_gc_value_queue queue={0};
     eri_native_gc_mark_roots(&queue,temporary_value,temporary_failure);
     size_t cursor=0;
     while(cursor<queue.count)eri_native_gc_mark_value(queue.items[cursor++],&queue);
     eri_native_gc_keep_live_prefix_indexes();
+    eri_native_gc_release_range_index();
     eri_native_gc_sweep();
     free(queue.items);
     eri_native_gc_allocations_since_collection=0;
