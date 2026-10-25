@@ -1,0 +1,51 @@
+{
+  "name": "eristavi-language",
+  "displayName": "Eristavi Language Support",
+  "description": "Syntax highlighting and language configuration for the Eristavi programming language.",
+  "version": "0.0.1",
+  "publisher": "eristavi",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/eristavi/eristavi-lang.git"
+  },
+  "homepage": "https://eristavi.org",
+  "bugs": {
+    "url": "https://github.com/eristavi/eristavi-lang/issues"
+  },
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "keywords": [
+    "eristavi",
+    "eri",
+    "language",
+    "syntax",
+    "textmate"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "eristavi",
+        "aliases": [
+          "Eristavi",
+          "eristavi"
+        ],
+        "extensions": [
+          ".eri"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "eristavi",
+        "scopeName": "source.eristavi",
+        "path": "./syntaxes/eristavi.tmLanguage.json"
+      }
+    ]
+  }
+}
