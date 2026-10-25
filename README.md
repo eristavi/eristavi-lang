@@ -39,6 +39,9 @@ boundaries. The pip-installed developer CLI remains the Python Stage-0 reference
 including its existing artifacts and JS/Wasm routes; the native bundle is opt-in.
 The frozen language philosophy and source specifications are unchanged.
 
+[PRODUCTION_HARDENING.md](PRODUCTION_HARDENING.md) records the runtime review,
+native checked-unwind lifetime fix, and remaining memory/release gates.
+
 The lower-level frontend still offers syntax/token/AST inspection plus semantic,
 typed-IR, Universal-IR, C and native-assembly commands. See
 [FRONTEND_TOOL.md](FRONTEND_TOOL.md) and [SELF_HOSTING.md](SELF_HOSTING.md).
@@ -222,7 +225,7 @@ erist build-wat examples/hello.eri -o hello.wat
 python -m unittest discover -s tests -v
 ```
 
-The current suite contains **350 tests**. The hosted CI matrix runs:
+The current suite contains **353 tests**. The hosted CI matrix runs:
 
 - GCC / x86-64 Ubuntu / `-O2`;
 - Clang / x86-64 Ubuntu / `-O2`;

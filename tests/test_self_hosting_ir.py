@@ -323,3 +323,57 @@ int main(int argc,char **argv){int code=erist_application(argc,argv);eri_seconda
 '''
                 actual=self.compile_c(text,root)
                 self.assertEqual((actual.returncode,actual.stdout,actual.stderr),(0,expected,''))
+                if self.native:
+                    assembly=self.invoke(entry,root,'emit-asm')
+                    self.assertEqual(assembly.returncode,0,assembly.stderr)
+                    asm=root/'cleanup.s';asm.write_text(assembly.stdout)
+                    runtime=(ROOT/'runtime/value_runtime.c').read_text()
+                    begin=runtime.index('static bool eri_file_cleanup(');end=runtime.index('\n',begin)
+                    original=runtime[begin:end].replace('eri_file_cleanup(','eri_file_cleanup_real(',1)
+                    runtime=runtime[:begin]+original+injected+runtime[end:]
+                    runtime=runtime.replace('int main(int argc,char **argv){','int erist_application(int argc,char **argv){')
+                    runtime+='''
+int main(int argc,char **argv){int code=erist_application(argc,argv);eri_secondary_failure *next=eri_failure.secondary;while(next){eri_out_text(next->message);next=next->next;}return code;}
+'''
+                    runtime_source=root/'runtime.c';runtime_source.write_text(runtime)
+                    executable=root/'native-cleanup'
+                    compiled=subprocess.run([*shlex.split(os.environ.get('CC','cc')),'-std=c11','-O2',
+                        '-DERIST_NATIVE_RUNTIME',str(asm),str(runtime_source),'-lm','-o',str(executable)],capture_output=True,text=True)
+                    self.assertEqual(compiled.returncode,0,compiled.stderr)
+                    actual=subprocess.run([str(executable)],capture_output=True,text=True,timeout=10)
+                    self.assertEqual((actual.returncode,actual.stdout,actual.stderr),(0,expected,''))
+
+    def test_repeated_checked_unwinds_preserve_caller_state_and_error_payload(self):
+        source='''
+error Problem { message Text; total Int; }
+type State { total Int; }
+function inner(shared identity State) fails Problem {
+    let items be [10,20]; shared.total=shared.total+items[0];
+    fail Problem { message="caught"; total=shared.total; };
+}
+function middle(shared identity State) fails Problem { try inner(shared); }
+function run() {
+    let shared be identity State { total=0; }; let last be 0; let index be 0;
+    while index<1000 {
+        middle(shared) else error Problem { last=error.total; };
+        index=index+1;
+    }
+    output(shared.total); output(last);
+}
+run();
+'''
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);entry=materialize(root,{'app.eri':source})
+            emitted=self.invoke(entry,root)
+            self.assertEqual(emitted.returncode,0,emitted.stderr)
+            result=self.compile_c(emitted.stdout,root)
+            self.assertEqual((result.returncode,result.stdout,result.stderr),(0,'10000\n10000\n',''))
+            if self.native:
+                assembly=self.invoke(entry,root,'emit-asm')
+                self.assertEqual(assembly.returncode,0,assembly.stderr)
+                asm=root/'unwind.s';asm.write_text(assembly.stdout);executable=root/'unwind'
+                compiled=subprocess.run([*shlex.split(os.environ.get('CC','cc')),str(asm),str(self.runtime),
+                    '-lm','-o',str(executable)],capture_output=True,text=True)
+                self.assertEqual(compiled.returncode,0,compiled.stderr)
+                result=subprocess.run([str(executable)],capture_output=True,text=True,timeout=10)
+                self.assertEqual((result.returncode,result.stdout,result.stderr),(0,'10000\n10000\n',''))

@@ -13,7 +13,14 @@
 #include <errno.h>
 
 typedef struct { size_t len; unsigned char *data; } eri_text;
-typedef struct eri_handler_frame { jmp_buf env; struct eri_handler_frame *prev; } eri_handler_frame;
+typedef struct eri_handler_frame {
+    jmp_buf env; struct eri_handler_frame *prev;
+#ifdef ERIST_NATIVE_RUNTIME
+    struct ev_slot_node *slot_mark;
+    struct ev_scope *scope_mark;
+    bool raised;
+#endif
+} eri_handler_frame;
 typedef struct eri_secondary_failure { const char *type; void *payload; eri_text message; struct eri_secondary_failure *next; } eri_secondary_failure;
 typedef struct { const char *type; void *payload; eri_text message; eri_secondary_failure *secondary; } eri_failure_value;
 typedef struct { eri_text f_message; } eri_error_view;
@@ -51,8 +58,22 @@ static eri_text eri_text_add(eri_text a,eri_text b){if(!b.len)return a;if(!a.len
 static char *eri_text_to_c_path(eri_text t){ if(t.len && memchr(t.data,0,t.len))return NULL; char *r=(char*)eri_alloc(t.len+1); if(t.len)memcpy(r,t.data,t.len); r[t.len]='\0'; return r; }
 static void eri_fault_text(eri_text t){ fputs("Eristavi runtime fault: ",stderr); if(t.len)fwrite(t.data,1,t.len,stderr); fputc('\n',stderr); exit(1); }
 static void eri_attach_secondary(eri_failure_value *primary, eri_failure_value secondary){ eri_secondary_failure *n=(eri_secondary_failure*)eri_alloc(sizeof(*n)); n->type=secondary.type; n->payload=secondary.payload; n->message=secondary.message; n->next=NULL; eri_secondary_failure **p=&primary->secondary; while(*p)p=&(*p)->next; *p=n; }
-static void eri_raise(const char *type, void *payload, eri_text message){ eri_failure=(eri_failure_value){type,payload,message,NULL}; if(!eri_handler_top)eri_fault_text(message); longjmp(eri_handler_top->env,1); }
-static void eri_propagate_saved(eri_failure_value f){ eri_failure=f; if(!eri_handler_top)eri_fault_text(f.message); longjmp(eri_handler_top->env,1); }
+static void eri_raise(const char *type, void *payload, eri_text message){
+    eri_failure=(eri_failure_value){type,payload,message,NULL};
+    if(!eri_handler_top)eri_fault_text(message);
+#ifdef ERIST_NATIVE_RUNTIME
+    eri_handler_top->raised=true;
+#endif
+    longjmp(eri_handler_top->env,1);
+}
+static void eri_propagate_saved(eri_failure_value f){
+    eri_failure=f;
+    if(!eri_handler_top)eri_fault_text(f.message);
+#ifdef ERIST_NATIVE_RUNTIME
+    eri_handler_top->raised=true;
+#endif
+    longjmp(eri_handler_top->env,1);
+}
 
 typedef struct { eri_text f_message; eri_text f_path; } eri_file_error;
 typedef struct { eri_text path; char *c_path; FILE *handle; bool closed; bool writable; } eri_file;
@@ -5067,7 +5088,9 @@ static ev_slot_node *ev_slots=NULL;
 static ev_scope *ev_scopes=NULL;
 static ev_value *ev_slot(ev_value value){ev_slot_node *node=malloc(sizeof(*node));if(!node)eri_fault("out of memory");node->value=value;node->next=ev_slots;ev_slots=node;return &node->value;}
 static ev_scope *ev_scope_enter(void){ev_scope *scope=malloc(sizeof(*scope));if(!scope)eri_fault("out of memory");scope->mark=ev_slots;scope->previous=ev_scopes;ev_scopes=scope;return scope;}
-static ev_value ev_scope_leave(ev_scope *scope,ev_value value){while(ev_slots!=scope->mark){ev_slot_node *node=ev_slots;ev_slots=node->next;free(node);}while(ev_scopes!=scope){ev_scope *nested=ev_scopes;ev_scopes=nested->previous;free(nested);}ev_scopes=scope->previous;free(scope);return value;}
+static void ev_restore_slots(ev_slot_node *mark){while(ev_slots!=mark){ev_slot_node *node=ev_slots;ev_slots=node->next;free(node);}}
+static void ev_restore_scopes(ev_scope *mark){while(ev_scopes!=mark){ev_scope *scope=ev_scopes;ev_scopes=scope->previous;free(scope);}}
+static ev_value ev_scope_leave(ev_scope *scope,ev_value value){ev_restore_slots(scope->mark);ev_restore_scopes(scope->previous);return value;}
 
 /* Pointer ABI for Eristavi's native x86-64 consumer. Runtime object only. */
 #ifdef ERIST_NATIVE_RUNTIME
@@ -5100,8 +5123,27 @@ ev_value *evn_view(int type,ev_value *value){return ev_slot(ev_view(type,*value)
 ev_value *evn_builtin0(const char *name,int type){return ev_slot(ev_builtin(name,type,0,NULL));}
 ev_value *evn_builtin1(const char *name,int type,ev_value *first){ev_value args[]={*first};return ev_slot(ev_builtin(name,type,1,args));}
 ev_value *evn_builtin2(const char *name,int type,ev_value *first,ev_value *second){ev_value args[]={*first,*second};return ev_slot(ev_builtin(name,type,2,args));}
-eri_handler_frame *evn_frame(void){eri_handler_frame *frame=eri_alloc(sizeof(*frame));frame->prev=eri_handler_top;eri_handler_top=frame;return frame;}
-void evn_pop(eri_handler_frame *frame){eri_handler_top=frame->prev;}
+eri_handler_frame *evn_frame(void){
+    eri_handler_frame *frame=eri_alloc(sizeof(*frame));
+    frame->prev=eri_handler_top;frame->slot_mark=ev_slots;
+    frame->scope_mark=ev_scopes;frame->raised=false;
+    eri_handler_top=frame;return frame;
+}
+void evn_pop(eri_handler_frame *frame){
+    eri_handler_frame *stop=frame->prev;
+    ev_slot_node *slots=frame->slot_mark;
+    ev_scope *scopes=frame->scope_mark;
+    bool raised=frame->raised;
+    /* A scoped return can pop multiple nested resource frames at once. */
+    while(eri_handler_top!=stop){
+        eri_handler_frame *current=eri_handler_top;
+        eri_handler_top=current->prev;free(current);
+    }
+    /* Normal completion still needs its expression result. On a checked jump,
+       only caller locals predating the boundary survive; failure payloads and
+       ordinary value buffers have separate ownership, outside these slots. */
+    if(raised){ev_restore_slots(slots);ev_restore_scopes(scopes);}
+}
 eri_failure_value *evn_saved(void){eri_failure_value *value=eri_alloc(sizeof(*value));*value=eri_failure;return value;}
 int64_t evn_match(eri_failure_value *failure,int type){return strcmp(failure->type,ev_types[type].name)==0;}
 ev_value *evn_error(eri_failure_value *failure,int type){return ev_slot(ev_error_from_failure(*failure,type));}
@@ -5110,8 +5152,8 @@ void evn_fail(ev_value *value,int message){ev_fail_message(*value,message);}
 eri_failure_value *evn_empty_failure(void){eri_failure_value *value=eri_alloc(sizeof(*value));*value=(eri_failure_value){0};return value;}
 void evn_cleanup_accumulate(ev_value *resource,eri_failure_value *primary){eri_failure_value one={0};if(eri_file_cleanup(resource->resource,&one)){if(!primary->type)*primary=one;else eri_attach_secondary(primary,one);}}
 void evn_propagate_if(eri_failure_value *failure){if(failure->type)eri_propagate_saved(*failure);}
-void evn_cleanup_normal(ev_value *resource,eri_handler_frame *frame){eri_failure_value failure={0};bool failed=eri_file_cleanup(resource->resource,&failure);eri_handler_top=frame->prev;if(failed)eri_propagate_saved(failure);}
-void evn_unwind(ev_value *resource,eri_handler_frame *frame){eri_failure_value saved=eri_failure;eri_handler_top=frame->prev;eri_failure_value one={0};if(eri_file_cleanup(resource->resource,&one))eri_attach_secondary(&saved,one);eri_propagate_saved(saved);}
+void evn_cleanup_normal(ev_value *resource,eri_handler_frame *frame){eri_failure_value failure={0};bool failed=eri_file_cleanup(resource->resource,&failure);evn_pop(frame);if(failed)eri_propagate_saved(failure);}
+void evn_unwind(ev_value *resource,eri_handler_frame *frame){eri_failure_value saved=eri_failure;evn_pop(frame);eri_failure_value one={0};if(eri_file_cleanup(resource->resource,&one))eri_attach_secondary(&saved,one);eri_propagate_saved(saved);}
 extern ev_value *erist_entry(void);
 int main(int argc,char **argv){eri_process_argc=argc;eri_process_argv=argv;if(fesetround(FE_TONEAREST))eri_fault("cannot establish Float rounding mode");erist_entry();return eri_process_exit_code;}
 #endif
