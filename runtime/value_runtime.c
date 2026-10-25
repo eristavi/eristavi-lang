@@ -28,9 +28,98 @@ static eri_handler_frame *eri_handler_top = NULL;
 static eri_failure_value eri_failure = {NULL,NULL,{0,NULL},NULL};
 
 static void eri_fault(const char *m) { fprintf(stderr, "Eristavi runtime fault: %s\n", m); exit(1); }
-static void *eri_alloc(size_t n){ void *p=malloc(n?n:1); if(!p)eri_fault("out of memory"); return p; }
-static void *eri_realloc(void *p,size_t n){ void *q=realloc(p,n?n:1); if(!q)eri_fault("out of memory"); return q; }
-static eri_text eri_text_from_bytes(const unsigned char *s,size_t n){ eri_text r={n,NULL}; if(n){r.data=(unsigned char*)eri_alloc(n); memcpy(r.data,s,n);} return r; }
+enum eri_heap_kind { ERI_HEAP_OTHER,ERI_HEAP_OBJECT,ERI_HEAP_OBJECT_DATA,ERI_HEAP_TEXT,
+    ERI_HEAP_PREFIX_INDEX,ERI_HEAP_FAILURE,ERI_HEAP_SLOT,ERI_HEAP_SCOPE,
+    ERI_HEAP_HANDLER,ERI_HEAP_ROOT_TABLE,ERI_HEAP_UNICODE,ERI_HEAP_FILE,ERI_HEAP_KIND_COUNT };
+#ifdef ERIST_HEAP_STATS
+/* Diagnostic registry only: categories are allocation families, not tracing
+   descriptors or reachability facts. Payload alignment matches malloc. */
+typedef struct { size_t allocations,reallocations,frees,live_allocations,live_bytes,
+    peak_allocations,peak_bytes,requested_bytes; } eri_heap_counter;
+typedef union eri_heap_header eri_heap_header;
+union eri_heap_header {
+    struct { size_t bytes;int kind;eri_heap_header *previous,*next; } info;
+    max_align_t alignment;
+};
+static eri_heap_header *eri_heap_blocks;
+static eri_heap_counter eri_heap_total,eri_heap_categories[ERI_HEAP_KIND_COUNT];
+static size_t eri_heap_sum(size_t a,size_t b){if(a>SIZE_MAX-b)eri_fault("heap statistics overflow");return a+b;}
+static void eri_heap_peak(eri_heap_counter *c){
+    if(c->live_allocations>c->peak_allocations)c->peak_allocations=c->live_allocations;
+    if(c->live_bytes>c->peak_bytes)c->peak_bytes=c->live_bytes;
+}
+static void eri_heap_new(eri_heap_counter *c,size_t n){
+    c->allocations=eri_heap_sum(c->allocations,1);c->live_allocations=eri_heap_sum(c->live_allocations,1);
+    c->live_bytes=eri_heap_sum(c->live_bytes,n);c->requested_bytes=eri_heap_sum(c->requested_bytes,n);eri_heap_peak(c);
+}
+static void eri_heap_resize(eri_heap_counter *c,size_t old,size_t n){
+    c->reallocations=eri_heap_sum(c->reallocations,1);c->live_bytes-=old;
+    c->live_bytes=eri_heap_sum(c->live_bytes,n);c->requested_bytes=eri_heap_sum(c->requested_bytes,n);eri_heap_peak(c);
+}
+static void eri_heap_release(eri_heap_counter *c,size_t n){c->frees++;c->live_allocations--;c->live_bytes-=n;}
+static bool eri_heap_check(void){
+    size_t counts[ERI_HEAP_KIND_COUNT]={0},bytes[ERI_HEAP_KIND_COUNT]={0},total=0,size=0;
+    eri_heap_header *previous=NULL;
+    for(eri_heap_header *h=eri_heap_blocks;h;h=h->info.next){
+        if(total>=eri_heap_total.live_allocations||h->info.previous!=previous||h->info.kind<0||h->info.kind>=ERI_HEAP_KIND_COUNT)return false;
+        total++;size=eri_heap_sum(size,h->info.bytes);counts[h->info.kind]++;
+        bytes[h->info.kind]=eri_heap_sum(bytes[h->info.kind],h->info.bytes);previous=h;
+    }
+    if(total!=eri_heap_total.live_allocations||size!=eri_heap_total.live_bytes)return false;
+    for(int i=0;i<ERI_HEAP_KIND_COUNT;i++)if(counts[i]!=eri_heap_categories[i].live_allocations||bytes[i]!=eri_heap_categories[i].live_bytes)return false;
+    return true;
+}
+static void eri_heap_write_counter(FILE *out,const eri_heap_counter *c){
+    fprintf(out,"{\"allocations\":%zu,\"reallocations\":%zu,\"frees\":%zu,\"live_allocations\":%zu,\"live_bytes\":%zu,\"peak_allocations\":%zu,\"peak_bytes\":%zu,\"requested_bytes\":%zu}",
+        c->allocations,c->reallocations,c->frees,c->live_allocations,c->live_bytes,c->peak_allocations,c->peak_bytes,c->requested_bytes);
+}
+static void eri_heap_write_stats(FILE *out){
+    static const char *names[]={"other","object","object_data","text","prefix_index","failure","slot","scope","handler","root_table","unicode","file"};
+    fprintf(out,"{\"format\":\"eristavi-heap-stats-v1\",\"payload_bytes_only\":true,\"registry_consistent\":%s,\"total\":",eri_heap_check()?"true":"false");
+    eri_heap_write_counter(out,&eri_heap_total);fputs(",\"categories\":{",out);
+    for(int i=0;i<ERI_HEAP_KIND_COUNT;i++){if(i)fputc(',',out);fprintf(out,"\"%s\":",names[i]);eri_heap_write_counter(out,&eri_heap_categories[i]);}
+    fputs("}}\n",out);
+}
+#endif
+static void *eri_alloc_kind(size_t n,int kind){
+#ifdef ERIST_HEAP_STATS
+    if(kind<0||kind>=ERI_HEAP_KIND_COUNT)eri_fault("invalid heap category");
+    size_t actual=n?n:1;if(actual>SIZE_MAX-sizeof(eri_heap_header))eri_fault("allocation size overflow");
+    eri_heap_header *h=malloc(sizeof(*h)+actual);if(!h)eri_fault("out of memory");
+    h->info.bytes=n;h->info.kind=kind;h->info.previous=NULL;h->info.next=eri_heap_blocks;
+    if(eri_heap_blocks)eri_heap_blocks->info.previous=h;eri_heap_blocks=h;
+    eri_heap_new(&eri_heap_total,n);eri_heap_new(&eri_heap_categories[kind],n);return h+1;
+#else
+    (void)kind;void *p=malloc(n?n:1);if(!p)eri_fault("out of memory");return p;
+#endif
+}
+static void *eri_alloc(size_t n){return eri_alloc_kind(n,ERI_HEAP_OTHER);}
+static void eri_free(void *p){
+    if(!p)return;
+#ifdef ERIST_HEAP_STATS
+    eri_heap_header *h=(eri_heap_header*)p-1;
+    if(h->info.previous)h->info.previous->info.next=h->info.next;else eri_heap_blocks=h->info.next;
+    if(h->info.next)h->info.next->info.previous=h->info.previous;
+    eri_heap_release(&eri_heap_total,h->info.bytes);eri_heap_release(&eri_heap_categories[h->info.kind],h->info.bytes);free(h);
+#else
+    free(p);
+#endif
+}
+static void *eri_realloc_kind(void *p,size_t n,int kind){
+    if(!p)return eri_alloc_kind(n,kind);
+#ifdef ERIST_HEAP_STATS
+    eri_heap_header *old=(eri_heap_header*)p-1,*previous=old->info.previous,*next=old->info.next;
+    size_t before=old->info.bytes,actual=n?n:1;kind=old->info.kind;
+    if(actual>SIZE_MAX-sizeof(*old))eri_fault("allocation size overflow");
+    eri_heap_header *h=realloc(old,sizeof(*h)+actual);if(!h)eri_fault("out of memory");
+    if(previous)previous->info.next=h;else eri_heap_blocks=h;if(next)next->info.previous=h;
+    h->info.bytes=n;eri_heap_resize(&eri_heap_total,before,n);eri_heap_resize(&eri_heap_categories[kind],before,n);return h+1;
+#else
+    (void)kind;void *q=realloc(p,n?n:1);if(!q)eri_fault("out of memory");return q;
+#endif
+}
+static void *eri_realloc(void *p,size_t n){return eri_realloc_kind(p,n,ERI_HEAP_OTHER);}
+static eri_text eri_text_from_bytes(const unsigned char *s,size_t n){ eri_text r={n,NULL}; if(n){r.data=(unsigned char*)eri_alloc_kind(n,ERI_HEAP_TEXT); memcpy(r.data,s,n);} return r; }
 static eri_text eri_text_from_cstr(const char *s){ return eri_text_from_bytes((const unsigned char*)s,strlen(s)); }
 static bool eri_text_eq(eri_text a,eri_text b){ return a.len==b.len && (!a.len || memcmp(a.data,b.data,a.len)==0); }
 
@@ -38,7 +127,7 @@ static bool eri_text_eq(eri_text a,eri_text b){ return a.len==b.len && (!a.len |
 typedef struct eri_text_append_buffer { unsigned char *data; size_t used,capacity; struct eri_text_append_buffer *next; } eri_text_append_buffer;
 static eri_text_append_buffer *eri_text_append_buckets[4096];
 static size_t eri_text_append_hash(const unsigned char *data){return ((uintptr_t)data>>4)%4096;}
-static unsigned char *eri_prefix_append(const unsigned char *prefix,size_t prefix_size,const unsigned char *suffix,size_t suffix_size){
+static unsigned char *eri_prefix_append_kind(const unsigned char *prefix,size_t prefix_size,const unsigned char *suffix,size_t suffix_size,int kind){
     eri_text a={prefix_size,(unsigned char*)prefix},b={suffix_size,(unsigned char*)suffix};
     if(a.len>SIZE_MAX-b.len)eri_fault("Text size overflow");
     if(!b.len)return a.data;
@@ -47,17 +136,18 @@ static unsigned char *eri_prefix_append(const unsigned char *prefix,size_t prefi
     while(buffer && buffer->data!=a.data)buffer=buffer->next;
     if(buffer && buffer->used==a.len && length<=buffer->capacity){memmove(buffer->data+a.len,b.data,b.len);buffer->used=length;return buffer->data;}
     size_t capacity=32;while(capacity<length){if(capacity>SIZE_MAX/2){capacity=length;break;}capacity*=2;}
-    unsigned char *data=eri_alloc(capacity);if(a.len)memcpy(data,a.data,a.len);memcpy(data+a.len,b.data,b.len);
-    buffer=eri_alloc(sizeof(*buffer));size_t hash=eri_text_append_hash(data);
+    unsigned char *data=eri_alloc_kind(capacity,kind);if(a.len)memcpy(data,a.data,a.len);memcpy(data+a.len,b.data,b.len);
+    buffer=eri_alloc_kind(sizeof(*buffer),ERI_HEAP_PREFIX_INDEX);size_t hash=eri_text_append_hash(data);
     *buffer=(eri_text_append_buffer){data,length,capacity,eri_text_append_buckets[hash]};eri_text_append_buckets[hash]=buffer;
     return data;
 }
+static unsigned char *eri_prefix_append(const unsigned char *prefix,size_t prefix_size,const unsigned char *suffix,size_t suffix_size){return eri_prefix_append_kind(prefix,prefix_size,suffix,suffix_size,ERI_HEAP_TEXT);}
 static eri_text eri_text_add(eri_text a,eri_text b){if(!b.len)return a;if(!a.len)return b;unsigned char *data=eri_prefix_append(a.data,a.len,b.data,b.len);return (eri_text){a.len+b.len,data};}
 
 
 static char *eri_text_to_c_path(eri_text t){ if(t.len && memchr(t.data,0,t.len))return NULL; char *r=(char*)eri_alloc(t.len+1); if(t.len)memcpy(r,t.data,t.len); r[t.len]='\0'; return r; }
 static void eri_fault_text(eri_text t){ fputs("Eristavi runtime fault: ",stderr); if(t.len)fwrite(t.data,1,t.len,stderr); fputc('\n',stderr); exit(1); }
-static void eri_attach_secondary(eri_failure_value *primary, eri_failure_value secondary){ eri_secondary_failure *n=(eri_secondary_failure*)eri_alloc(sizeof(*n)); n->type=secondary.type; n->payload=secondary.payload; n->message=secondary.message; n->next=NULL; eri_secondary_failure **p=&primary->secondary; while(*p)p=&(*p)->next; *p=n; }
+static void eri_attach_secondary(eri_failure_value *primary, eri_failure_value secondary){ eri_secondary_failure *n=(eri_secondary_failure*)eri_alloc_kind(sizeof(*n),ERI_HEAP_FAILURE); n->type=secondary.type; n->payload=secondary.payload; n->message=secondary.message; n->next=NULL; eri_secondary_failure **p=&primary->secondary; while(*p)p=&(*p)->next; *p=n; }
 static void eri_raise(const char *type, void *payload, eri_text message){
     eri_failure=(eri_failure_value){type,payload,message,NULL};
     if(!eri_handler_top)eri_fault_text(message);
@@ -78,9 +168,9 @@ static void eri_propagate_saved(eri_failure_value f){
 typedef struct { eri_text f_message; eri_text f_path; } eri_file_error;
 typedef struct { eri_text path; char *c_path; FILE *handle; bool closed; bool writable; } eri_file;
 static bool eri_utf8_valid(const unsigned char *s,size_t n){ size_t i=0; while(i<n){ unsigned c=s[i++]; if(c<=0x7f)continue; if(c>=0xc2&&c<=0xdf){ if(i>=n||(s[i]&0xc0)!=0x80)return false; i++; continue; } if(c>=0xe0&&c<=0xef){ if(i+1>=n)return false; unsigned c1=s[i],c2=s[i+1]; if((c1&0xc0)!=0x80||(c2&0xc0)!=0x80)return false; if(c==0xe0&&c1<0xa0)return false; if(c==0xed&&c1>=0xa0)return false; i+=2; continue; } if(c>=0xf0&&c<=0xf4){ if(i+2>=n)return false; unsigned c1=s[i],c2=s[i+1],c3=s[i+2]; if((c1&0xc0)!=0x80||(c2&0xc0)!=0x80||(c3&0xc0)!=0x80)return false; if(c==0xf0&&c1<0x90)return false; if(c==0xf4&&c1>=0x90)return false; i+=3; continue; } return false; } return true; }
-static eri_failure_value eri_make_file_failure(const char *message,eri_text path){ eri_file_error *e=(eri_file_error*)eri_alloc(sizeof(*e)); e->f_message=eri_text_from_cstr(message?message:"file error"); e->f_path=path; return (eri_failure_value){"std.files.FileError",e,e->f_message,NULL}; }
+static eri_failure_value eri_make_file_failure(const char *message,eri_text path){ eri_file_error *e=(eri_file_error*)eri_alloc_kind(sizeof(*e),ERI_HEAP_FAILURE); e->f_message=eri_text_from_cstr(message?message:"file error"); e->f_path=path; return (eri_failure_value){"std.files.FileError",e,e->f_message,NULL}; }
 static void eri_raise_file_failure(const char *message,eri_text path){ eri_failure_value f=eri_make_file_failure(message,path); eri_raise(f.type,f.payload,f.message); }
-static void eri_fail_std_u002e_files_u002e_FileError(eri_file_error v){ eri_file_error *p=(eri_file_error*)eri_alloc(sizeof(*p)); *p=v; eri_raise("std.files.FileError",p,v.f_message); }
+static void eri_fail_std_u002e_files_u002e_FileError(eri_file_error v){ eri_file_error *p=(eri_file_error*)eri_alloc_kind(sizeof(*p),ERI_HEAP_FAILURE); *p=v; eri_raise("std.files.FileError",p,v.f_message); }
 static eri_file eri_file_open(eri_text path){ char *cp=eri_text_to_c_path(path); if(!cp)eri_raise_file_failure("file path contains NUL",path); FILE *h=fopen(cp,"r+"); if(!h)eri_raise_file_failure(strerror(errno),path); return (eri_file){path,cp,h,false,true}; }
 static eri_text eri_file_read_text(eri_file *f){ if(!f||f->closed||!f->handle)eri_fault("file resource is closed"); if(fseek(f->handle,0,SEEK_END)!=0)eri_raise_file_failure(strerror(errno),f->path); long n=ftell(f->handle); if(n<0)eri_raise_file_failure(strerror(errno),f->path); rewind(f->handle); unsigned char *buf=(unsigned char*)eri_alloc((size_t)n?((size_t)n):1); size_t got=fread(buf,1,(size_t)n,f->handle); if(got<(size_t)n&&ferror(f->handle))eri_raise_file_failure(strerror(errno),f->path); if(!eri_utf8_valid(buf,got))eri_raise_file_failure("invalid UTF-8",f->path); return eri_text_from_bytes(buf,got); }
 static void eri_file_write_text(eri_file *f,eri_text text){ if(f&&!f->writable)eri_raise_file_failure("file was opened read-only",f->path); if(!f||f->closed||!f->handle)eri_fault("file resource is closed"); FILE *h=freopen(f->c_path,"w+",f->handle); if(!h){f->handle=NULL; f->closed=true; eri_raise_file_failure(strerror(errno),f->path);} f->handle=h; if(text.len&&fwrite(text.data,1,text.len,h)!=text.len)eri_raise_file_failure(strerror(errno),f->path); if(fflush(h)!=0)eri_raise_file_failure(strerror(errno),f->path); rewind(h); }
@@ -4959,7 +5049,7 @@ static void eri_scalar_push(eri_scalar_buffer *buffer,uint32_t cp){
     if(buffer->count==buffer->capacity){
         size_t capacity=buffer->capacity ? buffer->capacity*2 : 16;
         if(capacity<buffer->capacity||capacity>SIZE_MAX/sizeof(uint32_t))eri_fault("Unicode buffer too large");
-        uint32_t *data=(uint32_t*)realloc(buffer->data,capacity*sizeof(uint32_t));
+        uint32_t *data=(uint32_t*)eri_realloc_kind(buffer->data,capacity*sizeof(uint32_t),ERI_HEAP_UNICODE);
         if(!data)eri_fault("out of memory");
         buffer->data=data;buffer->capacity=capacity;
     }
@@ -5009,12 +5099,12 @@ static eri_text eri_unicode_normalizeNfc(eri_text text){
         else {if(cc==0)starter=used;buffer.data[used++]=cp;previous=cc;}
     }
     if(used>SIZE_MAX/4)eri_fault("Unicode buffer too large");
-    unsigned char *bytes=(unsigned char*)malloc(used ? used*4 : 1);
+    unsigned char *bytes=(unsigned char*)eri_alloc_kind(used ? used*4 : 1,ERI_HEAP_UNICODE);
     if(!bytes)eri_fault("out of memory");
     size_t length=0;
     for(size_t i=0;i<used;i++)length+=eri_encode_scalar(buffer.data[i],bytes+length);
     eri_text result=eri_text_from_bytes(bytes,length);
-    free(bytes);free(buffer.data);return result;
+    eri_free(bytes);eri_free(buffer.data);return result;
 }
 
 #include <float.h>
@@ -5034,7 +5124,7 @@ static ev_value ev_float(double f){ev_value v={.type=2};v.f=f;return v;}
 static ev_value ev_bool(bool b){ev_value v={.type=3};v.i=b;return v;}
 static ev_value ev_text(eri_text t){ev_value v={.type=4};v.text=t;return v;}
 static ev_value ev_void(void){ev_value v={.type=5};return v;}
-static ev_value ev_object_value(int type,size_t count){ev_value v={.type=type}; v.object=eri_alloc(sizeof(ev_object)); v.object->count=count; if(count>SIZE_MAX/sizeof(ev_value))eri_fault("value size overflow"); v.object->data=count?eri_alloc(count*sizeof(ev_value)):NULL; return v;}
+static ev_value ev_object_value(int type,size_t count){ev_value v={.type=type}; v.object=eri_alloc_kind(sizeof(ev_object),ERI_HEAP_OBJECT); v.object->count=count; if(count>SIZE_MAX/sizeof(ev_value))eri_fault("value size overflow"); v.object->data=count?eri_alloc_kind(count*sizeof(ev_value),ERI_HEAP_OBJECT_DATA):NULL; return v;}
 static void ev_detach(ev_value *v){ev_object *old=v->object;ev_value fresh=ev_object_value(v->type,old->count);if(old->count)memcpy(fresh.object->data,old->data,old->count*sizeof(ev_value));*v=fresh;}
 static ev_value ev_wrap(int type,ev_value inner){ev_value v=ev_object_value(type,1);v.object->data[0]=inner;return v;}
 static ev_value ev_none(int type){ev_value v={.type=type};v.object=NULL;return v;}
@@ -5046,7 +5136,7 @@ static void ev_bounds(ev_value v,int64_t index){if(index<0||(uint64_t)index>=v.o
 static ev_value ev_index(ev_value v,int64_t index){if(ev_types[v.type].kind==12){if(strcmp(ev_types[v.type].name,"bytes")==0)return ev_int(eri_text_view_byte_get(v.view,index));return ev_text(eri_text_view_text_get(v.view,index));}ev_bounds(v,index);return v.object->data[index];}
 static ev_value *ev_index_ref(ev_value *v,int64_t index){ev_bounds(*v,index);ev_detach(v);return &v->object->data[index];}
 static ev_value ev_count(ev_value v){if(ev_types[v.type].kind==9)v=ev_get(v);if(ev_types[v.type].kind==12)return ev_int(eri_text_view_count(v.view));if(v.object->count>INT64_MAX)eri_fault("List count overflow");return ev_int((int64_t)v.object->count);}
-static void ev_add(ev_value *v,ev_value item){size_t count=v->object->count;if(count>=SIZE_MAX/sizeof(ev_value))eri_fault("List size overflow");ev_object *fresh=eri_alloc(sizeof(*fresh));fresh->count=count+1;fresh->data=(ev_value*)eri_prefix_append((const unsigned char*)v->object->data,count*sizeof(ev_value),(const unsigned char*)&item,sizeof(item));v->object=fresh;}
+static void ev_add(ev_value *v,ev_value item){size_t count=v->object->count;if(count>=SIZE_MAX/sizeof(ev_value))eri_fault("List size overflow");ev_object *fresh=eri_alloc_kind(sizeof(*fresh),ERI_HEAP_OBJECT);fresh->count=count+1;fresh->data=(ev_value*)eri_prefix_append_kind((const unsigned char*)v->object->data,count*sizeof(ev_value),(const unsigned char*)&item,sizeof(item),ERI_HEAP_OBJECT_DATA);v->object=fresh;}
 static bool ev_equal(ev_value a,ev_value b){if(a.type!=b.type)eri_fault("internal equality type mismatch");int kind=ev_types[a.type].kind;if(kind==1||kind==3)return a.i==b.i;if(kind==2)return a.f==b.f;if(kind==4)return eri_text_eq(a.text,b.text);if(kind==9)return a.object==b.object;if(kind==8){if(!a.object||!b.object)return a.object==b.object;return ev_equal(ev_get(a),ev_get(b));}if(a.object->count!=b.object->count)return false;for(size_t i=0;i<a.object->count;i++)if(!ev_equal(a.object->data[i],b.object->data[i]))return false;return true;}
 static ev_value ev_unary(int op,ev_value v){if(op==1)return ev_bool(!v.i);if(v.type==1)return ev_int(eri_ineg(v.i));return ev_float(eri_fneg(v.f));}
 static ev_value ev_binary(int op,ev_value a,ev_value b){
@@ -5063,8 +5153,8 @@ static ev_value ev_error_from_failure(eri_failure_value failure,int type){
  if(strcmp(failure.type,"std.files.FileError")==0){eri_file_error *e=failure.payload; result.object->data[0]=ev_text(e->f_message);result.object->data[1]=ev_text(e->f_path);return result;}
  return *(ev_value*)failure.payload;
 }
-static void ev_fail(ev_value error){ev_value *payload=eri_alloc(sizeof(*payload));*payload=error;eri_text message=error.object->data[0].text;for(size_t i=0;i<ev_types[error.type].count;i++){/* error message index is supplied separately by emitter */}eri_raise(ev_types[error.type].name,payload,message);}
-static void ev_fail_message(ev_value error,int message){ev_value *payload=eri_alloc(sizeof(*payload));*payload=error;eri_raise(ev_types[error.type].name,payload,error.object->data[message].text);}
+static void ev_fail(ev_value error){ev_value *payload=eri_alloc_kind(sizeof(*payload),ERI_HEAP_FAILURE);*payload=error;eri_text message=error.object->data[0].text;for(size_t i=0;i<ev_types[error.type].count;i++){/* error message index is supplied separately by emitter */}eri_raise(ev_types[error.type].name,payload,message);}
+static void ev_fail_message(ev_value error,int message){ev_value *payload=eri_alloc_kind(sizeof(*payload),ERI_HEAP_FAILURE);*payload=error;eri_raise(ev_types[error.type].name,payload,error.object->data[message].text);}
 static ev_value ev_builtin(const char *name,int type,size_t count,ev_value *args){
  (void)count;
  if(strcmp(name,"std.process.arguments")==0){eri_list_text list=eri_process_arguments();ev_value result=ev_object_value(type,list.count);for(size_t i=0;i<list.count;i++)result.object->data[i]=ev_text(list.data[i]);return result;}
@@ -5074,7 +5164,7 @@ static ev_value ev_builtin(const char *name,int type,size_t count,ev_value *args
  if(strcmp(name,"std.unicode.isIdentifierContinue")==0)return ev_bool(eri_unicode_isIdentifierContinue(args[0].text));
  if(strcmp(name,"std.unicode.normalizeNfc")==0)return ev_text(eri_unicode_normalizeNfc(args[0].text));
  if(strcmp(name,"std.unicode.fromScalar")==0)return ev_text(eri_unicode_fromScalar(args[0].i));
- if(strcmp(name,"std.files.open")==0||strcmp(name,"std.files.openRead")==0||strcmp(name,"std.files.create")==0){ev_value result={.type=type};result.resource=eri_alloc(sizeof(eri_file));if(strcmp(name,"std.files.open")==0)*result.resource=eri_file_open(args[0].text);else *result.resource=eri_file_acquire(args[0].text,strcmp(name,"std.files.create")==0);return result;}
+ if(strcmp(name,"std.files.open")==0||strcmp(name,"std.files.openRead")==0||strcmp(name,"std.files.create")==0){ev_value result={.type=type};result.resource=eri_alloc_kind(sizeof(eri_file),ERI_HEAP_FILE);if(strcmp(name,"std.files.open")==0)*result.resource=eri_file_open(args[0].text);else *result.resource=eri_file_acquire(args[0].text,strcmp(name,"std.files.create")==0);return result;}
  if(strcmp(name,"std.files.readText")==0)return ev_text(eri_file_read_text(args[0].resource));
  if(strcmp(name,"std.files.writeText")==0){eri_file_write_text(args[0].resource,args[1].text);return ev_void();}
  if(strcmp(name,"std.files.exists")==0)return ev_bool(eri_file_exists_path(args[0].text));
@@ -5105,19 +5195,19 @@ static ev_value *ev_slot(ev_value value){
 #ifdef ERIST_NATIVE_RUNTIME
     if(ev_live_slots>=ev_next_slot_gc)ev_collect_slots();
 #endif
-    ev_slot_node *node=malloc(sizeof(*node));if(!node)eri_fault("out of memory");
+    ev_slot_node *node=eri_alloc_kind(sizeof(*node),ERI_HEAP_SLOT);if(!node)eri_fault("out of memory");
     node->value=value;node->next=ev_slots;ev_slots=node;
 #ifdef ERIST_NATIVE_RUNTIME
     ev_live_slots++;
 #endif
     return &node->value;
 }
-static ev_scope *ev_scope_enter(void){ev_scope *scope=malloc(sizeof(*scope));if(!scope)eri_fault("out of memory");*scope=(ev_scope){0};scope->mark=ev_slots;scope->previous=ev_scopes;ev_scopes=scope;return scope;}
+static ev_scope *ev_scope_enter(void){ev_scope *scope=eri_alloc_kind(sizeof(*scope),ERI_HEAP_SCOPE);if(!scope)eri_fault("out of memory");*scope=(ev_scope){0};scope->mark=ev_slots;scope->previous=ev_scopes;ev_scopes=scope;return scope;}
 static void ev_free_slot(ev_slot_node *node){
 #ifdef ERIST_NATIVE_RUNTIME
     ev_live_slots--;
 #endif
-    free(node);
+    eri_free(node);
 }
 static void ev_restore_slots(ev_slot_node *mark){
     while(ev_slots!=mark){ev_slot_node *node=ev_slots;ev_slots=node->next;ev_free_slot(node);}
@@ -5126,7 +5216,7 @@ static void ev_restore_slots(ev_slot_node *mark){
         ev_next_slot_gc=ev_live_slots+ERIST_SLOT_GC_INTERVAL;
 #endif
 }
-static void ev_restore_scopes(ev_scope *mark){while(ev_scopes!=mark){ev_scope *scope=ev_scopes;ev_scopes=scope->previous;free(scope);}}
+static void ev_restore_scopes(ev_scope *mark){while(ev_scopes!=mark){ev_scope *scope=ev_scopes;ev_scopes=scope->previous;eri_free(scope);}}
 static ev_value ev_scope_leave(ev_scope *scope,ev_value value){ev_restore_slots(scope->mark);ev_restore_scopes(scope->previous);return value;}
 
 /* Pointer ABI for Eristavi's native x86-64 consumer. Runtime object only. */
@@ -5160,7 +5250,7 @@ static void ev_collect_slots(void){
     size_t capacity=16;
     while(capacity<count*2){if(capacity>SIZE_MAX/2)eri_fault("native root table too large");capacity*=2;}
     if(capacity>SIZE_MAX/sizeof(uintptr_t))eri_fault("native root table too large");
-    uintptr_t *table=eri_alloc(capacity*sizeof(*table));memset(table,0,capacity*sizeof(*table));
+    uintptr_t *table=eri_alloc_kind(capacity*sizeof(*table),ERI_HEAP_ROOT_TABLE);memset(table,0,capacity*sizeof(*table));
     size_t mask=capacity-1;
     for(ev_scope *scope=ev_scopes;scope;scope=scope->previous){
         ev_root_insert(table,mask,(uintptr_t)scope->mark);
@@ -5177,7 +5267,7 @@ static void ev_collect_slots(void){
         if(ev_root_contains(table,mask,(uintptr_t)node))link=&node->next;
         else {*link=node->next;ev_free_slot(node);}
     }
-    free(table);
+    eri_free(table);
     if(ev_live_slots>SIZE_MAX-ERIST_SLOT_GC_INTERVAL)eri_fault("native slot count overflow");
     ev_next_slot_gc=ev_live_slots+ERIST_SLOT_GC_INTERVAL;
 }
@@ -5215,7 +5305,7 @@ ev_value *evn_builtin0(const char *name,int type){return ev_slot(ev_builtin(name
 ev_value *evn_builtin1(const char *name,int type,ev_value *first){ev_value args[]={*first};return ev_slot(ev_builtin(name,type,1,args));}
 ev_value *evn_builtin2(const char *name,int type,ev_value *first,ev_value *second){ev_value args[]={*first,*second};return ev_slot(ev_builtin(name,type,2,args));}
 eri_handler_frame *evn_frame(void){
-    eri_handler_frame *frame=eri_alloc(sizeof(*frame));
+    eri_handler_frame *frame=eri_alloc_kind(sizeof(*frame),ERI_HEAP_HANDLER);
     frame->prev=eri_handler_top;frame->slot_mark=ev_slots;
     frame->scope_mark=ev_scopes;frame->raised=false;
     eri_handler_top=frame;return frame;
@@ -5228,23 +5318,31 @@ void evn_pop(eri_handler_frame *frame){
     /* A scoped return can pop multiple nested resource frames at once. */
     while(eri_handler_top!=stop){
         eri_handler_frame *current=eri_handler_top;
-        eri_handler_top=current->prev;free(current);
+        eri_handler_top=current->prev;eri_free(current);
     }
     /* Normal completion still needs its expression result. On a checked jump,
        only caller locals predating the boundary survive; failure payloads and
        ordinary value buffers have separate ownership, outside these slots. */
     if(raised){ev_restore_slots(slots);ev_restore_scopes(scopes);}
 }
-eri_failure_value *evn_saved(void){eri_failure_value *value=eri_alloc(sizeof(*value));*value=eri_failure;return value;}
+eri_failure_value *evn_saved(void){eri_failure_value *value=eri_alloc_kind(sizeof(*value),ERI_HEAP_FAILURE);*value=eri_failure;return value;}
 int64_t evn_match(eri_failure_value *failure,int type){return strcmp(failure->type,ev_types[type].name)==0;}
 ev_value *evn_error(eri_failure_value *failure,int type){return ev_slot(ev_error_from_failure(*failure,type));}
 void evn_propagate(eri_failure_value *failure){eri_propagate_saved(*failure);}
 void evn_fail(ev_value *value,int message){ev_fail_message(*value,message);}
-eri_failure_value *evn_empty_failure(void){eri_failure_value *value=eri_alloc(sizeof(*value));*value=(eri_failure_value){0};return value;}
+eri_failure_value *evn_empty_failure(void){eri_failure_value *value=eri_alloc_kind(sizeof(*value),ERI_HEAP_FAILURE);*value=(eri_failure_value){0};return value;}
 void evn_cleanup_accumulate(ev_value *resource,eri_failure_value *primary){eri_failure_value one={0};if(eri_file_cleanup(resource->resource,&one)){if(!primary->type)*primary=one;else eri_attach_secondary(primary,one);}}
 void evn_propagate_if(eri_failure_value *failure){if(failure->type)eri_propagate_saved(*failure);}
 void evn_cleanup_normal(ev_value *resource,eri_handler_frame *frame){eri_failure_value failure={0};bool failed=eri_file_cleanup(resource->resource,&failure);evn_pop(frame);if(failed)eri_propagate_saved(failure);}
 void evn_unwind(ev_value *resource,eri_handler_frame *frame){eri_failure_value saved=eri_failure;evn_pop(frame);eri_failure_value one={0};if(eri_file_cleanup(resource->resource,&one))eri_attach_secondary(&saved,one);eri_propagate_saved(saved);}
 extern ev_value *erist_entry(void);
-int main(int argc,char **argv){eri_process_argc=argc;eri_process_argv=argv;if(fesetround(FE_TONEAREST))eri_fault("cannot establish Float rounding mode");erist_entry();return eri_process_exit_code;}
+int main(int argc,char **argv){
+    eri_process_argc=argc;eri_process_argv=argv;
+    if(fesetround(FE_TONEAREST))eri_fault("cannot establish Float rounding mode");
+    erist_entry();
+#ifdef ERIST_HEAP_STATS
+    eri_heap_write_stats(stderr);
+#endif
+    return eri_process_exit_code;
+}
 #endif
