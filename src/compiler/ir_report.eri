@@ -12,9 +12,17 @@ function routine(value identity ir.Function) returns Text {
     while cursor != none { result=result+separator+"{\"index\":"+format.integer(cursor.index)+",\"name\":"+format.quote(cursor.name)+",\"type\":"+format.integer(cursor.valueType)+",\"fixed\":"+format.boolean(cursor.immutable)+",\"parameter\":"+format.boolean(cursor.parameter)+"}"; separator=","; cursor=cursor.next; }
     return result+"],\"body\":"+node(value.body)+"}";
 }
+public function types(program identity ir.Program) returns Text {
+    let result be "["; let separator be ""; let cursor be program.types;
+    while cursor != none {
+        result=result+separator+"{\"index\":"+format.integer(cursor.index)+",\"kind\":"+format.integer(cursor.kind)+",\"name\":"+format.quote(cursor.name)+",\"inner\":"+format.integer(cursor.inner)+",\"checked\":"+format.boolean(cursor.checked)+",\"fields\":[";
+        let field be cursor.fields; let comma be ""; while field != none { result=result+comma+"{\"index\":"+format.integer(field.index)+",\"name\":"+format.quote(field.name)+",\"type\":"+format.integer(field.valueType)+",\"fixed\":"+format.boolean(field.immutable)+"}"; comma=","; field=field.next; }
+        result=result+"]}"; separator=","; cursor=cursor.next;
+    } return result+"]";
+}
 public function report(program identity ir.Program) returns Text fails m.SemanticError {
     try ir_verify.verify(program);
     let result be "{\"format\":\"eristavi-typed-ir-v1\",\"experimental\":true,\"functions\":["; let separator be ""; let cursor be program.functions;
     while cursor != none { result=result+separator+routine(cursor); separator=","; cursor=cursor.next; }
-    return result+"],\"entry\":"+routine(program.entry)+"}";
+    return result+"],\"types\":"+types(program)+",\"entry\":"+routine(program.entry)+"}";
 }

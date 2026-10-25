@@ -1,99 +1,138 @@
-// This backend consumes only verified Eristavi IR; it never interprets AST nodes.
+// Target C is a bootstrap consumer of verified structural Eristavi IR.
 import compiler.typed_ir as ir;
 import compiler.ir_verify;
-import compiler.scalar_runtime;
+import compiler.value_runtime;
 import compiler.semantic_model as m;
 import compiler.format;
 
-type Emitter { text Text; temporary Int; }
-function append(emitter identity Emitter, text Text) { emitter.text=emitter.text+text+"\n"; }
-function typeName(kind Int) returns Text { if kind == 1 { return "int64_t"; } if kind == 2 { return "double"; } if kind == 3 { return "bool"; } if kind == 4 { return "eri_text"; } return "void"; }
-function suffix(kind Int) returns Text { if kind == 1 { return "int"; } if kind == 2 { return "float"; } if kind == 3 { return "bool"; } return "text"; }
-function temp(emitter identity Emitter) returns Text { let name be "t"+format.integer(emitter.temporary); emitter.temporary=emitter.temporary+1; return name; }
-function required(node maybe identity ir.Node) returns identity ir.Node { if node != none { return node; } return ir.node(-1,5,identity m.Location { path=""; line=0; column=0; next=none; }); }
+type Cleanup { index Int; frame Text; next maybe identity Cleanup; }
+type Emitter { text Text; temporary Int; program identity ir.Program; cleanups maybe identity Cleanup; }
+function append(e identity Emitter,text Text) { e.text=e.text+text+"\n"; }
+function temp(e identity Emitter) returns Text { let name be "t"+format.integer(e.temporary); e.temporary=e.temporary+1; return name; }
+function required(value maybe identity ir.Node) returns identity ir.Node { if value != none { return value; } return ir.node(-1,5,identity m.Location { path=""; line=0; column=0; next=none; }); }
+function cquote(value Text) returns Text {
+    let result be "\""; let index be 0;
+    while index < value.bytes.count { let byte be value.bytes[index]; result=result+"\\"+"01234567".scalars[byte/64]+"01234567".scalars[(byte/8)%8]+"01234567".scalars[byte%8]; index=index+1; } return result+"\"";
+}
+function value(e identity Emitter,code Text) returns Text { let result be temp(e); append(e,"ev_value "+result+" = "+code+";"); return result; }
 function literal(node identity ir.Node) returns Text {
-    if node.valueType == 1 { if node.number == -9223372036854775807-1 { return "INT64_MIN"; } return "INT64_C("+format.integer(node.number)+")"; }
-    if node.valueType == 2 {
-        let spelling be ""; let index be 0;
-        while index < node.text.scalars.count { let ch be node.text.scalars[index]; if ch != "_" { spelling=spelling+ch; } index=index+1; }
-        return "eri_float_literal("+format.quote(spelling)+")";
-    }
-    if node.valueType == 3 { if node.number == 1 { return "true"; } return "false"; }
-    // Escape every UTF-8 byte using exactly three octal digits: no C source,
-    // escape-sequence, trigraph, embedded NUL or execution-charset ambiguity.
-    let result be ""; let index be 0;
-    while index < node.text.bytes.count { let byte be node.text.bytes[index]; result=result+"\\"+"01234567".scalars[byte/64]+"01234567".scalars[(byte/8)%8]+"01234567".scalars[byte%8]; index=index+1; }
-    return "(eri_text){(const unsigned char *)\""+result+"\",(size_t)"+format.integer(node.text.bytes.count)+"}";
+    if node.valueType == 1 { if node.number == -9223372036854775807-1 { return "ev_int(INT64_MIN)"; } return "ev_int(INT64_C("+format.integer(node.number)+"))"; }
+    if node.valueType == 3 { return "ev_bool("+format.integer(node.number)+")"; }
+    if node.valueType == 2 { let text be ""; let index be 0; while index < node.text.scalars.count { let ch be node.text.scalars[index]; if ch != "_" { text=text+ch; } index=index+1; } return "ev_float(ev_float_literal("+cquote(text)+"))"; }
+    return "ev_text(eri_text_from_bytes((const unsigned char *)"+cquote(node.text)+","+format.integer(node.text.bytes.count)+"))";
 }
-function expression(emitter identity Emitter, node identity ir.Node) returns Text {
-    let value be "";
-    if node.kind == 1 { value=literal(node); }
-    if node.kind == 2 { value="v"+format.integer(node.index); }
-    if node.kind == 3 {
-        let first be expression(emitter,required(node.first));
-        if node.text == "not" { value="(!"+first+")"; } else { let helper be "eri_ineg"; if node.valueType == 2 { helper="eri_fneg"; } value=helper+"("+first+")"; }
-    }
-    if node.kind == 4 {
-        let firstNode be required(node.first); let first be expression(emitter,firstNode);
-        if node.text == "and" or node.text == "or" {
-            let result be temp(emitter); append(emitter,"bool "+result+" = "+first+";");
-            let condition be result; if node.text == "or" { condition="!"+result; }
-            append(emitter,"if ("+condition+") {"); let second be expression(emitter,required(node.second)); append(emitter,result+" = "+second+";"); append(emitter,"}"); return result;
-        }
-        let second be expression(emitter,required(node.second)); let op be node.text;
-        if op == "+" or op == "-" or op == "*" or op == "/" or op == "%" {
-            let helper be "eri_iadd"; if op == "-" { helper="eri_isub"; } if op == "*" { helper="eri_imul"; } if op == "/" { helper="eri_idiv"; } if op == "%" { helper="eri_irem"; }
-            if firstNode.valueType == 2 { helper="eri_fadd"; if op == "-" { helper="eri_fsub"; } if op == "*" { helper="eri_fmul"; } if op == "/" { helper="eri_fdiv"; } }
-            if firstNode.valueType == 4 { helper="eri_text_add"; } value=helper+"("+first+","+second+")";
-        } else {
-            if firstNode.valueType == 4 { value="eri_text_equal("+first+","+second+")"; if op == "!=" { value="(!"+value+")"; } }
-            else { value="("+first+" "+op+" "+second+")"; }
-        }
-    }
-    if node.kind == 5 or node.kind == 6 {
-        let arguments be ""; let separator be ""; let cursor be node.first;
-        while cursor != none { let argument be expression(emitter,cursor); arguments=arguments+separator+argument; separator=","; cursor=cursor.next; }
-        let name be "f"+format.integer(node.index);
-        if node.kind == 6 { name="eri_out_"+suffix(required(node.first).valueType); }
-        value=name+"("+arguments+")";
-    }
-    if node.valueType == 5 { append(emitter,value+";"); return ""; }
-    // Every operand and argument is materialized in source order before its
-    // consumer. C's unspecified argument evaluation order cannot leak through.
-    let result be temp(emitter); append(emitter,typeName(node.valueType)+" "+result+" = "+value+";"); return result;
+function binary(op Text) returns Int { if op == "+" { return 0; } if op == "-" { return 1; } if op == "*" { return 2; } if op == "/" { return 3; } if op == "%" { return 4; } if op == "==" { return 5; } if op == "!=" { return 6; } if op == "<" { return 7; } if op == "<=" { return 8; } if op == ">" { return 9; } return 10; }
+function place(e identity Emitter,node identity ir.Node) returns Text {
+    if node.kind == 2 { return "v"+format.integer(node.index); }
+    let base be place(e,required(node.first));
+    if node.kind == 29 { return "ev_get_ref("+base+")"; }
+    if node.kind == 22 { return "ev_member_ref("+base+","+format.integer(node.index)+")"; }
+    let index be expression(e,required(node.second)); let result be temp(e); append(e,"ev_value *"+result+" = ev_index_ref("+base+","+index+".i);"); return result;
 }
-function block(emitter identity Emitter, node identity ir.Node) {
+function expression(e identity Emitter,node identity ir.Node) returns Text {
+    let kind be node.kind; let code be "ev_void()";
+    if kind == 1 { code=literal(node); }
+    if kind == 2 { code="*v"+format.integer(node.index); }
+    if kind == 3 { let first be expression(e,required(node.first)); let op be 0; if node.text == "not" { op=1; } code="ev_unary("+format.integer(op)+","+first+")"; }
+    if kind == 4 {
+        let first be expression(e,required(node.first));
+        if node.text == "and" or node.text == "or" { let result be value(e,first); let condition be result+".i"; if node.text == "or" { condition="!"+condition; } append(e,"if ("+condition+") {"); let second be expression(e,required(node.second)); append(e,result+" = "+second+";"); append(e,"}"); return result; }
+        let second be expression(e,required(node.second)); code="ev_binary("+format.integer(binary(node.text))+","+first+","+second+")";
+    }
+    if kind == 5 or kind == 6 or kind == 31 {
+        let arguments be ""; let separator be ""; let cursor be node.first; let count be 0;
+        while cursor != none { let argument be expression(e,cursor); arguments=arguments+separator+argument; separator=","; count=count+1; cursor=cursor.next; }
+        if kind == 5 { code="f"+format.integer(node.index)+"("+arguments+")"; }
+        if kind == 6 { append(e,"ev_output("+arguments+");"); }
+        if kind == 31 { let data be "NULL"; if count > 0 { data="(ev_value[]){"+arguments+"}"; } code="ev_builtin("+cquote(node.text)+","+format.integer(node.valueType)+","+format.integer(count)+","+data+")"; }
+    }
+    if kind == 20 or kind == 21 {
+        let count be 0; let cursor be node.first; while cursor != none { count=count+1; cursor=cursor.next; }
+        let result be value(e,"ev_object_value("+format.integer(node.valueType)+","+format.integer(count)+")"); cursor=node.first; let index be 0;
+        while cursor != none {
+            let item be cursor; let slot be index; if kind == 21 { item=required(cursor.first); slot=cursor.index; }
+            let expressionValue be expression(e,item); append(e,result+".object->data["+format.integer(slot)+"] = "+expressionValue+";"); cursor=cursor.next; index=index+1;
+        } return result;
+    }
+    if kind == 22 { let first be expression(e,required(node.first)); code="ev_member("+first+","+format.integer(node.index)+")"; }
+    if kind == 23 { let first be expression(e,required(node.first)); let second be expression(e,required(node.second)); code="ev_index("+first+","+second+".i)"; }
+    if kind == 24 { let first be expression(e,required(node.first)); code="ev_count("+first+")"; }
+    if kind == 25 { let base be place(e,required(node.first)); let first be expression(e,required(node.second)); append(e,"ev_add("+base+","+first+");"); }
+    if kind == 26 or kind == 28 { let first be expression(e,required(node.first)); code="ev_wrap("+format.integer(node.valueType)+","+first+")"; }
+    if kind == 27 { code="ev_none("+format.integer(node.valueType)+")"; }
+    if kind == 29 or kind == 36 { let first be expression(e,required(node.first)); code="ev_get("+first+")"; }
+    if kind == 30 { let first be expression(e,required(node.first)); code="ev_view("+format.integer(node.valueType)+","+first+")"; }
+    if kind == 40 { return expression(e,required(node.first)); }
+    if kind == 41 {
+        let result be temp(e); append(e,"ev_value *"+result+" = ev_slot(ev_void());"); let frame be temp(e); append(e,"eri_handler_frame "+frame+"; "+frame+".prev=eri_handler_top; eri_handler_top=&"+frame+";");
+        append(e,"if (setjmp("+frame+".env)==0) {"); let first be expression(e,required(node.first)); append(e,"*"+result+"="+first+"; eri_handler_top="+frame+".prev;"); append(e,"} else {"); append(e,"eri_handler_top="+frame+".prev;");
+        let saved be temp(e); append(e,"eri_failure_value "+saved+"=eri_failure;"); let handler be node.second; let separator be ""; let catchAll be false;
+        while handler != none {
+            let descriptor be ir.typeAt(e.program,handler.valueType); let name be ""; if descriptor != none { name=descriptor.name; }
+            if ir.kind(e.program,handler.valueType) == 11 { append(e,separator+"{"); catchAll=true; }
+            else { append(e,separator+"if (strcmp("+saved+".type,"+cquote(name)+")==0) {"); }
+            append(e,"*v"+format.integer(handler.index)+"=ev_error_from_failure("+saved+","+format.integer(handler.valueType)+");"); block(e,required(handler.first));
+            if node.immutable { append(e,"eri_fault(\"value handler completed without terminating\");"); } append(e,"}"); separator="else "; handler=handler.next;
+        }
+        if not catchAll { append(e,separator+"{ eri_propagate_saved("+saved+"); }"); } append(e,"}"); return value(e,"*"+result);
+    }
+    return value(e,code);
+}
+function cleanup(e identity Emitter) {
+    let cursor be e.cleanups; if cursor == none { return; }
+    let primary be temp(e); let one be temp(e); append(e,"eri_failure_value "+primary+"={0}, "+one+"={0};"); let last be "";
+    while cursor != none { append(e,"if (eri_file_cleanup(v"+format.integer(cursor.index)+"->resource,&"+one+")) { if (!"+primary+".type) "+primary+"="+one+"; else eri_attach_secondary(&"+primary+","+one+"); }"); last=cursor.frame; cursor=cursor.next; }
+    append(e,"eri_handler_top="+last+".prev; if ("+primary+".type) eri_propagate_saved("+primary+");");
+}
+function block(e identity Emitter,node identity ir.Node) {
     let cursor be node.first;
     while cursor != none {
-        let kind be cursor.kind;
-        if kind == 10 or kind == 11 {
-            let valueNode be required(cursor.first); let value be expression(emitter,valueNode); let prefix be "";
-            if kind == 10 { prefix=typeName(valueNode.valueType)+" "; }
-            append(emitter,prefix+"v"+format.integer(cursor.index)+" = "+value+";");
+        let current be cursor; let kind be current.kind;
+        if kind == 10 or kind == 11 { let result be expression(e,required(current.first)); append(e,"*v"+format.integer(current.index)+"="+result+";"); }
+        if kind == 33 { let result be expression(e,required(current.second)); let target be place(e,required(current.first)); append(e,"*"+target+"="+result+";"); }
+        if kind == 12 { let ignored be expression(e,required(current.first)); }
+        if kind == 15 { let returned be current.first; let result be "ev_void()"; if returned != none { result=expression(e,returned); } cleanup(e); append(e,"return ev_scope_leave(scope,"+result+");"); }
+        if kind == 43 {
+            let returned be required(current.first); let result be expression(e,returned); let descriptor be ir.typeAt(e.program,returned.valueType); let index be 0;
+            if descriptor != none { let field be descriptor.fields; while field != none { if field.name == "message" { index=field.index; } field=field.next; } }
+            append(e,"ev_fail_message("+result+","+format.integer(index)+");");
         }
-        if kind == 12 { let ignored be expression(emitter,required(cursor.first)); }
-        if kind == 15 { let value be cursor.first; if value == none { append(emitter,"return;"); } else { let result be expression(emitter,value); append(emitter,"return "+result+";"); } }
-        if kind == 13 {
-            let condition be expression(emitter,required(cursor.first)); append(emitter,"if ("+condition+") {"); block(emitter,required(cursor.second)); append(emitter,"}");
-            let other be cursor.third; if other != none { append(emitter,"else {"); block(emitter,other); append(emitter,"}"); }
+        if kind == 13 { let condition be expression(e,required(current.first)); append(e,"if ("+condition+".i) {"); block(e,required(current.second)); append(e,"}"); let other be current.third; if other != none { append(e,"else {"); block(e,other); append(e,"}"); } }
+        if kind == 14 { append(e,"while (true) {"); let condition be expression(e,required(current.first)); append(e,"if (!"+condition+".i) break;"); block(e,required(current.second)); append(e,"}"); }
+        if kind == 34 { let snapshot be expression(e,required(current.first)); let index be temp(e); append(e,"for (size_t "+index+"=0; "+index+"<"+snapshot+".object->count; "+index+"++) {"); append(e,"*v"+format.integer(current.index)+"="+snapshot+".object->data["+index+"];"); block(e,required(current.second)); append(e,"}"); }
+        if kind == 44 {
+            let resource be expression(e,required(current.first)); append(e,"*v"+format.integer(current.index)+"="+resource+";"); let frame be temp(e); let saved be temp(e); let one be temp(e);
+            append(e,"{ eri_handler_frame "+frame+"; "+frame+".prev=eri_handler_top; eri_handler_top=&"+frame+"; if (setjmp("+frame+".env)==0) {");
+            let outer be e.cleanups; e.cleanups=identity Cleanup { index=current.index; frame=frame; next=outer; }; block(e,required(current.second)); e.cleanups=outer;
+            append(e,"eri_failure_value "+one+"={0}; bool "+one+"_failed=eri_file_cleanup(v"+format.integer(current.index)+"->resource,&"+one+"); eri_handler_top="+frame+".prev; if ("+one+"_failed) eri_propagate_saved("+one+");");
+            append(e,"} else { eri_failure_value "+saved+"=eri_failure; eri_handler_top="+frame+".prev; eri_failure_value "+one+"={0}; if (eri_file_cleanup(v"+format.integer(current.index)+"->resource,&"+one+")) eri_attach_secondary(&"+saved+","+one+"); eri_propagate_saved("+saved+"); } }");
         }
-        if kind == 14 {
-            append(emitter,"while (true) {"); let condition be expression(emitter,required(cursor.first)); append(emitter,"if (!"+condition+") break;"); block(emitter,required(cursor.second)); append(emitter,"}");
-        }
-        cursor=cursor.next;
+        cursor=current.next;
     }
 }
 function signature(routine identity ir.Function) returns Text {
-    let result be "static "+typeName(routine.result)+" f"+format.integer(routine.index)+"("; let separator be ""; let parameter be routine.locals;
-    while parameter != none { if parameter.parameter { result=result+separator+typeName(parameter.valueType)+" v"+format.integer(parameter.index); separator=","; } parameter=parameter.next; }
-    if separator == "" { result=result+"void"; } return result+")";
+    let result be "static ev_value f"+format.integer(routine.index)+"("; let parameter be routine.locals; let separator be "";
+    while parameter != none { if parameter.parameter { result=result+separator+"ev_value a"+format.integer(parameter.index); separator=","; } parameter=parameter.next; } if separator == "" { result=result+"void"; } return result+")";
+}
+function locals(e identity Emitter,routine identity ir.Function) {
+    let cursor be routine.locals; while cursor != none { let initial be "ev_void()"; if cursor.parameter { initial="a"+format.integer(cursor.index); } append(e,"ev_value *v"+format.integer(cursor.index)+"=ev_slot("+initial+");"); cursor=cursor.next; }
+}
+function descriptors(e identity Emitter) {
+    let cursor be e.program.types; let count be 6;
+    while cursor != none {
+        let fields be ""; let separator be ""; let field be cursor.fields;
+        while field != none { fields=fields+separator+format.integer(field.valueType); separator=","; field=field.next; }
+        if fields != "" { append(e,"static const int fields"+format.integer(cursor.index)+"[]={"+fields+"};"); } count=count+1; cursor=cursor.next;
+    }
+    append(e,"const ev_type ev_types[]={ {0,0,\"\",0,NULL}, {1,0,\"Int\",0,NULL}, {2,0,\"Float\",0,NULL}, {3,0,\"Bool\",0,NULL}, {4,0,\"Text\",0,NULL}, {5,0,\"\",0,NULL},");
+    let index be 6;
+    while index < count { let descriptor be ir.typeAt(e.program,index); if descriptor != none { let size be 0; let field be descriptor.fields; while field != none { size=size+1; field=field.next; } let fields be "NULL"; if size > 0 { fields="fields"+format.integer(index); } append(e,"{"+format.integer(descriptor.kind)+","+format.integer(descriptor.inner)+","+cquote(descriptor.name)+","+format.integer(size)+","+fields+"},"); } index=index+1; } append(e,"};");
 }
 public function emit(program identity ir.Program) returns Text fails m.SemanticError {
-    try ir_verify.verify(program);
-    let emitter be identity Emitter { text=scalar_runtime.source(); temporary=0; };
-    let cursor be program.functions;
-    while cursor != none { append(emitter,signature(cursor)+";"); cursor=cursor.next; }
+    try ir_verify.verify(program); let runtime be try value_runtime.source();
+    let e be identity Emitter { text=runtime; temporary=0; program=program; cleanups=none; }; descriptors(e);
+    let cursor be program.functions; while cursor != none { append(e,signature(cursor)+";"); cursor=cursor.next; }
     cursor=program.functions;
-    while cursor != none { emitter.temporary=0; append(emitter,signature(cursor)+" {"); block(emitter,cursor.body); if cursor.result == 5 { append(emitter,"return;"); } append(emitter,"}"); cursor=cursor.next; }
-    emitter.temporary=0; append(emitter,"int main(void) {"); append(emitter,"if (fesetround(FE_TONEAREST) != 0) eri_fault(\"cannot establish Float rounding mode\");"); append(emitter,"if (atexit(eri_cleanup) != 0) eri_fault(\"cannot register runtime cleanup\");"); block(emitter,program.entry.body); append(emitter,"return 0;\n}"); return emitter.text;
+    while cursor != none { e.temporary=0; append(e,signature(cursor)+" { ev_scope *scope=ev_scope_enter();"); locals(e,cursor); block(e,cursor.body); append(e,"return ev_scope_leave(scope,ev_void());\n}"); cursor=cursor.next; }
+    append(e,"int main(int argc,char **argv) { eri_process_argc=argc; eri_process_argv=argv; if (fesetround(FE_TONEAREST)) eri_fault(\"cannot establish Float rounding mode\");"); locals(e,program.entry); block(e,program.entry.body); append(e,"return eri_process_exit_code;\n}"); return e.text;
 }

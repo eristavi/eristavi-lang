@@ -370,7 +370,14 @@ class Lowerer:
         if isinstance(e,IdentityExpr): return IRIdentity(semantic_t,e.location,self._expr(e.value))
         if isinstance(e,UnaryExpr): return IRUnary(semantic_t,e.location,e.operator,self._expr(e.operand))
         if isinstance(e,BinaryExpr):
-            left=self._expr(e.left); right=self._expr(e.right)
+            # Presence tests inspect optional storage itself, including repeated
+            # loop conditions after the body may have assigned none.
+            def presence_operand(value, other):
+                stored=self._lookup(value.name) if isinstance(value,NameExpr) else None
+                if e.operator in ('==','!=') and isinstance(other,NoneExpr) and stored is not None and stored.startswith('maybe '):
+                    return IRVar(stored,value.location,value.name)
+                return self._expr(value)
+            left=presence_operand(e.left,e.right); right=presence_operand(e.right,e.left)
             if e.operator in ("==","!="):
                 if left.type_name.startswith("maybe ") and right.type_name==maybe_inner(left.type_name): right=self._coerce(right,left.type_name,e.location)
                 elif right.type_name.startswith("maybe ") and left.type_name==maybe_inner(right.type_name): left=self._coerce(left,right.type_name,e.location)

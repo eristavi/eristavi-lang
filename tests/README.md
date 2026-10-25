@@ -6,7 +6,7 @@ Run the full suite from the repository root:
 python -m unittest discover -s tests -v
 ```
 
-The current suite contains **344 tests**.
+The current suite contains **349 tests**.
 
 The scalar compiler corpus freezes 60 executable projects, with 10 additional
 runtime-fault comparisons under undefined-behavior sanitization and 28 malformed
@@ -52,3 +52,12 @@ CI currently runs the suite on:
 Architecture-specific executable tests run on their matching Linux host. On x86-64 Linux the ARM-native cases are skipped; on ARM64 Linux they execute.
 
 Tests should continue to grow around frozen semantics, cross-backend equivalence, runtime conformance and failure-mode regression rather than speculative source syntax.
+
+The structural/native milestone expands the executable corpus to 88 projects,
+checks all 67 accepted semantic projects for lowering, and tests cleanup-failure
+composition. Universal-IR tests cover CFG reachability, class/call validity and
+initialization across branches. Native execution runs on matching Linux x86-64/
+ARM64 hosts; cross-assembly uses Clang where available. The Linux packaging CI step
+separately enforces fixed-snapshot self-build and offline executable audits. See
+OFFLINE_TOOLCHAIN.md for the reference-C limitations explicitly recorded by three
+projects and for bootstrap/runtime boundaries.

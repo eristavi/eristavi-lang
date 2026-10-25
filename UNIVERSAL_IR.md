@@ -102,3 +102,12 @@ The Python Stage-0 implementations above remain the broad Universal IR path.
 The Eristavi-written candidate now builds and verifies its first source-close
 typed IR slice and emits scalar C applications. It does not yet build Universal
 IR basic blocks. See [SCALAR_COMPILATION.md](SCALAR_COMPILATION.md).
+
+## Eristavi-written native migration
+
+The experimental candidate now has its own register/basic-block construction,
+class/CFG/definite-initialization verifier, unreachable-block pass and x86-64/ARM64
+consumers under `src/compiler/universal_*.eri` and `ir_x86.eri`/`ir_arm64.eri`.
+This is a machine-neutral internal migration format, not compatibility with the
+Stage-0 serialized object ABI. OFFLINE_TOOLCHAIN.md documents semantics, evidence
+and the prebuilt runtime pointer ABI.

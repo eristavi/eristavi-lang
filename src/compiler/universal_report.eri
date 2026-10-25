@@ -1,0 +1,25 @@
+import compiler.universal_model as u;
+import compiler.universal_verify;
+import compiler.semantic_model as m;
+import compiler.format;
+import compiler.ir_report;
+function instruction(value identity u.Instruction) returns Text {
+    let result be "{\"op\":"+format.integer(value.op)+",\"result\":"+format.integer(value.result)+",\"class\":"+format.integer(value.valueClass)+",\"number\":"+format.integer(value.number)+",\"symbol\":"+format.quote(value.text)+",\"first\":"+format.integer(value.first)+",\"second\":"+format.integer(value.second)+",\"arguments\":["; let separator be ""; let cursor be value.arguments;
+    while cursor != none { result=result+separator+format.integer(cursor.value); separator=","; cursor=cursor.next; } return result+"]}";
+}
+function routine(value identity u.Function) returns Text {
+    let result be "{\"index\":"+format.integer(value.index)+",\"parameters\":"+format.integer(value.parameters)+",\"registers\":["; let cursor be value.registers; let separator be "";
+    while cursor != none { result=result+separator+format.integer(cursor.valueClass); separator=","; cursor=cursor.next; }
+    result=result+"],\"blocks\":["; let block be value.blocks; separator="";
+    while block != none {
+        result=result+separator+"{\"index\":"+format.integer(block.index)+",\"instructions\":["; let instruction be block.instructions; let comma be "";
+        while instruction != none { result=result+comma+instruction(instruction); comma=","; instruction=instruction.next; }
+        result=result+"],\"terminator\":"; let terminal be block.terminator; if terminal == none { result=result+"null"; } else { result=result+instruction(terminal); }
+        result=result+"}"; separator=","; block=block.next;
+    } return result+"]}";
+}
+public function snapshot(program identity u.Program) returns Text {
+    let result be "{\"format\":\"eristavi-universal-ir-v1\",\"experimental\":true,\"functions\":["; let cursor be program.functions; let separator be "";
+    while cursor != none { result=result+separator+routine(cursor); separator=","; cursor=cursor.next; } return result+"],\"types\":"+ir_report.types(program.types)+",\"entry\":"+routine(program.entry)+"}";
+}
+public function report(program identity u.Program) returns Text fails m.SemanticError { try universal_verify.verify(program); return snapshot(program); }

@@ -1,6 +1,6 @@
 # Eristavi Self-Hosting
 
-> **Status: active staged migration; Stage-0 remains the trusted bootstrap**
+> **Status: experimental native self-build/offline bundle gate; Stage-0 retained as reference/bootstrap**
 
 Eristavi is now developed with an explicit self-hosting plan. The existing Python implementation under `compiler/erist/` is the **Stage-0 bootstrap compiler**. It is deliberately retained until an Eristavi-written compiler can reproduce the frozen language semantics and compile itself.
 
@@ -70,38 +70,34 @@ own module graph offline. Expression type/effect facts are retained for Stage 4.
 See [`SEMANTIC_ANALYSIS.md`](SEMANTIC_ANALYSIS.md). Complete equivalence and promotion
 require continued differential coverage; this is not full self-building.
 
-### Stage 4 — experimental typed IR and C executable slice
+### Stage 4 — structural and Universal IR
 
-Source-close typed IR construction, an independent verifier, JSON inspection and
-C11 emission are now written in Eristavi for Int/Float/Bool/Text programs with
-inferred scalar specialization.
-The emitted applications cover functions, recursion, source imports, scopes,
-control flow, checked arithmetic and length-aware Text. See
-[`SCALAR_COMPILATION.md`](SCALAR_COMPILATION.md). Scalar generic and binary64
-details are documented in SCALAR_SPECIALIZATION.md.
-Aggregates, optional/identity values, errors/resources, Universal IR construction
-and optimization remain later work. This stage cannot yet compile the compiler
-itself; Stage-0 is still the default.
+The Eristavi-written candidate lowers scalars, ordinary values/Lists, maybe/identity,
+checked failures, Text views, standard-library boundaries and deterministic cleanup
+into independently verified structural IR. It then builds target-independent
+register operations/basic blocks, verifies CFG/classes/definite initialization,
+and removes unreachable blocks with pre/post verification. See OFFLINE_TOOLCHAIN.md.
 
-### Stage 5 — native lowering
+### Stage 5 — native consumers
 
-The x86-64 backend, register allocation/lowering contracts and then ARM64 are moved behind Eristavi-owned IR. Stage-0 remains capable of rebuilding the Stage-1 compiler while this work is in progress.
+Eristavi-written x86-64 and ARM64 ELF consumers emit instructions from Universal IR.
+They currently spill virtual registers and call a prebuilt C bootstrap runtime
+through a pointer ABI. Native runtime optimization/register allocation remain
+performance work; source semantics do not change to simplify backend code.
 
-### Stage 6 — first repeatable self-build
+### Stage 6 — repeated native self-build and offline packaging
 
-The promotion gate is:
+`tools/build_offline.py` builds native compiler B, uses B to build C and uses C to
+reproduce the next assembly. It requires identical assembly and B/C binaries for
+a fixed source/runtime snapshot. Its default gate also builds/runs applications
+with unusable Python/C compiler shims in child PATH. Assemblers/linkers, runtime
+objects, startup files, provenance and evidence are packaged for a compatible Linux
+host. x86-64 and ARM64 are supported native bundle targets.
 
-```text
-Stage-0 Python compiler
-        ↓
-Eristavi compiler A
-        ↓
-Eristavi compiler B
-        ↓
-Eristavi compiler C
-```
-
-B and C must agree under the documented reproducibility policy and pass the same semantic/conformance suites. Only then can the Eristavi-written compiler become the default `erist` implementation.
+The gate is experimental and does not replace the independent Stage-0 reference,
+its artifact ABI or its existing JS/Wasm consumers. The runtime remains a C bootstrap
+artifact and the bundled assembler/linker are GNU tools. This is not an Eristavi-
+written operating-system/runtime/assembler stack or a production release claim.
 
 ## Current bootstrap gaps
 
@@ -150,9 +146,9 @@ repository `.eri` source is also parsed and compared to Stage-0.
 
 The normal compiler still uses Stage-0; experimental Eristavi analysis is available
 through the separate semantic commands. See [`FRONTEND_TOOL.md`](FRONTEND_TOOL.md).
-The final standalone offline compiler also needs bundled or Eristavi-owned
-assembler/linker functionality; a self-hosted frontend alone does not satisfy that
-native-toolchain goal.
+The native bundle now includes assembler/linker tooling and a prebuilt bootstrap
+runtime. See OFFLINE_TOOLCHAIN.md for the repeatability/offline audit, supported
+Linux hosts and remaining production/runtime/portability gates.
 
 ## Promotion rule
 

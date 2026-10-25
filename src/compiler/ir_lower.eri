@@ -3,6 +3,8 @@ import compiler.semantic_model as m;
 import compiler.semantic_types as types;
 import compiler.typed_ir as ir;
 import compiler.format;
+import compiler.ir_types;
+import compiler.semantic;
 
 type Source { declaration identity m.Declaration; routine identity ir.Function; map identity m.Clone; key Text; state Int; next maybe identity Source; }
 type Seen { owner identity m.Module; next maybe identity Seen; }
@@ -13,21 +15,21 @@ type Context { builder identity Builder; owner identity m.Module; routine identi
 function reject(owner identity m.Module, source identity ast.Node, message Text) returns Bool fails m.SemanticError {
     return try m.reject(m.at(owner,source.token),"lower",message);
 }
-function concrete(owner identity m.Module, source identity ast.Node, value identity m.Type, allowVoid Bool) returns Int fails m.SemanticError {
-    let kind be types.resolve(value).kind;
-    if ir.scalar(kind) or (allowVoid and kind == 5) { return kind; }
-    try reject(owner,source,"experimental IR supports concrete Int, Float, Bool and Text; this type requires a later lowering stage"); return 5;
+function concrete(builder identity Builder, owner identity m.Module, source identity ast.Node, value identity m.Type, allowVoid Bool) returns Int fails m.SemanticError {
+    let result be try ir_types.register(builder.program,owner,value,m.at(owner,source.token));
+    if not allowVoid and result == 5 { try reject(owner,source,"ordinary storage requires a value"); } return result;
 }
 function fact(context identity Context, source identity ast.Node) returns Int fails m.SemanticError {
     let cursor be context.owner.facts;
-    while cursor != none {
-        if cursor.node == source {
-            if cursor.failures != none { try reject(context.owner,source,"checked failures require a later IR lowering stage"); }
-            return try concrete(context.owner,source,types.clone(cursor.value,context.map),true);
-        }
-        cursor=cursor.next;
-    }
+    while cursor != none { if cursor.node == source { return try concrete(context.builder,context.owner,source,types.clone(cursor.value,context.map),true); } cursor=cursor.next; }
     try reject(context.owner,source,"missing semantic expression fact"); return 5;
+}
+function coerce(context identity Context, value identity ir.Node, expected Int) returns identity ir.Node fails m.SemanticError {
+    if value.valueType == expected { return value; }
+    if ir.kind(context.builder.program,expected) == 8 and ir.inner(context.builder.program,expected) == value.valueType {
+        let result be ir.node(28,expected,value.location); result.first=value; result.effects=value.effects; return result;
+    }
+    try reject(context.owner,context.owner.root,"missing implicit optional injection"); return value;
 }
 function local(context identity Context, name Text, kind Int, immutable Bool, parameter Bool) returns identity ir.Local {
     let result be identity ir.Local { index=context.count; name=name; valueType=kind; immutable=immutable; parameter=parameter; next=none; };
@@ -51,7 +53,6 @@ function collect(builder identity Builder, owner identity m.Module) returns Bool
     let declaration be owner.declarations;
     while declaration != none {
         if declaration.node.kind == ast.functionDecl() {
-            if declaration.failures != none { try reject(owner,declaration.node,"checked routine contracts require a later IR lowering stage"); }
             let generic be false; let parameter be declaration.parameters;
             while parameter != none { if types.unresolved(parameter.value) { generic=true; } parameter=parameter.next; }
             if not generic { let routine be try instantiate(builder,declaration,none,false); }
@@ -62,27 +63,26 @@ function collect(builder identity Builder, owner identity m.Module) returns Bool
 }
 function instantiate(builder identity Builder, declaration identity m.Declaration, arguments maybe identity ir.Node, supplied Bool) returns identity ir.Function fails m.SemanticError {
     let owner be declaration.owner; let source be declaration.node;
-    if declaration.failures != none { try reject(owner,source,"checked function contracts require a later IR lowering stage"); }
     let map be identity m.Clone { head=none; };
     let parameter be declaration.parameters; let argument be arguments; let key be "";
     while parameter != none {
         let value be types.clone(parameter.value,map);
         if supplied {
             if argument == none { try reject(owner,source,"missing specialization argument"); }
-            else { try types.unify(value,m.makeType(argument.valueType,""),m.at(owner,source.token)); argument=argument.next; }
+            else { try types.assign(value,ir_types.semanticType(builder.program,argument.valueType),m.at(owner,source.token)); argument=argument.next; }
         }
-        let kind be try concrete(owner,source,value,false); key=key+"$"+format.integer(kind); parameter=parameter.next;
+        let kind be try concrete(builder,owner,source,value,false); key=key+"$"+format.integer(kind); parameter=parameter.next;
     }
     if argument != none { try reject(owner,source,"unexpected specialization argument"); }
-    let result be try concrete(owner,source,types.clone(declaration.result,map),true);
+    let result be try concrete(builder,owner,source,types.clone(declaration.result,map),true);
     let cursor be builder.sources;
     while cursor != none { if cursor.declaration == declaration and cursor.key == key { return cursor.routine; } cursor=cursor.next; }
-    let routine be identity ir.Function { index=builder.count; name=owner.name+"."+source.text+key; result=result; locals=none; body=ir.node(0,5,m.at(owner,source.token)); next=builder.program.functions; };
+    let routine be identity ir.Function { index=builder.count; name=owner.name+"."+source.text+key; result=result; locals=none; body=ir.node(0,5,m.at(owner,source.token)); failures=try ir_types.failures(builder.program,owner,declaration.failures,m.at(owner,source.token)); next=builder.program.functions; };
     builder.count=builder.count+1; builder.program.functions=routine;
     builder.sources=identity Source { declaration=declaration; routine=routine; map=map; key=key; state=0; next=builder.sources; };
     let context be identity Context { builder=builder; owner=owner; routine=routine; bindings=none; count=0; map=map; };
     parameter=declaration.parameters;
-    while parameter != none { let kind be try concrete(owner,source,types.clone(parameter.value,map),false); local(context,parameter.name,kind,false,true); parameter=parameter.next; }
+    while parameter != none { let kind be try concrete(builder,owner,source,types.clone(parameter.value,map),false); local(context,parameter.name,kind,false,true); parameter=parameter.next; }
     return routine;
 }
 function target(context identity Context, callee identity ast.Node, arguments maybe identity ir.Node) returns identity ir.Function fails m.SemanticError {
@@ -108,52 +108,148 @@ function integer(raw Text) returns Int {
 }
 function expression(context identity Context, source identity ast.Node) returns identity ir.Node fails m.SemanticError {
     let kind be try fact(context,source); let result be ir.node(-1,kind,m.at(context.owner,source.token));
+    let info be context.owner.facts;
+    while info != none { let current be info; info=current.next; if current.node == source { result.effects=try ir_types.failures(context.builder.program,context.owner,current.failures,result.location); info=none; } }
     if source.kind == ast.literalExpr() {
         result.kind=1; result.text=source.text;
-        if kind == 1 { result.number=integer(source.text); } if kind == 3 and source.flag { result.number=1; }
-        return result;
+        if kind == 1 { result.number=integer(source.text); } if kind == 3 and source.flag { result.number=1; } return result;
     }
-    if source.kind == ast.nameExpr() { result.kind=2; result.index=(try binding(context,source)).index; return result; }
+    if source.kind == ast.noneExpr() { result.kind=27; return result; }
+    if source.kind == ast.nameExpr() {
+        let item be try binding(context,source); result.kind=2; result.index=item.index;
+        if item.valueType != kind { let base be ir.node(2,item.valueType,result.location); base.index=item.index; result.kind=29; result.first=base; } return result;
+    }
     if source.kind == ast.unaryExpr() { result.kind=3; result.text=source.text; result.first=try expression(context,m.child(source.first)); return result; }
-    if source.kind == ast.binaryExpr() { result.kind=4; result.text=source.text; result.first=try expression(context,m.child(source.first)); result.second=try expression(context,m.child(source.second)); return result; }
+    if source.kind == ast.binaryExpr() {
+        result.kind=4; result.text=source.text;
+        let left be m.child(source.first); let right be m.child(source.second);
+        let first be try expression(context,left); let second be try expression(context,right);
+        if source.text == "==" or source.text == "!=" { if left.kind == ast.nameExpr() and right.kind == ast.noneExpr() { first=try place(context,left); } if right.kind == ast.nameExpr() and left.kind == ast.noneExpr() { second=try place(context,right); } }
+        if first.valueType != second.valueType { if ir.kind(context.builder.program,first.valueType) == 8 { second=try coerce(context,second,first.valueType); } else { first=try coerce(context,first,second.valueType); } }
+        result.first=first; result.second=second; return result;
+    }
+    if source.kind == ast.identityExpr() { result.kind=26; result.first=try expression(context,m.child(source.first)); return result; }
+    if source.kind == ast.listExpr() {
+        result.kind=20; let cursor be source.first; let tail maybe identity ir.Node be none;
+        while cursor != none { let value be try coerce(context,try expression(context,cursor),ir.inner(context.builder.program,kind)); if tail == none { result.first=value; } else { tail.next=value; } tail=value; cursor=cursor.next; } return result;
+    }
+    if source.kind == ast.constructionExpr() {
+        result.kind=21; let cursor be source.first; let tail maybe identity ir.Node be none;
+        while cursor != none {
+            let field be try ir_types.field(context.builder.program,kind,cursor.text,result.location);
+            let value be try coerce(context,try expression(context,m.child(cursor.first)),field.valueType);
+            // The field index belongs to an initializer wrapper, never the
+            // child's local/call index (which may already have a meaning).
+            let entry be ir.node(35,field.valueType,m.at(context.owner,cursor.token)); entry.index=field.index; entry.first=value;
+            if tail == none { result.first=entry; } else { tail.next=entry; } tail=entry; cursor=cursor.next;
+        } return result;
+    }
+    if source.kind == ast.memberExpr() {
+        let base be try expression(context,m.child(source.first)); let baseKind be ir.kind(context.builder.program,base.valueType);
+        if baseKind == 9 {
+            let innerKind be ir.kind(context.builder.program,ir.inner(context.builder.program,base.valueType));
+            if innerKind == 7 { let payload be ir.node(36,ir.inner(context.builder.program,base.valueType),result.location); payload.first=base; payload.effects=base.effects; base=payload; baseKind=innerKind; }
+        }
+        result.first=base;
+        if baseKind == 4 { result.kind=30; result.text=source.text; return result; }
+        if (baseKind == 7 or baseKind == 12) and source.text == "count" { result.kind=24; return result; }
+        result.kind=22; result.index=(try ir_types.field(context.builder.program,base.valueType,source.text,result.location)).index; return result;
+    }
+    if source.kind == ast.indexExpr() { result.kind=23; result.first=try expression(context,m.child(source.first)); result.second=try expression(context,m.child(source.second)); return result; }
+    if source.kind == ast.tryExpr() { result.kind=40; result.first=try expression(context,m.child(source.first)); return result; }
+    if source.kind == ast.handledExpr() {
+        result.kind=41; result.immutable=true; result.first=try expression(context,m.child(source.first));
+        let handler be source.second; let tail maybe identity ir.Node be none;
+        while handler != none {
+            let saved be context.bindings; let annotation be handler.first; let errorType be m.makeType(11,"");
+            if annotation != none { errorType=try semantic.typeRef(context.owner,annotation); }
+            let typeId be try ir_types.register(context.builder.program,context.owner,errorType,result.location);
+            let item be local(context,"error",typeId,false,false); let entry be ir.node(42,typeId,m.at(context.owner,handler.token)); entry.index=item.index;
+            entry.first=try block(context,m.child(handler.second)); context.bindings=saved;
+            if tail == none { result.second=entry; } else { tail.next=entry; } tail=entry; handler=handler.next;
+        } return result;
+    }
     if source.kind == ast.callExpr() {
         let callee be m.child(source.first); result.kind=5;
         if callee.kind == ast.nameExpr() and callee.text == "output" { result.kind=6; }
-
-        let argument be source.second; let tail maybe identity ir.Node be none;
-        while argument != none {
-            let lowered be try expression(context,argument);
-            if tail == none { result.first=lowered; } else { tail.next=lowered; } tail=lowered; argument=argument.next;
+        if callee.kind == ast.memberExpr() {
+            let base be m.child(callee.first); let imported maybe identity m.Import be none;
+            if base.kind == ast.nameExpr() { imported=m.imported(context.owner,base.text); }
+            let standard be false;
+            if imported != none { if imported.target == none { standard=true; result.kind=31; result.text=imported.path+"."+callee.text; } }
+            if not standard and imported == none {
+                if callee.text == "add" { result.kind=25; result.first=try place(context,base); let argument be try expression(context,m.child(source.second)); let destination be result.first; if destination != none { result.second=try coerce(context,argument,ir.inner(context.builder.program,destination.valueType)); } }
+                else { result.kind=31; result.text="std.files."+callee.text; result.first=try expression(context,base); }
+            }
         }
-        if result.kind == 5 { result.index=(try target(context,callee,result.first)).index; }
-        return result;
+        if result.kind == 25 { return result; }
+        let argument be source.second; let tail be result.first;
+        while argument != none {
+            let lowered be try expression(context,argument); if tail == none { result.first=lowered; } else { tail.next=lowered; } tail=lowered; argument=argument.next;
+        }
+        if result.kind == 5 {
+            let called be try target(context,callee,result.first); result.index=called.index;
+            let parameter be called.locals; let supplied be result.first; let adapted maybe identity ir.Node be none; let last maybe identity ir.Node be none;
+            while parameter != none {
+                if parameter.parameter { if supplied != none {
+                    let current be supplied; let next be current.next; current.next=none; let value be try coerce(context,current,parameter.valueType);
+                    if last == none { adapted=value; } else { last.next=value; } last=value; supplied=next;
+                } } parameter=parameter.next;
+            } result.first=adapted;
+        } return result;
     }
     try reject(context.owner,source,"expression requires a later IR lowering stage"); return result;
+}
+function place(context identity Context, source identity ast.Node) returns identity ir.Node fails m.SemanticError {
+    let location be m.at(context.owner,source.token);
+    if source.kind == ast.nameExpr() { let item be try binding(context,source); let result be ir.node(2,item.valueType,location); result.index=item.index; return result; }
+    let base be try place(context,m.child(source.first));
+    if ir.kind(context.builder.program,base.valueType) == 8 { let narrowed be ir.node(29,ir.inner(context.builder.program,base.valueType),location); narrowed.first=base; base=narrowed; }
+    if source.kind == ast.memberExpr() {
+        let field be try ir_types.field(context.builder.program,base.valueType,source.text,location); let result be ir.node(22,field.valueType,location); result.index=field.index; result.first=base; return result;
+    }
+    if source.kind == ast.indexExpr() { let result be ir.node(23,ir.inner(context.builder.program,base.valueType),location); result.first=base; result.second=try expression(context,m.child(source.second)); return result; }
+    try reject(context.owner,source,"unsupported assignment path"); return base;
 }
 function statement(context identity Context, source identity ast.Node) returns identity ir.Node fails m.SemanticError {
     let result be ir.node(-1,5,m.at(context.owner,source.token));
     if source.kind == ast.letStmt() {
         let value be try expression(context,m.child(source.second));
-        let item be local(context,source.text,value.valueType,source.flag,false);
+        let expected be value.valueType; let annotation be source.first;
+        if annotation != none { expected=try ir_types.register(context.builder.program,context.owner,try semantic.typeRef(context.owner,annotation),result.location); }
+        value=try coerce(context,value,expected);
+        let item be local(context,source.text,expected,source.flag,false);
         result.kind=10; result.index=item.index; result.first=value; result.immutable=source.flag; return result;
     }
     if source.kind == ast.assignStmt() {
-        let destination be m.child(source.first);
-        if destination.kind != ast.nameExpr() { try reject(context.owner,destination,"aggregate mutation requires a later IR lowering stage"); }
-        result.kind=11; result.index=(try binding(context,destination)).index; result.first=try expression(context,m.child(source.second)); return result;
+        let destination be try place(context,m.child(source.first)); result.kind=33; result.first=destination;
+        result.second=try coerce(context,try expression(context,m.child(source.second)),destination.valueType); return result;
     }
-    if source.kind == ast.expressionStmt() { result.kind=12; result.first=try expression(context,m.child(source.first)); return result; }
-    if source.kind == ast.returnStmt() { result.kind=15; let value be source.first; if value != none { result.first=try expression(context,value); } return result; }
+
+    if source.kind == ast.expressionStmt() { result.kind=12; let value be try expression(context,m.child(source.first)); if value.kind == 41 { value.immutable=false; } result.first=value; return result; }
+    if source.kind == ast.returnStmt() { result.kind=15; let value be source.first; if value != none { result.first=try coerce(context,try expression(context,value),context.routine.result); } return result; }
     if source.kind == ast.ifStmt() {
         result.kind=13; result.first=try expression(context,m.child(source.first)); result.second=try block(context,m.child(source.second));
         let other be source.third; if other != none { result.third=try block(context,other); } return result;
     }
     if source.kind == ast.whileStmt() { result.kind=14; result.first=try expression(context,m.child(source.first)); result.second=try block(context,m.child(source.second)); return result; }
+    if source.kind == ast.forStmt() {
+        result.kind=34; let iterable be try expression(context,m.child(source.first)); result.first=iterable;
+        let saved be context.bindings; let item be local(context,source.text,ir.inner(context.builder.program,iterable.valueType),false,false); result.index=item.index;
+        result.second=try block(context,m.child(source.second)); context.bindings=saved; return result;
+    }
+    if source.kind == ast.failStmt() { result.kind=43; result.first=try expression(context,m.child(source.first)); return result; }
+    if source.kind == ast.withStmt() {
+        result.kind=44; let resource be try expression(context,m.child(source.second)); result.first=resource;
+        let saved be context.bindings; let item be local(context,source.text,resource.valueType,true,false); result.index=item.index;
+        result.second=try block(context,m.child(source.third)); context.bindings=saved; return result;
+    }
     try reject(context.owner,source,"statement requires a later IR lowering stage"); return result;
 }
 function terminated(node identity ir.Node) returns Bool {
-    if node.kind == 15 { return true; }
+    if node.kind == 15 or node.kind == 43 { return true; }
     if node.kind == 0 { let cursor be node.first; while cursor != none { if terminated(cursor) { return true; } cursor=cursor.next; } }
+    if node.kind == 44 { let body be node.second; if body != none { return terminated(body); } }
     if node.kind == 13 { let first be node.second; let second be node.third; if first != none { if second != none { return terminated(first) and terminated(second); } } }
     return false;
 }
@@ -172,8 +268,8 @@ function block(context identity Context, source identity ast.Node) returns ident
     context.bindings=saved; return result;
 }
 public function lower(owner identity m.Module) returns identity ir.Program fails m.SemanticError {
-    let entry be identity ir.Function { index=-1; name=owner.name; result=5; locals=none; body=ir.node(0,5,m.at(owner,0)); next=none; };
-    let program be identity ir.Program { functions=none; entry=entry; };
+    let entry be identity ir.Function { index=-1; name=owner.name; result=5; locals=none; body=ir.node(0,5,m.at(owner,0)); failures=none; next=none; };
+    let program be identity ir.Program { functions=none; entry=entry; types=none; };
     let builder be identity Builder { program=program; sources=none; seen=none; count=0; };
     try collect(builder,owner);
     let context be identity Context { builder=builder; owner=owner; routine=entry; bindings=none; count=0; map=identity m.Clone { head=none; }; };

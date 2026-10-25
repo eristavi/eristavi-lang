@@ -40,13 +40,13 @@ function resolveName(owner identity m.Module, name Text, node identity ast.Node)
     }
     try failAt(owner,node,"name","unknown or private type: " + name); return m.makeType(5,"");
 }
-function typeRef(owner identity m.Module, node identity ast.Node) returns identity m.Type fails m.SemanticError {
+public function typeRef(owner identity m.Module, node identity ast.Node) returns identity m.Type fails m.SemanticError {
     let result be try resolveName(owner,node.text,node);
     if node.extra >= 2 { result=m.wrap(9,result); }
     if node.extra % 2 == 1 { result=m.wrap(8,result); }
     return result;
 }
-function layout(owner identity m.Module, name Text) returns maybe identity m.Declaration {
+public function layout(owner identity m.Module, name Text) returns maybe identity m.Declaration {
     let declarations be owner.declarations;
     while declarations != none { let currentDeclaration be declarations;
         if currentDeclaration.value.name == name and currentDeclaration.value.kind == 6 { return declarations; }

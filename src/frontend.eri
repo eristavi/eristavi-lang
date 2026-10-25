@@ -10,7 +10,13 @@ import compiler.semantic_model;
 import compiler.semantic_report;
 import compiler.ir_lower;
 import compiler.ir_c;
+import compiler.ir_x86;
+import compiler.ir_arm64;
 import compiler.ir_report;
+import compiler.typed_ir;
+import compiler.universal_lower;
+import compiler.universal_optimize;
+import compiler.universal_report;
 
 function read(path Text) returns Text fails files.FileError {
     with file be try files.openRead(path) { return try file.readText(); }
@@ -20,10 +26,13 @@ function write(path Text, text Text) fails files.FileError {
     with file be try files.create(path) { try file.writeText(text); }
 }
 
+function universalReport(program identity typed_ir.Program) returns Text fails semantic_model.SemanticError {
+    let lowered be try universal_lower.lower(program); try universal_optimize.optimize(lowered); return try universal_report.report(lowered);
+}
 function usage() {
     process.writeError("Usage: erist-frontend check|ast|tokens SOURCE.eri [--output REPORT.json]");
-    process.writeError("       erist-frontend analyze|analyze-report|ir|emit-c SOURCE.eri [--source-root DIRECTORY]");
-    process.writeError("check is syntax-only; analyze is experimental. --output preserves existing files.");
+    process.writeError("       erist-frontend analyze|analyze-report|ir|emit-c|emit-asm|uir SOURCE.eri [--source-root DIRECTORY]");
+    process.writeError("check is syntax-only; native targets: x86_64-linux and arm64-linux. --output preserves existing files.");
     process.setExitCode(2);
 }
 
@@ -32,19 +41,22 @@ function run() {
     if arguments.count == 1 {
         if arguments[0] == "--help" {
             output("Usage: erist-frontend check|ast|tokens SOURCE.eri [--output REPORT.json]");
-            output("       erist-frontend analyze|analyze-report|ir|emit-c SOURCE.eri [--source-root DIRECTORY]");
+            output("       erist-frontend analyze|analyze-report|ir|emit-c|emit-asm|uir SOURCE.eri [--source-root DIRECTORY]");
             output("check checks syntax only. analyze runs experimental Eristavi semantic analysis; ir and emit-c use the experimental scalar compiler.");
             return;
         }
     }
-    if arguments.count != 2 and arguments.count != 4 { usage(); return; }
+    if arguments.count < 2 or arguments.count > 6 or arguments.count%2 != 0 { usage(); return; }
     let command be arguments[0];
-    if command != "check" and command != "ast" and command != "tokens" and command != "analyze" and command != "analyze-report" and command != "ir" and command != "emit-c" { usage(); return; }
-    if arguments.count == 4 {
-        if command == "analyze" or command == "analyze-report" or command == "ir" or command == "emit-c" { if arguments[2] != "--source-root" { usage(); return; } }
-        else { if arguments[2] != "--output" or command == "check" { usage(); return; } }
+    if command != "check" and command != "ast" and command != "tokens" and command != "analyze" and command != "analyze-report" and command != "ir" and command != "emit-c" and command != "emit-asm" and command != "uir" { usage(); return; }
+    let path be arguments[1]; let sourceRoot be semantic_project.parent(path); let target be "x86_64-linux"; let outputPath be "";
+    let hasRoot be false; let hasTarget be false; let hasOutput be false; let option be 2;
+    while option < arguments.count {
+        if arguments[option] == "--source-root" and command != "check" and command != "ast" and command != "tokens" and not hasRoot { sourceRoot=arguments[option+1]; hasRoot=true; }
+        else { if arguments[option] == "--target" and command == "emit-asm" and not hasTarget { target=arguments[option+1]; hasTarget=true; if target != "x86_64-linux" and target != "arm64-linux" { usage(); return; } }
+        else { if arguments[option] == "--output" and (command == "ast" or command == "tokens") and not hasOutput { outputPath=arguments[option+1]; hasOutput=true; }
+        else { usage(); return; } } } option=option+2;
     }
-    let path be arguments[1];
     let source be read(path) else error files.FileError {
         process.writeError(path + ": file error: " + error.message);
         process.setExitCode(1); return;
@@ -61,9 +73,8 @@ function run() {
             process.setExitCode(1); return;
         };
         if command == "check" { return; }
-        if command == "analyze" or command == "analyze-report" or command == "ir" or command == "emit-c" {
-            let root be semantic_project.parent(path);
-            if arguments.count == 4 { root=arguments[3]; }
+        if command == "analyze" or command == "analyze-report" or command == "ir" or command == "emit-c" or command == "emit-asm" or command == "uir" {
+            let root be sourceRoot;
             let analyzed be semantic_project.analyze(tree,tokens,path,root) else error semantic_model.SemanticError {
                 let prefix be error.path + ":" + format.integer(error.line) + ":" + format.integer(error.column);
                 if error.category == "lex" or error.category == "parse" { process.writeError(prefix + ": " + error.category + " error: " + error.message); }
@@ -71,22 +82,39 @@ function run() {
                 process.setExitCode(1); return;
             };
             if command == "analyze-report" { output(semantic_report.report(analyzed)); }
-            if command == "ir" or command == "emit-c" {
+            if command == "ir" or command == "emit-c" or command == "emit-asm" or command == "uir" {
                 let lowered be ir_lower.lower(analyzed) else error semantic_model.SemanticError {
                     process.writeError(error.path+":"+format.integer(error.line)+":"+format.integer(error.column)+": compiler error ["+error.category+"]: "+error.message);
                     process.setExitCode(1); return;
                 };
                 let generated be "";
-                if command == "ir" {
+                if command == "uir" {
+                    generated=universalReport(lowered) else error semantic_model.SemanticError {
+                        process.writeError(error.path+":"+format.integer(error.line)+":"+format.integer(error.column)+": compiler error ["+error.category+"]: "+error.message); process.setExitCode(1); return;
+                    };
+                } else { if command == "ir" {
                     generated=ir_report.report(lowered) else error semantic_model.SemanticError {
                         process.writeError(error.path+":"+format.integer(error.line)+":"+format.integer(error.column)+": compiler error ["+error.category+"]: "+error.message);
                         process.setExitCode(1); return;
                     };
+                } else { if command == "emit-asm" {
+                    if target == "arm64-linux" {
+                        generated=ir_arm64.emit(lowered) else error semantic_model.SemanticError {
+                            process.writeError(error.path+":"+format.integer(error.line)+":"+format.integer(error.column)+": compiler error ["+error.category+"]: "+error.message); process.setExitCode(1); return;
+                        };
+                    } else {
+                    generated=ir_x86.emit(lowered) else error semantic_model.SemanticError {
+                        process.writeError(error.path+":"+format.integer(error.line)+":"+format.integer(error.column)+": compiler error ["+error.category+"]: "+error.message);
+                        process.setExitCode(1); return;
+                    };
+                    }
                 } else {
                     generated=ir_c.emit(lowered) else error semantic_model.SemanticError {
                         process.writeError(error.path+":"+format.integer(error.line)+":"+format.integer(error.column)+": compiler error ["+error.category+"]: "+error.message);
                         process.setExitCode(1); return;
                     };
+                }
+                }
                 }
                 output(generated);
             }
@@ -94,8 +122,8 @@ function run() {
         }
         text = report.tree(tree, tokens);
     }
-    if arguments.count == 4 {
-        let destination be arguments[3];
+    if hasOutput {
+        let destination be outputPath;
         write(destination, text + "\n") else error files.FileError {
             process.writeError(destination + ": file error: " + error.message);
             process.setExitCode(1);

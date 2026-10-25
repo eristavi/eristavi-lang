@@ -1,6 +1,6 @@
 # Scalar specialization and Float compilation
 
-> Experimental extension of the Eristavi-written typed-IR/C compiler.
+> Historical scalar-specialization milestone, extended by OFFLINE_TOOLCHAIN.md.
 
 The candidate now compiles concrete `Float` alongside `Int`, `Bool` and `Text`,
 and specializes inferred functions for scalar argument types. No generic syntax,

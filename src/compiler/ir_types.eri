@@ -1,0 +1,50 @@
+import compiler.typed_ir as ir;
+import compiler.semantic_model as m;
+import compiler.semantic_types as t;
+import compiler.semantic;
+
+public function register(program identity ir.Program, owner identity m.Module, value identity m.Type, location identity m.Location) returns Int fails m.SemanticError {
+    let actual be t.resolve(value); let kind be actual.kind;
+    if kind >= 1 and kind <= 5 { return kind; }
+    if kind == 0 { try m.reject(location,"lower","unresolved type in executable lowering"); }
+    let inner be -1;
+    if kind == 7 or kind == 8 or kind == 9 { inner=try register(program,owner,t.inner(actual),location); }
+    let cursor be program.types; let index be 6;
+    while cursor != none { if cursor.kind == kind and cursor.name == actual.name and cursor.inner == inner { return cursor.index; } index=index+1; cursor=cursor.next; }
+    let item be identity ir.Type { index=index; kind=kind; name=actual.name; inner=inner; fields=none; checked=false; next=program.types; }; program.types=item;
+    if kind == 6 {
+        if actual.name == "std.files.FileError" { item.checked=true;
+            item.fields=identity ir.Field { index=0; name="message"; valueType=4; immutable=false; next=identity ir.Field { index=1; name="path"; valueType=4; immutable=false; next=none; }; }; return index;
+        }
+        let declaration be semantic.layout(owner,actual.name);
+        if declaration == none { try m.reject(location,"lower","missing nominal type layout: "+actual.name); }
+        else {
+            item.checked=declaration.node.kind == 5;
+            let field be declaration.fields; let number be 0; let tail maybe identity ir.Field be none;
+            while field != none {
+                let fieldType be try register(program,owner,field.value,location);
+                let entry be identity ir.Field { index=number; name=field.name; valueType=fieldType; immutable=field.immutable; next=none; };
+                if tail == none { item.fields=entry; } else { tail.next=entry; } tail=entry; number=number+1; field=field.next;
+            }
+        }
+    }
+    if kind == 11 { item.fields=identity ir.Field { index=0; name="message"; valueType=4; immutable=false; next=none; }; }
+    return index;
+}
+public function semanticType(program identity ir.Program, index Int) returns identity m.Type {
+    let kind be ir.kind(program,index);
+    if index >= 1 and index <= 5 { return m.makeType(index,""); }
+    let item be ir.typeAt(program,index);
+    if item != none { if kind == 7 or kind == 8 or kind == 9 { return m.wrap(kind,semanticType(program,item.inner)); } return m.makeType(kind,item.name); }
+    return m.makeType(5,"");
+}
+public function failures(program identity ir.Program, owner identity m.Module, names maybe identity m.Name, location identity m.Location) returns maybe identity ir.Failure fails m.SemanticError {
+    let result maybe identity ir.Failure be none; let cursor be names;
+    while cursor != none { let value be try register(program,owner,m.makeType(6,cursor.text),location); result=identity ir.Failure { valueType=value; next=result; }; cursor=cursor.next; } return result;
+}
+public function field(program identity ir.Program, valueType Int, name Text, location identity m.Location) returns identity ir.Field fails m.SemanticError {
+    let target be valueType; if ir.kind(program,target) == 9 { target=ir.inner(program,target); }
+    let item be ir.typeAt(program,target);
+    if item != none { let cursor be item.fields; while cursor != none { if cursor.name == name { return cursor; } cursor=cursor.next; } }
+    try m.reject(location,"lower","missing nominal field: "+name); return identity ir.Field { index=-1; name=name; valueType=5; immutable=false; next=none; };
+}

@@ -4,6 +4,23 @@
 >
 > **Scope:** frozen pre-0.1 source contract, bootstrap/reference runtime, generated-C path, verified Universal IR, direct x86-64 GC/runtime with contract-driven physical register allocation and spill-frame compaction, native ARM64 runtime, module artifacts/caching, JavaScript/WebAssembly consumers, Unicode conformance and hosted CI.
 
+## Structural/native compiler and offline gate update
+
+Eristavi now owns structural value/List/maybe/identity/error/resource lowering,
+its typed/effect verifier, Universal register/CFG lowering and verifier, a small
+unreachable-block pass, and native x86-64/ARM64 ELF consumers. The executable corpus
+contains 88 projects; all 67 accepted semantic projects are checked for lowering.
+Cleanup-failure injection tests preserve primary/secondary ordering, and malformed
+Universal IR tests reject bad classes, calls, successors and initialization.
+
+The offline packaging gate compares fixed-snapshot native assembly/B-C binaries
+and audits application builds with unusable Python/C compiler shims. The runtime
+remains a prebuilt C bootstrap artifact and GNU assembler/linker tools are packaged;
+this is not a production release or a source-compatible Stage-0 artifact ABI port.
+The suite contains **349 tests**. Current-commit CI/self-build results belong to the
+PR. OFFLINE_TOOLCHAIN.md records the architecture, audit/evidence formats and gates.
+Frozen philosophy, grammar and semantic specifications remain unchanged.
+
 ## Float and inferred scalar specialization update
 
 The candidate now supports binary64 Float and specialization of inferred functions

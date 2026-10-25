@@ -1,0 +1,20 @@
+// A deliberately small semantics-preserving pass: discard unreachable blocks.
+import compiler.universal_model as u;
+import compiler.universal_verify;
+import compiler.semantic_model as m;
+function visit(routine identity u.Function,block identity u.Block) {
+    if block.live { return; } block.live=true; let terminal be block.terminator;
+    if terminal != none {
+        if terminal.op == 6 or terminal.op == 7 or terminal.op == 9 { let first be u.blockAt(routine,terminal.first); if first != none { visit(routine,first); } }
+        if terminal.op == 7 or terminal.op == 9 { let second be u.blockAt(routine,terminal.second); if second != none { visit(routine,second); } }
+    }
+}
+function routine(routine identity u.Function) {
+    let cursor be routine.blocks; while cursor != none { let current be cursor; current.live=false; cursor=current.next; }
+    let first be u.blockAt(routine,0); if first != none { visit(routine,first); }
+    cursor=routine.blocks; let head maybe identity u.Block be none; let tail maybe identity u.Block be none;
+    while cursor != none { let current be cursor; cursor=current.next; if current.live { current.next=none; if tail == none { head=current; } else { tail.next=current; } tail=current; } } routine.blocks=head;
+}
+public function optimize(program identity u.Program) returns Bool fails m.SemanticError {
+    try universal_verify.verify(program); routine(program.entry); let cursor be program.functions; while cursor != none { routine(cursor); cursor=cursor.next; } return try universal_verify.verify(program);
+}

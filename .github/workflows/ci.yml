@@ -37,6 +37,10 @@ jobs:
           https://raw.githubusercontent.com/starwing/luautf8/a47b1433473a2509d77ad28f59a976716d187927/GraphemeBreakTest.txt
           --output "$ERISTAVI_GRAPHEME_BREAK_TEST"
       - name: Compile Python sources
-        run: python -m compileall -q compiler tests
+        run: python -m compileall -q compiler tests tools
       - name: Run test suite
         run: python -m unittest discover -s tests -v
+      - name: Verify native self-build and offline bundle
+        if: runner.os == 'Linux'
+        timeout-minutes: 45
+        run: python tools/build_offline.py --output "$RUNNER_TEMP/erist-offline"

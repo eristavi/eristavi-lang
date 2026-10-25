@@ -1,0 +1,10 @@
+import std.files;
+import compiler.semantic_model as m;
+// A packaged runtime asset, not source-language input. The offline distribution
+// must include this file; native runtime ownership remains a later milestone.
+function read() returns Text fails files.FileError { with file be try files.openRead("runtime/value_runtime.c") { return try file.readText(); } }
+public function source() returns Text fails m.SemanticError {
+    let text be "";
+    text=read() else error files.FileError { fail m.SemanticError { message="cannot read runtime/value_runtime.c: "+error.message; category="runtime"; path="runtime/value_runtime.c"; line=1; column=1; }; };
+    return text;
+}

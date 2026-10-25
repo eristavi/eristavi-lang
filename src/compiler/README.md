@@ -37,3 +37,10 @@ Compiler code must stay inside the frozen pre-0.1 language. When the compiler ne
 The executable entry is `src/frontend.eri`; see [`FRONTEND_TOOL.md`](../../FRONTEND_TOOL.md).
 
 See [`SEMANTIC_ANALYSIS.md`](../../SEMANTIC_ANALYSIS.md) for the candidate boundary.
+
+The structural/native implementation adds ir_types.eri, universal_model.eri,
+universal_lower.eri, universal_verify.eri, universal_optimize.eri,
+universal_report.eri, ir_x86.eri and ir_arm64.eri. ir_c.eri remains a verified C
+consumer, using the pinned runtime/value_runtime.c bootstrap asset through
+value_runtime.eri. The offline bundle is built/audited by tools/build_offline.py;
+see OFFLINE_TOOLCHAIN.md at the repository root.

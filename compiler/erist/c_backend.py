@@ -80,7 +80,7 @@ class CBackend:
 static void {h}_detach({h} *v){{ if(!v->count){{v->data=NULL;return;}} {ct} *p=({ct}*)eri_alloc(sizeof({ct})*v->count); memcpy(p,v->data,sizeof({ct})*v->count); v->data=p; }}
 static {ct} {h}_get({h} v,int64_t i){{ if(i<0||(uint64_t)i>=v.count)eri_fault("List index out of bounds"); return v.data[i]; }}
 static void {h}_set({h} *v,int64_t i,{ct} x){{ if(i<0||(uint64_t)i>=v->count)eri_fault("List index out of bounds"); {h}_detach(v); v->data[i]=x; }}
-static void {h}_add({h} *v,{ct} x){{ {h}_detach(v); v->data=({ct}*)eri_realloc(v->data,sizeof({ct})*(v->count+1)); v->data[v->count++]=x; }}
+static void {h}_add({h} *v,{ct} x){{ if(v->count>=SIZE_MAX/sizeof({ct}))eri_fault("List size overflow"); v->data=({ct}*)eri_prefix_append((const unsigned char*)v->data,v->count*sizeof({ct}),(const unsigned char*)&x,sizeof({ct})); v->count++; }}
 static bool {h}_eq({h} a,{h} b){{ if(a.count!=b.count)return false; for(size_t i=0;i<a.count;i++){{if(!({eq}))return false;}} return true; }}
 '''
 

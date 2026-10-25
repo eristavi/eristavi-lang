@@ -1,0 +1,105 @@
+// CFG/type/definite-initialization verification independent of the lowerer.
+import compiler.universal_model as u;
+import compiler.typed_ir as ir;
+import compiler.semantic_model as m;
+import compiler.format;
+type Word { index Int; value Int; next maybe identity Word; }
+type Flow { block identity u.Block; reachable Bool; incoming maybe identity Word; outgoing maybe identity Word; next maybe identity Flow; }
+function require(program identity u.Program,condition Bool,message Text) returns Bool fails m.SemanticError { return try ir.require(condition,program.types.entry.body.location,"Universal IR: "+message); }
+function flowAt(flows maybe identity Flow,index Int) returns maybe identity Flow { let cursor be flows; while cursor != none { if cursor.block.index == index { return cursor; } cursor=cursor.next; } return none; }
+function words(count Int,full Bool) returns maybe identity Word { let result maybe identity Word be none; let index be (count+61)/62-1; while index>=0 { let value be 0; if full { value=4611686018427387903; } result=identity Word { index=index; value=value; next=result; }; index=index-1; } return result; }
+function wordAt(mask maybe identity Word,index Int) returns maybe identity Word { let cursor be mask; while cursor != none { if cursor.index == index { return cursor; } cursor=cursor.next; } return none; }
+function bit(index Int) returns Int {
+    let value be 1; let power be 2; let count be index%62;
+    while count>0 { if count%2 == 1 { value=value*power; } count=count/2; if count>0 { power=power*power; } } return value;
+}
+function defined(mask maybe identity Word,index Int) returns Bool { let word be wordAt(mask,index/62); if word != none { return (word.value/bit(index))%2 == 1; } return false; }
+function define(mask maybe identity Word,index Int) { let word be wordAt(mask,index/62); if word != none { let current be word; let flag be bit(index); if (current.value/flag)%2 == 0 { current.value=current.value+flag; } } }
+function copy(target maybe identity Word,source maybe identity Word) returns Bool { let changed be false; let first be target; let second be source; while first != none { let current be first; if second != none { if current.value != second.value { current.value=second.value; changed=true; } second=second.next; } first=current.next; } return changed; }
+function intersect(target maybe identity Word,source maybe identity Word) returns Bool {
+    let changed be false; let first be target; let second be source;
+    while first != none { let current be first; if second != none { let result be current.value; if current.value != second.value { if current.value == 0 or second.value == 0 { result=0; } else { if current.value == 4611686018427387903 { result=second.value; } else { if second.value != 4611686018427387903 { result=0; let flag be 1; let index be 0; while index<62 { if (current.value/flag)%2 == 1 and (second.value/flag)%2 == 1 { result=result+flag; } if index<61 { flag=flag*2; } index=index+1; } } } } } if result != current.value { current.value=result; changed=true; } second=second.next; } first=current.next; } return changed;
+}
+function signature(name Text) returns Text {
+    if name == "scope_enter" or name == "void" or name == "frame" or name == "saved" or name == "empty_failure" { return ""; }
+    if name == "scope_leave" { return "61"; }
+    if name == "copy" or name == "truth" or name == "output" or name == "count" or name == "get" or name == "get_ref" { return "1"; }
+    if name == "int" or name == "bool" or name == "none" { return "2"; }
+    if name == "float" { return "3"; } if name == "text" { return "32"; }
+    if name == "unary" or name == "wrap" or name == "view" { return "21"; }
+    if name == "binary" { return "211"; }
+    if name == "store" or name == "add" { return "11"; }
+    if name == "object" { return "22"; } if name == "init" { return "121"; }
+    if name == "member" or name == "member_ref" or name == "index" or name == "index_ref" or name == "fail" { return "12"; }
+    if name == "builtin0" { return "32"; } if name == "builtin1" { return "321"; } if name == "builtin2" { return "3211"; }
+    if name == "pop" { return "4"; } if name == "match" or name == "error" { return "52"; }
+    if name == "propagate" or name == "propagate_if" { return "5"; }
+    if name == "cleanup_accumulate" { return "15"; } if name == "cleanup_normal" or name == "unwind" { return "14"; }
+    return "?";
+}
+public function functionId(name Text) returns Int { if name.scalars.count<2 or name.scalars[0] != "f" { return -2; } let result be 0; let index be 1; while index<name.scalars.count { let code be name.bytes[index]-48; if code<0 or code>9 or result>100000000 { return -2; } result=result*10+code; index=index+1; } if name != "f"+format.integer(result) { return -2; } return result; }
+function operands(program identity u.Program,routine identity u.Function,value identity u.Instruction,classes,mask maybe identity Word,checkDefinitions Bool) returns Int fails m.SemanticError {
+    let cursor be value.arguments; let count be 0;
+    while cursor != none { try require(program,count<classes.count+8,"cyclic/excess operand list"); try require(program,cursor.value>=0 and cursor.value<classes.count,"unknown register operand"); if checkDefinitions { try require(program,defined(mask,cursor.value),"register is not initialized on every incoming path"); } count=count+1; cursor=cursor.next; } return count;
+}
+function instruction(program identity u.Program,routine identity u.Function,value identity u.Instruction,classes,mask maybe identity Word,checkDefinitions Bool) returns Bool fails m.SemanticError {
+    let count be try operands(program,routine,value,classes,mask,checkDefinitions); let op be value.op;
+    try require(program,value.result>=0 and value.result<classes.count and classes[value.result] == value.valueClass,"result register class mismatch at "+format.integer(value.result)+" (class "+format.integer(value.valueClass)+")");
+    if op == 1 { try require(program,value.valueClass == 2 and count == 0,"invalid integer constant"); }
+    else { if op == 2 { try require(program,value.valueClass == 3 and count == 0,"invalid byte constant"); }
+    else { if op == 5 { try require(program,value.valueClass == 1 and count == 0 and value.number>=0 and value.number<routine.parameters,"invalid parameter load"); }
+    else { if op == 4 { try require(program,count == 1,"copy requires one operand"); let first be value.arguments; if first != none { try require(program,count == 1 and classes[first.value] == value.valueClass,"invalid copy"); } }
+    else { if op == 11 or op == 12 { let expectedCount be 1; if op == 11 { expectedCount=2; } try require(program,value.valueClass == 2 and count == expectedCount,"invalid integer loop operation"); let cursor be value.arguments; while cursor != none { try require(program,classes[cursor.value] == 2,"loop operation requires integer registers"); cursor=cursor.next; } }
+    else { if op == 3 {
+        let id be functionId(value.text); let expected be signature(value.text); let resultClass be u.resultClass(value.text);
+        if id>=0 { let called be u.routineAt(program,id); try require(program,called != none,"unknown program call target"); if called != none { try require(program,count == called.parameters,"program call arity mismatch"); } resultClass=1; }
+        else { try require(program,expected != "?" and count == expected.scalars.count,"unknown helper or invalid arity"); }
+        try require(program,value.valueClass == resultClass,"call result class mismatch"); let cursor be value.arguments; let index be 0;
+        while cursor != none { let wanted be 1; if id<0 { wanted=expected.bytes[index]-48; } try require(program,classes[cursor.value] == wanted,"call argument class mismatch"); index=index+1; cursor=cursor.next; }
+    } else { try require(program,false,"unknown instruction opcode"); } } } } } }
+    return true;
+}
+function successors(program identity u.Program,value identity u.Instruction,flows maybe identity Flow) returns Bool fails m.SemanticError {
+    if value.op == 6 or value.op == 7 or value.op == 9 { try require(program,flowAt(flows,value.first) != none,"missing first successor"); }
+    if value.op == 7 or value.op == 9 { try require(program,flowAt(flows,value.second) != none,"missing second successor"); } return true;
+}
+function transfer(program identity u.Program,routine identity u.Function,flow identity Flow,classes,validate Bool,checkDefinitions Bool) returns Bool fails m.SemanticError {
+    let working be words(classes.count,false); copy(working,flow.incoming); let cursor be flow.block.instructions; let count be 0;
+    while cursor != none { try require(program,count<10*(classes.count+1),"cyclic/excess instruction list"); if validate { try instruction(program,routine,cursor,classes,working,checkDefinitions); } define(working,cursor.result); count=count+1; cursor=cursor.next; }
+    let terminal be flow.block.terminator; try require(program,terminal != none,"block has no terminator");
+    if terminal != none { if validate { let arity be try operands(program,routine,terminal,classes,working,checkDefinitions); let op be terminal.op;
+        if op == 6 or op == 10 { try require(program,arity == 0,"unexpected terminator operands"); }
+        else { let operand be terminal.arguments; try require(program,arity == 1,"terminator requires one operand"); if operand != none { let wanted be 2; if op == 8 { wanted=1; } if op == 9 { wanted=4; } try require(program,(op == 7 or op == 8 or op == 9) and classes[operand.value] == wanted,"invalid terminator/class"); } }
+    } } return copy(flow.outgoing,working);
+}
+function propagate(source identity Flow,target maybe identity Flow) returns Bool {
+    if target == none { return false; } let current be target; let changed be false;
+    if not current.reachable { current.reachable=true; changed=true; }
+    if intersect(current.incoming,source.outgoing) { changed=true; } return changed;
+}
+function routine(program identity u.Program,routine identity u.Function) returns Bool fails m.SemanticError {
+    let classes be []; let register be routine.registers;
+    while register != none { try require(program,register.index == classes.count and register.valueClass>=0 and register.valueClass<=6,"invalid register table"); classes.add(register.valueClass); register=register.next; }
+    let flows maybe identity Flow be none; let cursor be routine.blocks; let count be 0;
+    while cursor != none { try require(program,flowAt(flows,cursor.index) == none and cursor.index>=0,"cyclic/duplicate block table"); let record be identity Flow { block=cursor; reachable=cursor.index == 0; incoming=words(classes.count,cursor.index != 0); outgoing=words(classes.count,true); next=flows; }; flows=record; cursor=cursor.next; count=count+1; }
+    try require(program,flowAt(flows,0) != none,"function has no entry block"); let flow be flows;
+    while flow != none { let terminal be flow.block.terminator; try require(program,terminal != none,"missing terminator"); if terminal != none { try successors(program,terminal,flows); } try transfer(program,routine,flow,classes,true,false); flow=flow.next; }
+    let changed be true; let iterations be 0;
+    while changed {
+        changed=false; flow=flows; iterations=iterations+1; try require(program,iterations<=(classes.count+2)*(count+1),"definite initialization did not converge");
+        while flow != none {
+            let current be flow;
+            if current.reachable {
+                if try transfer(program,routine,current,classes,false,false) { changed=true; }
+                let terminal be current.block.terminator;
+                if terminal != none { if terminal.op == 6 or terminal.op == 7 or terminal.op == 9 { if propagate(current,flowAt(flows,terminal.first)) { changed=true; } } if terminal.op == 7 or terminal.op == 9 { if propagate(current,flowAt(flows,terminal.second)) { changed=true; } } }
+            } flow=current.next;
+        }
+    }
+    flow=flows; while flow != none { if flow.reachable { try transfer(program,routine,flow,classes,true,true); } flow=flow.next; } return true;
+}
+public function verify(program identity u.Program) returns Bool fails m.SemanticError {
+    try require(program,program.entry.index == -1 and program.entry.parameters == 0,"invalid entry function"); let cursor be program.functions; let count be 0;
+    while cursor != none { try require(program,cursor.index == count,"noncontiguous/duplicate function table"); count=count+1; cursor=cursor.next; }
+    cursor=program.functions; while cursor != none { try routine(program,cursor); cursor=cursor.next; } return try routine(program,program.entry);
+}

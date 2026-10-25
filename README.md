@@ -21,37 +21,27 @@ Unicode identifier, normalization and grapheme behavior is pinned to Unicode **1
 
 ## Self-hosting progress
 
-The trusted Stage-0 toolchain is still written in Python. `src/compiler/` now
-contains an Eristavi-written lexer and parser with an explicit identity AST.
-Recursive result contracts remain explicit; generic relationships remain inferred.
-Differential tests check lexical tokens, locations, rejection behavior and parser
-precedence against Stage-0. The Eristavi lexer and parser also compile and execute
-through the portable C route.
+`src/compiler/` now contains Eristavi-written parsing, semantic analysis, structural
+typed IR, verification, Universal IR, unreachable-block removal and native x86-64/
+ARM64 instruction consumers. The separate Linux offline bundle uses these components
+without Python or a C compiler during normal application builds. Its runtime is
+still a prebuilt C bootstrap artifact; GNU assembler/linker tools are packaged.
 
-The new `std.unicode` library exposes pinned Unicode-17 identifier checks, NFC
-normalization and scalar construction. It currently executes in the reference
-runtime and generated-C backend. Direct native, JavaScript and Wasm support for
-this library remains pending; those routes reject its use with guidance to use
-`erist build`. Existing direct-native functionality remains available.
-
-`src/frontend.eri` is now a usable syntax frontend: it reads a source file,
-checks syntax and emits token/AST JSON reports. The compiled executable runs
-offline without Python or a C compiler at runtime. Building it still uses Stage-0
-and a C toolchain. Syntax commands retain their existing behavior; experimental
-semantic commands are described below. The experimental `ir` and `emit-c` commands now compile a concrete Int/Float/Bool/Text
-slice with inferred scalar specialization through an Eristavi-written typed IR and verified C emitter. See
-[`SCALAR_COMPILATION.md`](SCALAR_COMPILATION.md) for executable examples and boundaries.
-Stage-0 remains the normal compiler.
-
-```text
-erist build src/frontend.eri --source-root src -o erist-frontend
-./erist-frontend check examples/hello.eri
-./erist-frontend ast examples/hello.eri --output hello.ast.json
+```sh
+python -m pip install -e .
+CFLAGS=-O2 python tools/build_offline.py --output /tmp/erist-offline
+/tmp/erist-offline/bin/erist build examples/scalar_compilation.eri -o /tmp/application
 ```
 
-See [`FRONTEND_TOOL.md`](FRONTEND_TOOL.md) for build/use/report contracts and
-[`SELF_HOSTING.md`](SELF_HOSTING.md) for the migration. This is not yet a compiler
-that can build itself.
+Packaging requires a fixed-snapshot repeated native self-build and an offline audit.
+See [OFFLINE_TOOLCHAIN.md](OFFLINE_TOOLCHAIN.md) for supported hosts, evidence and
+boundaries. The pip-installed developer CLI remains the Python Stage-0 reference,
+including its existing artifacts and JS/Wasm routes; the native bundle is opt-in.
+The frozen language philosophy and source specifications are unchanged.
+
+The lower-level frontend still offers syntax/token/AST inspection plus semantic,
+typed-IR, Universal-IR, C and native-assembly commands. See
+[FRONTEND_TOOL.md](FRONTEND_TOOL.md) and [SELF_HOSTING.md](SELF_HOSTING.md).
 
 ### Experimental semantic analysis
 
@@ -232,7 +222,7 @@ erist build-wat examples/hello.eri -o hello.wat
 python -m unittest discover -s tests -v
 ```
 
-The current suite contains **344 tests**. The hosted CI matrix runs:
+The current suite contains **349 tests**. The hosted CI matrix runs:
 
 - GCC / x86-64 Ubuntu / `-O2`;
 - Clang / x86-64 Ubuntu / `-O2`;
