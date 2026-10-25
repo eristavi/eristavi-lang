@@ -234,3 +234,10 @@ Float rounding/non-contraction, fixed/value/identity behavior, checked cleanup
 failure composition, forced native heap collection, identity cycles, saved-failure
 roots and weak prefix indexes. The full suite contains 361 tests; hosted results
 and native self-build audits are recorded on the change's CI run.
+
+## Toolchain independence plan
+
+See [TOOLCHAIN_INDEPENDENCE.md](TOOLCHAIN_INDEPENDENCE.md) for the audited C/Python
+and assembler/linker boundaries, the freestanding-runtime blocker, Windows scope,
+and staged acceptance gates. Normal offline builds already avoid Python/C
+compilation; complete project-owned toolchain independence remains separate work.
