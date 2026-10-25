@@ -148,18 +148,20 @@ def build(destination,compiler=None,self_build=True):
     (destination/'loader-path').write_text(str(loader)+'\n')
     (destination/'target').write_text(target+'\n')
     copy_file(ROOT/'runtime/value_runtime.c',destination/'runtime/value_runtime.c',inventory)
+    copy_file(ROOT/'runtime/native_gc_runtime.c',destination/'runtime/native_gc_runtime.c',inventory)
     runtime=destination/'lib/erist-runtime.o'
-    run([*cc,'-std=c11','-O2','-DERIST_NATIVE_RUNTIME','-c',ROOT/'runtime/value_runtime.c','-o',runtime])
-    inventory.append({'file':str(runtime),'sha256':digest(runtime),'source':'runtime/value_runtime.c'})
+    run([*cc,'-std=c11','-O2','-DERIST_NATIVE_RUNTIME','-c',ROOT/'runtime/native_gc_runtime.c','-o',runtime])
+    inventory.append({'file':str(runtime),'sha256':digest(runtime),'source':'runtime/native_gc_runtime.c'})
     source_hashes={str(path.relative_to(ROOT)):digest(path) for path in sorted((ROOT/'src').rglob('*.eri'))}
     source_hashes['runtime/value_runtime.c']=digest(ROOT/'runtime/value_runtime.c')
+    source_hashes['runtime/native_gc_runtime.c']=digest(ROOT/'runtime/native_gc_runtime.c')
     (destination/'source-manifest.json').write_text(json.dumps(source_hashes,indent=2)+'\n')
     evidence_directory=destination/'evidence';evidence_directory.mkdir()
     def fixed_snapshot():
         actual={name:digest(ROOT/name) for name in source_hashes}
         if actual!=source_hashes:
             raise RuntimeError('compiler source changed during self-build; rerun on a fixed snapshot')
-    (destination/'build-toolchain.json').write_text(json.dumps({'compiler':run([*cc,'--version']).stdout.splitlines()[0],'runtime_flags':['-std=c11','-O2','-DERIST_NATIVE_RUNTIME'],'target':target},indent=2)+'\n')
+    (destination/'build-toolchain.json').write_text(json.dumps({'compiler':run([*cc,'--version']).stdout.splitlines()[0],'runtime_flags':['-std=c11','-O2','-DERIST_NATIVE_RUNTIME'],'runtime_source':'runtime/native_gc_runtime.c','target':target},indent=2)+'\n')
     with tempfile.TemporaryDirectory() as td:
         scratch=Path(td)
         bootstrap=compiler
@@ -206,7 +208,7 @@ def build(destination,compiler=None,self_build=True):
     for item in inventory:
         item['file']=str(Path(item['file']).relative_to(destination))
     (destination/'inventory.json').write_text(json.dumps(inventory,indent=2)+'\n')
-    (destination/'README.txt').write_text('Experimental Eristavi offline compiler for this Linux/glibc host.\nRun bin/erist --help. Normal builds use the bundled assembler, linker and native runtime, with no Python or C compiler.\nThis is not a cross-platform production release. The host-compatible dynamic loader, POSIX shell and ordinary shell utilities remain OS prerequisites.\nThe runtime is a prebuilt C bootstrap artifact. macOS/Windows native packaging, interface/object artifact compatibility, production memory/runtime optimization and full release qualification remain separate work.\nSee inventory.json, licenses/ and self-build.json for provenance and repeatability evidence.\n')
+    (destination/'README.txt').write_text('Experimental Eristavi offline compiler for this Linux/glibc host.\nRun bin/erist --help. Normal builds use the bundled assembler, linker and native runtime, with no Python or C compiler.\nThis is not a cross-platform production release. The host-compatible dynamic loader, POSIX shell and ordinary shell utilities remain OS prerequisites.\nThe runtime remains a prebuilt C bootstrap artifact; native builds now use its typed non-moving heap reclamation layer. macOS/Windows native packaging, interface/object artifact compatibility, runtime performance qualification and full release qualification remain separate work.\nSee inventory.json, licenses/ and self-build.json for provenance and repeatability evidence.\n')
     print('Audit builds without Python or a C compiler in child PATH',flush=True)
     audit=run([sys.executable,ROOT/'tools/verify_offline.py',destination],cwd=ROOT)
     print(audit.stdout,end='',flush=True)
