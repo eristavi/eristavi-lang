@@ -6,7 +6,7 @@ Run the full suite from the repository root:
 python -m unittest discover -s tests -v
 ```
 
-The current suite contains **359 tests**.
+The current suite contains **361 tests**.
 
 The scalar compiler corpus freezes 60 executable projects, with 10 additional
 runtime-fault comparisons under undefined-behavior sanitization and 28 malformed
@@ -33,6 +33,7 @@ Coverage spans frontend/reference semantics and multiple compiler/runtime layers
 - reusable inferred-generic object specialization after source removal;
 - direct x86-64 functions/ABI, Float/Text/Text views, aggregates, Lists, maybe/identity, checked errors and resources;
 - x86-64 typed GC descriptors, liveness-aware roots, spill-slot planning and heap-reachability stress cases;
+- native offline-runtime typed mark-and-sweep for Text, aggregates, Lists, maybe/identity cycles, failures and weak prefix metadata;
 - x86-64 lowering-contract tests for conservative unknown operations, call clobbers and GC-safe operand consumption;
 - x86-64 physical-register-allocation regressions covering interference, the `r10`/`r11` GP pool, `xmm8`/`xmm9` Float allocation, call/GC boundaries, scalar extraction and emitted register-resident chains;
 - spill-frame compaction tests proving register-resident scalars omit stack slots while pinned values retain stable storage;
@@ -77,3 +78,12 @@ Heap-accounting tests validate aligned/zero-size allocations, resize bookkeeping
 category totals, retained object/Text/failure stress, overflow rejection, and a
 zero test-teardown balance under sanitizers. Native integration preserves stdout
 and verifies diagnostic counters alongside frequent slot collection.
+
+Native heap-reclamation tests force collection at nearly every safe point while
+checking live nested Text, weak prefix-index removal, an unreachable identity
+cycle, saved checked-failure payloads, and 10,000 iterations of transient
+Text/object allocation. The same fixture runs under AddressSanitizer and
+UndefinedBehaviorSanitizer and requires zero tracked live blocks after all roots
+are released. The offline application audit separately executes 100,000 iterations
+of ordinary Eristavi Text/List allocation using the packaged collector-enabled
+runtime before its existing value/identity/file/error checks.

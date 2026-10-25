@@ -90,7 +90,13 @@ static void *eri_alloc_kind(size_t n,int kind){
     if(eri_heap_blocks)eri_heap_blocks->info.previous=h;eri_heap_blocks=h;
     eri_heap_new(&eri_heap_total,n);eri_heap_new(&eri_heap_categories[kind],n);return h+1;
 #else
-    (void)kind;void *p=malloc(n?n:1);if(!p)eri_fault("out of memory");return p;
+    (void)kind;
+#ifdef ERIST_RUNTIME_ALLOCATE
+    void *p=ERIST_RUNTIME_ALLOCATE(n?n:1,kind);
+#else
+    void *p=malloc(n?n:1);
+#endif
+    if(!p)eri_fault("out of memory");return p;
 #endif
 }
 static void *eri_alloc(size_t n){return eri_alloc_kind(n,ERI_HEAP_OTHER);}
@@ -103,6 +109,13 @@ static void eri_free(void *p){
     eri_heap_release(&eri_heap_total,h->info.bytes);eri_heap_release(&eri_heap_categories[h->info.kind],h->info.bytes);free(h);
 #else
     free(p);
+#endif
+}
+static void eri_free_kind(void *p,int kind){
+#ifdef ERIST_RUNTIME_DEALLOCATE
+    ERIST_RUNTIME_DEALLOCATE(p,kind);
+#else
+    (void)kind;eri_free(p);
 #endif
 }
 static void *eri_realloc_kind(void *p,size_t n,int kind){
@@ -5207,7 +5220,7 @@ static void ev_free_slot(ev_slot_node *node){
 #ifdef ERIST_NATIVE_RUNTIME
     ev_live_slots--;
 #endif
-    eri_free(node);
+    eri_free_kind(node,ERI_HEAP_SLOT);
 }
 static void ev_restore_slots(ev_slot_node *mark){
     while(ev_slots!=mark){ev_slot_node *node=ev_slots;ev_slots=node->next;ev_free_slot(node);}
@@ -5216,7 +5229,7 @@ static void ev_restore_slots(ev_slot_node *mark){
         ev_next_slot_gc=ev_live_slots+ERIST_SLOT_GC_INTERVAL;
 #endif
 }
-static void ev_restore_scopes(ev_scope *mark){while(ev_scopes!=mark){ev_scope *scope=ev_scopes;ev_scopes=scope->previous;eri_free(scope);}}
+static void ev_restore_scopes(ev_scope *mark){while(ev_scopes!=mark){ev_scope *scope=ev_scopes;ev_scopes=scope->previous;eri_free_kind(scope,ERI_HEAP_SCOPE);}}
 static ev_value ev_scope_leave(ev_scope *scope,ev_value value){ev_restore_slots(scope->mark);ev_restore_scopes(scope->previous);return value;}
 
 /* Pointer ABI for Eristavi's native x86-64 consumer. Runtime object only. */
@@ -5267,7 +5280,7 @@ static void ev_collect_slots(void){
         if(ev_root_contains(table,mask,(uintptr_t)node))link=&node->next;
         else {*link=node->next;ev_free_slot(node);}
     }
-    eri_free(table);
+    eri_free_kind(table,ERI_HEAP_ROOT_TABLE);
     if(ev_live_slots>SIZE_MAX-ERIST_SLOT_GC_INTERVAL)eri_fault("native slot count overflow");
     ev_next_slot_gc=ev_live_slots+ERIST_SLOT_GC_INTERVAL;
 }
@@ -5318,7 +5331,7 @@ void evn_pop(eri_handler_frame *frame){
     /* A scoped return can pop multiple nested resource frames at once. */
     while(eri_handler_top!=stop){
         eri_handler_frame *current=eri_handler_top;
-        eri_handler_top=current->prev;eri_free(current);
+        eri_handler_top=current->prev;eri_free_kind(current,ERI_HEAP_HANDLER);
     }
     /* Normal completion still needs its expression result. On a checked jump,
        only caller locals predating the boundary survive; failure payloads and
