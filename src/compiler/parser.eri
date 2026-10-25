@@ -196,13 +196,39 @@ function parsePrimary(tokens, state identity parser_state.ParserState, types, al
         return ast.make(ast.noneExpr(), start, none, none, none, "", 0, false);
     }
     if match(tokens, state, token.leftBracket()) {
-        let elements be ast.emptyChain();
-        let more be not check(tokens, state, token.rightBracket());
-        while more {
-            ast.add(elements, try parseExpression(tokens, state, types, aliases));
-            if not match(tokens, state, token.comma()) {
-                more = false;
+        if match(tokens, state, token.colon()) {
+            try consume(tokens, state, token.rightBracket(), "expected ']' after empty Map literal");
+            return ast.make(ast.mapExpr(), start, none, none, none, "", 0, false);
+        }
+        if match(tokens, state, token.rightBracket()) {
+            return ast.make(ast.listExpr(), start, none, none, none, "", 0, false);
+        }
+
+        let first be try parseExpression(tokens, state, types, aliases);
+        if match(tokens, state, token.colon()) {
+            let entries be ast.emptyChain();
+            let firstValue be try parseExpression(tokens, state, types, aliases);
+            try consume(tokens, state, token.semicolon(), "expected ';' after Map entry");
+            ast.add(entries, ast.make(ast.mapEntry(), first.token, first, firstValue, none, "", 0, false));
+            while not check(tokens, state, token.rightBracket()) {
+                if check(tokens, state, token.eof()) {
+                    let found be tokenAt(tokens, start);
+                    fail diagnostic.ParseError { message = "unterminated Map literal; expected ']'"; line = found.line; column = found.column; };
+                }
+                let key be try parseExpression(tokens, state, types, aliases);
+                try consume(tokens, state, token.colon(), "expected ':' between Map key and value");
+                let value be try parseExpression(tokens, state, types, aliases);
+                try consume(tokens, state, token.semicolon(), "expected ';' after Map entry");
+                ast.add(entries, ast.make(ast.mapEntry(), key.token, key, value, none, "", 0, false));
             }
+            advance(tokens, state);
+            return ast.make(ast.mapExpr(), start, entries.first, none, none, "", 0, false);
+        }
+
+        let elements be ast.emptyChain();
+        ast.add(elements, first);
+        while match(tokens, state, token.comma()) {
+            ast.add(elements, try parseExpression(tokens, state, types, aliases));
         }
         try consume(tokens, state, token.rightBracket(), "expected ']' after List literal");
         return ast.make(ast.listExpr(), start, elements.first, none, none, "", 0, false);
