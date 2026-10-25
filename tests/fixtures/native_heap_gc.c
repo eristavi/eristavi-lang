@@ -66,6 +66,45 @@ static void reachable_values_and_weak_prefixes(void){
     eri_native_heap_collect();
 }
 
+static void list_maybe_and_text_view_survive_collection(void){
+    ev_scope *scope=evn_scope_enter();
+    uintptr_t roots[4]={0};unsigned char classes[4]={1,1,1,1};
+    evn_bind_roots(scope,roots,classes,4);
+
+    ev_value *list=evn_object(9,2);roots[0]=(uintptr_t)list;
+    ev_value *one=evn_int(1);roots[1]=(uintptr_t)one;
+    ev_value *two=evn_int(2);roots[2]=(uintptr_t)two;
+    evn_init(list,0,one);evn_init(list,1,two);
+    roots[1]=roots[2]=0;
+    clear_slots();
+    assert(list->object->count==2);
+    assert(list->object->data[0].i==1&&list->object->data[1].i==2);
+
+    ev_value *node=evn_object(6,1);roots[1]=(uintptr_t)node;
+    ev_value *identity=evn_wrap(7,node);roots[2]=(uintptr_t)identity;
+    evn_init(node,0,identity);
+    ev_value *optional=evn_wrap(10,node);roots[3]=(uintptr_t)optional;
+    roots[1]=roots[2]=0;
+    clear_slots();
+    assert(optional->object&&optional->object->data[0].type==6);
+    assert(optional->object->data[0].object->data[0].type==7);
+
+    roots[0]=roots[3]=0;
+    clear_slots();
+
+    ev_value *text=evn_text((const unsigned char*)"view",4);roots[0]=(uintptr_t)text;
+    ev_value *view=evn_view(13,text);roots[1]=(uintptr_t)view;
+    roots[0]=0;
+    clear_slots();
+    assert(view->view.text.len==4);
+    assert(memcmp(view->view.text.data,"view",4)==0);
+
+    roots[1]=0;
+    clear_slots();
+    ev_scope_leave(scope,ev_void());
+    eri_native_heap_collect();
+}
+
 static void unreachable_identity_cycle(void){
     ev_scope *scope=evn_scope_enter();
     uintptr_t roots[2]={0};unsigned char classes[2]={1,1};
@@ -135,6 +174,7 @@ static void long_running_allocation_plateaus(void){
 
 int main(void){
     reachable_values_and_weak_prefixes();
+    list_maybe_and_text_view_survive_collection();
     unreachable_identity_cycle();
     saved_failure_survives_collection();
     long_running_allocation_plateaus();
