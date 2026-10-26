@@ -1,173 +1,53 @@
-# Eristavi-Lang
+# Eristavi
 
-Eristavi-lang is an experimental general-purpose programming language focused on **readability, strong typing, native performance, universal portability, and controlled simplicity**.
+**A readable, strongly typed programming language with its own compiler architecture, machine-neutral IR, and native code generators.**
 
 > **Complexity belongs in the compiler and runtime, not in the programmer's code.**
 
-## Project identity
+Eristavi is a general-purpose programming language designed around a simple idea:
 
-- **Language:** Eristavi
-- **Source files:** `.eri`
-- **Reserved extension:** `.erist`
-- **CLI/toolchain:** `erist`
-- **Official website:** https://eristavi.org
-- **Repository:** `eristavi/eristavi-lang`
-
-## Status
-
-The **pre-0.1 source-language/frontend contract is frozen for implementation**. The bootstrap/reference runtime covers the principal frozen surface: functions, collections, ordinary values, maybe/identity, checked errors, deterministic resources, modules/imports, inferred generic relationships and explicit Unicode Text views.
-
-Unicode identifier, normalization and grapheme behavior is pinned to Unicode **17.0.0**. CI executes the complete official Unicode-17 `GraphemeBreakTest` fixture against the pinned reference segmenter in addition to compiled/direct grapheme tests.
-
-## Self-hosting progress
-
-`src/compiler/` now contains Eristavi-written parsing, semantic analysis, structural
-typed IR, verification, Universal IR, unreachable-block removal and native x86-64/
-ARM64 instruction consumers. The separate Linux offline bundle uses these components
-without Python or a C compiler during normal application builds. Its runtime is
-still a prebuilt C bootstrap artifact, now wrapped by a native-only typed
-non-moving heap collector; GNU assembler/linker tools are still packaged.
-
-```sh
-python -m pip install -e .
-CFLAGS=-O2 python tools/build_offline.py --output /tmp/erist-offline
-/tmp/erist-offline/bin/erist build examples/scalar_compilation.eri -o /tmp/application
-```
-
-Packaging requires a fixed-snapshot repeated native self-build and an offline audit.
-See [OFFLINE_TOOLCHAIN.md](OFFLINE_TOOLCHAIN.md) for supported hosts, evidence and
-boundaries. The pip-installed developer CLI remains the Python Stage-0 reference,
-including its existing artifacts and JS/Wasm routes; the native bundle is opt-in.
-The frozen language philosophy and source specifications are unchanged.
-
-[PRODUCTION_HARDENING.md](PRODUCTION_HARDENING.md) records the runtime review,
-checked-unwind/temporary-slot fixes, native heap reclamation and remaining
-qualification gates. [NATIVE_HEAP_GC.md](NATIVE_HEAP_GC.md) records the collector's
-root/traversal contract. Optional allocation profiling remains available through
-[HEAP_DIAGNOSTICS.md](HEAP_DIAGNOSTICS.md).
-
-The lower-level frontend still offers syntax/token/AST inspection plus semantic,
-typed-IR, Universal-IR, C and native-assembly commands. See
-[FRONTEND_TOOL.md](FRONTEND_TOOL.md) and [SELF_HOSTING.md](SELF_HOSTING.md).
-
-### Experimental semantic analysis
-
-The Eristavi-written frontend now also resolves source modules, names and scopes,
-infers static relationships, and checks fixed/maybe/identity, checked failures and
-resource contracts. It records expression type/effect facts and can explain inferred
-function signatures. Stage-0 remains the reference and normal compiler.
-
-```text
-./erist-frontend analyze project/src/application.eri --source-root project/src
-./erist-frontend analyze-report project/src/application.eri --source-root project/src
-```
-
-A shared 175-case corpus checks acceptance/rejection and inferred contracts against
-Stage-0. The compiled analyzer also analyzes its own frontend module graph offline.
-See [`SEMANTIC_ANALYSIS.md`](SEMANTIC_ANALYSIS.md) for evidence, diagnostic differences
-and remaining promotion gates. No frozen syntax or semantic specification changed.
-
-## Compiler architecture
-
-```text
-Eristavi source
-    ↓
-lexer / parser / semantic analysis + inference
-    ↓
-typed/source-close Eristavi IR
-    ├─→ C11 backend → C toolchain → native executable
-    ↓
-verified + optimized Universal IR
-    ├─→ x86-64 Linux → native executable
-    ├─→ ARM64 Linux → native executable
-    ├─→ ES2020 JavaScript
-    └─→ WebAssembly text
-```
-
-Universal IR is verified before/after bootstrap optimization. Current passes include constant folding and unreachable-block elimination. CFG-aware liveness, interference, spill-slot coloring, escape analysis and register-candidate analysis are available to direct backends. The x86-64 backend consumes those analyses through a contract-driven physical-register allocator for short-lived scalar regions.
-
-## Direct native backends
-
-### x86-64 Linux
-
-The direct x86-64 route executes a broad pre-0.1 implementation without generated C: functions/recursion, Int/Bool/Float/Text, all explicit Text views, Lists, ordinary values, maybe, identity, checked failures, inferred generic specializations, deterministic file resources and module-object linkage.
-
-The Stage-0 direct runtime includes a non-moving mark-and-sweep collector. Compiler root frames are **liveness-aware** and pair stable heap root addresses with static type descriptors. Typed traversal handles Text leaves, nominal fields, Lists, maybe/identity wrappers and file-resource records; conservative exact-pointer scanning remains only as a fallback for dynamic runtime state.
-
-Physical register allocation now uses CFG interference together with explicit x86 lowering use/clobber contracts. The audited allocation pools currently include two GP registers (`r10`, `r11`) and two XMM registers (`xmm8`, `xmm9`). Values that cross helper/PLT/GC clobbers remain spilled, while audited call-free scalar operations, safe extraction operations and scalar call results may stay register-resident. Unknown lowerings default to conservative full caller-saved clobbers. Register-resident scalars no longer reserve redundant spill slots in the precise x86 frame; pinned heap/root slots remain stable and take precedence over compaction.
-
-### ARM64 Linux
-
-ARM64 consumes the same Universal IR and covers Int/Bool/Float, functions, Text, ordinary values, Lists, maybe, identity, checked failures and deterministic file resources. The hosted CI matrix includes a native ARM64 Linux runner, so aggregate/error/resource behavior is executed rather than only cross-assembled. Mixed scalar/Text output also preserves source order through the composed ARM64 direct backend.
-
-### Offline native runtime
-
-The Eristavi-written offline compiler's boxed native runtime now uses a separate
-non-moving typed tracing layer on both supported Linux architectures. It starts
-from active value slots/scopes, verified Universal-IR value/failure roots, handlers
-and checked-failure state; it traverses Text/Text views, ordinary values, Lists,
-maybe/identity, resources and error payloads. Prefix-append indexes are weak
-metadata and do not keep otherwise dead backing buffers alive. Identity cycles are
-collectable. Deterministic files remain governed by `with`, not GC finalizers.
-
-Collection occurs only at native pointer-ABI safe points. The collector is a
-bootstrap production-hardening implementation: stop-the-world and single-runtime,
-not generational/concurrent/compacting. The underlying runtime source is still C
-and remains a later toolchain-independence boundary.
-
-## Module artifacts and incremental compilation
-
-```text
-module.eri
-  ├─→ module.eri-interface.json
-  └─→ module.eri-object.json
-```
-
-`erist interface` emits a deterministic public contract. `erist object` emits a versioned Universal-IR implementation bound to that interface digest.
-
-Object format v3 can carry a reusable bootstrap implementation template for public inferred-generic functions. Downstream compilation can specialize those functions after the original dependency `.eri` file has been removed, without adding explicit generic syntax to Eristavi.
-
-`erist compile-module` provides content/interface-digest keyed artifact caching. Public dependency changes invalidate importers; private implementation-only changes do not invalidate an unchanged public-contract key.
-
-## JavaScript and WebAssembly
-
-The ES2020 backend preserves checked Eristavi `Int` through `BigInt` and executes ordinary nominal values, Lists, maybe, identity, deep value cloning and structural equality in addition to scalar/function/control-flow behavior.
-
-The WebAssembly-text backend supports the current scalar/function/control slice plus Text through an explicit `externref` host ABI. UTF-8 constants are emitted as data segments; Text construction, concatenation, equality and output are explicit host contracts rather than numeric approximations.
-
-## Design direction
-
-Eristavi aims for:
-
-- a small, stable core vocabulary;
-- one obvious way to express fundamental concepts;
-- strong static typing with aggressive type inference;
-- a rich standard library instead of keyword bloat;
-- automatic memory management;
-- deterministic cleanup for files, sockets and other external resources;
-- machine-neutral compiler IRs;
-- direct native compilation for supported CPU architectures;
-- C, JavaScript and WebAssembly targets preserving Eristavi semantics;
-- clear compiler diagnostics;
-- performance transparency without forcing low-level complexity into ordinary code.
-
-See [`DESIGN_PHILOSOPHY.md`](DESIGN_PHILOSOPHY.md).
-
-## Syntax examples
+> Programmers should describe the computation clearly; the compiler should handle the machinery required to execute it.
 
 ```eri
-let x be 40;
-let y be 2;
-output(x + y);
-```
+let price be 120;
+let quantity be 3;
+let total be price * quantity;
 
-```eri
-function double(value Int) {
-    return value * 2;
+if total > 300 {
+    output("Large order");
 }
 
-output(double(21));
+output(total);
 ```
+
+Eristavi combines a deliberately small and readable source language with strong static semantics, type inference, automatic memory management, deterministic resource handling, and an architecture designed for direct native compilation.
+
+The language is currently **pre-0.1** and under active development.
+
+[About Eristavi](#why-the-project-exists) · [Design Philosophy](DESIGN_PHILOSOPHY.md) · [Language Semantics](LANGUAGE_SEMANTICS.md) · [Compiler Architecture](#compiler-architecture) · [Documentation](#documentation)
+
+---
+
+## Eristavi in a minute
+
+Variables are intentionally simple:
+
+```eri
+let age be 44;
+let name be "Anna";
+```
+
+Types are inferred when the compiler already knows them.
+
+Important contracts remain explicit:
+
+```eri
+function double(value Int) returns Int {
+    return value * 2;
+}
+```
+
+Ordinary values can define their structure directly:
 
 ```eri
 type Customer {
@@ -181,7 +61,23 @@ let customer be Customer {
 };
 ```
 
-Generic relationships are inferred rather than written with generic syntax:
+Failures form part of a function's contract:
+
+```eri
+function read(path Text) returns Text fails files.FileError {
+    ...
+}
+```
+
+External resources have deterministic lifetime:
+
+```eri
+with file be try files.open(path) {
+    return try file.readText();
+}
+```
+
+Generic relationships can be inferred without introducing separate generic syntax:
 
 ```eri
 function preserve(value) {
@@ -196,92 +92,629 @@ Unicode units are explicit:
 
 ```eri
 let text be "A\u{301}";
-output(text.characters.count); // 1 grapheme cluster
-output(text.scalars.count);    // 2 Unicode scalars
-output(text.bytes.count);      // 3 UTF-8 bytes
+
+output(text.characters.count);
+output(text.scalars.count);
+output(text.bytes.count);
 ```
 
-Checked failures and deterministic resources remain explicit:
+Eristavi distinguishes what the programmer means instead of silently guessing.
+
+---
+
+## Why Eristavi?
+
+Programming languages have accumulated decades of useful ideas.
+
+They have also accumulated complexity.
+
+Eristavi asks a different question:
+
+> **Which complexities should still belong to the programmer, and which can reasonably be handled by the compiler?**
+
+The language is designed around several principles.
+
+### Readable, but precise
+
+Eristavi aims to be immediately understandable without trying to imitate unrestricted natural language.
+
+```eri
+let total be price * quantity;
+
+if total > 100 {
+    output(total);
+}
+```
+
+Readable syntax must still have deterministic grammar and predictable semantics.
+
+### Strong types without excessive ceremony
+
+The compiler should infer what is obvious.
+
+The programmer should state what is important.
+
+```eri
+let quantity be 5;
+```
+
+The compiler knows this is an `Int`.
+
+But public contracts can remain explicit:
+
+```eri
+function calculate(price Float, quantity Int) returns Float {
+    ...
+}
+```
+
+### One obvious way
+
+Eristavi deliberately avoids accumulating multiple equivalent syntaxes for fundamental concepts.
+
+The goal is not to provide every familiar spelling from every other language.
+
+The goal is to reduce the number of concepts that programmers need to remember.
+
+### Small language, capable libraries
+
+Language syntax should describe program structure and semantics.
+
+Functionality such as files, networking, JSON, databases, time, encoding, and processes generally belongs in types and libraries rather than becoming additional language keywords.
+
+### Automatic memory management
+
+Ordinary application code should not need to manually allocate and release general-purpose memory.
+
+The compiler and runtime should manage memory lifetime while remaining free to optimize values into registers, stacks, or other representations where appropriate.
+
+### Deterministic resources
+
+Memory and external resources are different problems.
+
+Files, sockets, locks, transactions, and operating-system handles require predictable cleanup.
+
+Eristavi therefore makes resource lifetime explicit through scoped constructs such as `with`.
+
+### Native execution matters
+
+Readable source code should not require giving up native execution.
+
+Eristavi is being designed with its own target-independent compiler pipeline and target-specific native code generators.
+
+---
+
+## Compiler architecture
+
+Eristavi is not designed around C as its native execution model.
+
+Its compiler architecture separates source-language semantics from the machine that eventually executes the program.
+
+```text
+Eristavi source (.eri)
+        │
+        ▼
+Lexer / Parser
+        │
+        ▼
+Semantic analysis
+        │
+        ▼
+Type and effect inference
+        │
+        ▼
+Typed Eristavi representation
+        │
+        ▼
+Universal IR
+        │
+        ▼
+Verification + optimization
+        │
+        ├───────────────┬────────────────┐
+        ▼               ▼                ▼
+   x86-64 backend   ARM64 backend   WebAssembly
+        │               │
+        ▼               ▼
+ native instructions  native instructions
+        │               │
+        └─────── machine execution ──────┘
+```
+
+The source language describes computation.
+
+The target backend describes the machine.
+
+This separation allows new architectures to be added underneath the same Eristavi language model without introducing architecture-specific concepts into ordinary `.eri` source code.
+
+---
+
+## Eristavi owns the compilation model
+
+The long-term Eristavi toolchain is intended to own the path from source semantics to native instructions.
+
+```text
+.eri source
+    ↓
+Eristavi compiler
+    ↓
+Eristavi IR
+    ↓
+Universal IR
+    ↓
+Eristavi target backend
+    ↓
+machine instructions
+```
+
+This is an important part of the project.
+
+Eristavi is not intended to become merely a syntax layer that permanently translates programs into C before another compiler performs the real native compilation.
+
+During the pre-0.1 bootstrap phase, some external infrastructure remains involved in building and packaging the toolchain. Those dependencies are implementation boundaries being progressively reduced rather than part of the language's long-term execution model.
+
+The current x86-64 and ARM64 native backends lower verified Universal IR into target assembly. Direct instruction encoding and deeper ownership of object and executable generation are later steps in the same architecture.
+
+---
+
+## Native targets
+
+### x86-64
+
+The x86-64 backend consumes verified Universal IR and lowers supported Eristavi operations into architecture-specific native instructions.
+
+Current work includes:
+
+- integer and boolean operations;
+- floating-point operations;
+- functions and recursion;
+- control flow;
+- ordinary values;
+- Lists;
+- maybe and identity values;
+- checked failures;
+- deterministic resources;
+- Text support in the existing hosted runtime;
+- native memory and runtime independence work.
+
+### ARM64
+
+ARM64 consumes the same Universal IR.
+
+The language semantics are therefore not defined in terms of x86-64 behavior.
+
+Supported language concepts are progressively implemented behind the ARM64 backend while preserving the same source-level contracts.
+
+### Future architectures
+
+The compiler architecture is intended to allow additional native targets without changing the Eristavi source language.
+
+Potential future targets include architectures such as RISC-V.
+
+No target architecture should define Eristavi semantics.
+
+---
+
+## WebAssembly
+
+WebAssembly is a portable execution target rather than a substitute for Eristavi's native compiler architecture.
+
+```text
+Eristavi source
+      ↓
+Universal IR
+      ↓
+WebAssembly backend
+      ↓
+WebAssembly
+```
+
+This allows Eristavi programs to target environments where portable sandboxed execution is more appropriate than native binaries.
+
+---
+
+## Other output targets
+
+Eristavi may support additional translation or interoperability backends where they are useful.
+
+Those targets are secondary to the core architecture.
+
+The defining compilation model remains:
+
+```text
+Eristavi source → Eristavi compiler → Eristavi IR → target backend
+```
+
+---
+
+## Current status
+
+Eristavi is currently **pre-0.1** and is not yet recommended for production software.
+
+The source-language/frontend contract has reached a stable implementation phase while the compiler, runtime, and native toolchain continue to mature.
+
+Already implemented or substantially implemented areas include:
+
+- lexer and parser;
+- semantic analysis;
+- static relationship inference;
+- type and effect information;
+- typed intermediate representation;
+- Universal IR;
+- IR verification;
+- optimization passes;
+- x86-64 backend work;
+- ARM64 backend work;
+- WebAssembly generation;
+- module interfaces and compiled artifacts;
+- checked failures;
+- deterministic resource handling;
+- Unicode Text semantics;
+- managed heap and runtime work;
+- incremental compilation infrastructure.
+
+The compiler itself increasingly contains components written in Eristavi.
+
+---
+
+## Runtime independence
+
+A major project goal is to remove historical bootstrap dependencies from the normal Eristavi compilation and execution path.
+
+An important milestone has already been reached on Linux x86-64:
+
+> An ordinary `.eri` scalar program can travel through the Eristavi-written frontend and native backend and execute using the new freestanding Eristavi runtime path without linking the previous C application runtime, libc, CRT startup objects, or a dynamic loader.
+
+For example:
+
+```eri
+let first be 40;
+let second be 2;
+
+output(first + second);
+output(first < second);
+```
+
+produces:
+
+```text
+42
+false
+```
+
+through the freestanding scalar path.
+
+This milestone should be stated precisely:
+
+> **Eristavi has demonstrated a C-free application runtime path for the supported scalar subset.**
+
+It does not yet mean that every part of the compiler toolchain is completely independent of bootstrap infrastructure.
+
+The remaining dependencies are being removed incrementally without changing the public language model simply to make implementation work easier.
+
+See [FREESTANDING_SCALAR_APPLICATION.md](FREESTANDING_SCALAR_APPLICATION.md) and [OFFLINE_TOOLCHAIN.md](OFFLINE_TOOLCHAIN.md).
+
+---
+
+## Building Eristavi with Eristavi
+
+Self-hosting is not being treated as a marketing checkbox.
+
+It is part of the architecture.
+
+Increasing portions of the compiler are implemented in Eristavi, including work covering:
+
+```text
+Eristavi source
+      ↓
+parsing
+      ↓
+semantic analysis
+      ↓
+typed IR
+      ↓
+Universal IR
+      ↓
+verification
+      ↓
+optimization
+      ↓
+native target generation
+```
+
+The goal is progressively to reach a toolchain where Eristavi can build Eristavi through machinery owned by the project itself.
+
+The language design is not being changed merely to make self-hosting easier.
+
+Implementation complexity belongs underneath the language.
+
+See [SELF_HOSTING.md](SELF_HOSTING.md).
+
+---
+
+## Language design
+
+### Variables
+
+```eri
+let total be 42;
+```
+
+### Functions
+
+```eri
+function double(value Int) {
+    return value * 2;
+}
+
+output(double(21));
+```
+
+### Values
+
+```eri
+type Coordinate {
+    x Float;
+    y Float;
+}
+
+let point be Coordinate {
+    x = 10.5;
+    y = 20.0;
+};
+```
+
+### Fixed values
+
+```eri
+type Customer {
+    fixed id Int;
+    name Text;
+}
+```
+
+`fixed` expresses immutability as part of the value contract.
+
+### Inferred generic relationships
+
+```eri
+function first(value) {
+    return value;
+}
+
+let number be first(10);
+let text be first("Hello");
+```
+
+The compiler can infer the relationship rather than requiring a separate generic syntax for the common case.
+
+### Checked failures
+
+```eri
+function load(path Text) returns Text fails files.FileError {
+    ...
+}
+```
+
+A function that can fail states that contract explicitly.
+
+### Deterministic resources
 
 ```eri
 import std.files;
 
-function read(path Text) returns Text fails files.FileError {
+function load(path Text) returns Text fails files.FileError {
     with file be try files.open(path) {
         return try file.readText();
     }
 }
 ```
 
-## Toolchain
+### Unicode Text
 
-```text
+```eri
+let text be "A\u{301}";
+
+output(text.characters.count); // grapheme clusters
+output(text.scalars.count);    // Unicode scalar values
+output(text.bytes.count);      // UTF-8 bytes
+```
+
+Eristavi does not pretend these concepts are interchangeable.
+
+---
+
+## Quick start
+
+The current developer toolchain still includes bootstrap infrastructure while the independent native toolchain is being completed.
+
+```sh
+git clone https://github.com/eristavi/eristavi-lang.git
+cd eristavi-lang
+python -m pip install -e .
+```
+
+Run an Eristavi program:
+
+```sh
 erist run examples/hello.eri
-erist check examples/hello.eri
-
-erist interface models/user.eri
-erist object models/user.eri
-erist compile-module models/user.eri
-
-erist build-c examples/hello.eri -o hello.c
-erist build examples/hello.eri -o hello
-
-erist uir examples/hello.eri -o hello.uir
-erist build-asm examples/hello.eri -o hello.s --target x86_64-linux
-erist build-direct examples/hello.eri -o hello --target x86_64-linux
-erist link-direct examples/hello.eri -o hello --target x86_64-linux
-
-erist build-asm examples/hello.eri -o hello-aarch64.s --target arm64-linux
-erist build-direct examples/hello.eri -o hello-aarch64 --target arm64-linux
-
-erist build-js examples/hello.eri -o hello.mjs
-erist build-wat examples/hello.eri -o hello.wat
 ```
 
-## Tests
+Example:
+
+```eri
+let x be 40;
+let y be 2;
+output(x + y);
+```
+
+Output:
 
 ```text
-python -m unittest discover -s tests -v
+42
 ```
 
-The current suite contains **361 tests**. The hosted CI matrix runs:
+Check a program without running it:
 
-- GCC / x86-64 Ubuntu / `-O2`;
-- Clang / x86-64 Ubuntu / `-O2`;
-- Clang / ARM64 Ubuntu / `-O2`;
-- Clang / ARM64 macOS / `-O2`.
+```sh
+erist check examples/hello.eri
+```
 
-The matrix also downloads an immutable-revision copy of the official Unicode 17 `GraphemeBreakTest` fixture and executes all of its vectors. Platform-specific direct-native cases run on their matching Linux architecture. Linux packaging jobs additionally repeat the native compiler self-build and run the offline application audit against the collector-enabled runtime.
+Generate Universal IR:
 
-See [`IMPLEMENTATION_AUDIT.md`](IMPLEMENTATION_AUDIT.md) for the audited boundary and remaining production work.
+```sh
+erist uir examples/hello.eri
+```
+
+Generate native assembly for a supported target:
+
+```sh
+erist build-asm examples/hello.eri -o hello.s --target x86_64-linux
+```
+
+Build through the direct native backend:
+
+```sh
+erist build-direct examples/hello.eri -o hello --target x86_64-linux
+```
+
+---
+
+## Project direction
+
+The project is currently moving toward increasingly complete compiler and runtime independence.
+
+A simplified roadmap is:
+
+```text
+Language model
+      ✓
+Parser / semantic analysis
+      ✓
+Typed IR / Universal IR
+      ✓
+Native x86-64 backend
+      ✓ / expanding
+Native ARM64 backend
+      ✓ / expanding
+Freestanding memory foundation
+      ✓
+Freestanding scalar runtime
+      ✓
+Freestanding Text / managed values
+      →
+Remaining runtime families
+      →
+Independent native toolchain
+      →
+Direct machine-code / executable ownership
+      →
+0.1
+```
+
+The roadmap is intentionally incremental.
+
+A milestone is considered meaningful only when the implementation can preserve the existing language semantics rather than requiring shortcuts in the source language.
+
+---
+
+## Design principles
+
+Eristavi follows a small set of governing ideas.
+
+### Complexity belongs underneath the language
+
+Ordinary programs should not expose compiler or runtime implementation details unnecessarily.
+
+### One obvious way
+
+Fundamental concepts should normally have one preferred representation.
+
+### Infer what is obvious
+
+The compiler should not require programmers to repeat information it can safely prove.
+
+### Require what is important
+
+Public contracts, failures, resource lifetime, and ambiguous operations should remain explicit.
+
+### Libraries before keywords
+
+Capability should normally grow through types and libraries before expanding the language grammar.
+
+### Safe behavior should look ordinary
+
+Potentially dangerous low-level operations should eventually remain available, but they must be visibly explicit.
+
+### Machines do not define the language
+
+x86-64, ARM64, WebAssembly, and future architectures are backend concerns.
+
+Eristavi semantics remain machine-independent.
+
+Read the full charter in [DESIGN_PHILOSOPHY.md](DESIGN_PHILOSOPHY.md).
+
+---
+
+## Why the project exists
+
+Eristavi is also a personal exploration of how programming languages could be designed differently after decades of experience with modern software, compilers, and computer architecture.
+
+The longer story behind the project, its origins, and the thinking that led to its design will be documented separately as **About Eristavi**.
+
+---
 
 ## Documentation
 
-- [`SEMANTIC_ANALYSIS.md`](SEMANTIC_ANALYSIS.md) — experimental Eristavi-written semantic analyzer
-- [`FRONTEND_TOOL.md`](FRONTEND_TOOL.md) — Eristavi-written frontend executable
-- [`PRE_0_1_FREEZE.md`](PRE_0_1_FREEZE.md) — frozen source-language/frontend boundary
-- [`IMPLEMENTATION_AUDIT.md`](IMPLEMENTATION_AUDIT.md) — current audited implementation status
-- [`PRODUCTION_HARDENING.md`](PRODUCTION_HARDENING.md) — production runtime hardening gates
-- [`NATIVE_HEAP_GC.md`](NATIVE_HEAP_GC.md) — offline/native heap tracing contract
-- [`HEAP_DIAGNOSTICS.md`](HEAP_DIAGNOSTICS.md) — opt-in allocation accounting baseline
-- [`DESIGN_PHILOSOPHY.md`](DESIGN_PHILOSOPHY.md) — governing design charter
-- [`LANGUAGE_SEMANTICS.md`](LANGUAGE_SEMANTICS.md) — consolidated semantics
-- [`GRAMMAR.md`](GRAMMAR.md) — consolidated surface grammar
-- [`LEXICAL_RULES.md`](LEXICAL_RULES.md) — lexical rules
-- [`TEXT_VIEWS.md`](TEXT_VIEWS.md) — Unicode character/scalar/UTF-8 views
-- [`MODULE_INTERFACES.md`](MODULE_INTERFACES.md) — versioned contract and implementation artifacts
-- [`UNIVERSAL_IR.md`](UNIVERSAL_IR.md) — target-neutral lower IR
-- [`DIRECT_BACKENDS.md`](DIRECT_BACKENDS.md) — direct backend status
-- [`STANDARD_LIBRARY.md`](STANDARD_LIBRARY.md) — current standard-library surface
-- [`COLLECTIONS.md`](COLLECTIONS.md) — `List`
-- [`FIXED_IMMUTABILITY.md`](FIXED_IMMUTABILITY.md) — transitive `fixed`
-- [`VALUE_EQUALITY.md`](VALUE_EQUALITY.md) — ordinary structural equality
-- [`IDENTITY_EQUALITY.md`](IDENTITY_EQUALITY.md) — identity equality
-- [`ERRORS.md`](ERRORS.md) — checked failures
-- [`RESOURCE_CLEANUP.md`](RESOURCE_CLEANUP.md) — deterministic cleanup and dual-failure composition
-- [`GENERICS.md`](GENERICS.md) — inferred generic relationships
-- [`TARGETS.md`](TARGETS.md) — target strategy and implementation status
+### Language
+
+- [Design Philosophy](DESIGN_PHILOSOPHY.md)
+- [Language Semantics](LANGUAGE_SEMANTICS.md)
+- [Grammar](GRAMMAR.md)
+- [Lexical Rules](LEXICAL_RULES.md)
+- [Unicode Text Views](TEXT_VIEWS.md)
+- [Collections](COLLECTIONS.md)
+- [Fixed / Immutability](FIXED_IMMUTABILITY.md)
+- [Value Equality](VALUE_EQUALITY.md)
+- [Identity Equality](IDENTITY_EQUALITY.md)
+- [Checked Failures](ERRORS.md)
+- [Resource Cleanup](RESOURCE_CLEANUP.md)
+- [Inferred Generic Relationships](GENERICS.md)
+
+### Compiler
+
+- [Semantic Analysis](SEMANTIC_ANALYSIS.md)
+- [Frontend Tool](FRONTEND_TOOL.md)
+- [Universal IR](UNIVERSAL_IR.md)
+- [Module Interfaces](MODULE_INTERFACES.md)
+- [Direct Backends](DIRECT_BACKENDS.md)
+- [Targets](TARGETS.md)
+
+### Runtime and implementation
+
+- [Self Hosting](SELF_HOSTING.md)
+- [Implementation Audit](IMPLEMENTATION_AUDIT.md)
+- [Production Hardening](PRODUCTION_HARDENING.md)
+- [Native Heap GC](NATIVE_HEAP_GC.md)
+- [Heap Diagnostics](HEAP_DIAGNOSTICS.md)
+- [Freestanding Scalar Application](FREESTANDING_SCALAR_APPLICATION.md)
+- [Offline Toolchain](OFFLINE_TOOLCHAIN.md)
+
+---
+
+## Project identity
+
+- **Language:** Eristavi
+- **Source extension:** `.eri`
+- **CLI / compiler:** `erist`
+- **Official website:** [eristavi.org](https://eristavi.org)
+- **Repository:** `eristavi/eristavi-lang`
+- **License:** MIT
+
+The `.erist` extension is reserved for a possible distinct future purpose and is not an alternative ordinary source-file extension.
+
+---
 
 ## License
 
-Eristavi is released under the MIT License.
+Eristavi is released under the **MIT License**.
