@@ -1,0 +1,124 @@
+// Linux/System-V x86-64 lowering for the compiler-private runtime memory profile.
+// This is not a public backend surface: it lowers only verified runtime implementation
+// operations and intentionally has no route from ordinary Eristavi source syntax.
+import compiler.runtime_memory_ir as r;
+import compiler.format;
+
+type Emitter { body Text; failure Text; }
+
+function line(e identity Emitter,text Text) { e.body=e.body+text+"\n"; }
+function slot(index Int) returns Text { return "-"+format.integer((index+1)*8)+"(%rbp)"; }
+
+function registerCount(program identity r.Program) returns Int {
+    let count be 0; let cursor be program.registers;
+    while cursor != none { let current be cursor; count=count+1; cursor=current.next; }
+    return count;
+}
+
+function fail(e identity Emitter) { line(e,"jmp "+e.failure); }
+
+function lower(e identity Emitter,value identity r.Instruction) {
+    // machine-word constant
+    if value.kind == 1 {
+        line(e,"movabsq $"+format.integer(value.number)+", %rax");
+        line(e,"movq %rax, "+slot(value.result));
+        return;
+    }
+    // checked align-up
+    if value.kind == 2 {
+        line(e,"movq "+slot(value.first)+", %rax");
+        line(e,"addq $"+format.integer(value.alignment-1)+", %rax");
+        line(e,"jc "+e.failure);
+        line(e,"andq $-"+format.integer(value.alignment)+", %rax");
+        line(e,"movq %rax, "+slot(value.result));
+        return;
+    }
+    // platform reservation returns base in rax and exact mapped length in rdx
+    if value.kind == 3 {
+        line(e,"movq "+slot(value.first)+", %rdi");
+        line(e,"testq %rdi, %rdi");
+        line(e,"jle "+e.failure);
+        line(e,"call erist_rt_reserve");
+        line(e,"testq %rax, %rax");
+        line(e,"je "+e.failure);
+        line(e,"movq %rax, "+slot(value.result));
+        line(e,"movq %rdx, "+slot(value.extra));
+        return;
+    }
+    // exact release of a verifier-paired reservation
+    if value.kind == 4 {
+        line(e,"movq "+slot(value.first)+", %rdi");
+        line(e,"movq "+slot(value.second)+", %rsi");
+        line(e,"call erist_rt_release");
+        line(e,"testq %rax, %rax");
+        line(e,"jne "+e.failure);
+        return;
+    }
+    // checked derived address: offset must fit [0,length-width] and preserve alignment
+    if value.kind == 5 {
+        line(e,"movq "+slot(value.second)+", %rdx");
+        line(e,"cmpq $"+format.integer(value.width)+", %rdx");
+        line(e,"jb "+e.failure);
+        line(e,"subq $"+format.integer(value.width)+", %rdx");
+        line(e,"movq "+slot(value.third)+", %rcx");
+        line(e,"cmpq %rdx, %rcx");
+        line(e,"ja "+e.failure);
+        if value.alignment > 1 {
+            line(e,"testq $"+format.integer(value.alignment-1)+", %rcx");
+            line(e,"jne "+e.failure);
+        }
+        line(e,"movq "+slot(value.first)+", %rax");
+        line(e,"addq %rcx, %rax");
+        line(e,"jc "+e.failure);
+        line(e,"movq %rax, "+slot(value.result));
+        return;
+    }
+    // fixed-width load
+    if value.kind == 6 {
+        line(e,"movq "+slot(value.first)+", %rax");
+        if value.width == 1 { line(e,"movzbq (%rax), %rcx"); }
+        if value.width == 2 { line(e,"movzwq (%rax), %rcx"); }
+        if value.width == 4 { line(e,"movl (%rax), %ecx"); }
+        if value.width == 8 { line(e,"movq (%rax), %rcx"); }
+        line(e,"movq %rcx, "+slot(value.result));
+        return;
+    }
+    // fixed-width store
+    if value.kind == 7 {
+        line(e,"movq "+slot(value.first)+", %rax");
+        line(e,"movq "+slot(value.second)+", %rcx");
+        if value.width == 1 { line(e,"movb %cl, (%rax)"); }
+        if value.width == 2 { line(e,"movw %cx, (%rax)"); }
+        if value.width == 4 { line(e,"movl %ecx, (%rax)"); }
+        if value.width == 8 { line(e,"movq %rcx, (%rax)"); }
+        return;
+    }
+    fail(e);
+}
+
+public function emit(program identity r.Program,name Text,resultRegister Int) returns Text {
+    if not r.verify(program) { return ""; }
+    if r.registerClass(program,resultRegister) != 7 { return ""; }
+    let count be registerCount(program);
+    let size be ((count*8+15)/16)*16;
+    let failure be ".L"+name+"_memory_fail";
+    let e be identity Emitter { body=""; failure=failure; };
+    line(e,".text");
+    line(e,".globl "+name);
+    line(e,".type "+name+",@function");
+    line(e,name+":");
+    line(e,"pushq %rbp");
+    line(e,"movq %rsp, %rbp");
+    if size > 0 { line(e,"subq $"+format.integer(size)+", %rsp"); }
+    let cursor be program.instructions;
+    while cursor != none { let current be cursor; lower(e,current); cursor=current.next; }
+    line(e,"movq "+slot(resultRegister)+", %rax");
+    line(e,"leave");
+    line(e,"ret");
+    line(e,failure+":");
+    line(e,"movq $-1, %rax");
+    line(e,"leave");
+    line(e,"ret");
+    line(e,".size "+name+",.-"+name);
+    return e.body;
+}
