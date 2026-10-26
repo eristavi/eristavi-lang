@@ -63,7 +63,7 @@ public function layoutsValid() returns Bool {
 
 // Private typed heap registry layout, separate from the unchanged ev_value ABI.
 function textRecordLayout() returns identity Layout {
-    return identity Layout { size=40; alignment=8; fields=identity Field { offset=0; width=8; next=identity Field { offset=8; width=8; next=identity Field { offset=16; width=8; next=identity Field { offset=24; width=8; next=identity Field { offset=32; width=8; next=none; }; }; }; }; }; };
+    return identity Layout { size=48; alignment=8; fields=identity Field { offset=0; width=8; next=identity Field { offset=8; width=8; next=identity Field { offset=16; width=8; next=identity Field { offset=24; width=8; next=identity Field { offset=32; width=8; next=identity Field { offset=40; width=8; next=none; }; }; }; }; }; }; };
 }
 public function textLayoutsValid() returns Bool {
     return layoutsValid() and verify(textRecordLayout())
