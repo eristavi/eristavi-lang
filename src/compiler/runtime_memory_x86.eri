@@ -15,7 +15,7 @@ function registerCount(program identity r.Program) returns Int {
     return count;
 }
 
-function fail(e identity Emitter) { line(e,"jmp "+e.failure); }
+function emitFailureJump(e identity Emitter) { line(e,"jmp "+e.failure); }
 
 function lower(e identity Emitter,value identity r.Instruction) {
     // machine-word constant
@@ -93,7 +93,7 @@ function lower(e identity Emitter,value identity r.Instruction) {
         if value.width == 8 { line(e,"movq %rcx, (%rax)"); }
         return;
     }
-    fail(e);
+    emitFailureJump(e);
 }
 
 public function emit(program identity r.Program,name Text,resultRegister Int) returns Text {
