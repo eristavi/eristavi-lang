@@ -1,0 +1,113 @@
+// Compiler-private runtime implementation support. This is not Eristavi source syntax
+// and does not expose pointers, machine words or manual memory management to programs.
+// Layout records exist only while building the freestanding runtime.
+
+type Field {
+    offset Int;
+    width Int;
+    alignment Int;
+    next maybe identity Field;
+}
+
+type Layout {
+    size Int;
+    alignment Int;
+    fields maybe identity Field;
+}
+
+function powerOfTwo(value Int) returns Bool {
+    if value <= 0 { return false; }
+    let current be value;
+    while current > 1 {
+        if current % 2 != 0 { return false; }
+        current = current / 2;
+    }
+    return true;
+}
+
+function widthValid(width Int) returns Bool {
+    return width == 1 or width == 2 or width == 4 or width == 8;
+}
+
+function accessValid(layout identity Layout, offset Int, width Int, alignment Int) returns Bool {
+    if offset < 0 or not widthValid(width) { return false; }
+    if not powerOfTwo(alignment) or alignment > layout.alignment { return false; }
+    if offset % alignment != 0 { return false; }
+    if width > layout.size or offset > layout.size - width { return false; }
+    return true;
+}
+
+function overlaps(first identity Field, second identity Field) returns Bool {
+    let firstEnd be first.offset + first.width;
+    let secondEnd be second.offset + second.width;
+    return first.offset < secondEnd and second.offset < firstEnd;
+}
+
+function verify(layout identity Layout) returns Bool {
+    if layout.size <= 0 or not powerOfTwo(layout.alignment) { return false; }
+    if layout.size % layout.alignment != 0 { return false; }
+
+    // First establish that every field has a safe bounded range. This keeps the
+    // overlap pass from performing arithmetic on an unvalidated field.
+    let cursor be layout.fields;
+    let count be 0;
+    while cursor != none {
+        if not accessValid(layout,cursor.offset,cursor.width,cursor.alignment) { return false; }
+        count = count + 1;
+        if count > 64 { return false; }
+        cursor = cursor.next;
+    }
+
+    cursor = layout.fields;
+    while cursor != none {
+        let other be layout.fields;
+        while other != none {
+            if other != cursor {
+                if overlaps(cursor,other) { return false; }
+            }
+            other = other.next;
+        }
+        cursor = cursor.next;
+    }
+    return true;
+}
+
+function regionLayout() returns identity Layout {
+    return identity Layout {
+        size=32;
+        alignment=16;
+        fields=identity Field {
+            offset=0; width=8; alignment=8;
+            next=identity Field {
+                offset=8; width=8; alignment=8;
+                next=identity Field {
+                    offset=16; width=8; alignment=8;
+                    next=identity Field { offset=24; width=8; alignment=8; next=none; };
+                };
+            };
+        };
+    };
+}
+
+function blockLayout() returns identity Layout {
+    return identity Layout {
+        size=16;
+        alignment=16;
+        fields=identity Field {
+            offset=0; width=8; alignment=8;
+            next=identity Field { offset=8; width=8; alignment=8; next=none; };
+        };
+    };
+}
+
+public function allocatorLayoutsValid() returns Bool {
+    let region be regionLayout();
+    let block be blockLayout();
+    return verify(region) and verify(block)
+        and accessValid(region,0,8,8)
+        and accessValid(region,8,8,8)
+        and accessValid(region,16,8,8)
+        and accessValid(region,24,8,8)
+        and accessValid(block,0,8,8)
+        and accessValid(block,8,8,8);
+}

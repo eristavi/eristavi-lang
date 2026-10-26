@@ -1,0 +1,8 @@
+import runtime.allocator_x86_64;
+import compiler.runtime_memory_ir;
+
+if runtime_memory_ir.foundationValid() {
+    output(allocator_x86_64.probeSource());
+} else {
+    output(".text\n.globl _start\n_start:\n    ud2\n.section .note.GNU-stack,\"\",@progbits\n");
+}

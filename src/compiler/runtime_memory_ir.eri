@@ -1,0 +1,180 @@
+// Restricted compiler-private memory operation profile used to break the runtime
+// bootstrap cycle. These classes/opcodes are implementation data, not source syntax.
+// Class 7 = machine word, 8 = reservation base, 9 = checked derived address.
+
+type Register {
+    index Int;
+    valueClass Int;
+    defined Bool;
+    next maybe identity Register;
+}
+
+type Instruction {
+    kind Int;
+    result Int;
+    first Int;
+    second Int;
+    third Int;
+    width Int;
+    alignment Int;
+    next maybe identity Instruction;
+}
+
+type Program {
+    registers maybe identity Register;
+    instructions maybe identity Instruction;
+}
+
+function powerOfTwo(value Int) returns Bool {
+    if value <= 0 { return false; }
+    let current be value;
+    while current > 1 {
+        if current % 2 != 0 { return false; }
+        current = current / 2;
+    }
+    return true;
+}
+
+function widthValid(width Int) returns Bool {
+    return width == 1 or width == 2 or width == 4 or width == 8;
+}
+
+function classAt(program identity Program,index Int) returns Int {
+    let cursor be program.registers;
+    while cursor != none {
+        let current be cursor;
+        if current.index == index { return current.valueClass; }
+        cursor = current.next;
+    }
+    return -1;
+}
+
+function definedAt(program identity Program,index Int) returns Bool {
+    let cursor be program.registers;
+    while cursor != none {
+        let current be cursor;
+        if current.index == index { return current.defined; }
+        cursor = current.next;
+    }
+    return false;
+}
+
+function reset(program identity Program) returns Bool {
+    let cursor be program.registers;
+    let expected be 0;
+    while cursor != none {
+        let current be cursor;
+        if current.index != expected { return false; }
+        if current.valueClass < 7 or current.valueClass > 9 { return false; }
+        current.defined = false;
+        expected = expected + 1;
+        if expected > 128 { return false; }
+        cursor = current.next;
+    }
+    return true;
+}
+
+function define(program identity Program,index Int,wanted Int) returns Bool {
+    let cursor be program.registers;
+    while cursor != none {
+        let current be cursor;
+        if current.index == index {
+            if current.valueClass != wanted or current.defined { return false; }
+            current.defined = true;
+            return true;
+        }
+        cursor = current.next;
+    }
+    return false;
+}
+
+function input(program identity Program,index Int,wanted Int) returns Bool {
+    if index < 0 { return false; }
+    return classAt(program,index) == wanted and definedAt(program,index);
+}
+
+function noInputs(value identity Instruction) returns Bool {
+    return value.first == -1 and value.second == -1 and value.third == -1;
+}
+
+function verifyInstruction(program identity Program,value identity Instruction) returns Bool {
+    // word constant
+    if value.kind == 1 {
+        return noInputs(value) and value.width == 0 and value.alignment == 0
+            and define(program,value.result,7);
+    }
+    // checked power-of-two align-up
+    if value.kind == 2 {
+        return input(program,value.first,7) and value.second == -1 and value.third == -1
+            and value.width == 0 and powerOfTwo(value.alignment) and value.alignment <= 4096
+            and define(program,value.result,7);
+    }
+    // reserve a region base from an already checked positive word size
+    if value.kind == 3 {
+        return input(program,value.first,7) and value.second == -1 and value.third == -1
+            and value.width == 0 and value.alignment == 0
+            and define(program,value.result,8);
+    }
+    // release accepts only the original reservation base plus its exact length
+    if value.kind == 4 {
+        return value.result == -1 and input(program,value.first,8) and input(program,value.second,7)
+            and value.third == -1 and value.width == 0 and value.alignment == 0;
+    }
+    // derive an address only from a reservation base, exact region length and offset
+    if value.kind == 5 {
+        return input(program,value.first,8) and input(program,value.second,7) and input(program,value.third,7)
+            and widthValid(value.width) and powerOfTwo(value.alignment) and value.alignment <= value.width
+            and define(program,value.result,9);
+    }
+    // fixed-width load from a previously checked derived address
+    if value.kind == 6 {
+        return input(program,value.first,9) and value.second == -1 and value.third == -1
+            and widthValid(value.width) and value.alignment == value.width
+            and define(program,value.result,7);
+    }
+    // fixed-width store to a previously checked derived address
+    if value.kind == 7 {
+        return value.result == -1 and input(program,value.first,9) and input(program,value.second,7)
+            and value.third == -1 and widthValid(value.width) and value.alignment == value.width;
+    }
+    return false;
+}
+
+function verify(program identity Program) returns Bool {
+    if not reset(program) { return false; }
+    let cursor be program.instructions;
+    let count be 0;
+    while cursor != none {
+        let current be cursor;
+        if not verifyInstruction(program,current) { return false; }
+        count = count + 1;
+        if count > 256 { return false; }
+        cursor = current.next;
+    }
+    return count > 0;
+}
+
+public function foundationValid() returns Bool {
+    let r0 be identity Register { index=0; valueClass=7; defined=false; next=none; };
+    let r1 be identity Register { index=1; valueClass=7; defined=false; next=none; };
+    let r2 be identity Register { index=2; valueClass=8; defined=false; next=none; };
+    let r3 be identity Register { index=3; valueClass=7; defined=false; next=none; };
+    let r4 be identity Register { index=4; valueClass=7; defined=false; next=none; };
+    let r5 be identity Register { index=5; valueClass=9; defined=false; next=none; };
+    let r6 be identity Register { index=6; valueClass=7; defined=false; next=none; };
+    r0.next=r1; r1.next=r2; r2.next=r3; r3.next=r4; r4.next=r5; r5.next=r6;
+
+    let i0 be identity Instruction { kind=1; result=0; first=-1; second=-1; third=-1; width=0; alignment=0; next=none; };
+    let i1 be identity Instruction { kind=2; result=1; first=0; second=-1; third=-1; width=0; alignment=16; next=none; };
+    let i2 be identity Instruction { kind=3; result=2; first=1; second=-1; third=-1; width=0; alignment=0; next=none; };
+    let i3 be identity Instruction { kind=1; result=3; first=-1; second=-1; third=-1; width=0; alignment=0; next=none; };
+    let i4 be identity Instruction { kind=1; result=4; first=-1; second=-1; third=-1; width=0; alignment=0; next=none; };
+    let i5 be identity Instruction { kind=5; result=5; first=2; second=3; third=4; width=8; alignment=8; next=none; };
+    let i6 be identity Instruction { kind=7; result=-1; first=5; second=0; third=-1; width=8; alignment=8; next=none; };
+    let i7 be identity Instruction { kind=6; result=6; first=5; second=-1; third=-1; width=8; alignment=8; next=none; };
+    let i8 be identity Instruction { kind=4; result=-1; first=2; second=3; third=-1; width=0; alignment=0; next=none; };
+    i0.next=i1; i1.next=i2; i2.next=i3; i3.next=i4; i4.next=i5; i5.next=i6; i6.next=i7; i7.next=i8;
+
+    let program be identity Program { registers=r0; instructions=i0; };
+    return verify(program);
+}
