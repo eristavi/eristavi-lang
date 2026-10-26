@@ -1,0 +1,31 @@
+function makeBytes() {
+    let local be "A\u{301}😀\0";
+    return local.bytes;
+}
+function makeScalars() {
+    let local be "A\u{301}😀\0";
+    return local.scalars;
+}
+let bytes be makeBytes();
+let snapshot be bytes;
+let scalars be makeScalars();
+let i be 0;
+while i<2000 {
+    let temporary be "temporary";
+    i=i+1;
+}
+output(bytes.count);
+output(bytes[0]);
+output(bytes[1]);
+output(bytes[2]);
+output(bytes[3]);
+output(bytes[6]);
+output(bytes[7]);
+output(scalars.count);
+output(scalars[0]);
+output(scalars[1]);
+output(scalars[2]);
+output(scalars[3]);
+output(snapshot.count);
+output("".bytes.count);
+output("".scalars.count);
