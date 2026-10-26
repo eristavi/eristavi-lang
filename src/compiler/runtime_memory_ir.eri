@@ -128,41 +128,58 @@ function verifyInstruction(program identity Program,value identity Instruction) 
     }
     // checked power-of-two align-up; transformed words deliberately lose provenance
     if value.kind == 2 {
-        return value.extra == -1 and input(program,value.first,7) and value.second == -1 and value.third == -1
-            and value.width == 0 and powerOfTwo(value.alignment) and value.alignment <= 4096
+        return value.extra == -1 and value.number == 0 and input(program,value.first,7)
+            and value.second == -1 and value.third == -1 and value.width == 0
+            and powerOfTwo(value.alignment) and value.alignment <= 4096
             and define(program,value.result,7,-1);
     }
     // reserve produces both an opaque base and the exact mapped length returned by
     // the platform boundary. The pair receives the same verifier provenance.
     if value.kind == 3 {
-        if value.result == value.extra or not input(program,value.first,7) or value.second != -1 or value.third != -1
-            or value.width != 0 or value.alignment != 0 { return false; }
+        if value.result == value.extra or value.number != 0 or not input(program,value.first,7)
+            or value.second != -1 or value.third != -1 or value.width != 0 or value.alignment != 0 { return false; }
         if not define(program,value.result,8,value.result) { return false; }
         return define(program,value.extra,7,value.result);
     }
     // release accepts only a base and exact length originating from one reservation.
     if value.kind == 4 {
-        return value.result == -1 and value.extra == -1 and input(program,value.first,8) and input(program,value.second,7)
+        return value.result == -1 and value.extra == -1 and value.number == 0
+            and input(program,value.first,8) and input(program,value.second,7)
             and sameReservation(program,value.first,value.second)
             and value.third == -1 and value.width == 0 and value.alignment == 0;
     }
     // derive an address only from a matching reservation pair and a checked offset.
     if value.kind == 5 {
-        if value.extra != -1 or not input(program,value.first,8) or not input(program,value.second,7)
-            or not input(program,value.third,7) or not sameReservation(program,value.first,value.second)
+        if value.extra != -1 or value.number != 0 or not input(program,value.first,8)
+            or not input(program,value.second,7) or not input(program,value.third,7)
+            or not sameReservation(program,value.first,value.second)
             or not widthValid(value.width) or not powerOfTwo(value.alignment) or value.alignment > value.width { return false; }
         return define(program,value.result,9,provenanceAt(program,value.first));
     }
     // fixed-width load from a previously checked derived address
     if value.kind == 6 {
-        return value.extra == -1 and input(program,value.first,9) and value.second == -1 and value.third == -1
-            and widthValid(value.width) and value.alignment == value.width
-            and define(program,value.result,7,-1);
+        return value.extra == -1 and value.number == 0 and input(program,value.first,9)
+            and value.second == -1 and value.third == -1 and widthValid(value.width)
+            and value.alignment == value.width and define(program,value.result,7,-1);
     }
     // fixed-width store to a previously checked derived address
     if value.kind == 7 {
-        return value.result == -1 and value.extra == -1 and input(program,value.first,9) and input(program,value.second,7)
+        return value.result == -1 and value.extra == -1 and value.number == 0
+            and input(program,value.first,9) and input(program,value.second,7)
             and value.third == -1 and widthValid(value.width) and value.alignment == value.width;
+    }
+    // private helper ABI reservation pair: consecutive machine arguments are checked
+    // at lowering time and enter the verifier with one shared provenance token.
+    if value.kind == 8 {
+        if value.result == value.extra or not noInputs(value) or value.number < 0 or value.number > 4
+            or value.width != 0 or value.alignment != 0 { return false; }
+        if not define(program,value.result,8,value.result) { return false; }
+        return define(program,value.extra,7,value.result);
+    }
+    // private helper ABI machine-word parameter
+    if value.kind == 9 {
+        return value.extra == -1 and noInputs(value) and value.number >= 0 and value.number <= 5
+            and value.width == 0 and value.alignment == 0 and define(program,value.result,7,-1);
     }
     return false;
 }
@@ -190,6 +207,31 @@ function instruction(kind Int,result Int,extra Int) returns identity Instruction
         number=0; width=0; alignment=0; next=none; };
 }
 
+public function load64Program() returns identity Program {
+    let r0 be register(0,8); let r1 be register(1,7); let r2 be register(2,7);
+    let r3 be register(3,9); let r4 be register(4,7);
+    r0.next=r1; r1.next=r2; r2.next=r3; r3.next=r4;
+    let i0 be instruction(8,0,1); i0.number=0;
+    let i1 be instruction(9,2,-1); i1.number=2;
+    let i2 be instruction(5,3,-1); i2.first=0; i2.second=1; i2.third=2; i2.width=8; i2.alignment=8;
+    let i3 be instruction(6,4,-1); i3.first=3; i3.width=8; i3.alignment=8;
+    i0.next=i1; i1.next=i2; i2.next=i3;
+    return identity Program { registers=r0; instructions=i0; };
+}
+
+public function store64Program() returns identity Program {
+    let r0 be register(0,8); let r1 be register(1,7); let r2 be register(2,7);
+    let r3 be register(3,7); let r4 be register(4,9);
+    r0.next=r1; r1.next=r2; r2.next=r3; r3.next=r4;
+    let i0 be instruction(8,0,1); i0.number=0;
+    let i1 be instruction(9,2,-1); i1.number=2;
+    let i2 be instruction(9,3,-1); i2.number=3;
+    let i3 be instruction(5,4,-1); i3.first=0; i3.second=1; i3.third=2; i3.width=8; i3.alignment=8;
+    let i4 be instruction(7,-1,-1); i4.first=4; i4.second=3; i4.width=8; i4.alignment=8;
+    i0.next=i1; i1.next=i2; i2.next=i3; i3.next=i4;
+    return identity Program { registers=r0; instructions=i0; };
+}
+
 public function foundationValid() returns Bool {
     let r0 be register(0,7); let r1 be register(1,7); let r2 be register(2,8); let r3 be register(3,7);
     let r4 be register(4,7); let r5 be register(5,9); let r6 be register(6,7); let r7 be register(7,7);
@@ -207,7 +249,7 @@ public function foundationValid() returns Bool {
     i0.next=i1; i1.next=i2; i2.next=i3; i3.next=i4; i4.next=i5; i5.next=i6; i6.next=i7; i7.next=i8;
 
     let program be identity Program { registers=r0; instructions=i0; };
-    return verify(program) and registerClass(program,7) == 7;
+    return verify(program) and verify(load64Program()) and verify(store64Program()) and registerClass(program,7) == 7;
 }
 
 public function rejectsMixedReservations() returns Bool {
