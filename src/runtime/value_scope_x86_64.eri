@@ -1,0 +1,22 @@
+// Freestanding scalar slot/scope lifetime ABI for Linux/System-V x86-64.
+// Matches the existing native runtime structure expected by the compiler. Root/class
+// metadata is stored for the later GC port; this slice does not invent new ownership
+// semantics or expose lifetime controls to Eristavi source programs.
+import runtime.value_scalar_x86_64;
+import compiler.runtime_value;
+
+function scopeSource() returns Text {
+    let scopeSize be runtime_value.scopeSize();
+    let markOffset be runtime_value.scopeMarkOffset();
+    let previousOffset be runtime_value.scopePreviousOffset();
+    let rootsOffset be runtime_value.scopeRootsOffset();
+    let classesOffset be runtime_value.scopeClassesOffset();
+    let countOffset be runtime_value.scopeCountOffset();
+    let slotNext be runtime_value.slotNextOffset();
+    return ".text\n.globl evn_scope_enter\n.type evn_scope_enter,@function\nevn_scope_enter:\n    subq $8,%rsp\n    movl $"+format.integer(scopeSize)+",%edi\n    call erist_rt_alloc\n    addq $8,%rsp\n    testq %rax,%rax\n    je erist_rt_value_fault_oom\n    movq .Lvalue_slots(%rip),%rcx\n    movq %rcx,"+format.integer(markOffset)+"(%rax)\n    movq .Lvalue_scopes(%rip),%rcx\n    movq %rcx,"+format.integer(previousOffset)+"(%rax)\n    movq $0,"+format.integer(rootsOffset)+"(%rax)\n    movq $0,"+format.integer(classesOffset)+"(%rax)\n    movq $0,"+format.integer(countOffset)+"(%rax)\n    movq %rax,.Lvalue_scopes(%rip)\n    ret\n.size evn_scope_enter,.-evn_scope_enter\n\n.globl evn_bind_roots\n.type evn_bind_roots,@function\nevn_bind_roots:\n    testq %rdi,%rdi\n    je erist_rt_value_fault_internal\n    testq %rsi,%rsi\n    je erist_rt_value_fault_internal\n    testq %rdx,%rdx\n    je erist_rt_value_fault_internal\n    movabsq $2305843009213693951,%rax\n    cmpq %rax,%rcx\n    ja erist_rt_value_fault_internal\n    cmpq .Lvalue_scopes(%rip),%rdi\n    jne erist_rt_value_fault_internal\n    movq %rsi,"+format.integer(rootsOffset)+"(%rdi)\n    movq %rdx,"+format.integer(classesOffset)+"(%rdi)\n    movq %rcx,"+format.integer(countOffset)+"(%rdi)\n    ret\n.size evn_bind_roots,.-evn_bind_roots\n\n.globl evn_scope_leave\n.type evn_scope_leave,@function\nevn_scope_leave:\n    pushq %rbx\n    pushq %r12\n    pushq %r13\n    pushq %r14\n    pushq %r15\n    testq %rdi,%rdi\n    je .Lscope_leave_internal\n    testq %rsi,%rsi\n    je .Lscope_leave_internal\n    cmpq .Lvalue_scopes(%rip),%rdi\n    jne .Lscope_leave_internal\n    movq 0(%rsi),%r12\n    cmpq $1,%r12\n    je .Lscope_leave_value_ok\n    cmpq $3,%r12\n    je .Lscope_leave_value_ok\n    cmpq $5,%r12\n    jne .Lscope_leave_internal\n.Lscope_leave_value_ok:\n    movq 8(%rsi),%r13\n    movq %rdi,%r14\n    movq "+format.integer(markOffset)+"(%r14),%r15\n    movq "+format.integer(previousOffset)+"(%r14),%rbx\n.Lscope_leave_slots:\n    movq .Lvalue_slots(%rip),%rax\n    cmpq %r15,%rax\n    je .Lscope_leave_scope\n    testq %rax,%rax\n    je .Lscope_leave_internal\n    movq "+format.integer(slotNext)+"(%rax),%rcx\n    movq %rcx,.Lvalue_slots(%rip)\n    movq %rax,%rdi\n    call erist_rt_free\n    testq %rax,%rax\n    jne .Lscope_leave_internal\n    jmp .Lscope_leave_slots\n.Lscope_leave_scope:\n    movq %rbx,.Lvalue_scopes(%rip)\n    movq %r14,%rdi\n    call erist_rt_free\n    testq %rax,%rax\n    jne .Lscope_leave_internal\n    movq %r12,%rdi\n    movq %r13,%rsi\n    call erist_rt_value_new\n    popq %r15\n    popq %r14\n    popq %r13\n    popq %r12\n    popq %rbx\n    ret\n.Lscope_leave_internal:\n    popq %r15\n    popq %r14\n    popq %r13\n    popq %r12\n    popq %rbx\n    jmp erist_rt_value_fault_internal\n.size evn_scope_leave,.-evn_scope_leave\n";
+}
+
+public function source() returns Text {
+    if not runtime_value.layoutsValid() { return ".text\n.globl erist_rt_scope_layout_invalid\nerist_rt_scope_layout_invalid:\n    ud2\n"; }
+    return value_scalar_x86_64.source()+scopeSource();
+}
