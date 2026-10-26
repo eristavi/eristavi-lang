@@ -4,20 +4,24 @@
 // composition adds exact UTF-8 byte output; Float remains a later migration step.
 import runtime.value_scope_x86_64;
 import runtime.value_text_x86_64;
+import runtime.value_float_x86_64;
 
-function outputSource(allowText Bool) returns Text {
+function outputSource(allowText Bool,allowFloat Bool) returns Text {
     let textCheck be ""; let textOutput be "";
     if allowText {
         textCheck="    cmpq $4,%rax\n    je erist_rt_output_text\n";
         textOutput=".section .rodata\n.Loutput_text_newline:\n.byte 10\n.text\n.globl erist_rt_output_text\n.type erist_rt_output_text,@function\nerist_rt_output_text:\n    subq $8,%rsp\n    movq 8(%rdi),%rdx\n    movq 16(%rdi),%rsi\n    movl $1,%edi\n    call erist_rt_write_all\n    testq %rax,%rax\n    js .Loutput_text_fail\n    movl $1,%edi\n    leaq .Loutput_text_newline(%rip),%rsi\n    movl $1,%edx\n    call erist_rt_write_all\n    testq %rax,%rax\n    js .Loutput_text_fail\n    addq $8,%rsp\n    ret\n.Loutput_text_fail:\n    addq $8,%rsp\n    jmp erist_rt_value_fault_internal\n.size erist_rt_output_text,.-erist_rt_output_text\n";
     }
+    if allowFloat { textCheck="    cmpq $2,%rax\n    je .Loutput_value_float\n"+textCheck; textOutput=textOutput+".text\n.Loutput_value_float:\n    movq 8(%rdi),%rdi\n    jmp erist_rt_output_float\n"; }
     return ".section .rodata\n.Loutput_true:\n    .ascii \"true\\n\"\n.Loutput_false:\n    .ascii \"false\\n\"\n.text\n.globl erist_rt_output_int\n.type erist_rt_output_int,@function\nerist_rt_output_int:\n    pushq %rbx\n    subq $48,%rsp\n    movb $10,47(%rsp)\n    leaq 46(%rsp),%r8\n    movq %rdi,%rax\n    xorl %ebx,%ebx\n    testq %rax,%rax\n    jge .Loutput_int_magnitude\n    movl $1,%ebx\n    negq %rax\n.Loutput_int_magnitude:\n    testq %rax,%rax\n    jne .Loutput_int_digits\n    movb $48,(%r8)\n    decq %r8\n    jmp .Loutput_int_sign\n.Loutput_int_digits:\n    xorl %edx,%edx\n    movl $10,%ecx\n    divq %rcx\n    addb $48,%dl\n    movb %dl,(%r8)\n    decq %r8\n    testq %rax,%rax\n    jne .Loutput_int_digits\n.Loutput_int_sign:\n    testl %ebx,%ebx\n    je .Loutput_int_emit\n    movb $45,(%r8)\n    decq %r8\n.Loutput_int_emit:\n    leaq 1(%r8),%rsi\n    leaq 48(%rsp),%rdx\n    subq %rsi,%rdx\n    movl $1,%edi\n    call erist_rt_write_all\n    testq %rax,%rax\n    js .Loutput_int_fault\n    addq $48,%rsp\n    popq %rbx\n    ret\n.Loutput_int_fault:\n    addq $48,%rsp\n    popq %rbx\n    jmp erist_rt_value_fault_internal\n.size erist_rt_output_int,.-erist_rt_output_int\n\n.globl erist_rt_output_bool\n.type erist_rt_output_bool,@function\nerist_rt_output_bool:\n    testq %rdi,%rdi\n    je .Loutput_bool_false\n    leaq .Loutput_true(%rip),%rsi\n    movl $5,%edx\n    jmp .Loutput_bool_emit\n.Loutput_bool_false:\n    leaq .Loutput_false(%rip),%rsi\n    movl $6,%edx\n.Loutput_bool_emit:\n    movl $1,%edi\n    subq $8,%rsp\n    call erist_rt_write_all\n    addq $8,%rsp\n    testq %rax,%rax\n    js erist_rt_value_fault_internal\n    ret\n.size erist_rt_output_bool,.-erist_rt_output_bool\n\n.globl evn_output\n.type evn_output,@function\nevn_output:\n    testq %rdi,%rdi\n    je erist_rt_value_fault_internal\n    movq 0(%rdi),%rax\n    cmpq $1,%rax\n    je .Loutput_value_int\n    cmpq $3,%rax\n    je .Loutput_value_bool\n"+textCheck+"    jmp erist_rt_value_fault_internal\n.Loutput_value_int:\n    movq 8(%rdi),%rdi\n    jmp erist_rt_output_int\n.Loutput_value_bool:\n    movq 8(%rdi),%rdi\n    jmp erist_rt_output_bool\n.size evn_output,.-evn_output\n"+textOutput;
 }
 
-public function source() returns Text { return value_scope_x86_64.source()+outputSource(false); }
+public function source() returns Text { return value_scope_x86_64.source()+outputSource(false,false); }
 
-public function textSource() returns Text { return value_text_x86_64.source()+outputSource(true); }
+public function textSource() returns Text { return value_text_x86_64.source()+outputSource(true,false); }
 
-public function viewSource() returns Text { return value_text_x86_64.viewSource()+outputSource(true); }
+public function viewSource() returns Text { return value_text_x86_64.viewSource()+outputSource(true,false); }
 
-public function nfcSource() returns Text { return value_text_x86_64.nfcSource()+outputSource(true); }
+public function nfcSource() returns Text { return value_text_x86_64.nfcSource()+outputSource(true,false); }
+
+public function floatSource() returns Text { return value_text_x86_64.floatSource()+outputSource(true,true)+value_float_x86_64.source(); }

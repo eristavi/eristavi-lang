@@ -1,6 +1,7 @@
 # Owned-runtime allocation-failure qualification
 
-Status: all thirteen focused Linux x86-64 probes passed locally; full CI pending.
+Status: thirteen Text failure probes qualified in PR #33 across all four CI jobs
+(with target-native probes on x86-64 Linux) and merged.
 This is a bounded prerequisite for roadmap step 7, not complete collector integration.
 The supported target is Linux/System-V x86-64 and the supported value heap is Text.
 

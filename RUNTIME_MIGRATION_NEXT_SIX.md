@@ -1,6 +1,6 @@
 # Current six-step runtime migration
 
-This checklist describes the remaining C value-runtime migration after PR #32.
+This checklist describes the remaining C value-runtime migration after PR #33.
 It records implementation boundaries; adding a primitive or test is not completion
 of the corresponding language-value subsystem. All target work currently concerns
 Linux/System-V x86-64. The bootstrap generator still uses the existing C runtime.
@@ -8,7 +8,7 @@ Linux/System-V x86-64. The bootstrap generator still uses the existing C runtime
 | Step | Current batch | Remaining acceptance boundary |
 | --- | --- | --- |
 | 1. Text performance | Indexed backing lookup; snapshot-safe append capacity; geometric growth | Qualified in PR #32; independent small-buffer allocation remains unpooled |
-| 2. Float | Strict binary64 primitives qualified; exact decimal-output helper focused checks passed | Full CI for formatting; correct decimal input; value ABI dispatch and lifetime integration; end-to-end fixtures |
+| 2. Float | Arithmetic and formatting qualified; exact parsing and ordinary value integration focused checks passed | Automatic full CI qualification of the Float value profile |
 | 3. Objects and Lists | Existing C ABI and operations inventoried | Typed backing ownership; construction and initialization; copy/detach; member/index/ref; append; equality; transitive tracing |
 | 4. `maybe` and identity | Existing wrapper/alias ABI inventoried | None/present operations; optional detach; shared identity updates; alias equality; cyclic graph marking |
 | 5. Checked failures | Existing native helper contracts inventoried | Handler frames and context transfer; saved payload ownership; typed matches; unwind roots; primary/secondary propagation |

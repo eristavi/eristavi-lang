@@ -1,6 +1,7 @@
 # Owned binary64 decimal output
 
-Status: focused Linux/System-V x86-64 qualification passed; full automatic CI pending.
+Status: isolated formatter qualified in PR #33 and merged. Shared-helper refactor
+and value-profile integration have focused checks passed; full CI pending.
 
 `runtime.float_format_x86_64.source()` emits the private
 `erist_rt_float_format(bits, buffer)` helper. The caller supplies a trusted writable
@@ -30,9 +31,11 @@ the fixed/scientific notation decision.
 The fixed workspace holds 128 limbs (1152 decimal digits), while every finite
 binary64 input requires at most 767 digits in this representation. Up to twelve
 powers are multiplied per pass: 5^12 is less than 1e9, so a limb product plus carry
-fits in an unsigned 64-bit word and introduces at most one new limb. The function
-uses 1792 bytes of stack workspace plus five saved registers, allocates no heap
-storage and calls no helper. The longest formatted result is at most 24 bytes,
+fits in an unsigned 64-bit word and introduces at most one new limb. The formatter
+uses a 1792-byte stack workspace and calls the shared exact-digit
+helper, which uses 512 bytes of limb workspace. Including saved registers and the
+call boundary, nested stack use remains below 2.5 KiB; neither function allocates
+heap storage. The longest formatted result is at most 24 bytes,
 within the caller's 32-byte buffer. The capacity guard returns an internal status
 rather than writing beyond the limb array.
 
@@ -59,7 +62,8 @@ with `tests` and the pinned project dependencies on PYTHONPATH. This took 5.973
 seconds. No manual full suite, self-build, workflow dispatch or rerun was initiated.
 Full CI remains required before merging the new batch.
 
-This completes the isolated decimal-output helper, not the full Float migration.
-Correctly rounded literal parsing and ordinary value-helper dispatch, copies,
-stores, scope escapes and real application fixtures remain. The normal compiler
-continues to use its existing runtime until those boundaries are complete.
+The subsequent Float value profile adds correctly rounded literal parsing, ordinary
+value-helper dispatch, copies, stores, scope escapes and a real application fixture;
+see `FREESTANDING_FLOAT_VALUES.md` for its pending qualification boundary. The
+compiler retains its broad C-runtime dependency until all required value families
+and failure/resource services have been ported.
