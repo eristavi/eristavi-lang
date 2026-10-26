@@ -1,0 +1,26 @@
+name: Freestanding scalar application preflight
+
+on:
+  push:
+    branches: [runtime/freestanding-scalar-application]
+
+concurrency:
+  group: scalar-application-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    env:
+      CFLAGS: -O2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install bootstrap toolchain
+        run: python -m pip install -e .
+      - name: Compile focused tests
+        run: python -m py_compile tests/test_freestanding_foundation.py tests/test_internal_memory_allocator.py tests/test_runtime_memory_lowering.py tests/test_verified_free_list.py tests/test_freestanding_checked_scalars.py tests/test_freestanding_scalar_faults.py tests/test_freestanding_scalar_values.py tests/test_freestanding_scalar_scopes.py tests/test_freestanding_scalar_application.py
+      - name: Run focused runtime independence tests
+        run: python -m unittest -v tests.test_freestanding_foundation tests.test_internal_memory_allocator tests.test_runtime_memory_lowering tests.test_verified_free_list tests.test_freestanding_checked_scalars tests.test_freestanding_scalar_faults tests.test_freestanding_scalar_values tests.test_freestanding_scalar_scopes tests.test_freestanding_scalar_application
