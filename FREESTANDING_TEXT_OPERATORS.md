@@ -18,9 +18,12 @@ Other internal Text operator codes remain runtime defects.
 
 Concatenation checks unsigned addition overflow and the reservation boundary's maximum
 supported length before reading payload bytes or allocating. Empty operands share the
-other immutable value through normal Text copy. Nonempty operands allocate a fresh
-reservation and copy both byte spans using the verified byte-store lowerer. Neither
-input storage nor an earlier snapshot is modified, including self-concatenation.
+other immutable value through normal Text copy. Nonempty operands append within an existing reservation only when the left input
+is its longest published prefix and sufficient capacity remains. Otherwise they
+allocate geometrically sized storage and copy both byte spans. All destination
+byte writes use the verified lowerer. Previously published bytes and snapshot
+lengths remain unchanged, including self-concatenation and branches from older
+prefixes. See `FREESTANDING_TEXT_CAPACITY.md` for the capacity and registry rules.
 
 A common private publish operation installs the owned reservation in the typed Text
 registry and completes the 32-byte Text value slot before collection. Constructors
