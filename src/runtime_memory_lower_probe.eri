@@ -11,7 +11,7 @@ function ins(kind Int,result Int,extra Int) returns identity r.Instruction {
         number=0; width=0; alignment=0; next=none; };
 }
 
-function program() returns identity r.Program {
+function validProgram() returns identity r.Program {
     let r0 be reg(0,7); let r1 be reg(1,7); let r2 be reg(2,8); let r3 be reg(3,7);
     let r4 be reg(4,7); let r5 be reg(5,9); let r6 be reg(6,7); let r7 be reg(7,7);
     r0.next=r1; r1.next=r2; r2.next=r3; r3.next=r4; r4.next=r5; r5.next=r6; r6.next=r7;
@@ -29,6 +29,20 @@ function program() returns identity r.Program {
     return identity r.Program { registers=r0; instructions=i0; };
 }
 
+function invalidAccessProgram(offset Int) returns identity r.Program {
+    let r0 be reg(0,7); let r1 be reg(1,8); let r2 be reg(2,7); let r3 be reg(3,7);
+    let r4 be reg(4,9); let r5 be reg(5,7);
+    r0.next=r1; r1.next=r2; r2.next=r3; r3.next=r4; r4.next=r5;
+    let i0 be ins(1,0,-1); i0.number=1;
+    let i1 be ins(3,1,2); i1.first=0;
+    let i2 be ins(1,3,-1); i2.number=offset;
+    let i3 be ins(5,4,-1); i3.first=1; i3.second=2; i3.third=3; i3.width=8; i3.alignment=8;
+    let i4 be ins(6,5,-1); i4.first=4; i4.width=8; i4.alignment=8;
+    let i5 be ins(4,-1,-1); i5.first=1; i5.second=2;
+    i0.next=i1; i1.next=i2; i2.next=i3; i3.next=i4; i4.next=i5;
+    return identity r.Program { registers=r0; instructions=i0; };
+}
+
 function invalidSource() returns Text {
     return ".text\n.globl _start\n.type _start,@function\n_start:\n    movl $1,%edi\n    jmp erist_rt_exit\n.size _start,.-_start\n.section .note.GNU-stack,\"\",@progbits\n";
 }
@@ -36,9 +50,11 @@ function invalidSource() returns Text {
 function probeSource() returns Text {
     let platform be linux_x86_64.memorySource();
     if not r.foundationValid() or not r.rejectsMixedReservations() { return platform+invalidSource(); }
-    let lowered be runtime_memory_x86.emit(program(),"erist_rt_memory_lower_probe",7);
-    if lowered == "" { return platform+invalidSource(); }
-    return platform+lowered+".text\n.globl _start\n.type _start,@function\n_start:\n    xorl %ebp,%ebp\n    call erist_rt_memory_lower_probe\n    cmpq $123456789,%rax\n    jne .Lmemory_lower_probe_fail\n    xorl %edi,%edi\n    jmp erist_rt_exit\n.Lmemory_lower_probe_fail:\n    movl $1,%edi\n    jmp erist_rt_exit\n.size _start,.-_start\n.section .note.GNU-stack,\"\",@progbits\n";
+    let valid be runtime_memory_x86.emit(validProgram(),"erist_rt_memory_lower_probe",7);
+    let bounds be runtime_memory_x86.emit(invalidAccessProgram(4096),"erist_rt_memory_bounds_probe",5);
+    let alignment be runtime_memory_x86.emit(invalidAccessProgram(3),"erist_rt_memory_alignment_probe",5);
+    if valid == "" or bounds == "" or alignment == "" { return platform+invalidSource(); }
+    return platform+valid+bounds+alignment+".text\n.globl _start\n.type _start,@function\n_start:\n    xorl %ebp,%ebp\n    call erist_rt_memory_lower_probe\n    cmpq $123456789,%rax\n    jne .Lmemory_lower_probe_fail\n    call erist_rt_memory_bounds_probe\n    cmpq $-1,%rax\n    jne .Lmemory_lower_probe_fail\n    call erist_rt_memory_alignment_probe\n    cmpq $-1,%rax\n    jne .Lmemory_lower_probe_fail\n    xorl %edi,%edi\n    jmp erist_rt_exit\n.Lmemory_lower_probe_fail:\n    movl $1,%edi\n    jmp erist_rt_exit\n.size _start,.-_start\n.section .note.GNU-stack,\"\",@progbits\n";
 }
 
 output(probeSource());
