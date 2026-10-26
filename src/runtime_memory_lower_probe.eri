@@ -54,7 +54,7 @@ function probeSource() returns Text {
     let bounds be runtime_memory_x86.emit(invalidAccessProgram(4096),"erist_rt_memory_bounds_probe",5);
     let alignment be runtime_memory_x86.emit(invalidAccessProgram(3),"erist_rt_memory_alignment_probe",5);
     if valid == "" or bounds == "" or alignment == "" { return platform+invalidSource(); }
-    return platform+valid+bounds+alignment+".text\n.globl _start\n.type _start,@function\n_start:\n    xorl %ebp,%ebp\n    call erist_rt_memory_lower_probe\n    cmpq $123456789,%rax\n    jne .Lmemory_lower_probe_fail\n    call erist_rt_memory_bounds_probe\n    cmpq $-1,%rax\n    jne .Lmemory_lower_probe_fail\n    call erist_rt_memory_alignment_probe\n    cmpq $-1,%rax\n    jne .Lmemory_lower_probe_fail\n    xorl %edi,%edi\n    jmp erist_rt_exit\n.Lmemory_lower_probe_fail:\n    movl $1,%edi\n    jmp erist_rt_exit\n.size _start,.-_start\n.section .note.GNU-stack,\"\",@progbits\n";
+    return platform+valid+bounds+alignment+".text\n.globl _start\n.type _start,@function\n_start:\n    xorl %ebp,%ebp\n    call erist_rt_memory_lower_probe\n    testq %rdx,%rdx\n    jne .Lmemory_lower_probe_fail\n    cmpq $123456789,%rax\n    jne .Lmemory_lower_probe_fail\n    call erist_rt_memory_bounds_probe\n    cmpq $1,%rdx\n    jne .Lmemory_lower_probe_fail\n    call erist_rt_memory_alignment_probe\n    cmpq $1,%rdx\n    jne .Lmemory_lower_probe_fail\n    xorl %edi,%edi\n    jmp erist_rt_exit\n.Lmemory_lower_probe_fail:\n    movl $1,%edi\n    jmp erist_rt_exit\n.size _start,.-_start\n.section .note.GNU-stack,\"\",@progbits\n";
 }
 
 output(probeSource());
