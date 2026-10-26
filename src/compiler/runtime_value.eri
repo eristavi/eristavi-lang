@@ -1,0 +1,62 @@
+// Compiler-private native value lifetime layouts. These are ABI verification data,
+// not source-level types and not public pointer/ownership syntax.
+
+type Field { offset Int; width Int; next maybe identity Field; }
+type Layout { size Int; alignment Int; fields maybe identity Field; }
+
+function aligned(value Int,alignment Int) returns Bool { return alignment>0 and value%alignment==0; }
+function valid(layout identity Layout,field identity Field) returns Bool {
+    return field.offset>=0 and field.width==8 and aligned(field.offset,8)
+        and field.offset<=layout.size-field.width;
+}
+function verify(layout identity Layout) returns Bool {
+    if layout.size<=0 or layout.alignment!=8 or not aligned(layout.size,layout.alignment) { return false; }
+    let cursor be layout.fields; let count be 0;
+    while cursor != none {
+        let current be cursor;
+        if not valid(layout,current) { return false; }
+        let other be layout.fields;
+        while other != none {
+            let candidate be other;
+            if candidate != current {
+                if current.offset < candidate.offset+candidate.width and candidate.offset < current.offset+current.width { return false; }
+            }
+            other=candidate.next;
+        }
+        count=count+1; if count>16 { return false; }
+        cursor=current.next;
+    }
+    return true;
+}
+
+public function valueSize() returns Int { return 32; }
+public function valueTypeOffset() returns Int { return 0; }
+public function valuePayloadOffset() returns Int { return 8; }
+public function valueTail1Offset() returns Int { return 16; }
+public function valueTail2Offset() returns Int { return 24; }
+public function slotSize() returns Int { return 40; }
+public function slotNextOffset() returns Int { return 32; }
+
+public function scopeSize() returns Int { return 40; }
+public function scopeMarkOffset() returns Int { return 0; }
+public function scopePreviousOffset() returns Int { return 8; }
+public function scopeRootsOffset() returns Int { return 16; }
+public function scopeClassesOffset() returns Int { return 24; }
+public function scopeCountOffset() returns Int { return 32; }
+
+function valueLayout() returns identity Layout {
+    return identity Layout { size=32; alignment=8; fields=identity Field { offset=0; width=8; next=identity Field { offset=8; width=8; next=identity Field { offset=16; width=8; next=identity Field { offset=24; width=8; next=none; }; }; }; }; };
+}
+function slotLayout() returns identity Layout {
+    return identity Layout { size=40; alignment=8; fields=identity Field { offset=0; width=8; next=identity Field { offset=8; width=8; next=identity Field { offset=16; width=8; next=identity Field { offset=24; width=8; next=identity Field { offset=32; width=8; next=none; }; }; }; }; }; };
+}
+function scopeLayout() returns identity Layout {
+    return identity Layout { size=40; alignment=8; fields=identity Field { offset=0; width=8; next=identity Field { offset=8; width=8; next=identity Field { offset=16; width=8; next=identity Field { offset=24; width=8; next=identity Field { offset=32; width=8; next=none; }; }; }; }; }; };
+}
+
+public function layoutsValid() returns Bool {
+    return verify(valueLayout()) and verify(slotLayout()) and verify(scopeLayout())
+        and valueSize()==slotNextOffset()
+        and scopeMarkOffset()==0 and scopePreviousOffset()==8
+        and scopeRootsOffset()==16 and scopeClassesOffset()==24 and scopeCountOffset()==32;
+}

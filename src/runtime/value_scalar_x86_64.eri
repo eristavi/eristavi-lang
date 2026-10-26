@@ -1,0 +1,42 @@
+// Freestanding scalar slice of the existing native ev_value ABI.
+// Linux/System-V x86-64 only. This intentionally implements only Int, Bool and void
+// values; Text, Float, objects, maybe/identity, resources and GC remain later
+// migration stages. No part of this file is Eristavi source-level API.
+//
+// Existing C ABI layout on x86-64:
+//   ev_value size 32 bytes
+//   +0  int type + ABI padding (stored here as one zero-extended machine word)
+//   +8  union payload begins (Int/Bool use the first signed 64-bit word)
+//   +16,+24 remaining union storage, zeroed for scalar values.
+// Native slot nodes append the existing 8-byte next link at +32 (40 bytes total).
+
+import runtime.linux_x86_64;
+import runtime.allocator_x86_64;
+import runtime.scalar_x86_64;
+import runtime.scalar_fault_x86_64;
+import compiler.runtime_value;
+
+function stateSource() returns Text {
+    return ".bss\n.p2align 3\n.Lvalue_slots:\n.quad 0\n.Lvalue_scopes:\n.quad 0\n";
+}
+
+function faultSource() returns Text {
+    return ".section .rodata\n.Lvalue_fault_oom:\n    .ascii \"Eristavi runtime fault: out of memory\\n\"\n.Lvalue_fault_oom_end:\n.Lvalue_fault_internal:\n    .ascii \"Eristavi runtime fault: invalid internal scalar value operation\\n\"\n.Lvalue_fault_internal_end:\n.text\n.globl erist_rt_value_fault_oom\n.type erist_rt_value_fault_oom,@function\nerist_rt_value_fault_oom:\n    leaq .Lvalue_fault_oom(%rip),%rsi\n    movl $(.Lvalue_fault_oom_end-.Lvalue_fault_oom),%edx\n    jmp .Lvalue_fault_emit\n.globl erist_rt_value_fault_internal\n.type erist_rt_value_fault_internal,@function\nerist_rt_value_fault_internal:\n    leaq .Lvalue_fault_internal(%rip),%rsi\n    movl $(.Lvalue_fault_internal_end-.Lvalue_fault_internal),%edx\n.Lvalue_fault_emit:\n    movl $2,%edi\n    subq $8,%rsp\n    call erist_rt_write_all\n    addq $8,%rsp\n    movl $1,%edi\n    jmp erist_rt_exit\n.size erist_rt_value_fault_oom,.-erist_rt_value_fault_oom\n.size erist_rt_value_fault_internal,.-erist_rt_value_fault_internal\n";
+}
+
+function valueSource() returns Text {
+    return ".text\n.globl erist_rt_value_new\n.type erist_rt_value_new,@function\nerist_rt_value_new:\n    pushq %r12\n    pushq %r13\n    subq $8,%rsp\n    movq %rdi,%r12\n    movq %rsi,%r13\n    movl $40,%edi\n    call erist_rt_alloc\n    testq %rax,%rax\n    je .Lvalue_new_oom\n    movq %r12,0(%rax)\n    movq %r13,8(%rax)\n    movq $0,16(%rax)\n    movq $0,24(%rax)\n    movq .Lvalue_slots(%rip),%rcx\n    movq %rcx,32(%rax)\n    movq %rax,.Lvalue_slots(%rip)\n    addq $8,%rsp\n    popq %r13\n    popq %r12\n    ret\n.Lvalue_new_oom:\n    addq $8,%rsp\n    popq %r13\n    popq %r12\n    jmp erist_rt_value_fault_oom\n.size erist_rt_value_new,.-erist_rt_value_new\n\n.globl evn_void\n.type evn_void,@function\nevn_void:\n    movl $5,%edi\n    xorl %esi,%esi\n    jmp erist_rt_value_new\n.size evn_void,.-evn_void\n\n.globl evn_int\n.type evn_int,@function\nevn_int:\n    movq %rdi,%rsi\n    movl $1,%edi\n    jmp erist_rt_value_new\n.size evn_int,.-evn_int\n\n.globl evn_bool\n.type evn_bool,@function\nevn_bool:\n    testq %rdi,%rdi\n    setne %al\n    movzbq %al,%rsi\n    movl $3,%edi\n    jmp erist_rt_value_new\n.size evn_bool,.-evn_bool\n\n.globl evn_copy\n.type evn_copy,@function\nevn_copy:\n    movq 0(%rdi),%rax\n    cmpq $1,%rax\n    je .Lvalue_copy_scalar\n    cmpq $3,%rax\n    je .Lvalue_copy_scalar\n    cmpq $5,%rax\n    jne erist_rt_value_fault_internal\n.Lvalue_copy_scalar:\n    movq 8(%rdi),%rsi\n    movq %rax,%rdi\n    jmp erist_rt_value_new\n.size evn_copy,.-evn_copy\n\n.globl evn_store\n.type evn_store,@function\nevn_store:\n    movq 0(%rsi),%rax\n    movq %rax,0(%rdi)\n    movq 8(%rsi),%rax\n    movq %rax,8(%rdi)\n    movq 16(%rsi),%rax\n    movq %rax,16(%rdi)\n    movq 24(%rsi),%rax\n    movq %rax,24(%rdi)\n    ret\n.size evn_store,.-evn_store\n\n.globl evn_truth\n.type evn_truth,@function\nevn_truth:\n    movq 8(%rdi),%rax\n    ret\n.size evn_truth,.-evn_truth\n\n.globl evn_unary\n.type evn_unary,@function\nevn_unary:\n    pushq %r12\n    movq 0(%rsi),%r12\n    cmpq $0,%rdi\n    je .Lvalue_unary_neg_type\n    cmpq $1,%rdi\n    je .Lvalue_unary_not_type\n    jmp .Lvalue_unary_internal\n.Lvalue_unary_neg_type:\n    cmpq $1,%r12\n    jne .Lvalue_unary_internal\n    jmp .Lvalue_unary_run\n.Lvalue_unary_not_type:\n    cmpq $3,%r12\n    jne .Lvalue_unary_internal\n.Lvalue_unary_run:\n    movq 8(%rsi),%rsi\n    call erist_rt_scalar_unary\n    testq %rdx,%rdx\n    jne .Lvalue_unary_fault\n    movq %rax,%rsi\n    movq %r12,%rdi\n    popq %r12\n    jmp erist_rt_value_new\n.Lvalue_unary_fault:\n    movq %rdx,%rdi\n    popq %r12\n    jmp erist_rt_scalar_fault\n.Lvalue_unary_internal:\n    popq %r12\n    jmp erist_rt_value_fault_internal\n.size evn_unary,.-evn_unary\n\n.globl evn_binary\n.type evn_binary,@function\nevn_binary:\n    pushq %r12\n    pushq %r13\n    subq $8,%rsp\n    movq %rdi,%r13\n    movq 0(%rsi),%r12\n    cmpq 0(%rdx),%r12\n    jne .Lvalue_binary_internal\n    cmpq $1,%r12\n    je .Lvalue_binary_int\n    cmpq $3,%r12\n    jne .Lvalue_binary_internal\n    cmpq $5,%r13\n    je .Lvalue_binary_run\n    cmpq $6,%r13\n    jne .Lvalue_binary_internal\n    jmp .Lvalue_binary_run\n.Lvalue_binary_int:\n    cmpq $10,%r13\n    ja .Lvalue_binary_internal\n.Lvalue_binary_run:\n    movq 8(%rsi),%rsi\n    movq 8(%rdx),%rdx\n    movq %r13,%rdi\n    call erist_rt_scalar_binary\n    testq %rdx,%rdx\n    jne .Lvalue_binary_fault\n    movq %rax,%rsi\n    movq $1,%rdi\n    cmpq $5,%r13\n    jb .Lvalue_binary_make\n    movq $3,%rdi\n.Lvalue_binary_make:\n    addq $8,%rsp\n    popq %r13\n    popq %r12\n    jmp erist_rt_value_new\n.Lvalue_binary_fault:\n    movq %rdx,%rdi\n    addq $8,%rsp\n    popq %r13\n    popq %r12\n    jmp erist_rt_scalar_fault\n.Lvalue_binary_internal:\n    addq $8,%rsp\n    popq %r13\n    popq %r12\n    jmp erist_rt_value_fault_internal\n.size evn_binary,.-evn_binary\n";
+}
+
+public function source() returns Text {
+    if not runtime_value.layoutsValid() { return ".text\n.globl erist_rt_value_layout_invalid\nerist_rt_value_layout_invalid:\n    ud2\n"; }
+    return allocator_x86_64.source()+linux_x86_64.writeSource()+scalar_x86_64.source()+scalar_fault_x86_64.source()+stateSource()+faultSource()+valueSource();
+}
+
+public function probeSource() returns Text {
+    return source()+".text\n.globl _start\n.type _start,@function\n_start:\n    xorl %ebp,%ebp\n    movq $40,%rdi\n    call evn_int\n    movq %rax,%r12\n    cmpq $1,0(%r12)\n    jne .Lvalue_probe_fail\n    cmpq $40,8(%r12)\n    jne .Lvalue_probe_fail\n    cmpq $0,16(%r12)\n    jne .Lvalue_probe_fail\n    cmpq $0,24(%r12)\n    jne .Lvalue_probe_fail\n    movq $2,%rdi\n    call evn_int\n    movq %rax,%r13\n    movq $0,%rdi\n    movq %r12,%rsi\n    movq %r13,%rdx\n    call evn_binary\n    movq %rax,%r14\n    movq %r14,%rdi\n    call evn_truth\n    cmpq $42,%rax\n    jne .Lvalue_probe_fail\n    movq %r12,%rdi\n    call evn_copy\n    movq %rax,%r15\n    movq $7,%rdi\n    call evn_int\n    movq %r15,%rdi\n    movq %rax,%rsi\n    call evn_store\n    movq %r15,%rdi\n    call evn_truth\n    cmpq $7,%rax\n    jne .Lvalue_probe_fail\n    xorl %edi,%edi\n    call evn_bool\n    movq $1,%rdi\n    movq %rax,%rsi\n    call evn_unary\n    movq %rax,%rdi\n    call evn_truth\n    cmpq $1,%rax\n    jne .Lvalue_probe_fail\n    movq $1,%rdi\n    call evn_int\n    movq %rax,%r12\n    movq $2,%rdi\n    call evn_int\n    movq $7,%rdi\n    movq %r12,%rsi\n    movq %rax,%rdx\n    call evn_binary\n    cmpq $3,0(%rax)\n    jne .Lvalue_probe_fail\n    movq %rax,%rdi\n    call evn_truth\n    cmpq $1,%rax\n    jne .Lvalue_probe_fail\n    call evn_void\n    cmpq $5,0(%rax)\n    jne .Lvalue_probe_fail\n    call erist_rt_allocator_release_all\n    testq %rax,%rax\n    jne .Lvalue_probe_fail\n    xorl %edi,%edi\n    jmp erist_rt_exit\n.Lvalue_probe_fail:\n    movl $1,%edi\n    jmp erist_rt_exit\n.size _start,.-_start\n.section .note.GNU-stack,\"\",@progbits\n";
+}
+
+public function overflowProbeSource() returns Text {
+    return source()+".text\n.globl _start\n.type _start,@function\n_start:\n    xorl %ebp,%ebp\n    movabsq $0x7fffffffffffffff,%rdi\n    call evn_int\n    movq %rax,%r12\n    movq $1,%rdi\n    call evn_int\n    movq $0,%rdi\n    movq %r12,%rsi\n    movq %rax,%rdx\n    call evn_binary\n    movl $2,%edi\n    jmp erist_rt_exit\n.size _start,.-_start\n.section .note.GNU-stack,\"\",@progbits\n";
+}

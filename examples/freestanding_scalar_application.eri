@@ -1,0 +1,4 @@
+let first be 40;
+let second be 2;
+output(first + second);
+output(first < second);

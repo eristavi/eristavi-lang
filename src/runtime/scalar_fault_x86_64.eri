@@ -1,0 +1,12 @@
+// Freestanding adapter from private scalar status codes to Eristavi runtime faults.
+// These statuses are compiler/runtime implementation details, not `fails` values.
+import runtime.linux_x86_64;
+import runtime.scalar_x86_64;
+
+public function source() returns Text {
+    return ".section .rodata\n.Lscalar_fault_overflow:\n    .ascii \"Eristavi runtime fault: Int arithmetic overflow\\n\"\n.Lscalar_fault_overflow_end:\n.Lscalar_fault_divzero:\n    .ascii \"Eristavi runtime fault: Int division by zero\\n\"\n.Lscalar_fault_divzero_end:\n.Lscalar_fault_remzero:\n    .ascii \"Eristavi runtime fault: Int remainder by zero\\n\"\n.Lscalar_fault_remzero_end:\n.Lscalar_fault_internal:\n    .ascii \"Eristavi runtime fault: invalid internal scalar operator\\n\"\n.Lscalar_fault_internal_end:\n.text\n.globl erist_rt_scalar_fault\n.type erist_rt_scalar_fault,@function\nerist_rt_scalar_fault:\n    cmpq $1,%rdi\n    je .Lscalar_fault_pick_overflow\n    cmpq $2,%rdi\n    je .Lscalar_fault_pick_divzero\n    cmpq $3,%rdi\n    je .Lscalar_fault_pick_remzero\n    leaq .Lscalar_fault_internal(%rip),%rsi\n    movl $(.Lscalar_fault_internal_end-.Lscalar_fault_internal),%edx\n    jmp .Lscalar_fault_emit\n.Lscalar_fault_pick_overflow:\n    leaq .Lscalar_fault_overflow(%rip),%rsi\n    movl $(.Lscalar_fault_overflow_end-.Lscalar_fault_overflow),%edx\n    jmp .Lscalar_fault_emit\n.Lscalar_fault_pick_divzero:\n    leaq .Lscalar_fault_divzero(%rip),%rsi\n    movl $(.Lscalar_fault_divzero_end-.Lscalar_fault_divzero),%edx\n    jmp .Lscalar_fault_emit\n.Lscalar_fault_pick_remzero:\n    leaq .Lscalar_fault_remzero(%rip),%rsi\n    movl $(.Lscalar_fault_remzero_end-.Lscalar_fault_remzero),%edx\n.Lscalar_fault_emit:\n    movl $2,%edi\n    subq $8,%rsp\n    call erist_rt_write_all\n    addq $8,%rsp\n    movl $1,%edi\n    jmp erist_rt_exit\n.size erist_rt_scalar_fault,.-erist_rt_scalar_fault\n";
+}
+
+public function overflowProbeSource() returns Text {
+    return linux_x86_64.memorySource()+linux_x86_64.writeSource()+scalar_x86_64.source()+source()+".text\n.globl _start\n.type _start,@function\n_start:\n    xorl %ebp,%ebp\n    movq $0,%rdi\n    movabsq $0x7fffffffffffffff,%rsi\n    movq $1,%rdx\n    call erist_rt_scalar_binary\n    movq %rdx,%rdi\n    jmp erist_rt_scalar_fault\n.size _start,.-_start\n";
+}
