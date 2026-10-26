@@ -1,0 +1,2 @@
+import runtime.value_scalar_x86_64;
+output(value_scalar_x86_64.probeSource());
