@@ -1,6 +1,6 @@
-# Eristavi
+# Eristavi-Lang
 
-Eristavi is an experimental general-purpose programming language focused on **readability, strong typing, native performance, universal portability, and controlled simplicity**.
+Eristavi-lang is an experimental general-purpose programming language focused on **readability, strong typing, native performance, universal portability, and controlled simplicity**.
 
 > **Complexity belongs in the compiler and runtime, not in the programmer's code.**
 
