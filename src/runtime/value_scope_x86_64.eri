@@ -6,10 +6,11 @@ import runtime.value_scalar_x86_64;
 import compiler.runtime_value;
 import compiler.format;
 
-function scopeSource(allowText Bool) returns Text {
+function scopeSource(allowText Bool,allowViews Bool) returns Text {
     let textCheck be ""; let collect be "";
     if allowText {
         textCheck="    cmpq $4,%r12\n    je .Lscope_leave_value_ok\n";
+        if allowViews { textCheck="    cmpq $4,%r12\n    je .Lscope_leave_value_ok\n    cmpq $6,%r12\n    jb .Lscope_leave_nonview\n    movq %rsi,0(%rsp)\n    movq %r12,%rdi\n    call erist_rt_view_kind\n    movq 0(%rsp),%rsi\n    jmp .Lscope_leave_value_ok\n.Lscope_leave_nonview:\n"; }
         collect="    movq %rax,%r12\n    movq %rax,%rdi\n    call erist_rt_text_safe_point\n    movq %r12,%rax\n";
     }
     let scopeSize be runtime_value.scopeSize();
@@ -24,11 +25,13 @@ function scopeSource(allowText Bool) returns Text {
 
 public function source() returns Text {
     if not runtime_value.layoutsValid() { return ".text\n.globl erist_rt_scope_layout_invalid\nerist_rt_scope_layout_invalid:\n    ud2\n"; }
-    return value_scalar_x86_64.source()+scopeSource(false);
+    return value_scalar_x86_64.source()+scopeSource(false,false);
 }
 
 // Composed only by the managed Text runtime, which supplies its collector.
 public function textSource() returns Text {
     if not runtime_value.layoutsValid() { return ".text\n.globl erist_rt_scope_layout_invalid\nerist_rt_scope_layout_invalid:\n    ud2\n"; }
-    return value_scalar_x86_64.textSource()+scopeSource(true);
+    return value_scalar_x86_64.textSource()+scopeSource(true,false);
 }
+
+public function viewSource() returns Text { return value_scalar_x86_64.viewSource()+scopeSource(true,true); }

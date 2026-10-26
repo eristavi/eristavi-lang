@@ -17,3 +17,5 @@ function outputSource(allowText Bool) returns Text {
 public function source() returns Text { return value_scope_x86_64.source()+outputSource(false); }
 
 public function textSource() returns Text { return value_text_x86_64.source()+outputSource(true); }
+
+public function viewSource() returns Text { return value_text_x86_64.viewSource()+outputSource(true); }
