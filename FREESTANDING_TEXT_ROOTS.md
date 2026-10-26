@@ -38,3 +38,6 @@ have not been run manually; normal GitHub CI remains the qualification path.
 The next Text functionality slice is equality/inequality and concatenation over this
 lifetime foundation, followed by explicit Unicode views. Compiler/generator bootstrap
 and GNU assembly/link dependencies are unchanged.
+
+The follow-up in FREESTANDING_TEXT_OPERATORS.md extends safe points to all supported
+ordinary-value allocations in the Text-enabled profile, including scalar-only loops.
