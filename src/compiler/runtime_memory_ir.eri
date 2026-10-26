@@ -42,8 +42,9 @@ function widthValid(width Int) returns Bool {
 function classAt(program identity Program,index Int) returns Int {
     let cursor be program.registers;
     while cursor != none {
-        if cursor.index == index { return cursor.valueClass; }
-        cursor = cursor.next;
+        let current be cursor;
+        if current.index == index { return current.valueClass; }
+        cursor = current.next;
     }
     return -1;
 }
@@ -51,8 +52,9 @@ function classAt(program identity Program,index Int) returns Int {
 function definedAt(program identity Program,index Int) returns Bool {
     let cursor be program.registers;
     while cursor != none {
-        if cursor.index == index { return cursor.defined; }
-        cursor = cursor.next;
+        let current be cursor;
+        if current.index == index { return current.defined; }
+        cursor = current.next;
     }
     return false;
 }
@@ -61,12 +63,13 @@ function reset(program identity Program) returns Bool {
     let cursor be program.registers;
     let expected be 0;
     while cursor != none {
-        if cursor.index != expected { return false; }
-        if cursor.valueClass < 7 or cursor.valueClass > 9 { return false; }
-        cursor.defined = false;
+        let current be cursor;
+        if current.index != expected { return false; }
+        if current.valueClass < 7 or current.valueClass > 9 { return false; }
+        current.defined = false;
         expected = expected + 1;
         if expected > 128 { return false; }
-        cursor = cursor.next;
+        cursor = current.next;
     }
     return true;
 }
@@ -74,12 +77,13 @@ function reset(program identity Program) returns Bool {
 function define(program identity Program,index Int,wanted Int) returns Bool {
     let cursor be program.registers;
     while cursor != none {
-        if cursor.index == index {
-            if cursor.valueClass != wanted or cursor.defined { return false; }
-            cursor.defined = true;
+        let current be cursor;
+        if current.index == index {
+            if current.valueClass != wanted or current.defined { return false; }
+            current.defined = true;
             return true;
         }
-        cursor = cursor.next;
+        cursor = current.next;
     }
     return false;
 }
@@ -141,10 +145,11 @@ function verify(program identity Program) returns Bool {
     let cursor be program.instructions;
     let count be 0;
     while cursor != none {
-        if not verifyInstruction(program,cursor) { return false; }
+        let current be cursor;
+        if not verifyInstruction(program,current) { return false; }
         count = count + 1;
         if count > 256 { return false; }
-        cursor = cursor.next;
+        cursor = current.next;
     }
     return count > 0;
 }
