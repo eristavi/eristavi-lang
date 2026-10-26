@@ -1,0 +1,7 @@
+import runtime.allocator_x86_64;
+
+function probeSource() returns Text {
+    return allocator_x86_64.source()+".text\n.globl _start\n.type _start,@function\n_start:\n    xorl %ebp,%ebp\n    movq $1,%rdi\n    call erist_rt_alloc\n    testq %rax,%rax\n    je .Lverified_freelist_fail\n    movq %rax,%r12\n    movq $48,%rdi\n    call erist_rt_alloc\n    testq %rax,%rax\n    je .Lverified_freelist_fail\n    movq %rax,%r13\n    movq %r13,%rdi\n    call erist_rt_free\n    testq %rax,%rax\n    jne .Lverified_freelist_fail\n    movq %r12,%rdi\n    call erist_rt_free\n    testq %rax,%rax\n    jne .Lverified_freelist_fail\n    movq $33,%rdi\n    call erist_rt_alloc\n    cmpq %r13,%rax\n    jne .Lverified_freelist_fail\n    movq $8,%rdi\n    call erist_rt_alloc\n    cmpq %r12,%rax\n    jne .Lverified_freelist_fail\n    call erist_rt_allocator_release_all\n    testq %rax,%rax\n    jne .Lverified_freelist_fail\n    xorl %edi,%edi\n    jmp erist_rt_exit\n.Lverified_freelist_fail:\n    movl $1,%edi\n    jmp erist_rt_exit\n.size _start,.-_start\n.section .note.GNU-stack,\"\",@progbits\n";
+}
+
+output(probeSource());
