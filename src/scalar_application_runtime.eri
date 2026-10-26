@@ -1,0 +1,7 @@
+import runtime.value_output_x86_64;
+
+function startupSource() returns Text {
+    return ".text\n.globl _start\n.type _start,@function\n_start:\n    xorl %ebp,%ebp\n    call erist_entry\n    call erist_rt_allocator_release_all\n    testq %rax,%rax\n    jne .Lscalar_app_fail\n    xorl %edi,%edi\n    jmp erist_rt_exit\n.Lscalar_app_fail:\n    movl $1,%edi\n    jmp erist_rt_exit\n.size _start,.-_start\n.section .note.GNU-stack,\"\",@progbits\n";
+}
+
+output(value_output_x86_64.source()+startupSource());
