@@ -207,30 +207,35 @@ function instruction(kind Int,result Int,extra Int) returns identity Instruction
         number=0; width=0; alignment=0; next=none; };
 }
 
-public function load64Program() returns identity Program {
+function loadProgram(width Int) returns identity Program {
     let r0 be register(0,8); let r1 be register(1,7); let r2 be register(2,7);
     let r3 be register(3,9); let r4 be register(4,7);
     r0.next=r1; r1.next=r2; r2.next=r3; r3.next=r4;
     let i0 be instruction(8,0,1); i0.number=0;
     let i1 be instruction(9,2,-1); i1.number=2;
-    let i2 be instruction(5,3,-1); i2.first=0; i2.second=1; i2.third=2; i2.width=8; i2.alignment=8;
-    let i3 be instruction(6,4,-1); i3.first=3; i3.width=8; i3.alignment=8;
+    let i2 be instruction(5,3,-1); i2.first=0; i2.second=1; i2.third=2; i2.width=width; i2.alignment=width;
+    let i3 be instruction(6,4,-1); i3.first=3; i3.width=width; i3.alignment=width;
     i0.next=i1; i1.next=i2; i2.next=i3;
     return identity Program { registers=r0; instructions=i0; };
 }
 
-public function store64Program() returns identity Program {
+function storeProgram(width Int) returns identity Program {
     let r0 be register(0,8); let r1 be register(1,7); let r2 be register(2,7);
     let r3 be register(3,7); let r4 be register(4,9);
     r0.next=r1; r1.next=r2; r2.next=r3; r3.next=r4;
     let i0 be instruction(8,0,1); i0.number=0;
     let i1 be instruction(9,2,-1); i1.number=2;
     let i2 be instruction(9,3,-1); i2.number=3;
-    let i3 be instruction(5,4,-1); i3.first=0; i3.second=1; i3.third=2; i3.width=8; i3.alignment=8;
-    let i4 be instruction(7,-1,-1); i4.first=4; i4.second=3; i4.width=8; i4.alignment=8;
+    let i3 be instruction(5,4,-1); i3.first=0; i3.second=1; i3.third=2; i3.width=width; i3.alignment=width;
+    let i4 be instruction(7,-1,-1); i4.first=4; i4.second=3; i4.width=width; i4.alignment=width;
     i0.next=i1; i1.next=i2; i2.next=i3; i3.next=i4;
     return identity Program { registers=r0; instructions=i0; };
 }
+
+public function load64Program() returns identity Program { return loadProgram(8); }
+public function store64Program() returns identity Program { return storeProgram(8); }
+public function load8Program() returns identity Program { return loadProgram(1); }
+public function store8Program() returns identity Program { return storeProgram(1); }
 
 public function foundationValid() returns Bool {
     let r0 be register(0,7); let r1 be register(1,7); let r2 be register(2,8); let r3 be register(3,7);
