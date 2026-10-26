@@ -1,0 +1,40 @@
+function preserve(value Float) returns Float {
+    if value == value { return value; }
+    return value;
+}
+let first be 1.25;
+let snapshot be first;
+first = first + 2.5;
+output(snapshot);
+output(preserve(first));
+output(0.1 + 0.2);
+let zero be 0.0;
+output(-zero);
+output(1.0 / zero);
+output(-1.0 / zero);
+let unordered be zero / zero;
+output(unordered);
+output(-unordered);
+output(unordered == unordered);
+output(unordered != unordered);
+output(unordered < first);
+let tiny be 4.9406564584124654e-324;
+output(preserve(tiny));
+output(tiny / 2.0);
+output(1.7976931348623157e308);
+output(1.0e9999);
+output(-1.0e-9999);
+output(1.00000000000000011102230246251565404236316680908203125);
+output(1_2.5E-1);
+let backing be "A\0β";
+let total be 0.0;
+let step be 0.5;
+let index be 0;
+while index < 3000 {
+    total = preserve(total + step);
+    index = index + 1;
+}
+output(total);
+output(backing.bytes.count);
+output(backing.scalars.count);
+output(snapshot);

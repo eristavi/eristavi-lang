@@ -28,8 +28,7 @@ compared with hosted binary64 results. The caller deliberately enables truncatio
 DAZ and FTZ before every call and checks exact MXCSR restoration afterward. Static
 ELF/import checks and unavailable-PATH execution use the existing harness.
 
-The following batch adds an isolated exact decimal-output helper matching the
-current `%.17g` behavior; see `FREESTANDING_FLOAT_FORMAT.md`. Correctly rounded
-decimal input and integration with value slots, scope escapes and ordinary helper
-dispatch remain. Existing language semantics do not define a new numeric conversion
+PR #33 qualified the exact decimal-output helper matching `%.17g`. The subsequent
+Float value profile adds exact literal parsing, slots, scope escapes and ordinary
+helper dispatch; see `FREESTANDING_FLOAT_VALUES.md` for its qualification boundary. Existing language semantics do not define a new numeric conversion
 API; this batch introduces none.
