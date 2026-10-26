@@ -1,6 +1,6 @@
 # Freestanding byte/scalar Text views
 
-Status: Linux x86-64 review candidate; automatic CI qualification pending.
+Status: byte/scalar slice qualified by PR #27 and merged; Linux x86-64 only.
 
 The explicit view runtime composition adds the existing `evn_view`, `evn_count` and
 `evn_index` ABI for byte and scalar views. Source syntax and read-only view semantics
@@ -32,3 +32,6 @@ Automatic CI covers returned/copied views, source-scope escape, UTF-8/NUL observ
 tracked buffer release and static/no-import ELF execution. No tests were run manually.
 Grapheme views and Unicode library operations are next. This is not completion of
 Float, aggregate/identity, failure/resource, compiler bootstrap or object/linker work.
+
+The follow-up grapheme and Unicode primitive migration is documented in
+FREESTANDING_GRAPHEMES.md; its qualification is recorded separately.
