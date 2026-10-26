@@ -6,21 +6,25 @@ type Layout { size Int; alignment Int; fields maybe identity Field; }
 
 function aligned(value Int,alignment Int) returns Bool { return alignment>0 and value%alignment==0; }
 function valid(layout identity Layout,field identity Field) returns Bool {
-    return field.offset>=0 and (field.width==8) and aligned(field.offset,8)
+    return field.offset>=0 and field.width==8 and aligned(field.offset,8)
         and field.offset<=layout.size-field.width;
 }
 function verify(layout identity Layout) returns Bool {
     if layout.size<=0 or layout.alignment!=8 or not aligned(layout.size,layout.alignment) { return false; }
     let cursor be layout.fields; let count=0;
     while cursor != none {
-        if not valid(layout,cursor) { return false; }
+        let current be cursor;
+        if not valid(layout,current) { return false; }
         let other=layout.fields;
-        while other != none and other != cursor {
-            if cursor.offset < other.offset+other.width and other.offset < cursor.offset+cursor.width { return false; }
-            other=other.next;
+        while other != none {
+            let candidate be other;
+            if candidate != current {
+                if current.offset < candidate.offset+candidate.width and candidate.offset < current.offset+current.width { return false; }
+            }
+            other=candidate.next;
         }
         count=count+1; if count>16 { return false; }
-        cursor=cursor.next;
+        cursor=current.next;
     }
     return true;
 }
