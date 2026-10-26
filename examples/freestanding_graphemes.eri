@@ -1,0 +1,25 @@
+import std.unicode;
+function makeCharacters() {
+    let local be "A\u{301}👩🏽‍💻";
+    return local.characters;
+}
+let characters be makeCharacters();
+let snapshot be characters;
+let i be 0;
+while i<1000 { let temporary be "temporary"; i=i+1; }
+output(characters.count);
+output(characters[0]);
+output(characters[1]);
+output(snapshot.count);
+output("🇨🇾🇧🇪🇬".characters[0]);
+output("".characters.count);
+output(unicode.fromScalar(128512));
+output(unicode.isIdentifierStart("_"));
+output(unicode.isIdentifierContinue("_"));
+output(unicode.isIdentifierStart("α"));
+output(unicode.isIdentifierStart("9"));
+output(unicode.isIdentifierContinue("9"));
+output(unicode.isIdentifierStart("\u{301}"));
+output(unicode.isIdentifierContinue("\u{301}"));
+output(unicode.isIdentifierContinue("😀"));
+output(unicode.isIdentifierStart("ab"));

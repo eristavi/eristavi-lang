@@ -1,0 +1,19 @@
+{
+  "unicode_version": "17.0.0",
+  "source": "runtime/value_runtime.c",
+  "source_commit": "06707291a8ce6ed89787f96b0f08c3429ae9f9d3",
+  "rows": {
+    "gcb": 1392,
+    "incb": 483,
+    "ep": 156,
+    "xid_start": 702,
+    "xid_continue": 821
+  },
+  "source_table_sha256": {
+    "gcb": "98d16358659b5f710534f19d5f0ce8bf3551fb2166947485e097858417682e4a",
+    "incb": "5c02d251663c44997e984464d14d62d9ecbe866ea3b8bdd0176f78439770e382",
+    "ep": "52cbeda2ccb4e24737cc62e5471a4db275f4f9186bf3dbde62fa1e9a83410416",
+    "xid_start": "1afc59493021e127e5222a65b4aab9b0b897c23800c14468191dcc98a3ce7316",
+    "xid_continue": "2f53a510add9e74784aa0df26b4cb23c1a6e7164a1cc40edbfd8aed97d11774d"
+  }
+}
