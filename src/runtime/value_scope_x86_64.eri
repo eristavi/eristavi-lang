@@ -11,7 +11,7 @@ function scopeSource(allowText Bool,allowViews Bool) returns Text {
     if allowText {
         textCheck="    cmpq $4,%r12\n    je .Lscope_leave_value_ok\n";
         if allowViews { textCheck="    cmpq $4,%r12\n    je .Lscope_leave_value_ok\n    cmpq $6,%r12\n    jb .Lscope_leave_nonview\n    movq %rsi,0(%rsp)\n    movq %r12,%rdi\n    call erist_rt_view_kind\n    movq 0(%rsp),%rsi\n    jmp .Lscope_leave_value_ok\n.Lscope_leave_nonview:\n"; }
-        collect="    movq %rax,%r12\n    movq %rax,%rdi\n    call erist_rt_text_safe_point\n    movq %r12,%rax\n";
+        collect="    movq $1,.Ltext_heap_dirty(%rip)\n    movq %rax,%r12\n    movq %rax,%rdi\n    call erist_rt_text_safe_point\n    movq %r12,%rax\n";
     }
     let scopeSize be runtime_value.scopeSize();
     let markOffset be runtime_value.scopeMarkOffset();
