@@ -5,6 +5,9 @@
 import runtime.value_scope_x86_64;
 import runtime.value_text_x86_64;
 import runtime.value_float_x86_64;
+import runtime.graph_heap_x86_64;
+import runtime.graph_values_x86_64;
+import runtime.graph_failure_x86_64;
 
 function outputSource(allowText Bool,allowFloat Bool) returns Text {
     let textCheck be ""; let textOutput be "";
@@ -25,3 +28,5 @@ public function viewSource() returns Text { return value_text_x86_64.viewSource(
 public function nfcSource() returns Text { return value_text_x86_64.nfcSource()+outputSource(true,false); }
 
 public function floatSource() returns Text { return value_text_x86_64.floatSource()+outputSource(true,true)+value_float_x86_64.source(); }
+
+public function graphSource() returns Text { return value_text_x86_64.graphSource()+outputSource(true,true)+value_float_x86_64.source()+graph_heap_x86_64.source()+graph_values_x86_64.source()+graph_failure_x86_64.source(); }

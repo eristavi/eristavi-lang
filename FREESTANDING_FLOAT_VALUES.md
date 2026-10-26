@@ -1,6 +1,7 @@
 # Owned Float value-runtime profile
 
-Status: focused Linux/System-V x86-64 qualification passed; automatic full CI pending.
+Status: qualified in PR #34 across all four CI jobs and merged.
+The later combined graph profile adds the next value families; see `OWNED_GRAPH_RUNTIME.md`.
 
 `runtime.value_output_x86_64.floatSource()` composes the existing owned Int, Bool,
 void, Text, Text views and Unicode helpers with ordinary Float values.

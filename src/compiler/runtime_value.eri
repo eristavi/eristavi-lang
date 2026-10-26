@@ -69,3 +69,14 @@ public function textLayoutsValid() returns Bool {
     return layoutsValid() and verify(textRecordLayout())
         and valuePayloadOffset()==8 and valueTail1Offset()==16 and valueTail2Offset()==24;
 }
+
+// Owned object header, saved failure and opaque handler-frame words.
+function graphWordLayout(size Int) returns identity Layout {
+    let fields maybe identity Field be none; let offset be size-8;
+    while offset>=0 { fields=identity Field { offset=offset; width=8; next=fields; }; offset=offset-8; }
+    return identity Layout { size=size; alignment=8; fields=fields; };
+}
+public function graphLayoutsValid() returns Bool {
+    return textLayoutsValid() and valueSize()==32 and verify(graphWordLayout(48))
+        and verify(graphWordLayout(96)) and verify(graphWordLayout(112));
+}

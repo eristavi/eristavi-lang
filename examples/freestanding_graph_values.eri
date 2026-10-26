@@ -1,0 +1,82 @@
+type Inner { value Int; }
+type Box { inner Inner; name Text; }
+type Node { label Text; next maybe identity Node; }
+error Problem { code Int; message Text; link identity Node; }
+error Other { message Text; }
+function cycle(label Text) returns identity Node {
+    let node be identity Node { label=label; next=none; };
+    node.next=node;
+    return node;
+}
+function rename(box Box) returns Box { box.name="renamed"; return box; }
+function risky(which Int) returns Int fails Problem,Other {
+    if which==0 { return 7; }
+    if which==1 { fail Other { message="other"; }; }
+    fail Problem { code=42; message="outer"; link=cycle("retained"); };
+}
+function forward(which Int) returns Int fails Problem,Other { return try risky(which); }
+function nested() { risky(1) else error { let temporary be error.message+"!"; }; }
+function newFailure() returns Int fails Problem,Other {
+    return risky(1) else error Other { return try risky(1); } else error Problem { return 0; };
+}
+function run() {
+let original be Box { inner=Inner { value=1; }; name="A\0β"; };
+let changed be original;
+changed.inner.value=9;
+output(original.inner.value);
+output(changed.inner.value);
+output(original==changed);
+output(rename(original).name);
+output(original.name.bytes.count);
+let originals be [original];
+let copies be originals;
+copies[0].name="B";
+output(originals[0].name.bytes.count);
+output(copies[0].name);
+let numbers be [1,2];
+let snapshot be numbers;
+for number in snapshot { output(number); numbers.add(9); }
+output(numbers.count);
+output(snapshot==[1,2]);
+let selected maybe Inner be Inner { value=3; };
+let selectedCopy be selected;
+if selectedCopy!=none { selectedCopy.value=8; }
+if selectedCopy!=none { output(selectedCopy.value); }
+if selected!=none { output(selected.value); }
+let empty maybe Int be none;
+output(empty==none);
+let first be cycle("shared");
+let alias be first;
+alias.label="updated";
+output(first.label);
+output(first==alias);
+output(first==cycle("updated"));
+if first.next!=none { output(first.next==first); }
+let index be 0;
+while index<1200 {
+    let abandoned be cycle("dead");
+    let values be [Box { inner=Inner { value=index; }; name="transient"; }];
+    values[0].inner.value=index+1;
+    index=index+1;
+}
+output(first.label);
+forward(2) else error Other { output("wrong"); }
+else error Problem {
+    let counter be 0;
+    while counter<300 { nested(); let garbage be cycle("handler garbage"); counter=counter+1; }
+    output(error.code);
+    output(error.message);
+    output(error.link.label);
+};
+let success be forward(0) else error { output("wrong success"); return; };
+output(success);
+forward(1) else error { output(error.message); };
+newFailure() else error { output(error.message); };
+let floats be [0.0/0.0];
+output(floats==floats);
+let textView be original.name.scalars;
+output(textView.count);
+output(textView[2]);
+
+}
+run();
