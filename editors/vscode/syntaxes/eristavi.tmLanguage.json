@@ -1,0 +1,246 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Eristavi",
+  "scopeName": "source.eristavi",
+  "fileTypes": ["eri"],
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#strings" },
+    { "include": "#numbers" },
+    { "include": "#declarations" },
+    { "include": "#keywords" },
+    { "include": "#builtins" },
+    { "include": "#operators" },
+    { "include": "#member-access" },
+    { "include": "#calls" },
+    { "include": "#punctuation" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.eristavi",
+          "match": "//.*$"
+        },
+        {
+          "include": "#block-comment"
+        }
+      ]
+    },
+    "block-comment": {
+      "name": "comment.block.eristavi",
+      "begin": "/\\*",
+      "end": "\\*/",
+      "patterns": [
+        { "include": "#block-comment" }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.eristavi",
+          "begin": "\"",
+          "end": "\"|(?=\\r?$)",
+          "patterns": [
+            {
+              "name": "constant.character.escape.eristavi",
+              "match": "\\\\(?:[\"\\\\nrt0]|u\\{[0-9A-Fa-f]+\\})"
+            },
+            {
+              "name": "invalid.illegal.escape.eristavi",
+              "match": "\\\\."
+            }
+          ]
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.float.eristavi",
+          "match": "(?<![A-Za-z0-9_])(?:[0-9](?:_?[0-9])*\\.[0-9](?:_?[0-9])*(?:[eE][+-]?[0-9](?:_?[0-9])*)?|[0-9](?:_?[0-9])*[eE][+-]?[0-9](?:_?[0-9])*)(?![A-Za-z0-9_])"
+        },
+        {
+          "name": "constant.numeric.integer.binary.eristavi",
+          "match": "(?<![A-Za-z0-9_])0b[01](?:_?[01])*(?![A-Za-z0-9_])"
+        },
+        {
+          "name": "constant.numeric.integer.hexadecimal.eristavi",
+          "match": "(?<![A-Za-z0-9_])0x[0-9A-Fa-f](?:_?[0-9A-Fa-f])*(?![A-Za-z0-9_])"
+        },
+        {
+          "name": "constant.numeric.integer.decimal.eristavi",
+          "match": "(?<![A-Za-z0-9_])(?:0|[1-9](?:_?[0-9])*)(?![A-Za-z0-9_])"
+        }
+      ]
+    },
+    "declarations": {
+      "patterns": [
+        {
+          "name": "meta.function.definition.eristavi",
+          "match": "\\b(function)\\s+((?:_|[\\p{L}\\p{Nl}])(?:_|[\\p{L}\\p{Nl}\\p{Mn}\\p{Mc}\\p{Nd}\\p{Pc}])*)",
+          "captures": {
+            "1": { "name": "keyword.declaration.function.eristavi" },
+            "2": { "name": "entity.name.function.eristavi" }
+          }
+        },
+        {
+          "name": "meta.type.definition.eristavi",
+          "match": "\\b(type)\\s+((?:_|[\\p{L}\\p{Nl}])(?:_|[\\p{L}\\p{Nl}\\p{Mn}\\p{Mc}\\p{Nd}\\p{Pc}])*)",
+          "captures": {
+            "1": { "name": "keyword.declaration.type.eristavi" },
+            "2": { "name": "entity.name.type.eristavi" }
+          }
+        },
+        {
+          "name": "meta.error.definition.eristavi",
+          "match": "\\b(error)\\s+((?:_|[\\p{L}\\p{Nl}])(?:_|[\\p{L}\\p{Nl}\\p{Mn}\\p{Mc}\\p{Nd}\\p{Pc}])*)",
+          "captures": {
+            "1": { "name": "keyword.declaration.error.eristavi" },
+            "2": { "name": "entity.name.type.error.eristavi" }
+          }
+        },
+        {
+          "name": "meta.variable.definition.eristavi",
+          "match": "\\b(let)\\s+(?:(fixed)\\s+)?((?:_|[\\p{L}\\p{Nl}])(?:_|[\\p{L}\\p{Nl}\\p{Mn}\\p{Mc}\\p{Nd}\\p{Pc}])*)",
+          "captures": {
+            "1": { "name": "keyword.declaration.variable.eristavi" },
+            "2": { "name": "storage.modifier.fixed.eristavi" },
+            "3": { "name": "variable.other.definition.eristavi" }
+          }
+        },
+        {
+          "name": "meta.import.eristavi",
+          "match": "\\b(import)\\s+((?:_|[\\p{L}\\p{Nl}])(?:_|[\\p{L}\\p{Nl}\\p{Mn}\\p{Mc}\\p{Nd}\\p{Pc}])*(?:\\.(?:_|[\\p{L}\\p{Nl}])(?:_|[\\p{L}\\p{Nl}\\p{Mn}\\p{Mc}\\p{Nd}\\p{Pc}])*)*)",
+          "captures": {
+            "1": { "name": "keyword.control.import.eristavi" },
+            "2": { "name": "entity.name.namespace.eristavi" }
+          }
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.conditional.eristavi",
+          "match": "\\b(?:if|else)\\b"
+        },
+        {
+          "name": "keyword.control.loop.eristavi",
+          "match": "\\b(?:for|in|while)\\b"
+        },
+        {
+          "name": "keyword.control.return.eristavi",
+          "match": "\\breturn\\b"
+        },
+        {
+          "name": "keyword.control.resource.eristavi",
+          "match": "\\bwith\\b"
+        },
+        {
+          "name": "keyword.control.error.eristavi",
+          "match": "\\b(?:fail|try)\\b"
+        },
+        {
+          "name": "keyword.declaration.eristavi",
+          "match": "\\b(?:let|function|type|error|import)\\b"
+        },
+        {
+          "name": "keyword.other.contract.eristavi",
+          "match": "\\b(?:returns|fails)\\b"
+        },
+        {
+          "name": "keyword.operator.assignment.eristavi",
+          "match": "\\bbe\\b"
+        },
+        {
+          "name": "storage.modifier.eristavi",
+          "match": "\\b(?:fixed|public|maybe|identity)\\b"
+        },
+        {
+          "name": "keyword.control.import.eristavi",
+          "match": "\\bas\\b"
+        },
+        {
+          "name": "keyword.operator.logical.eristavi",
+          "match": "\\b(?:and|or|not)\\b"
+        },
+        {
+          "name": "constant.language.boolean.eristavi",
+          "match": "\\b(?:true|false)\\b"
+        },
+        {
+          "name": "constant.language.none.eristavi",
+          "match": "\\bnone\\b"
+        }
+      ]
+    },
+    "builtins": {
+      "patterns": [
+        {
+          "name": "support.type.builtin.eristavi",
+          "match": "\\b(?:Int|Float|Bool|Text|List)\\b"
+        },
+        {
+          "name": "support.function.builtin.eristavi",
+          "match": "\\boutput(?=\\s*\\()"
+        },
+        {
+          "name": "support.namespace.std.eristavi",
+          "match": "\\bstd(?=\\.)"
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.comparison.eristavi",
+          "match": "==|!=|<=|>=|<|>"
+        },
+        {
+          "name": "keyword.operator.arithmetic.eristavi",
+          "match": "\\+|-|\\*|/|%"
+        },
+        {
+          "name": "keyword.operator.assignment.eristavi",
+          "match": "="
+        }
+      ]
+    },
+    "member-access": {
+      "patterns": [
+        {
+          "name": "meta.member.access.eristavi",
+          "match": "(\\.)((?:_|[\\p{L}\\p{Nl}])(?:_|[\\p{L}\\p{Nl}\\p{Mn}\\p{Mc}\\p{Nd}\\p{Pc}])*)",
+          "captures": {
+            "1": { "name": "punctuation.accessor.dot.eristavi" },
+            "2": { "name": "variable.other.member.eristavi" }
+          }
+        }
+      ]
+    },
+    "calls": {
+      "patterns": [
+        {
+          "name": "meta.function-call.eristavi",
+          "match": "((?:_|[\\p{L}\\p{Nl}])(?:_|[\\p{L}\\p{Nl}\\p{Mn}\\p{Mc}\\p{Nd}\\p{Pc}])*)\\s*(?=\\()",
+          "captures": {
+            "1": { "name": "entity.name.function.call.eristavi" }
+          }
+        }
+      ]
+    },
+    "punctuation": {
+      "patterns": [
+        {
+          "name": "punctuation.terminator.statement.eristavi",
+          "match": ";"
+        },
+        {
+          "name": "punctuation.separator.comma.eristavi",
+          "match": ","
+        }
+      ]
+    }
+  }
+}
