@@ -1,0 +1,27 @@
+function join(first Text,second Text) returns Text {
+    return first+second;
+}
+let original be "α";
+let snapshot be original;
+original=join(original,"β");
+output(original);
+output(snapshot);
+output(original=="αβ");
+output(original!="αβ");
+output(""+"");
+output("x"+"");
+output(""+"x");
+output("A\0"+"B");
+output("A\0B"=="A\0B");
+output("A\0B"=="A");
+output("é"=="e\u{301}");
+let accumulated be "";
+let i be 0;
+while i<300 {
+    accumulated=accumulated+"x";
+    i=i+1;
+}
+output(accumulated=="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx");
+let j be 0;
+while j<10000 { j=j+1; }
+output(j);
