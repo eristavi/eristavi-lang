@@ -1,0 +1,2 @@
+import runtime.allocator_x86_64;
+output(allocator_x86_64.probeSource());
