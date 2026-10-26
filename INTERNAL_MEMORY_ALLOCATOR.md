@@ -42,6 +42,38 @@ block header (16 bytes, 16-byte aligned)
 The low bit of the aligned capacity is private allocation state. Payload
 capacities are multiples of 16, so that bit is not part of the capacity.
 
+## Restricted memory-operation profile
+
+`src/compiler/runtime_memory_ir.eri` pins the first compiler-private operation
+model needed to break the runtime bootstrap cycle. It deliberately exists below
+ordinary source semantics.
+
+Private value classes are:
+
+- class 7: machine word;
+- class 8: original reservation base;
+- class 9: checked derived address.
+
+The verifier accepts only a restricted sequence of primitives:
+
+- machine-word constant;
+- checked power-of-two align-up;
+- reserve from a checked word size;
+- release using the original reservation base and exact length;
+- bounded/aligned address derivation from reservation base + region length + offset;
+- fixed-width load from a checked derived address;
+- fixed-width store to a checked derived address.
+
+Registers must be contiguous, operands must already be defined with the expected
+private class, results cannot be defined twice, and only address derivation can
+produce the address class. In particular there is no operation that reinterprets
+ordinary `Int`, `identity` or an arbitrary integer as an address.
+
+This is the verifier/profile foundation. It is not yet a public Universal-IR
+surface and it does not change the source grammar or type system. The next lowering
+step will connect these verified concepts to the shared runtime implementation
+pipeline without exposing them to ordinary programs.
+
 ## Allocator boundary
 
 `src/runtime/allocator_x86_64.eri` emits a target allocator on top of the previous
@@ -94,6 +126,7 @@ for unresolved imports/interpreter/dynamic loading and executes it with an unusa
 
 The target probe covers:
 
+- private memory-profile verification before emission;
 - 16-byte alignment;
 - writes through the first and last byte of aligned payload capacity;
 - free-list reuse of a released block;
@@ -104,14 +137,15 @@ The target probe covers:
 - fresh allocation after complete release;
 - rejection of a misaligned derived pointer.
 
-The expensive repeated compiler self-build and full platform matrix should run
-only after the focused source/compiler/assembler checks for this slice are clean.
+The focused Ubuntu preflight builds both freestanding generators and executes both
+target probes before any full regression/self-build qualification is requested.
 
 ## Next boundary
 
-After this allocator slice is qualified, move the private memory concepts into the
-compiler's restricted runtime implementation profile/Universal IR so machine-word,
-region/address derivation and fixed-width load/store operations receive explicit
-verifier and lowering rules. The allocator must remain below managed values. Only
-then should checked scalars, Text and the managed value runtime begin migrating off
-`runtime/value_runtime.c`.
+Lower the verified private word/reservation/address operations into the shared
+runtime implementation pipeline and make the allocator consume those operations
+instead of relying on handwritten assembly templates for its metadata accesses.
+The allocator must remain below managed values. Once that boundary is qualified,
+port checked scalar helpers, then Text/Unicode storage, ordinary values/identity,
+failures/resources and finally the typed collector away from the C bootstrap
+runtime in dependency order.
