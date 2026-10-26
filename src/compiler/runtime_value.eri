@@ -11,11 +11,11 @@ function valid(layout identity Layout,field identity Field) returns Bool {
 }
 function verify(layout identity Layout) returns Bool {
     if layout.size<=0 or layout.alignment!=8 or not aligned(layout.size,layout.alignment) { return false; }
-    let cursor be layout.fields; let count=0;
+    let cursor be layout.fields; let count be 0;
     while cursor != none {
         let current be cursor;
         if not valid(layout,current) { return false; }
-        let other=layout.fields;
+        let other be layout.fields;
         while other != none {
             let candidate be other;
             if candidate != current {
