@@ -4,6 +4,7 @@
 // semantics or expose lifetime controls to Eristavi source programs.
 import runtime.value_scalar_x86_64;
 import compiler.runtime_value;
+import compiler.format;
 
 function scopeSource() returns Text {
     let scopeSize be runtime_value.scopeSize();
