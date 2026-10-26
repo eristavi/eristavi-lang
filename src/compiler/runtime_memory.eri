@@ -2,129 +2,62 @@
 // and does not expose pointers, machine words or manual memory management to programs.
 // Layout records exist only while building the freestanding runtime.
 
-type Field {
-    offset Int;
-    width Int;
-    alignment Int;
-    next maybe identity Field;
-}
-
-type Layout {
-    size Int;
-    alignment Int;
-    fields maybe identity Field;
-}
+type Field { offset Int; width Int; alignment Int; next maybe identity Field; }
+type Layout { size Int; alignment Int; fields maybe identity Field; }
 
 function powerOfTwo(value Int) returns Bool {
     if value <= 0 { return false; }
     let current be value;
-    while current > 1 {
-        if current % 2 != 0 { return false; }
-        current = current / 2;
-    }
+    while current > 1 { if current % 2 != 0 { return false; } current=current/2; }
     return true;
 }
-
-function widthValid(width Int) returns Bool {
-    return width == 1 or width == 2 or width == 4 or width == 8;
-}
-
-function accessValid(layout identity Layout, offset Int, width Int, alignment Int) returns Bool {
+function widthValid(width Int) returns Bool { return width == 1 or width == 2 or width == 4 or width == 8; }
+function accessValid(layout identity Layout,offset Int,width Int,alignment Int) returns Bool {
     if offset < 0 or not widthValid(width) { return false; }
-    if not powerOfTwo(alignment) or alignment > layout.alignment { return false; }
-    if offset % alignment != 0 { return false; }
-    if width > layout.size or offset > layout.size - width { return false; }
+    if not powerOfTwo(alignment) or alignment > layout.alignment or offset%alignment != 0 { return false; }
+    if width > layout.size or offset > layout.size-width { return false; }
     return true;
 }
-
-function overlaps(first identity Field, second identity Field) returns Bool {
-    let firstEnd be first.offset + first.width;
-    let secondEnd be second.offset + second.width;
-    return first.offset < secondEnd and second.offset < firstEnd;
+function overlaps(first identity Field,second identity Field) returns Bool {
+    return first.offset < second.offset+second.width and second.offset < first.offset+first.width;
 }
-
 function verify(layout identity Layout) returns Bool {
-    if layout.size <= 0 or not powerOfTwo(layout.alignment) { return false; }
-    if layout.size % layout.alignment != 0 { return false; }
-
-    // First establish that every field has a safe bounded range. This keeps the
-    // overlap pass from performing arithmetic on an unvalidated field.
-    let cursor be layout.fields;
-    let count be 0;
-    while cursor != none {
-        if not accessValid(layout,cursor.offset,cursor.width,cursor.alignment) { return false; }
-        count = count + 1;
-        if count > 64 { return false; }
-        cursor = cursor.next;
-    }
-
-    cursor = layout.fields;
-    while cursor != none {
-        let other be layout.fields;
-        while other != none {
-            if other != cursor {
-                if overlaps(cursor,other) { return false; }
-            }
-            other = other.next;
-        }
-        cursor = cursor.next;
-    }
+    if layout.size <= 0 or not powerOfTwo(layout.alignment) or layout.size%layout.alignment != 0 { return false; }
+    let cursor be layout.fields; let count be 0;
+    while cursor != none { if not accessValid(layout,cursor.offset,cursor.width,cursor.alignment) { return false; } count=count+1; if count>64 { return false; } cursor=cursor.next; }
+    cursor=layout.fields;
+    while cursor != none { let other be layout.fields; while other != none { if other != cursor { if overlaps(cursor,other) { return false; } } other=other.next; } cursor=cursor.next; }
     return true;
 }
 
-// Region references are stored as base/length pairs. A linked region therefore
-// carries both fields for its successor so traversal never has to invent a length
-// from an untyped pointer. The final 8 bytes are alignment padding.
+// Region links and free-list links are reservation-aware. A reusable block stores
+// the next free block as region base + exact length + block offset, never a naked
+// block pointer.
 public function regionHeaderSize() returns Int { return 48; }
 public function regionNextBaseOffset() returns Int { return 0; }
 public function regionNextLengthOffset() returns Int { return 8; }
 public function regionLengthOffset() returns Int { return 16; }
 public function regionUsedOffset() returns Int { return 24; }
 public function regionMagicOffset() returns Int { return 32; }
-public function blockHeaderSize() returns Int { return 16; }
+
+public function blockHeaderSize() returns Int { return 32; }
 public function blockCapacityOffset() returns Int { return 0; }
-public function blockNextOffset() returns Int { return 8; }
+public function blockNextRegionOffset() returns Int { return 8; }
+public function blockNextLengthOffset() returns Int { return 16; }
+public function blockNextOffsetOffset() returns Int { return 24; }
 
 function regionLayout() returns identity Layout {
-    return identity Layout {
-        size=48;
-        alignment=16;
-        fields=identity Field {
-            offset=0; width=8; alignment=8;
-            next=identity Field {
-                offset=8; width=8; alignment=8;
-                next=identity Field {
-                    offset=16; width=8; alignment=8;
-                    next=identity Field {
-                        offset=24; width=8; alignment=8;
-                        next=identity Field { offset=32; width=8; alignment=8; next=none; };
-                    };
-                };
-            };
-        };
-    };
+    return identity Layout { size=48; alignment=16; fields=identity Field { offset=0; width=8; alignment=8; next=identity Field { offset=8; width=8; alignment=8; next=identity Field { offset=16; width=8; alignment=8; next=identity Field { offset=24; width=8; alignment=8; next=identity Field { offset=32; width=8; alignment=8; next=none; }; }; }; }; }; };
 }
-
 function blockLayout() returns identity Layout {
-    return identity Layout {
-        size=16;
-        alignment=16;
-        fields=identity Field {
-            offset=0; width=8; alignment=8;
-            next=identity Field { offset=8; width=8; alignment=8; next=none; };
-        };
-    };
+    return identity Layout { size=32; alignment=16; fields=identity Field { offset=0; width=8; alignment=8; next=identity Field { offset=8; width=8; alignment=8; next=identity Field { offset=16; width=8; alignment=8; next=identity Field { offset=24; width=8; alignment=8; next=none; }; }; }; }; };
 }
-
 public function allocatorLayoutsValid() returns Bool {
-    let region be regionLayout();
-    let block be blockLayout();
+    let region be regionLayout(); let block be blockLayout();
     return verify(region) and verify(block)
-        and accessValid(region,regionNextBaseOffset(),8,8)
-        and accessValid(region,regionNextLengthOffset(),8,8)
-        and accessValid(region,regionLengthOffset(),8,8)
-        and accessValid(region,regionUsedOffset(),8,8)
-        and accessValid(region,regionMagicOffset(),8,8)
-        and accessValid(block,blockCapacityOffset(),8,8)
-        and accessValid(block,blockNextOffset(),8,8);
+        and accessValid(region,regionNextBaseOffset(),8,8) and accessValid(region,regionNextLengthOffset(),8,8)
+        and accessValid(region,regionLengthOffset(),8,8) and accessValid(region,regionUsedOffset(),8,8)
+        and accessValid(region,regionMagicOffset(),8,8) and accessValid(block,blockCapacityOffset(),8,8)
+        and accessValid(block,blockNextRegionOffset(),8,8) and accessValid(block,blockNextLengthOffset(),8,8)
+        and accessValid(block,blockNextOffsetOffset(),8,8);
 }
