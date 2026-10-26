@@ -1,40 +1,32 @@
 # Current six-step runtime migration
 
-This checklist describes the remaining C value-runtime migration after PR #33.
-It records implementation boundaries; adding a primitive or test is not completion
-of the corresponding language-value subsystem. All target work currently concerns
-Linux/System-V x86-64. The bootstrap generator still uses the existing C runtime.
+This checklist records the owned Linux/System-V x86-64 value-runtime migration after
+PR #34. Implemented helpers and focused checks do not replace full CI qualification.
+The bootstrap compiler/generators still use the broad C runtime.
 
-| Step | Current batch | Remaining acceptance boundary |
+| Step | Current implementation | Remaining acceptance boundary |
 | --- | --- | --- |
-| 1. Text performance | Indexed backing lookup; snapshot-safe append capacity; geometric growth | Qualified in PR #32; independent small-buffer allocation remains unpooled |
-| 2. Float | Arithmetic and formatting qualified; exact parsing and ordinary value integration focused checks passed | Automatic full CI qualification of the Float value profile |
-| 3. Objects and Lists | Existing C ABI and operations inventoried | Typed backing ownership; construction and initialization; copy/detach; member/index/ref; append; equality; transitive tracing |
-| 4. `maybe` and identity | Existing wrapper/alias ABI inventoried | None/present operations; optional detach; shared identity updates; alias equality; cyclic graph marking |
-| 5. Checked failures | Existing native helper contracts inventoried | Handler frames and context transfer; saved payload ownership; typed matches; unwind roots; primary/secondary propagation |
-| 6. Resources and OS services | Existing cleanup and file contracts inventoried | File/process syscall boundary; exactly-once reverse cleanup; failure composition; compiler-required services |
+| 1. Text performance | Indexed backing lookup, immutable prefix capacity and geometric growth qualified in PR #32 | Independent small-buffer allocation remains unpooled |
+| 2. Float | Arithmetic, decimal parsing/output, values and scope integration qualified in PR #34 | Further throughput optimization remains optional performance work |
+| 3. Objects and Lists | Owned storage, construction, initialization, copy/detach, member/index/ref, append, equality and transitive tracing implemented; focused checks pass | Full CI for the combined graph batch; prefix-append performance follow-up |
+| 4. `maybe` and identity | None/present operations, optional detach, shared aliases, equality and cyclic graph marking implemented; focused checks pass | Full CI for the combined graph batch |
+| 5. Checked failures | Owned handler contexts, stable payload/message snapshots, typed/catch-all matching, propagation and slot/scope unwind implemented; focused checks pass | Full CI for ordinary failures; secondary cleanup contexts join the resource port |
+| 6. Resources and OS services | Existing cleanup/file/process contracts inventoried | Owned file/process boundary, exactly-once reverse cleanup, primary/secondary composition and compiler-required services |
 
-Steps 3 and 4 require a common nonmoving typed heap tracer before constructors can
-safely publish nested values. The existing Text collector follows slots to backing
-buffers only. Enabling aggregates in its tag dispatch without tracing every nested
-edge would prematurely free live Text. Root maps can also contain interior values,
-failures and resources; the present Text profile intentionally does not enable them.
+The common owned graph tracer now marks complete value slots, validated interior
+cells, current/saved failures and protected pending results. Active scope/handler
+administration remains explicitly owned; handler slot marks are pinned during
+pruning. An intrusive work list marks before enqueueing, preserving cycles without
+recursive traversal or allocation during marking. Resources are intentionally not
+enabled until their state and cleanup contracts are implemented. See
+`OWNED_GRAPH_RUNTIME.md` for layouts, validation and performance limits.
 
-The existing `ev_value` layout is 32 bytes. Objects hold a count and a pointer to
-32-byte cells. Value updates detach aggregate backing. Identity uses a shared wrapper
-cell; updates detach the contained value while preserving the wrapper alias.
-`maybe` uses absent null backing or a one-cell wrapper. Ordinary identity equality
-compares wrapper identity; aggregate equality follows values. These contracts must
-be carried over, with all cycles marked before descent and no recursive sweep.
+The next work is the resource/OS-service port, followed by complete collector-root
+qualification for those families. Only then can the compiler rebuild on the owned
+runtime and proceed to removing required Python tooling, native instruction/object
+output, linking and additional independent platforms. The current List append and
+interior-owner lookup costs must also be assessed before large compiler workloads.
 
-Checked failures and resources cannot be enabled by implementing only `evn_fail` or
-Linux `close`. Native handler frames preserve slot/scope boundaries. Active and saved
-failures own typed payloads and secondary contexts; all remain collector roots.
-Cleanup preserves the original primary failure, attaches secondary failures in
-reverse acquisition order, cancels a successful return on cleanup failure, and runs
-exactly once. `RESOURCE_CLEANUP.md` remains authoritative.
-
-Publish related implementation in one coherent batch. Keep automatic GitHub CI and
+Batch related implementation before publishing a PR. Keep automatic GitHub CI and
 all platform/self-build gates enabled. Do not dispatch or rerun expensive workflows
-for each helper. Qualification claims require completed results for the exact source
-head, followed by a merge with that head as the expected revision.
+for each helper. Merge only the exact fully qualified source head.
