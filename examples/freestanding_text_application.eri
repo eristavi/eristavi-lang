@@ -1,0 +1,9 @@
+function echo(value Text) returns Text {
+    let snapshot be value;
+    return snapshot;
+}
+let original be "Γεια σου — Привет 👋";
+let preserved be echo(original);
+output(preserved);
+output(original);
+output(echo(""));

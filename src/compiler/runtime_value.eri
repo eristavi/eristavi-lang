@@ -60,3 +60,12 @@ public function layoutsValid() returns Bool {
         and scopeMarkOffset()==0 and scopePreviousOffset()==8
         and scopeRootsOffset()==16 and scopeClassesOffset()==24 and scopeCountOffset()==32;
 }
+
+// Private typed heap registry layout, separate from the unchanged ev_value ABI.
+function textRecordLayout() returns identity Layout {
+    return identity Layout { size=40; alignment=8; fields=identity Field { offset=0; width=8; next=identity Field { offset=8; width=8; next=identity Field { offset=16; width=8; next=identity Field { offset=24; width=8; next=identity Field { offset=32; width=8; next=none; }; }; }; }; }; };
+}
+public function textLayoutsValid() returns Bool {
+    return layoutsValid() and verify(textRecordLayout())
+        and valuePayloadOffset()==8 and valueTail1Offset()==16 and valueTail2Offset()==24;
+}
