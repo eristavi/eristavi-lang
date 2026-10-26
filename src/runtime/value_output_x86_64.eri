@@ -19,3 +19,5 @@ public function source() returns Text { return value_scope_x86_64.source()+outpu
 public function textSource() returns Text { return value_text_x86_64.source()+outputSource(true); }
 
 public function viewSource() returns Text { return value_text_x86_64.viewSource()+outputSource(true); }
+
+public function nfcSource() returns Text { return value_text_x86_64.nfcSource()+outputSource(true); }

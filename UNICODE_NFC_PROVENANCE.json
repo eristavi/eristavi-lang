@@ -1,0 +1,16 @@
+{
+  "unicode_version": "17.0.0",
+  "source": "runtime/value_runtime.c",
+  "source_commit": "06707291a8ce6ed89787f96b0f08c3429ae9f9d3",
+  "maximum_expansion": 4,
+  "decompositions": 2081,
+  "flat_scalars": 3450,
+  "compositions": 961,
+  "ccc_ranges": 968,
+  "source_sha256": {
+    "decompositions": "bd8200833e65f6f305425aada6f98dfac8a8fabf4d9c61169c1691bcb68d3065",
+    "data": "3f3c16de164996a07e5907cbf8b1ec75bc5a4308ba327bddbfc5c04075cccbbb",
+    "compositions": "4e07262ca875c808a820ee3d24cbfb37f56fe35be0560dfaa56a6689d6a2ad90",
+    "ccc": "97d116b5c9ccd4149f1b5d14b17286efd073abed6157a8bb994d20b5d42d6b18"
+  }
+}

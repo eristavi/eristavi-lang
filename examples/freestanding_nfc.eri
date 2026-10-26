@@ -1,0 +1,15 @@
+import std.unicode;
+function normalize(value Text) returns Text {
+    return unicode.normalizeNfc(value);
+}
+let original be "A\u{301}";
+let snapshot be original;
+let normalized be normalize(original);
+output(normalized=="Á");
+output(snapshot==normalized);
+output(unicode.normalizeNfc(normalized)==normalized);
+output(unicode.normalizeNfc("\u{1100}\u{1161}\u{11A8}"));
+output(unicode.normalizeNfc("A\0B"));
+let i be 0;
+while i<1000 { let temporary be normalize("a\u{301}\u{327}"); i=i+1; }
+output(snapshot=="A\u{301}");
