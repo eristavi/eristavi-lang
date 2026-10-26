@@ -1,2 +1,7 @@
 import runtime.value_scalar_x86_64;
-output(value_scalar_x86_64.overflowProbeSource());
+
+function probeSource() returns Text {
+    return value_scalar_x86_64.source()+".text\n.globl _start\n.type _start,@function\n_start:\n    xorl %ebp,%ebp\n    movabsq $0x7fffffffffffffff,%rdi\n    call evn_int\n    movq %rax,%r12\n    movq $1,%rdi\n    call evn_int\n    movq $0,%rdi\n    movq %r12,%rsi\n    movq %rax,%rdx\n    call evn_binary\n    movl $2,%edi\n    jmp erist_rt_exit\n.size _start,.-_start\n.section .note.GNU-stack,\"\",@progbits\n";
+}
+
+output(probeSource());
