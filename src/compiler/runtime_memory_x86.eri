@@ -1,6 +1,7 @@
 // Linux/System-V x86-64 lowering for the compiler-private runtime memory profile.
 // This is not a public backend surface: it lowers only verified runtime implementation
 // operations and intentionally has no route from ordinary Eristavi source syntax.
+// Private helper ABI: rax = result word, rdx = 0 on success / 1 on checked failure.
 import compiler.runtime_memory_ir as r;
 import compiler.format;
 
@@ -8,6 +9,14 @@ type Emitter { body Text; failure Text; }
 
 function line(e identity Emitter,text Text) { e.body=e.body+text+"\n"; }
 function slot(index Int) returns Text { return "-"+format.integer((index+1)*8)+"(%rbp)"; }
+function argument(index Int) returns Text {
+    if index == 0 { return "%rdi"; }
+    if index == 1 { return "%rsi"; }
+    if index == 2 { return "%rdx"; }
+    if index == 3 { return "%rcx"; }
+    if index == 4 { return "%r8"; }
+    return "%r9";
+}
 
 function registerCount(program identity r.Program) returns Int {
     let count be 0; let cursor be program.registers;
@@ -93,6 +102,26 @@ function lower(e identity Emitter,value identity r.Instruction) {
         if value.width == 8 { line(e,"movq %rcx, (%rax)"); }
         return;
     }
+    // checked reservation pair supplied by a private runtime helper caller
+    if value.kind == 8 {
+        line(e,"movq "+argument(value.number)+", %rax");
+        line(e,"movq "+argument(value.number+1)+", %rcx");
+        line(e,"testq %rax, %rax");
+        line(e,"je "+e.failure);
+        line(e,"testq %rcx, %rcx");
+        line(e,"jle "+e.failure);
+        line(e,"testq $4095, %rcx");
+        line(e,"jne "+e.failure);
+        line(e,"movq %rax, "+slot(value.result));
+        line(e,"movq %rcx, "+slot(value.extra));
+        return;
+    }
+    // private machine-word helper argument
+    if value.kind == 9 {
+        line(e,"movq "+argument(value.number)+", %rax");
+        line(e,"movq %rax, "+slot(value.result));
+        return;
+    }
     emitFailureJump(e);
 }
 
@@ -113,10 +142,12 @@ public function emit(program identity r.Program,name Text,resultRegister Int) re
     let cursor be program.instructions;
     while cursor != none { let current be cursor; lower(e,current); cursor=current.next; }
     line(e,"movq "+slot(resultRegister)+", %rax");
+    line(e,"xorl %edx, %edx");
     line(e,"leave");
     line(e,"ret");
     line(e,failure+":");
-    line(e,"movq $-1, %rax");
+    line(e,"xorl %eax, %eax");
+    line(e,"movl $1, %edx");
     line(e,"leave");
     line(e,"ret");
     line(e,".size "+name+",.-"+name);
