@@ -72,9 +72,22 @@ function verify(layout identity Layout) returns Bool {
     return true;
 }
 
+// Region references are stored as base/length pairs. A linked region therefore
+// carries both fields for its successor so traversal never has to invent a length
+// from an untyped pointer. The final 8 bytes are alignment padding.
+public function regionHeaderSize() returns Int { return 48; }
+public function regionNextBaseOffset() returns Int { return 0; }
+public function regionNextLengthOffset() returns Int { return 8; }
+public function regionLengthOffset() returns Int { return 16; }
+public function regionUsedOffset() returns Int { return 24; }
+public function regionMagicOffset() returns Int { return 32; }
+public function blockHeaderSize() returns Int { return 16; }
+public function blockCapacityOffset() returns Int { return 0; }
+public function blockNextOffset() returns Int { return 8; }
+
 function regionLayout() returns identity Layout {
     return identity Layout {
-        size=32;
+        size=48;
         alignment=16;
         fields=identity Field {
             offset=0; width=8; alignment=8;
@@ -82,7 +95,10 @@ function regionLayout() returns identity Layout {
                 offset=8; width=8; alignment=8;
                 next=identity Field {
                     offset=16; width=8; alignment=8;
-                    next=identity Field { offset=24; width=8; alignment=8; next=none; };
+                    next=identity Field {
+                        offset=24; width=8; alignment=8;
+                        next=identity Field { offset=32; width=8; alignment=8; next=none; };
+                    };
                 };
             };
         };
@@ -104,10 +120,11 @@ public function allocatorLayoutsValid() returns Bool {
     let region be regionLayout();
     let block be blockLayout();
     return verify(region) and verify(block)
-        and accessValid(region,0,8,8)
-        and accessValid(region,8,8,8)
-        and accessValid(region,16,8,8)
-        and accessValid(region,24,8,8)
-        and accessValid(block,0,8,8)
-        and accessValid(block,8,8,8);
+        and accessValid(region,regionNextBaseOffset(),8,8)
+        and accessValid(region,regionNextLengthOffset(),8,8)
+        and accessValid(region,regionLengthOffset(),8,8)
+        and accessValid(region,regionUsedOffset(),8,8)
+        and accessValid(region,regionMagicOffset(),8,8)
+        and accessValid(block,blockCapacityOffset(),8,8)
+        and accessValid(block,blockNextOffset(),8,8);
 }
