@@ -46,17 +46,27 @@ function overlaps(first identity Field, second identity Field) returns Bool {
 function verify(layout identity Layout) returns Bool {
     if layout.size <= 0 or not powerOfTwo(layout.alignment) { return false; }
     if layout.size % layout.alignment != 0 { return false; }
+
+    // First establish that every field has a safe bounded range. This keeps the
+    // overlap pass from performing arithmetic on an unvalidated field.
     let cursor be layout.fields;
     let count be 0;
     while cursor != none {
         if not accessValid(layout,cursor.offset,cursor.width,cursor.alignment) { return false; }
-        let other be layout.fields;
-        while other != none and other != cursor {
-            if overlaps(cursor,other) { return false; }
-            other = other.next;
-        }
         count = count + 1;
         if count > 64 { return false; }
+        cursor = cursor.next;
+    }
+
+    cursor = layout.fields;
+    while cursor != none {
+        let other be layout.fields;
+        while other != none {
+            if other != cursor {
+                if overlaps(cursor,other) { return false; }
+            }
+            other = other.next;
+        }
         cursor = cursor.next;
     }
     return true;
