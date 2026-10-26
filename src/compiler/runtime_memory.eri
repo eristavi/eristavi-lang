@@ -9,7 +9,7 @@ type Field {
     next maybe identity Field;
 }
 
-public type Layout {
+type Layout {
     size Int;
     alignment Int;
     fields maybe identity Field;
@@ -43,7 +43,7 @@ function overlaps(first identity Field, second identity Field) returns Bool {
     return first.offset < secondEnd and second.offset < firstEnd;
 }
 
-public function verify(layout identity Layout) returns Bool {
+function verify(layout identity Layout) returns Bool {
     if layout.size <= 0 or not powerOfTwo(layout.alignment) { return false; }
     if layout.size % layout.alignment != 0 { return false; }
     let cursor be layout.fields;
