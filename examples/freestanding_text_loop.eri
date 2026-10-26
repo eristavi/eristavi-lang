@@ -1,0 +1,8 @@
+let kept be "Γεια σου 👋";
+let i be 0;
+while i < 3000 {
+    let temporary be "temporary";
+    i=i+1;
+}
+output(kept);
+output(i);

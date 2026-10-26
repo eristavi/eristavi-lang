@@ -48,3 +48,6 @@ The Text runtime is an explicit composition via `value_output_x86_64.textSource(
 the previous scalar-only composition remains available and rejects unsupported kinds.
 Text equality/concatenation, typed root-map slot pruning and Unicode views remain next.
 The compiler/generator still use the bootstrap runtime and GNU as/ld are still required.
+
+The following root-map reclamation slice is documented in FREESTANDING_TEXT_ROOTS.md;
+it adds Text safe-point slot pruning while retaining this value/heap lifetime ABI.
