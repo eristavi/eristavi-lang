@@ -195,6 +195,8 @@ class UniversalLowerer:
         self.type_by_name: dict[str, UType] = {}
 
     def lower(self, program: IRProgram) -> UProgram:
+        from .collection_codegen import require_collection_codegen
+        require_collection_codegen(program, "Universal IR")
         self.types = [
             UType(
                 item.name,

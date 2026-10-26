@@ -124,7 +124,7 @@ class Analyzer(BaseAnalyzer):
             args = []
             failures = set()
             for i, (argument, declared_type) in enumerate(zip(expr.arguments, fn.typed_parameters), 1):
-                actual_type = self._expr(argument, True, allow_checked)
+                actual_type = self._argument_type(argument, declared_type, allow_checked)
                 failures |= self.expr_failures.get(id(argument), set())
                 if declared_type is not None:
                     self._assign_or_error(declared_type, actual_type, argument.location, f"argument {i}")

@@ -70,6 +70,7 @@ public function less() returns Int { return 50; }
 public function lessEqual() returns Int { return 51; }
 public function greater() returns Int { return 52; }
 public function greaterEqual() returns Int { return 53; }
+public function colon() returns Int { return 54; }
 
 public function keywordKind(name Text) returns Int {
     if name == "let" { return letKeyword(); }

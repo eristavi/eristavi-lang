@@ -2,7 +2,7 @@ import compiler.ast;
 
 public error SemanticError { message Text; category Text; path Text; line Int; column Int; }
 public type Location { path Text; line Int; column Int; next maybe identity Location; }
-public type Type { kind Int; name Text; inner maybe identity Type; link maybe identity Type; allowed Int; mustFixed Bool; mustEqual Bool; }
+public type Type { kind Int; name Text; inner maybe identity Type; other maybe identity Type; link maybe identity Type; allowed Int; mustFixed Bool; mustEqual Bool; }
 public type Name { text Text; next maybe identity Name; }
 public type Binding { name Text; value identity Type; immutable Bool; resource Bool; location identity Location; next maybe identity Binding; }
 public type Narrow { binding identity Binding; value identity Type; active Bool; next maybe identity Narrow; }
@@ -17,10 +17,13 @@ public type Clone { head maybe identity Pair; }
 public type Seen { declaration identity Declaration; next maybe identity Seen; }
 
 public function makeType(kind Int, name Text) returns identity Type {
-    return identity Type { kind=kind; name=name; inner=none; link=none; allowed=0; mustFixed=false; mustEqual=false; };
+    return identity Type { kind=kind; name=name; inner=none; other=none; link=none; allowed=0; mustFixed=false; mustEqual=false; };
 }
 public function wrap(kind Int, inner identity Type) returns identity Type {
     let value be makeType(kind, ""); value.inner=inner; return value;
+}
+public function pairType(kind Int, first identity Type, second identity Type) returns identity Type {
+    let value be makeType(kind, ""); value.inner=first; value.other=second; return value;
 }
 public function result(value identity Type) returns Result { return Result { value=value; failures=none; }; }
 public function at(owner identity Module, token Int) returns identity Location {

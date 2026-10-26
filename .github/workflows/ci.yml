@@ -4,13 +4,40 @@ on:
   push:
     branches: [main]
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
 jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install bootstrap toolchain
+        run: |
+          for attempt in 1 2 3; do
+            python -m pip install -e . && break
+            [ "$attempt" -lt 3 ] || exit 1
+          done
+      - name: Compile Python sources
+        run: python -m compileall -q compiler tests tools
+      - name: Run preflight before qualification
+        env:
+          QUALIFY: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+        run: |
+          if [ "$QUALIFY" = true ]; then
+            python tools/preflight.py --qualify
+          else
+            python tools/preflight.py
+          fi
   test:
+    needs: preflight
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     strategy:
       fail-fast: false
       matrix:
@@ -34,7 +61,11 @@ jobs:
         with:
           python-version: '3.11'
       - name: Install bootstrap toolchain
-        run: python -m pip install -e .
+        run: |
+          for attempt in 1 2 3; do
+            python -m pip install -e . && break
+            [ "$attempt" -lt 3 ] || exit 1
+          done
       - name: Fetch pinned Unicode 17 grapheme conformance vectors
         run: >-
           curl --fail --location --retry 3

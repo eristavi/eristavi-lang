@@ -188,6 +188,7 @@ function symbolKind(spelling Text) returns Int {
     if spelling == ">=" { return token.greaterEqual(); }
     if spelling == ";" { return token.semicolon(); }
     if spelling == "," { return token.comma(); }
+    if spelling == ":" { return token.colon(); }
     if spelling == "." { return token.dot(); }
     if spelling == "(" { return token.leftParen(); }
     if spelling == ")" { return token.rightParen(); }

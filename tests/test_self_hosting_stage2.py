@@ -77,6 +77,14 @@ class SelfHostingStage2Tests(unittest.TestCase):
         )
         self.assertEqual(self.run_self_host_parser(source), ["1"])
 
+    def test_self_host_parser_accepts_map_literals(self):
+        source = (
+            'let ages be ["Anna" : 32; "John" : 41;]; '
+            'let empty be [:]; '
+            'output(1);'
+        )
+        self.assertEqual(self.run_self_host_parser(source), ["1"])
+
     def test_self_host_parser_accepts_checked_error_resource_shape(self):
         source = (
             'import std.files; '

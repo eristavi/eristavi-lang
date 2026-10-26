@@ -48,8 +48,7 @@ class Interpreter(BaseInterpreter):
         super().__init__(output, module_id, imported_modules)
         self.process_state = process_state if process_state is not None else ProcessState(tuple(arguments), 0, error_output or (lambda text: print(text, file=sys.stderr)))
 
-    def _member_value(self, e):
-        base = self._expr(e.base)
+    def _member_from_value(self, base, e):
         if isinstance(base, str) and e.name in ("characters", "scalars", "bytes"):
             return TextViewValue(e.name, base)
         if isinstance(base, TextViewValue):
@@ -59,18 +58,15 @@ class Interpreter(BaseInterpreter):
                 f"Text {base.kind} view has no member {e.name!r} in pre-0.1",
                 e.location,
             )
-        return super()._member_value(e)
+        return super()._member_from_value(base, e)
 
-    def _expr(self, e):
-        if isinstance(e, IndexExpr):
-            base = self._expr(e.base)
-            if isinstance(base, TextViewValue):
-                idx = self._expr(e.index)
-                items = base.items()
-                if idx < 0 or idx >= len(items):
-                    raise RuntimeFault("Text view index out of bounds", e.location)
-                return copy_value(items[idx])
-        return super()._expr(e)
+    def _index_value(self, base, index, location):
+        if isinstance(base, TextViewValue):
+            items = base.items()
+            if index < 0 or index >= len(items):
+                raise RuntimeFault("Text view index out of bounds", location)
+            return copy_value(items[index])
+        return super()._index_value(base, index, location)
 
     def _call(self, e: CallExpr):
         if (isinstance(e.callee, MemberExpr) and isinstance(e.callee.base, NameExpr)

@@ -104,6 +104,43 @@ class SelfHostedSemanticTests(unittest.TestCase):
         self.assertEqual(result.returncode,0,result.stderr)
         self.assertEqual(result.stdout,'')
 
+    def test_compiled_analyzer_accepts_map_and_contextual_bytes(self):
+        source='''
+        function first(data Bytes) returns Int { return data[0]; }
+        function greeting() returns Bytes { return [72, 105]; }
+        let ages be ["Anna" : 32; "John" : 41;];
+        let empty be [:];
+        empty["answer"] = 42;
+        let data Bytes be [65, 66, 67];
+        output(first([70, 71]));
+        output(ages["John"]);
+        output(empty["answer"]);
+        output(data.count);
+        output(greeting().count);
+        '''
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);entry=root/'app.eri';entry.write_text(source,encoding='utf-8')
+            compile_entry(entry,root)
+            result=self.invoke(entry,root)
+            self.assertEqual(result.returncode,0,result.stderr)
+            self.assertEqual(result.stdout,'')
+            self.assertEqual(result.stderr,'')
+
+    def test_compiled_analyzer_rejects_invalid_map_key_and_byte_range(self):
+        sources=(
+            'let values be [:]; values[1.5] = 2;',
+            'let data Bytes be [0, 256];',
+            'let data Bytes be [-1, 2];',
+        )
+        for source in sources:
+            with self.subTest(source=source),tempfile.TemporaryDirectory() as td:
+                root=Path(td);entry=root/'app.eri';entry.write_text(source,encoding='utf-8')
+                with self.assertRaises(EristaviError):
+                    compile_entry(entry,root)
+                result=self.invoke(entry,root)
+                self.assertEqual(result.returncode,1,result.stderr)
+                self.assertIn('semantic error',result.stderr)
+
     def test_reference_execution_of_eristavi_analyzer_matches_compiled_execution(self):
         selected=[next(c for c in CASES if c['name']==name) for name in ('generic_nested_list_0','fixed_nested_identity','module_checked')]
         module=compile_entry(ROOT/'src/frontend.eri',ROOT/'src')

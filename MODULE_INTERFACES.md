@@ -34,6 +34,14 @@ It records:
 
 Serialization is deterministic canonical JSON and has a SHA-256 digest.
 
+The experimental collection branch encodes inferred Map relationships as a
+`map` type with recursively encoded `key` and `value` contracts, sharing the
+function's generic-variable table. Bytes uses its named type contract. These
+contracts can be imported without implementation source; an older reader that
+does not understand `map` must reject that type rather than reinterpret it as a
+List. Interface support does not imply Map/Bytes code generation support: see
+`VALIDATION.md` for the qualification gate and remaining backend/runtime work.
+
 Private functions are not exposed as callable interface symbols. Structural metadata required to validate public contracts may remain compiler-visible without becoming source-addressable.
 
 ## Implementation object

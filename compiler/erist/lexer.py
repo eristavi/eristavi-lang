@@ -64,6 +64,7 @@ class TokenKind(Enum):
     LESS_EQUAL = auto()
     GREATER = auto()
     GREATER_EQUAL = auto()
+    COLON = auto()
 
 
 KEYWORDS = {
@@ -345,6 +346,7 @@ class Lexer:
         one_map = {
             ";": TokenKind.SEMICOLON,
             ",": TokenKind.COMMA,
+            ":": TokenKind.COLON,
             ".": TokenKind.DOT,
             "(": TokenKind.LPAREN,
             ")": TokenKind.RPAREN,
