@@ -1,6 +1,6 @@
 # Freestanding binary64 operation foundation
 
-Status: implementation awaiting automatic CI qualification. Linux/System-V x86-64.
+Status: primitive operations qualified in PR #32 and merged. Linux/System-V x86-64.
 
 `runtime.float_x86_64.source()` emits private machine operations on binary64 bit
 patterns. `src/float_runtime_primitives.eri` exposes an assembly generator for
@@ -28,7 +28,8 @@ compared with hosted binary64 results. The caller deliberately enables truncatio
 DAZ and FTZ before every call and checks exact MXCSR restoration afterward. Static
 ELF/import checks and unavailable-PATH execution use the existing harness.
 
-Next Float work is correctly rounded decimal input, output matching the current
-`%.17g` behavior, and integration with value slots, scope escapes and the ordinary
-helper dispatch. Existing language semantics do not define a new numeric conversion
+The following batch adds an isolated exact decimal-output helper matching the
+current `%.17g` behavior; see `FREESTANDING_FLOAT_FORMAT.md`. Correctly rounded
+decimal input and integration with value slots, scope escapes and ordinary helper
+dispatch remain. Existing language semantics do not define a new numeric conversion
 API; this batch introduces none.
