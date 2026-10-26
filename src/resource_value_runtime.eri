@@ -1,0 +1,2 @@
+import runtime.value_output_x86_64;
+output(value_output_x86_64.resourceSource());

@@ -42,3 +42,8 @@ public function graphSource() returns Text {
     if not runtime_value.graphLayoutsValid() { return ".text\n.globl erist_rt_text_layout_invalid\nerist_rt_text_layout_invalid:\n    ud2\n"; }
     return value_scope_x86_64.graphSource()+text_buffer_x86_64.helpersSource()+text_registry_x86_64.source()+collectorSource(true,true)+value_roots_x86_64.graphSource()+constructorSource()+publishSource()+text_ops_x86_64.source()+value_view_x86_64.graphSource();
 }
+
+public function resourceSource() returns Text {
+    if not runtime_value.resourceLayoutsValid() { return ".text\n.globl erist_rt_text_layout_invalid\nerist_rt_text_layout_invalid:\n    ud2\n"; }
+    return value_scope_x86_64.graphSource()+text_buffer_x86_64.helpersSource()+text_registry_x86_64.source()+collectorSource(true,true)+value_roots_x86_64.graphSource()+constructorSource()+publishSource()+text_ops_x86_64.source()+value_view_x86_64.resourceSource();
+}
