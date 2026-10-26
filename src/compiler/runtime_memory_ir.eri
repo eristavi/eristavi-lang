@@ -269,3 +269,6 @@ public function rejectsMixedReservations() returns Bool {
     let program be identity Program { registers=r0; instructions=i0; };
     return not verify(program);
 }
+
+public function load32Program() returns identity Program { return loadProgram(4); }
+public function store32Program() returns identity Program { return storeProgram(4); }

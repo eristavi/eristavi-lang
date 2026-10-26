@@ -24,3 +24,8 @@ public function viewSource() returns Text {
     if not runtime_value.textLayoutsValid() { return ".text\n.globl erist_rt_text_layout_invalid\nerist_rt_text_layout_invalid:\n    ud2\n"; }
     return value_scope_x86_64.viewSource()+text_buffer_x86_64.helpersSource()+collectorSource(true)+value_roots_x86_64.source()+constructorSource()+publishSource()+text_ops_x86_64.source()+value_view_x86_64.source();
 }
+
+public function nfcSource() returns Text {
+    if not runtime_value.textLayoutsValid() { return ".text\n.globl erist_rt_text_layout_invalid\nerist_rt_text_layout_invalid:\n    ud2\n"; }
+    return value_scope_x86_64.viewSource()+text_buffer_x86_64.helpersSource()+collectorSource(true)+value_roots_x86_64.source()+constructorSource()+publishSource()+text_ops_x86_64.source()+value_view_x86_64.nfcSource();
+}
