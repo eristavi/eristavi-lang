@@ -36,6 +36,12 @@ CASES = (
     FailureCase('constructor-arena-oom', reservation=2, allocations=1, reservations=2, releases=1),
     FailureCase('constructor-slot-oom', allocation=2, allocations=2, reservations=2, buffers=1),
     FailureCase('constructor-copy-failure', store=2, reservations=1, releases=1, message=INTERNAL),
+    FailureCase('pooled-record-oom', setup='pooled-constructor', allocation=1,
+                allocations=1, buffers=1),
+    FailureCase('pooled-copy-failure', setup='pooled-constructor', store=2,
+                buffers=1, message=INTERNAL),
+    FailureCase('pooled-slot-oom', setup='pooled-constructor', allocation=2,
+                allocations=2, buffers=2),
     FailureCase('empty-slot-oom', setup='empty', allocation=1, allocations=1),
     FailureCase('invalid-before-allocation', setup='invalid',
                 message=b'Eristavi runtime fault: invalid UTF-8 inside Text\n'),
@@ -143,15 +149,30 @@ def instrument(runtime, case):
     repe scasq
     jne .Lfi_bad_exit
 '''
-    if case.name in ('constructor-slot-oom', 'growth-slot-oom'):
-        length = 2 if case.setup == 'constructor' else 4098
-        checks += f'''    movq .Lfi_pairs(%rip),%rdi
+    if case.name in ('constructor-slot-oom', 'growth-slot-oom', 'pooled-slot-oom'):
+        length = 4098 if case.setup == 'growth' else 2
+        checks += f'''    movq .Ltext_records(%rip),%rdi
+    movq 8(%rdi),%rdi
     subq $8,%rsp
     call erist_rt_text_registry_find
     addq $8,%rsp
     testq %rax,%rax
     je .Lfi_bad_exit
     cmpq ${length},24(%rax)
+    jne .Lfi_bad_exit
+'''
+    if case.setup == 'pooled-constructor':
+        expected_live = 2 if case.name == 'pooled-slot-oom' else 1
+        checks += f'''    cmpq $1,.Ltext_pool_count(%rip)
+    jne .Lfi_bad_exit
+    movq .Lfi_left(%rip),%rax
+    movq 16(%rax),%rax
+    cmpb $98,(%rax)
+    jne .Lfi_bad_exit
+    cmpb $99,1(%rax)
+    jne .Lfi_bad_exit
+    movq -16(%rax),%rax
+    cmpq ${expected_live},16(%rax)
     jne .Lfi_bad_exit
 '''
     if case.setup in ('append', 'growth'):
@@ -178,6 +199,12 @@ def instrument(runtime, case):
 
 def program(case):
     setup = '.text\n.globl _start\n_start:\n    xorl %ebp,%ebp\n'
+    if case.setup == 'pooled-constructor':
+        setup += '''    leaq .Lfi_bytes(%rip),%rdi
+    movl $2,%esi
+    call evn_text
+    movq %rax,.Lfi_left(%rip)
+'''
     if case.setup in ('append', 'growth'):
         left_length = 4096 if case.setup == 'growth' else 1
         setup += f'''    leaq .Lfi_left_bytes(%rip),%rdi

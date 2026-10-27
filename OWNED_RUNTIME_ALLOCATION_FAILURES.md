@@ -55,3 +55,14 @@ interior roots, handlers, current/saved/secondary failures and resource state. T
 families must be implemented and qualified before step 8's C-runtime-free compiler
 self-build. Steps 9–12 remain subsequent milestones; this work does not implement
 native packaging, instruction encoding, object output, a linker or additional OSes.
+
+## Small-Text pooling follow-up
+
+The pooling batch keeps all thirteen original failure probes and adds three
+preexisting-neighbor cases, for sixteen cases in this harness. Failed copy or
+record allocation returns only the unpublished slice without unmapping the
+neighbor's slab. Failed value-slot allocation leaves the published registry and
+pool live counts consistent. The release ledger still tracks exact OS reservation
+pairs; registry checks now retrieve the published buffer base from its record,
+which can be a slice inside a slab. These private storage changes do not alter
+source-level failure or cleanup contracts. See `OWNED_TEXT_POOL.md`.

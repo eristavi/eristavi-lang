@@ -123,10 +123,16 @@ allocation-failure tests. The tightened root probe additionally verifies that
 successful scratch reservations occur and have matching releases. Hosted results
 belong to the final PR revision, not to these local timings.
 
-Small Text buffers remain unpooled and are the next allocation cost to profile.
-Another full owned compiler rebuild remains deferred until compiler throughput
-justifies its cost; this batch does not change the 900-second qualification limit
-or claim repeated owned self-build success.
+PR #38 passed CI #381 and its owned integration audit before merging. The next
+batch adds independent small-Text pooling, reducing the token/report probe by
+another 42–49% and OS reservation count by 97%. See `OWNED_TEXT_POOL.md`.
+One completed-batch owned rebuild attempt retained the existing 900-second
+limit and timed out during B-to-C emission. The initial B assembly was reused
+only after verifying its recorded hash and all 29 unchanged compiler source
+modules; the owned runtime emitter/object was regenerated for this batch.
+C and the following reproduction pass were not completed. Repeatability remains
+unqualified, and the default remains the bootstrap profile. The next performance
+work must profile full-compilation stages before scheduling another long rebuild.
 
 Bootstrap creation still requires Python and a C toolchain. GNU as/ld and the shell
 wrapper remain external tools with their own host dependencies. C export keeps its
