@@ -454,7 +454,7 @@ function construct(context identity m.Context, node identity ast.Node, allowChec
 }
 function expression(context identity m.Context, node identity ast.Node, valueRequired Bool, allowChecked Bool) returns m.Result fails m.SemanticError {
     let value be try evaluate(context,node,valueRequired,allowChecked);
-    context.owner.facts=identity m.Fact { node=node; value=value.value; failures=value.failures; next=context.owner.facts; };
+    m.remember(context.owner,node,value);
     return value;
 }
 function evaluate(context identity m.Context, node identity ast.Node, valueRequired Bool, allowChecked Bool) returns m.Result fails m.SemanticError {

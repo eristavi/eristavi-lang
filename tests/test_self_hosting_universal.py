@@ -91,7 +91,7 @@ import compiler.universal_optimize;
 import compiler.typed_ir as t;
 import compiler.semantic_model as m;
 function fresh() returns identity u.Builder {
-    let location be identity m.Location { path="test.eri"; line=1; column=1; next=none;  ordinal=-1; left=none; right=none; };
+    let location be identity m.Location { path="test.eri"; line=1; column=1; next=none;  ordinal=-1; left=none; right=none; facts=none; };
     let source be identity t.Function { index=-1; name="entry"; result=5; locals=none; body=t.node(0,5,location); failures=none; next=none; };
     let typed be identity t.Program { functions=none; entry=source; types=none; };
     let entry be identity u.Function { index=-1; parameters=0; registers=none; registerTail=none; blocks=none; next=none; };
