@@ -9,7 +9,7 @@ type Cleanup { index Int; frame Text; next maybe identity Cleanup; }
 type Emitter { text Text; temporary Int; program identity ir.Program; cleanups maybe identity Cleanup; }
 function append(e identity Emitter,text Text) { e.text=e.text+text+"\n"; }
 function temp(e identity Emitter) returns Text { let name be "t"+format.integer(e.temporary); e.temporary=e.temporary+1; return name; }
-function required(value maybe identity ir.Node) returns identity ir.Node { if value != none { return value; } return ir.node(-1,5,identity m.Location { path=""; line=0; column=0; next=none; ordinal=-1; left=none; right=none; }); }
+function required(value maybe identity ir.Node) returns identity ir.Node { if value != none { return value; } return ir.node(-1,5,identity m.Location { path=""; line=0; column=0; next=none; ordinal=-1; left=none; right=none; facts=none; }); }
 function cquote(value Text) returns Text {
     let result be "\""; let index be 0;
     while index < value.bytes.count { let byte be value.bytes[index]; result=result+"\\"+"01234567".scalars[byte/64]+"01234567".scalars[(byte/8)%8]+"01234567".scalars[byte%8]; index=index+1; } return result+"\"";

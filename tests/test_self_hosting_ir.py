@@ -146,7 +146,7 @@ import compiler.typed_ir as ir;
 import compiler.ir_verify;
 import compiler.ir_c;
 import compiler.semantic_model as m;
-function location() returns identity m.Location { return identity m.Location { path="test.eri"; line=4; column=2; next=none;  ordinal=-1; left=none; right=none; }; }
+function location() returns identity m.Location { return identity m.Location { path="test.eri"; line=4; column=2; next=none;  ordinal=-1; left=none; right=none; facts=none; }; }
 function node(kind Int,valueType Int) returns identity ir.Node { return ir.node(kind,valueType,location()); }
 function empty() returns identity ir.Program {
     let entry be identity ir.Function { index=-1; name="entry"; result=5; locals=none; body=node(0,5); failures=none; next=none; };

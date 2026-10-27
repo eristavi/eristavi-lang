@@ -19,10 +19,11 @@ function concrete(builder identity Builder, owner identity m.Module, source iden
     let result be try ir_types.register(builder.program,owner,value,m.at(owner,source.token));
     if not allowVoid and result == 5 { try reject(owner,source,"ordinary storage requires a value"); } return result;
 }
-function fact(context identity Context, source identity ast.Node) returns Int fails m.SemanticError {
-    let cursor be context.owner.facts;
-    while cursor != none { if cursor.node == source { return try concrete(context.builder,context.owner,source,types.clone(cursor.value,context.map),true); } cursor=cursor.next; }
-    try reject(context.owner,source,"missing semantic expression fact"); return 5;
+function fact(context identity Context, source identity ast.Node) returns identity m.Fact fails m.SemanticError {
+    let found be m.expressionFact(context.owner,source);
+    if found != none { return found; }
+    try reject(context.owner,source,"missing semantic expression fact");
+    return identity m.Fact { node=source; value=m.makeType(5,""); failures=none; next=none; tokenNext=none; };
 }
 function coerce(context identity Context, value identity ir.Node, expected Int) returns identity ir.Node fails m.SemanticError {
     if value.valueType == expected { return value; }
@@ -107,9 +108,10 @@ function integer(raw Text) returns Int {
     } return result;
 }
 function expression(context identity Context, source identity ast.Node) returns identity ir.Node fails m.SemanticError {
-    let kind be try fact(context,source); let result be ir.node(-1,kind,m.at(context.owner,source.token));
-    let info be context.owner.facts;
-    while info != none { let current be info; info=current.next; if current.node == source { result.effects=try ir_types.failures(context.builder.program,context.owner,current.failures,result.location); info=none; } }
+    let info be try fact(context,source);
+    let kind be try concrete(context.builder,context.owner,source,types.clone(info.value,context.map),true);
+    let result be ir.node(-1,kind,m.at(context.owner,source.token));
+    result.effects=try ir_types.failures(context.builder.program,context.owner,info.failures,result.location);
     if source.kind == ast.literalExpr() {
         result.kind=1; result.text=source.text;
         if kind == 1 { result.number=integer(source.text); } if kind == 3 and source.flag { result.number=1; } return result;

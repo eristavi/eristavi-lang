@@ -1,7 +1,7 @@
 import compiler.ast;
 
 public error SemanticError { message Text; category Text; path Text; line Int; column Int; }
-public type Location { path Text; line Int; column Int; next maybe identity Location; ordinal Int; left maybe identity Location; right maybe identity Location; }
+public type Location { path Text; line Int; column Int; next maybe identity Location; ordinal Int; left maybe identity Location; right maybe identity Location; facts maybe identity Fact; }
 public type Type { kind Int; name Text; inner maybe identity Type; link maybe identity Type; allowed Int; mustFixed Bool; mustEqual Bool; }
 public type Name { text Text; next maybe identity Name; }
 public type Binding { name Text; value identity Type; immutable Bool; resource Bool; location identity Location; next maybe identity Binding; }
@@ -10,7 +10,7 @@ public type Import { alias Text; path Text; target maybe identity Module; next m
 public type Module { name Text; path Text; root identity ast.Node; locations maybe identity Location; locationIndex maybe identity Location; imports maybe identity Import; declarations maybe identity Declaration; facts maybe identity Fact; state Int; entry Bool; next maybe identity Module; }
 public type Declaration { node identity ast.Node; owner identity Module; value identity Type; fields maybe identity Binding; parameters maybe identity Binding; result identity Type; explicitResult Bool; failures maybe identity Name; state Int; next maybe identity Declaration; }
 public type Context { owner identity Module; symbols maybe identity Binding; narrowings maybe identity Narrow; activeFunction maybe identity Declaration; result identity Type; sawValue Bool; sawBare Bool; generics maybe identity Binding; }
-public type Fact { node identity ast.Node; value identity Type; failures maybe identity Name; next maybe identity Fact; }
+public type Fact { node identity ast.Node; value identity Type; failures maybe identity Name; next maybe identity Fact; tokenNext maybe identity Fact; }
 public type Result { value identity Type; failures maybe identity Name; }
 public type Pair { source identity Type; target identity Type; next maybe identity Pair; }
 public type Clone { head maybe identity Pair; }
@@ -50,7 +50,26 @@ public function at(owner identity Module, token Int) returns identity Location {
         if token == node.ordinal { return node; }
         if token < node.ordinal { cursor=node.left; } else { cursor=node.right; }
     }
-    return identity Location { path=owner.path; line=1; column=1; next=none; ordinal=-1; left=none; right=none; };
+    return identity Location { path=owner.path; line=1; column=1; next=none; ordinal=-1; left=none; right=none; facts=none; };
+}
+// Keep newest-first facts per token, retaining identity checks for nodes that
+// share an ordinal. The global chain remains the fallback for synthetic nodes.
+public function remember(owner identity Module, node identity ast.Node, value Result) {
+    let location be at(owner,node.token);
+    let entry be identity Fact { node=node; value=value.value; failures=value.failures; next=owner.facts; tokenNext=location.facts; };
+    owner.facts=entry;
+    if location.ordinal>=0 { location.facts=entry; }
+}
+public function expressionFact(owner identity Module, node identity ast.Node) returns maybe identity Fact {
+    let location be at(owner,node.token);
+    let cursor be location.facts;
+    if location.ordinal<0 { cursor=owner.facts; }
+    while cursor != none {
+        let current be cursor;
+        if current.node==node { return current; }
+        if location.ordinal<0 { cursor=current.next; } else { cursor=current.tokenNext; }
+    }
+    return none;
 }
 public function reject(location identity Location, category Text, message Text) returns Bool fails SemanticError {
     fail SemanticError { message=message; category=category; path=location.path; line=location.line; column=location.column; };
