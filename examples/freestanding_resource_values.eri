@@ -1,0 +1,59 @@
+import std.files;
+import std.process;
+error BodyError { code Int; message Text; }
+function read(path Text) returns Text fails files.FileError {
+    with file be try files.openRead(path) { return try file.readText(); }
+}
+function create(path Text) fails files.FileError {
+    with file be try files.create(path) {
+        try file.writeText("first");
+        try file.writeText("A\0β");
+        output(try file.readText());
+    }
+}
+function join(path Text) returns Text fails files.FileError {
+    with first be try files.openRead(path) {
+        with second be try files.openRead(path) {
+            return try first.readText() + try second.readText();
+        }
+    }
+}
+function body(path Text) fails BodyError, files.FileError {
+    with file be try files.openRead(path) {
+        fail BodyError { code=42; message="body preserved"; };
+    }
+}
+function readOnly(path Text) fails files.FileError {
+    with file be try files.openRead(path) { try file.writeText("forbidden"); }
+}
+function run(path Text) {
+    let exists be files.exists(path) else error { output(error.message); return; };
+    output(exists);
+    create(path) else error { output(error.message); return; };
+    let existsNow be files.exists(path) else error { output(error.message); return; };
+    output(existsNow);
+    let canonical be files.canonicalPath(path+".link") else error { output(error.message); return; };
+    output(canonical == path);
+    let joined be join(path) else error { output(error.message); return; };
+    output(joined);
+    let iteration be 0;
+    while iteration<600 {
+        let text be read(path) else error { output(error.message); return; };
+        iteration=iteration+1;
+    }
+    body(path) else error BodyError { output(error.code); output(error.message); }
+        else error files.FileError { output(error.message); };
+    readOnly(path) else error { output(error.message); };
+    create(path) else error { output(error.message); };
+    read(path+".missing") else error files.FileError {
+        output(error.path == path+".missing"); output(error.message);
+    };
+    read(path+".bad") else error { output(error.message); };
+    files.remove(path) else error { output(error.message); return; };
+    let gone be files.exists(path) else error { output(error.message); return; };
+    output(gone);
+}
+let arguments be process.arguments();
+if arguments.count > 0 { run(arguments[0]); }
+process.writeError("service β\0");
+process.setExitCode(7);

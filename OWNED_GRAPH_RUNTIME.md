@@ -1,7 +1,7 @@
 # Owned aggregate, optional, identity and checked-failure runtime
 
-Status: implementation and focused Linux/System-V x86-64 qualification passed;
-automatic full CI qualification pending for the combined batch.
+Status: qualified in PR #35, merged as `e7be684613f08486544c3252e9520ef85c8f96d0`.
+All four automatic CI jobs passed, including the three Linux self-build/offline gates.
 
 `runtime.value_output_x86_64.graphSource()` and `src/graph_value_runtime.eri` compose
 the owned scalar/Float/Text/Unicode runtime with Objects, Lists, maybe/identity and
@@ -117,9 +117,10 @@ ELF checks require no imports, dynamic loader or executable stack; target execut
 uses an unavailable PATH. No manual full suite, self-build, workflow dispatch or
 rerun was initiated. The complete batch is published once for normal automatic CI.
 
-Resources, file/process builtins and deterministic cleanup are the next port. The
-saved-context secondary slot is reserved; secondary cleanup contexts cannot yet be
-created by this profile. Resource values are rejected rather than traced incompletely.
+The explicit graph profile continues to reject resource values. The next combined
+resource profile adds file/process builtins, deterministic cleanup and secondary
+failure contexts; see `OWNED_RESOURCE_RUNTIME.md`. Secondary contexts use the saved
+failure reserved word as an ordered chain link and share the typed failure tracer.
 Full resource/secondary-failure integration and a compiler self-build on the owned
 runtime remain outstanding. Bootstrap C/Python and GNU as/ld have not been removed,
 and independent ARM64/Windows/macOS execution is not implemented by this batch.

@@ -80,3 +80,7 @@ public function graphLayoutsValid() returns Bool {
     return textLayoutsValid() and valueSize()==32 and verify(graphWordLayout(48))
         and verify(graphWordLayout(96)) and verify(graphWordLayout(112));
 }
+
+public function resourceLayoutsValid() returns Bool {
+    return graphLayoutsValid() and verify(graphWordLayout(96));
+}

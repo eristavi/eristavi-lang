@@ -68,6 +68,7 @@ function descriptors(e identity Emitter) {
         let nameLabel be ".Ltype_name_"+format.integer(index); let fields be "0"; if size > 0 { fields=".Ltype_fields_"+format.integer(index); }
         datum(e,".long "+format.integer(kind)+","+format.integer(inner)+"\n.quad "+nameLabel+"\n.quad "+format.integer(size)+"\n.quad "+fields); index=index+1;
     }
+    datum(e,".globl ev_types_end\nev_types_end:");
     index=0;
     while index < count {
         datum(e,".Ltype_name_"+format.integer(index)+":"); let descriptor be ir.typeAt(e.program.types,index); let name be ""; if descriptor != none { name=descriptor.name; }
