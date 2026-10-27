@@ -83,17 +83,50 @@ token/report probe improved from approximately 10.3 seconds before the workload
 optimizations to 1.8 seconds afterward on this host; that does not establish full
 compiler throughput or a cross-machine benchmark.
 
-Automatic CI adds one owned **integration-only** development bundle/audit, recording
-`repeatable: false`. The original four-platform suite and three Linux bootstrap
-self-build/offline gates remain enabled in full. Hosted qualification of the new
-source head remains required before merging.
+CI #379 passed the four-platform suite, all three Linux bootstrap self-build/
+offline gates and owned integration for PR #37. Expensive gates now live in the
+explicit completed-batch qualification workflow; ordinary CI keeps the full
+four-platform test suite. See `CI_QUALIFICATION.md` for selection and final-revision
+requirements. Owned integration still records `repeatable: false`.
 
-Further compiler-workload profiling should prioritize temporary-root membership
-scans and independent small-Text allocations. Counter measurements on the small
-probe found roughly 643 million root-membership comparisons; constant-time slot
-counting removes a separate 496 million slot-list visits but does not fix that
-membership cost. Small Text buffers remain unpooled. These costs need measured
-improvement before another expensive owned compiler rebuild.
+Temporary-slot pruning now builds a nonowning, open-addressed set of exact
+class-1 root keys and scope boundaries before scanning the slot chain. Duplicate,
+null and stale keys are safe: keys are compared without dereferencing them. Pending
+results and active handler boundaries retain their existing pins; unbound scopes
+still suppress pruning. Maps are rebuilt at each pass so overwritten roots do not
+remain live. Scratch uses a separate zero-filled reservation and is released at
+the end of the pass; reservation failure falls back to the original linear search.
+Using the value allocator for this scratch regressed the compiler probe and was
+rejected because it polluted the reusable-block chain.
+
+The previous probe counted roughly 643 million root-membership comparisons.
+Qualification now checks a 1,024-entry mixed-class map with duplicates and invalid
+keys, changed roots, nested scope marks, bounded membership probes and matched
+scratch reservations/releases. The same survivor expectations run with scratch
+reservation forced to fail. Existing graph/resource checks also cross-check the
+slot counter against the independent slot chain.
+
+A before/after token-report probe used identical compiler-B assembly and input
+files, changing only the linked owned runtime. Three alternating runs per size on
+this Linux x86-64 host produced these wall-time medians; output bytes matched in
+every run. This includes token-report formatting and is not a pure lexer or full
+compiler benchmark.
+
+| Declarations | Before | Indexed roots | Reduction |
+| --- | --- | --- | --- |
+| 200 | 1.898 s | 1.143 s | 40% |
+| 400 | 4.445 s | 2.715 s | 39% |
+| 800 | 11.756 s | 7.173 s | 39% |
+
+The local completed-batch run passed 25 Text/Unicode/Float/graph/resource/root/
+allocation-failure tests. The tightened root probe additionally verifies that
+successful scratch reservations occur and have matching releases. Hosted results
+belong to the final PR revision, not to these local timings.
+
+Small Text buffers remain unpooled and are the next allocation cost to profile.
+Another full owned compiler rebuild remains deferred until compiler throughput
+justifies its cost; this batch does not change the 900-second qualification limit
+or claim repeated owned self-build success.
 
 Bootstrap creation still requires Python and a C toolchain. GNU as/ld and the shell
 wrapper remain external tools with their own host dependencies. C export keeps its

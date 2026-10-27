@@ -12,6 +12,130 @@ import test_freestanding_text_lifetimes as lifetime_tests
 ROOT = Path(__file__).resolve().parents[1]
 
 
+LARGE_ROOT_PROBE = r'''
+.text
+.globl _start
+_start:
+    call evn_scope_enter
+    movq %rax,%r12
+    xorl %ebx,%ebx
+.Lroot_create:
+    movq %rbx,%rdi
+    call evn_int
+    leaq .Lroot_keys(%rip),%r8
+    movq %rax,(%r8,%rbx,8)
+    leaq .Lroot_classes(%rip),%r9
+    movb $1,(%r9,%rbx)
+    movq %rbx,%rcx
+    andl $3,%ecx
+    cmpq $1,%rcx
+    jne .Lroot_not_duplicate
+    movq -8(%r8,%rbx,8),%rax
+    movq %rax,(%r8,%rbx,8)
+.Lroot_not_duplicate:
+    cmpq $2,%rcx
+    jne .Lroot_not_machine
+    movb $7,(%r9,%rbx)
+.Lroot_not_machine:
+    cmpq $3,%rcx
+    jne .Lroot_created
+    movq $1,(%r8,%rbx,8)
+.Lroot_created:
+    incq %rbx
+    cmpq $1024,%rbx
+    jb .Lroot_create
+    movq %r12,%rdi
+    leaq .Lroot_keys(%rip),%rsi
+    leaq .Lroot_classes(%rip),%rdx
+    movl $1024,%ecx
+    call evn_bind_roots
+    movl $1024,%ebx
+.Lroot_garbage:
+    call evn_void
+    decq %rbx
+    jne .Lroot_garbage
+    movq %rax,%r13
+    movq %rax,%rdi
+    call erist_rt_slots_collect
+    call erist_rt_slots_live
+    cmpq $257,%rax
+    jne .Lfail
+    # A newly entered scope's mark is a root even if its key is overwritten.
+    call evn_scope_enter
+    movq %rax,%r14
+    movq %rax,%rdi
+    leaq .Lroot_keys(%rip),%rsi
+    leaq .Lroot_classes(%rip),%rdx
+    xorl %ecx,%ecx
+    call evn_bind_roots
+    # Clear all old root keys, then install a different live slot at a late key.
+    leaq .Lroot_keys(%rip),%rdi
+    movl $1024,%ecx
+    xorl %eax,%eax
+    rep stosq
+    movl $42,%edi
+    call evn_int
+    movq %rax,.Lroot_keys+8184(%rip)
+    xorl %edi,%edi
+    call erist_rt_slots_collect
+    call erist_rt_slots_live
+    cmpq $2,%rax
+    jne .Lfail
+    movq %r13,%rdi
+    cmpq $5,(%rdi)
+    jne .Lfail
+    movq .Lroot_keys+8184(%rip),%rdi
+    cmpq $42,8(%rdi)
+    jne .Lfail
+    call evn_void
+    movq %r14,%rdi
+    movq %rax,%rsi
+    call evn_scope_leave
+    movq %r12,%rdi
+    movq %rax,%rsi
+    call evn_scope_leave
+    movq .Lroot_reservations(%rip),%rax
+    movl $ROOT_PROBE_LIMIT,%ecx
+    testq %rcx,%rcx
+    je .Lroot_compare_releases
+    testq %rax,%rax
+    je .Lfail
+.Lroot_compare_releases:
+    cmpq .Lroot_releases(%rip),%rax
+    jne .Lfail
+    movq .Lroot_probes(%rip),%rax
+    cmpq $ROOT_PROBE_LIMIT,%rax
+    ja .Lfail
+    movq .Lvalue_slots(%rip),%rdi
+    movq $0,.Lvalue_slots(%rip)
+    movq $0,.Lvalue_slot_count(%rip)
+    call erist_rt_free
+    testq %rax,%rax
+    jne .Lfail
+    call erist_rt_allocator_release_all
+    testq %rax,%rax
+    jne .Lfail
+    xorl %edi,%edi
+    jmp erist_rt_exit
+.Lfail:
+    movl $99,%edi
+    jmp erist_rt_exit
+.bss
+.p2align 3
+.Lroot_keys:
+.zero 8192
+.Lroot_classes:
+.zero 1024
+.p2align 3
+.Lroot_probes:
+.quad 0
+.Lroot_reservations:
+.quad 0
+.Lroot_releases:
+.quad 0
+'''
+
+
 @unittest.skipUnless(platform.system() == 'Linux' and platform.machine().lower() in ('x86_64', 'amd64'),
                      'freestanding Text roots currently target Linux x86-64')
 class FreestandingTextRootTests(unittest.TestCase):
@@ -194,6 +318,33 @@ _start:
                 self, directory, 'roots', emitted.stdout, probe)
             self.assertEqual((result.returncode, result.stdout, result.stderr),
                              (0, b'A\0\xc3\xa9\nA\0\xc3\xa9\ntmp\ninner\n', b''))
+            # Force scratch reservation failure only in index preparation. The
+            # original search must preserve exactly the same survivors/output.
+            prepare, rest = emitted.stdout.split('.Lslots_prepare_index:\n', 1)
+            body, after = rest.split('.Lslots_index_unavailable:', 1)
+            self.assertEqual(body.count('    call erist_rt_reserve\n'), 1)
+            fallback = prepare+'.Lslots_prepare_index:\n'+body.replace(
+                '    call erist_rt_reserve\n', '    xorl %eax,%eax\n', 1
+            )+'.Lslots_index_unavailable:'+after
+            result = lifetime_tests.FreestandingTextLifetimeTests._link_run(
+                self, directory, 'roots-no-index-memory', fallback, probe)
+            self.assertEqual((result.returncode, result.stdout, result.stderr),
+                             (0, b'A\0\xc3\xa9\nA\0\xc3\xa9\ntmp\ninner\n', b''))
+            indexed = emitted.stdout.replace('.Lslots_root:\n',
+                '.Lslots_root:\n    jmp .Lfail\n', 1)
+            indexed = indexed.replace('.Lslots_index_find_probe:\n',
+                '.Lslots_index_find_probe:\n    incq .Lroot_probes(%rip)\n', 1)
+            indexed = indexed.replace('    movq %rdx,%r15\n    decq %r14\n',
+                '    movq %rdx,%r15\n    incq .Lroot_reservations(%rip)\n    decq %r14\n', 1)
+            indexed = indexed.replace('    call erist_rt_release\n    testq %rax,%rax\n    jne .Lslots_internal',
+                '    call erist_rt_release\n    incq .Lroot_releases(%rip)\n    testq %rax,%rax\n    jne .Lslots_internal', 1)
+            for name, runtime, bound in [('indexed', indexed, 20000),
+                                         ('fallback', fallback, 0)]:
+                result = lifetime_tests.FreestandingTextLifetimeTests._link_run(
+                    self, directory, 'large-roots-'+name, runtime,
+                    LARGE_ROOT_PROBE.replace('ROOT_PROBE_LIMIT', str(bound)))
+                self.assertEqual((result.returncode, result.stdout, result.stderr),
+                                 (0, b'', b''))
             frontend = directory/'frontend'
             self.assertEqual(build_native(ROOT/'src/frontend.eri', frontend, ROOT/'src'), 0)
             compiled = subprocess.run([str(frontend), 'emit-asm',
