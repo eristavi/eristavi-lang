@@ -50,6 +50,17 @@ class SelfHostedSemanticTests(unittest.TestCase):
         return subprocess.run([str(self.binary),command,str(entry),'--source-root',str(root)],
                               capture_output=True,text=True,timeout=120,**kwargs)
 
+    def test_indexed_locations_preserve_late_unicode_diagnostics(self):
+        for count in (0, 63, 256, 1023):
+            with self.subTest(declarations=count), tempfile.TemporaryDirectory() as td:
+                root=Path(td);entry=root/'main.eri'
+                line='output("λ"); output(missing);'
+                entry.write_text(''.join(f'let value{i} be {i};\n' for i in range(count))+line+'\n')
+                result=self.invoke(entry,root)
+                self.assertEqual(result.returncode,1)
+                self.assertIn(f':{count+1}:{line.index("missing")+1}: semantic error',result.stderr)
+                self.assertEqual(result.stdout,'')
+
     def test_corpus_is_independently_frozen_against_stage0(self):
         self.assertEqual(len({c['name'] for c in CASES}),len(CASES))
         for case in CASES:

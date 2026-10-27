@@ -11,7 +11,7 @@ function bytes(e identity State,text Text) returns Int { return u.bytes(e.builde
 function call(e identity State,name Text,arguments) returns Int { return u.call(e.builder,name,arguments); }
 function zero(e identity State,name Text) returns Int { return u.zero(e.builder,name); }
 function local(e identity State,index Int) returns Int { return u.local(e.builder,index); }
-function required(value maybe identity ir.Node) returns identity ir.Node { if value != none { return value; } return ir.node(-1,5,identity m.Location { path=""; line=0; column=0; next=none; }); }
+function required(value maybe identity ir.Node) returns identity ir.Node { if value != none { return value; } return ir.node(-1,5,identity m.Location { path=""; line=0; column=0; next=none; ordinal=-1; left=none; right=none; }); }
 function binary(op Text) returns Int { if op == "+" { return 0; } if op == "-" { return 1; } if op == "*" { return 2; } if op == "/" { return 3; } if op == "%" { return 4; } if op == "==" { return 5; } if op == "!=" { return 6; } if op == "<" { return 7; } if op == "<=" { return 8; } if op == ">" { return 9; } return 10; }
 function place(e identity State,node identity ir.Node) returns Int {
     if node.kind == 2 { return local(e,node.index); }
