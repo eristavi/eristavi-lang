@@ -95,9 +95,61 @@ function lower(e identity Emitter,value identity r.Instruction) {
     emitFailureJump(e);
 }
 
+// Recognize only complete verified single-access programs; no name-based bypass.
+function accessWidth(program identity r.Program,resultRegister Int) returns Int {
+    if countRegisters(program)!=5 { return 0; }
+    if r.registerClass(program,0)!=8 or r.registerClass(program,1)!=7 or r.registerClass(program,2)!=7 { return 0; }
+    let first be program.instructions; if first==none { return 0; } let a be first;
+    if a.kind!=8 or a.result!=0 or a.extra!=1 or a.number!=0 { return 0; }
+    let second be a.next; if second==none { return 0; } let b be second;
+    if b.kind!=9 or b.result!=2 or b.number!=2 { return 0; }
+    let third be b.next; if third==none { return 0; } let c be third;
+    if c.kind==5 {
+        if resultRegister!=4 or r.registerClass(program,3)!=9 or r.registerClass(program,4)!=7 { return 0; }
+        let fourth be c.next; if fourth==none { return 0; } let d be fourth;
+        if c.result!=3 or c.first!=0 or c.second!=1 or c.third!=2 or c.alignment!=c.width { return 0; }
+        if d.kind!=6 or d.result!=4 or d.first!=3 or d.width!=c.width or d.next!=none { return 0; }
+        return c.width;
+    }
+    if c.kind!=9 or c.result!=3 or c.number!=3 or resultRegister!=3 { return 0; }
+    if r.registerClass(program,3)!=7 or r.registerClass(program,4)!=9 { return 0; }
+    let fourth be c.next; if fourth==none { return 0; } let d be fourth;
+    let fifth be d.next; if fifth==none { return 0; } let f be fifth;
+    if d.kind!=5 or d.result!=4 or d.first!=0 or d.second!=1 or d.third!=2 or d.alignment!=d.width { return 0; }
+    if f.kind!=7 or f.first!=4 or f.second!=3 or f.width!=d.width or f.next!=none { return 0; }
+    return 0-d.width;
+}
+function accessSource(name Text,code Int) returns Text {
+    let width be code; let store be false;
+    if code<0 { width=0-code; store=true; }
+    let bad be ".L"+name+"_memory_fail";
+    let body be ".text\n.globl "+name+"\n.type "+name+",@function\n"+name+":\n";
+    body=body+"testq %rdi,%rdi\nje "+bad+"\ntestq %rsi,%rsi\njle "+bad+"\ntestq $4095,%rsi\njne "+bad+"\n";
+    // Verified widths are at most eight bytes; a positive page-multiple length
+    // is at least 4096, so this subtraction cannot underflow.
+    body=body+"movq %rsi,%rax\nsubq $"+format.integer(width)+",%rax\ncmpq %rax,%rdx\nja "+bad+"\n";
+    if width>1 { body=body+"testq $"+format.integer(width-1)+",%rdx\njne "+bad+"\n"; }
+    body=body+"movq %rdi,%rax\naddq %rdx,%rax\njc "+bad+"\n";
+    if store {
+        if width==1 { body=body+"movb %cl, (%rax)\n"; }
+        if width==2 { body=body+"movw %cx, (%rax)\n"; }
+        if width==4 { body=body+"movl %ecx, (%rax)\n"; }
+        if width==8 { body=body+"movq %rcx, (%rax)\n"; }
+        body=body+"movq %rcx,%rax\n";
+    } else {
+        if width==1 { body=body+"movzbq (%rax),%rax\n"; }
+        if width==2 { body=body+"movzwq (%rax),%rax\n"; }
+        if width==4 { body=body+"movl (%rax),%eax\n"; }
+        if width==8 { body=body+"movq (%rax),%rax\n"; }
+    }
+    return body+"xorl %edx,%edx\nret\n"+bad+":\nxorl %eax,%eax\nmovl $1,%edx\nret\n.size "+name+",.-"+name+"\n";
+}
+
 public function emit(program identity r.Program,name Text,resultRegister Int) returns Text {
     if not r.verify(program) { return ""; }
     if r.registerClass(program,resultRegister) != 7 { return ""; }
+    let access be accessWidth(program,resultRegister);
+    if access!=0 { return accessSource(name,access); }
     let count be countRegisters(program);
     let size be (((count+6)*8+15)/16)*16;
     let failure be ".L"+name+"_memory_fail";
