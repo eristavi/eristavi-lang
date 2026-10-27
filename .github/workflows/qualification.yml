@@ -1,0 +1,64 @@
+name: Eristavi qualification
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: Qualification required by the completed batch
+        type: choice
+        options: [full, owned-integration]
+        default: full
+  pull_request:
+    types: [labeled]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}-${{ github.event.label.name || inputs.profile }}
+  cancel-in-progress: true
+
+jobs:
+  bootstrap:
+    if: >-
+      (github.event_name == 'workflow_dispatch' && inputs.profile == 'full') ||
+      github.event.label.name == 'qualification'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            cc: gcc
+          - os: ubuntu-latest
+            cc: clang
+          - os: ubuntu-24.04-arm
+            cc: clang
+    runs-on: ${{ matrix.os }}
+    env:
+      CC: ${{ matrix.cc }}
+      CFLAGS: -O2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install bootstrap toolchain
+        run: python -m pip install -e .
+      - name: Verify native self-build and offline bundle
+        timeout-minutes: 45
+        run: python tools/build_offline.py --output "$RUNNER_TEMP/erist-offline"
+  owned:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      contains(fromJSON('["qualification", "owned-qualification"]'), github.event.label.name)
+    runs-on: ubuntu-latest
+    env:
+      CC: clang
+      CFLAGS: -O2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install bootstrap toolchain
+        run: python -m pip install -e .
+      - name: Verify owned static build/startup integration
+        timeout-minutes: 45
+        run: python tools/build_offline.py --runtime owned --skip-self-build --output "$RUNNER_TEMP/erist-owned"

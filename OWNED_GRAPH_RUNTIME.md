@@ -49,6 +49,12 @@ the bounded-stack claim below applies to tracing, not arbitrary structural equal
 
 ## Tracing and roots
 
+Slot pruning builds a temporary exact-key hash set from class-1 root maps and
+scope boundaries, preserving pending-result and handler pins. It never
+dereferences arbitrary keys. Each pass rebuilds and releases its scratch;
+reservation failure uses the original linear membership search. Unbound scopes
+continue to suppress pruning. See `CI_QUALIFICATION.md` for batch validation.
+
 Object pointers use a nonowning 4096-bucket hash index with full-address collision
 checks. The registry owns the allocations. Sweep rebuilds the index from survivors.
 Interior cell roots are accepted only after finding a tracked owner and proving a

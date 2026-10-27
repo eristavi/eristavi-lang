@@ -224,6 +224,13 @@ C harness.
 This is a private experimental host bundle, not a public redistribution/release
 qualification of the bundled third-party tools.
 
+## Hosted qualification
+
+Ordinary four-platform CI runs the full test suite. Expensive repeated self-builds
+and offline bundle audits are selected once per completed batch using the separate
+qualification workflow. See `CI_QUALIFICATION.md` for full versus owned-integration
+selection and the requirement to qualify the final revision before merge.
+
 ## Regression evidence
 
 The executable corpus contains 88 projects. It compares saved outputs with the
