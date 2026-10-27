@@ -48,8 +48,8 @@ function modulePath(root Text, name Text) returns Text {
 function tokenAt(tokens, index Int) returns token.Token { return tokens[index]; }
 function makeModule(tree identity ast.Node, tokens, name Text, path Text, entry Bool, project identity Project) returns identity m.Module {
     let locations maybe identity m.Location be none; let index be tokens.count-1;
-    while index >= 0 { let item be tokenAt(tokens,index); locations=identity m.Location { path=path; line=item.line; column=item.column; next=locations; }; index=index-1; }
-    let result be identity m.Module { name=name; path=path; root=tree; locations=locations; imports=none; declarations=none; facts=none; state=1; entry=entry; next=project.modules; };
+    while index >= 0 { let item be tokenAt(tokens,index); locations=identity m.Location { path=path; line=item.line; column=item.column; next=locations; ordinal=index; left=none; right=none; }; index=index-1; }
+    let result be identity m.Module { name=name; path=path; root=tree; locations=locations; locationIndex=m.indexLocations(locations,tokens.count); imports=none; declarations=none; facts=none; state=1; entry=entry; next=project.modules; };
     project.modules=result; return result;
 }
 function read(path Text) returns Text fails files.FileError {
