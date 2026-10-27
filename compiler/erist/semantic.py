@@ -171,13 +171,23 @@ class Analyzer:
         return base
 
     def _ensure_function(self,fn:FunctionSymbol,param_types:list[TypeLike],value_required:bool)->TypeLike:
+        def instantiate(spec):
+            # A completed generic signature belongs to the callee. Freshen its
+            # parameters and result together, then relate them to this caller.
+            # Returning the cached result directly loses nested-call inference
+            # and can share one call's type variables with unrelated callers.
+            variables={}
+            parameters=[clone_type(t,variables) for t in spec.parameter_types]
+            result=clone_type(spec.return_type or NO_VALUE,variables)
+            for expected,actual in zip(parameters,param_types): unify(expected,actual)
+            return resolve(result)
         key=specialization_key(param_types)
         spec=fn.specializations.get(key)
         if spec is None:
             variables={}
             spec=FunctionSpec([clone_type(t,variables) for t in param_types],fn.explicit_return)
             fn.specializations[key]=spec
-        if spec.state=="done": return resolve(spec.return_type or NO_VALUE)
+        if spec.state=="done": return instantiate(spec)
         if spec.state=="visiting":
             if fn.explicit_return is not None: return fn.explicit_return
             if not value_required: return NO_VALUE
@@ -197,7 +207,7 @@ class Analyzer:
                 spec.return_type=ctx.inferred_return
                 if not terminates: raise SemanticError(f"value-producing function {fn.declaration.name!r} has a reachable successful path without a return value",fn.declaration.location)
             else: spec.return_type=NO_VALUE
-            self._validate_scope_inference(self.scopes[0]); spec.state="done"; return resolve(spec.return_type)
+            self._validate_scope_inference(self.scopes[0]); spec.state="done"; return instantiate(spec)
         except Exception:
             spec.state="unseen"; raise
         finally:

@@ -11,6 +11,24 @@ from compiler.erist.cli import build_native
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def audit_slot_count(runtime):
+    """Cross-check the production counter against the independent slot chain."""
+    label='erist_rt_slots_live:\n'
+    assert runtime.count(label)==1
+    return runtime.replace(label,label+'''    xorl %eax,%eax
+    movq .Lvalue_slots(%rip),%rdx
+.Ltest_actual_slots:
+    testq %rdx,%rdx
+    je .Ltest_slots_counted
+    incq %rax
+    movq 32(%rdx),%rdx
+    jmp .Ltest_actual_slots
+.Ltest_slots_counted:
+    cmpq .Lvalue_slot_count(%rip),%rax
+    jne erist_rt_value_fault_internal
+''',1)
+
+
 @unittest.skipUnless(platform.system() == 'Linux' and platform.machine().lower() in ('x86_64', 'amd64'),
                      'freestanding managed Text currently targets Linux x86-64')
 class FreestandingTextLifetimeTests(unittest.TestCase):
@@ -124,6 +142,7 @@ _start:
     je .Ldropped
     movq 32(%rdi),%rax
     movq %rax,.Lvalue_slots(%rip)
+    decq .Lvalue_slot_count(%rip)
     call erist_rt_free
     testq %rax,%rax
     jne .Lfail

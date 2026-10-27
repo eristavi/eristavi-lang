@@ -77,7 +77,7 @@ function graphWordLayout(size Int) returns identity Layout {
     return identity Layout { size=size; alignment=8; fields=fields; };
 }
 public function graphLayoutsValid() returns Bool {
-    return textLayoutsValid() and valueSize()==32 and verify(graphWordLayout(48))
+    return textLayoutsValid() and valueSize()==32 and verify(graphWordLayout(64))
         and verify(graphWordLayout(96)) and verify(graphWordLayout(112));
 }
 

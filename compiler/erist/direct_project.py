@@ -158,49 +158,85 @@ def _specialize_object_generics(
     object_functions,
     object_types,
 ):
+    # Resolve the complete call graph before lowering new template bodies. Calls
+    # may originate in source IR, serialized Universal IR, or another template.
     by_module = {artifact.module_id: artifact for artifact in artifacts}
-    known = {fn.name for fn in object_functions}
-    requested = {}
-    for call in _walk_calls(typed):
-        if call.name in known or "$" not in call.name:
-            continue
-        module_and_name = call.name.split("$", 1)[0]
-        if "." not in module_and_name:
-            continue
-        module_id, function_name = module_and_name.rsplit(".", 1)
-        artifact = by_module.get(module_id)
-        if artifact is None:
-            continue
-        requested[call.name] = (artifact, function_name, tuple(arg.type_name for arg in call.arguments))
+    known = {fn.name for fn in [*object_functions, *typed.functions]}
+    requested = []
+    queued = set()
 
-    if not requested:
-        return []
+    def request(symbol):
+        if symbol in known or symbol in queued or "$" not in symbol:
+            return
+        qualified, *types = symbol.split("$")
+        if "." not in qualified:
+            return
+        module_id, function_name = qualified.rsplit(".", 1)
+        artifact = by_module.get(module_id)
+        if artifact is not None:
+            queued.add(symbol)
+            requested.append((symbol, artifact, function_name, types))
+
+    def source_calls(value):
+        for call in _walk_calls(value):
+            request(call.name)
+
+    source_calls(typed)
+    for fn in object_functions:
+        for block in fn.blocks:
+            for instruction in block.instructions:
+                if instruction.op == "call":
+                    request(instruction.immediate)
 
     generated = []
+    structures = list(typed.structs)
     template_cache = {}
-    for symbol, (artifact, function_name, argument_types) in requested.items():
-        key = artifact.module_id
-        if key not in template_cache:
-            template_cache[key] = _template_module(artifact, registry)
-        program, analyzer = template_cache[key]
+    index = 0
+    while index < len(requested):
+        symbol, artifact, function_name, argument_types = requested[index]
+        index += 1
+        if symbol in known:
+            continue
+        if artifact.module_id not in template_cache:
+            template_cache[artifact.module_id] = _template_module(artifact, registry)
+        program, analyzer = template_cache[artifact.module_id]
         fn = analyzer.functions.get(function_name)
         if fn is None:
             raise ValueError(f"generic object template does not contain function {function_name!r}")
-        concrete_types = [CoreLowerer._type_from_name(name) for name in argument_types]
-        analyzer._ensure_function(fn, concrete_types, True)
-        typed_template = Lowerer(analyzer, artifact.module_id).lower(program, False)
-
-        contracts = {
-            item.name: ([p.type_name for p in item.parameters], item.return_type, tuple(item.fails))
-            for item in [*object_functions, *generated]
-        }
-        universal = ResourceUniversalLowerer(contracts, object_types).lower(typed_template)
-        matches = [item for item in universal.functions if item.name == symbol]
-        if len(matches) != 1:
+        analyzer._ensure_function(fn, [CoreLowerer._type_from_name(t) for t in argument_types], True)
+        template = Lowerer(analyzer, artifact.module_id).lower(program, False)
+        if sum(item.name == symbol for item in template.functions) != 1:
             raise ValueError(f"generic object specialization {symbol!r} was not produced exactly once")
-        generated.append(matches[0])
-        known.add(symbol)
-    return generated
+        # Include private helpers and inferred specializations used by the body.
+        # Existing object definitions remain authoritative and are never replaced.
+        for item in template.functions:
+            if item.name not in known:
+                known.add(item.name)
+                generated.append(item)
+                source_calls(item)
+        structures.extend(item for item in template.structs if item not in structures)
+
+    if not generated:
+        return []
+    contracts = {
+        item.name: ([p.type_name for p in item.parameters], item.return_type, tuple(item.fails))
+        for item in object_functions
+    }
+    lowerer = ResourceUniversalLowerer()
+    for item in typed.functions:
+        contracts[item.name] = ([lowerer._map_type(p.type_name) for p in item.parameters],
+                                "void" if item.return_type is None else lowerer._map_type(item.return_type),
+                                tuple(item.fails))
+    universal = ResourceUniversalLowerer(contracts, object_types).lower(IRProgram(structures, generated, []))
+    # The combined program must retain layouts used solely by a new specialization.
+    existing = {item.name: item for item in object_types}
+    for item in universal.types:
+        if item.name not in existing:
+            object_types.append(item)
+            existing[item.name] = item
+        elif existing[item.name] != item:
+            raise ValueError(f"conflicting Universal-IR type layout for {item.name!r}")
+    return [item for item in universal.functions if item.name != universal.entry]
 
 
 def lower_direct_entry(path: Path, source_root: Path | None = None) -> UProgram:

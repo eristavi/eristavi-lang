@@ -1,0 +1,7 @@
+// Complete Linux/System-V x86-64 runtime and executable startup.
+import runtime.value_output_x86_64;
+import compiler.runtime_value;
+
+if runtime_value.resourceLayoutsValid() {
+    output(value_output_x86_64.resourceSource()+".text\n.globl _start\n.type _start,@function\n_start:\n    movq %rsp,%rdi\n    jmp erist_rt_process_start\n.size _start,.-_start\n.section .note.GNU-stack,\"\",@progbits\n");
+}

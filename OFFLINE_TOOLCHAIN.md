@@ -1,5 +1,11 @@
 # Eristavi-written compiler and offline native toolchain
 
+The default bundle retains the qualified bootstrap runtime. The opt-in Linux
+x86-64 `--runtime owned` path assembles the Eristavi-owned runtime and links
+compiler/application executables statically without libc, CRT objects or a dynamic
+loader. Its repeated-build evidence and current boundaries are described in
+[OWNED_BUILD_INTEGRATION.md](OWNED_BUILD_INTEGRATION.md).
+
 > Experimental Linux native milestone. The frozen source-language contract and
 > governing philosophy are unchanged. The developer/reference `erist` installed
 > by pip remains Stage-0; the separately built offline bundle contains the
