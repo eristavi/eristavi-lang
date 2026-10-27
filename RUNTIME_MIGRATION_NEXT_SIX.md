@@ -1,12 +1,12 @@
 # Current six-step runtime migration
 
 This checklist records the owned Linux/System-V x86-64 value-runtime migration after
-PR #36. Implemented helpers and focused checks do not replace full CI qualification.
+PR #38. Implemented helpers and focused checks do not replace full CI qualification.
 The bootstrap compiler/generators still use the broad C runtime.
 
 | Step | Current implementation | Remaining acceptance boundary |
 | --- | --- | --- |
-| 1. Text performance | Indexed backing lookup, immutable prefix capacity and geometric growth qualified in PR #32 | Independent small-buffer allocation remains unpooled |
+| 1. Text performance | Indexed backing lookup, immutable prefix capacity and geometric growth qualified in PR #32 | Independent small-buffer pooling implemented; final-revision owned qualification remains required |
 | 2. Float | Arithmetic, decimal parsing/output, values and scope integration qualified in PR #34 | Further throughput optimization remains optional performance work |
 | 3. Objects and Lists | Owned storage, construction, initialization, copy/detach, member/index/ref, append, equality and transitive tracing implemented; focused checks pass | Qualified in PR #35; geometric prefix backing implemented in integration batch |
 | 4. `maybe` and identity | None/present operations, optional detach, shared aliases, equality and cyclic graph marking implemented; focused checks pass | Qualified in PR #35 |
@@ -21,13 +21,15 @@ recursive traversal or allocation during marking. The separate resource profile 
 contexts. See
 `OWNED_GRAPH_RUNTIME.md` for layouts, validation and performance limits.
 
-The current batch adds transitive object-generic resolution, owned build/startup
-selection, geometric List prefix storage and indexed interior roots. Repeated compiler
+PR #37 added transitive object-generic resolution, owned build/startup
+selection, geometric List prefix storage and indexed interior roots. PR #38 qualified
+indexed temporary-root membership. The current batch pools independent small Text
+buffers; see `OWNED_TEXT_POOL.md` for ownership and measurement evidence. Repeated compiler
 self-build qualification and the existing offline application audit must establish
 readiness before the owned profile becomes the default. See `OWNED_BUILD_INTEGRATION.md`.
 Python bootstrap removal, native instruction/object output, owned linking and additional
 independent platforms remain subsequent boundaries.
 
-Batch related implementation before publishing a PR. Keep automatic GitHub CI and
-all platform/self-build gates enabled. Do not dispatch or rerun expensive workflows
+Batch related implementation before publishing a PR. Keep automatic four-platform CI enabled and select the required completed-batch
+qualification using `CI_QUALIFICATION.md`. Do not dispatch or rerun expensive workflows
 for each helper. Merge only the exact fully qualified source head.

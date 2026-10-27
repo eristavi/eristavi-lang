@@ -251,14 +251,14 @@ erist build-wat examples/hello.eri -o hello.wat
 python -m unittest discover -s tests -v
 ```
 
-The current suite contains **403 tests**. The hosted CI matrix runs:
+The current suite contains **405 tests**. The hosted CI matrix runs:
 
 - GCC / x86-64 Ubuntu / `-O2`;
 - Clang / x86-64 Ubuntu / `-O2`;
 - Clang / ARM64 Ubuntu / `-O2`;
 - Clang / ARM64 macOS / `-O2`.
 
-The matrix also downloads an immutable-revision copy of the official Unicode 17 `GraphemeBreakTest` fixture and executes all of its vectors. Platform-specific direct-native cases run on their matching Linux architecture. Linux packaging jobs additionally repeat the native compiler self-build and run the offline application audit against the collector-enabled runtime.
+The matrix also downloads an immutable-revision copy of the official Unicode 17 `GraphemeBreakTest` fixture and executes all of its vectors. Platform-specific direct-native cases run on their matching Linux architecture. Completed batches select repeated Linux native self-builds and offline application audits through the separate [qualification workflow](CI_QUALIFICATION.md); ordinary CI keeps all four platform test suites.
 
 See [`IMPLEMENTATION_AUDIT.md`](IMPLEMENTATION_AUDIT.md) for the audited boundary and remaining production work.
 
