@@ -309,6 +309,8 @@ class Lowerer:
         raise SemanticError("cannot derive concrete expression type for generic IR specialization",getattr(e,"location",None))
 
     def _spec_return(self,fn,arg_types,loc):
+        if hasattr(fn,"contract"):
+            return fn.contract.instantiate(arg_types)
         key=tuple(describe(resolve(declared if declared is not None else actual))
                   for declared,actual in zip(fn.typed_parameters,arg_types)); spec=fn.specializations.get(key)
         if spec is None or spec.state!="done" or spec.return_type is None: raise SemanticError(f"no analyzed concrete specialization for function {fn.declaration.name!r} with ({', '.join(key)})",loc)

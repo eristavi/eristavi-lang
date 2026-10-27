@@ -57,6 +57,7 @@ _start:
     call evn_scope_leave
     movq %rax,%rdi
     movq $0,.Lvalue_slots(%rip)
+    movq $0,.Lvalue_slot_count(%rip)
     call erist_rt_free
     testq %rax,%rax
     jne .Lfail
@@ -150,6 +151,7 @@ _start:
     cmpq $1,%rax
     jne .Lfail
     movq $0,.Lvalue_slots(%rip)
+    movq $0,.Lvalue_slot_count(%rip)
     movq %r12,%rdi
     call erist_rt_free
     testq %rax,%rax

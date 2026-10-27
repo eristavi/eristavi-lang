@@ -1,7 +1,9 @@
 # Owned aggregate, optional, identity and checked-failure runtime
 
-Status: qualified in PR #35, merged as `e7be684613f08486544c3252e9520ef85c8f96d0`.
+Foundation: qualified in PR #35, merged as `e7be684613f08486544c3252e9520ef85c8f96d0`.
 All four automatic CI jobs passed, including the three Linux self-build/offline gates.
+The subsequent storage/index/scheduling optimizations are qualified as part of the
+build-integration batch described in `OWNED_BUILD_INTEGRATION.md`.
 
 `runtime.value_output_x86_64.graphSource()` and `src/graph_value_runtime.eri` compose
 the owned scalar/Float/Text/Unicode runtime with Objects, Lists, maybe/identity and
@@ -11,9 +13,9 @@ families. General compiler builds still use the existing broad bootstrap runtime
 
 ## Owned storage and value operations
 
-Every object allocation contains a 48-byte private header followed by initialized
+Every object allocation contains a 64-byte private header followed by initialized
 32-byte cells. The first two words keep the existing object ABI (count and data
-pointer); the remaining words hold registry, mark, work-list and hash links. Empty
+pointer); the remaining words hold registry, mark, work-list, hash, capacity and backing-owner links. Empty
 objects have no data cells. The allocator owns the entire payload as one block.
 Count/size arithmetic is checked before allocation. Every cell starts as void before
 any constructor result can reach a safe point. Object, saved-failure and handler
@@ -27,10 +29,17 @@ wrapper. Updating an optional value detaches its wrapper; identity aliases keep
 their common wrapper. Source presence/refinement rules remain unchanged.
 
 Lists support construction, initialization, checked reads/writes, count, append and
-snapshot iteration. Append allocates fresh backing and copies the prefix, preserving
-all older snapshots. Its current cost is linear per append; reusable prefix capacity
-and more efficient long append chains are performance follow-up work. This batch
-does not claim parity with the C runtime's prefix-append optimization.
+snapshot iteration. Append publishes a separate logical-prefix header. A private
+backing owner stores initialized length and geometrically grown capacity. Only an
+append to its latest complete prefix may fill unused tail capacity. Appending to
+an older prefix allocates independent backing; member/index mutation still detaches.
+Older snapshot lengths and cells never change. Marking a snapshot retains its backing
+owner, whose initialized cells are visited once. Spare capacity is never interpreted.
+A shorter live snapshot can retain the initialized tail of its shared backing until
+that backing dies; this is bounded by that backing's geometric capacity.
+The ordinary monotonic append path initializes/copies a linear number of cells,
+plus one fixed-size snapshot header per append. Branching from old prefixes still
+requires copying their logical contents.
 
 Equality is structural for ordinary values, Lists and present optionals, exact-byte
 for Text, IEEE for Float, and logical identity for identity handles. Identity edges
@@ -44,13 +53,17 @@ Object pointers use a nonowning 4096-bucket hash index with full-address collisi
 checks. The registry owns the allocations. Sweep rebuilds the index from survivors.
 Interior cell roots are accepted only after finding a tracked owner and proving a
 complete 32-byte cell at an aligned offset inside its initialized data span. Unknown,
-stale and machine-class words are not dereferenced as values. Interior lookup scans
-the ownership registry; improving that lookup for very large live heaps is future
-performance work.
+stale and machine-class words are not dereferenced as values. Before marking, a nonowning sorted interval index is prepared over initialized
+backing owners (snapshot aliases are excluded). Iterative in-place heapsort uses no
+recursive stack or auxiliary sort allocation. Interior lookup then uses binary search
+and validates full-cell alignment and initialized bounds. Outside a prepared collection,
+private probes retain a validated linear fallback. New allocations and sweep invalidate
+the index; sweep releases its scratch allocation when the object heap empties.
 
 Tracing marks an object before enqueueing it on an intrusive work list, then visits
 its initialized cells iteratively. Cycles and deep mixed optional/identity graphs
-need no recursive marking or heap-allocated mark queue. Text/view leaves mark their
+need no recursive marking or heap-allocated mark queue. Index preparation may grow
+its private scratch allocation before marking; OOM there remains a terminal fault. Text/view leaves mark their
 existing reservation records, including shorter immutable prefix snapshots. Only
 after all graph roots and transitive edges are marked may Text and object sweep run.
 
@@ -72,6 +85,14 @@ as well as the existing slot-pruning threshold. Unregistered embedding scopes re
 the established arena fallback. There are no resource finalizers. A current failure
 remains a strong snapshot until replacement, matching the existing native runtime;
 `erist_rt_failure_clear` is an explicit private embedding/shutdown operation.
+
+The graph/resource profiles batch dirty graph tracing using a safe-point budget.
+After a collection the budget is half the surviving graph/Text/failure record count,
+bounded to 128..65536. Mutation marks reachability dirty without forcing a full trace
+at the very next helper call. Slot pruning remains independent, and explicit
+`erist_rt_text_collect` performs an immediate complete trace. This changes collection
+timing, not value semantics or deterministic resource cleanup. Small Text-only
+profiles retain their existing orphan-release scheduling.
 
 ## Checked control transfer
 
@@ -121,6 +142,6 @@ The explicit graph profile continues to reject resource values. The next combine
 resource profile adds file/process builtins, deterministic cleanup and secondary
 failure contexts; see `OWNED_RESOURCE_RUNTIME.md`. Secondary contexts use the saved
 failure reserved word as an ordered chain link and share the typed failure tracer.
-Full resource/secondary-failure integration and a compiler self-build on the owned
-runtime remain outstanding. Bootstrap C/Python and GNU as/ld have not been removed,
+The resource composition is qualified in PR #36. Owned build/startup integration and
+compiler self-build qualification are tracked in `OWNED_BUILD_INTEGRATION.md`. Bootstrap C/Python and GNU as/ld have not been removed,
 and independent ARM64/Windows/macOS execution is not implemented by this batch.

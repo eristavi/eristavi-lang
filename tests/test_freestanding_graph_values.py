@@ -69,7 +69,7 @@ class FreestandingGraphValueTests(unittest.TestCase):
             raise AssertionError('graph runtime generator did not compile')
         emitted=subprocess.run([str(generator)],capture_output=True,text=True,timeout=60)
         if (emitted.returncode,emitted.stderr)!=(0,''): raise AssertionError(emitted.stderr)
-        cls.runtime=emitted.stdout
+        cls.runtime=lifetime_tests.audit_slot_count(emitted.stdout)
         if build_native(ROOT/'src/frontend.eri',cls.frontend,ROOT/'src')!=0:
             raise AssertionError('frontend did not compile')
 
@@ -83,6 +83,43 @@ class FreestandingGraphValueTests(unittest.TestCase):
                                 text=True,timeout=30)
         self.assertEqual((compiled.returncode,compiled.stderr),(0,''))
         return compiled.stdout
+
+    def test_geometric_list_growth_preserves_prefixes_and_reclaims_backing(self):
+        source=self.directory/'list-growth.eri'
+        source.write_text("""
+        let values be []; let prefix be [-1]; let i be 0;
+        while i<10000 {
+            values.add(i);
+            if i==1999 { prefix=values; }
+            i=i+1;
+        }
+        let branch be prefix; branch.add(-9);
+        values[0]=42;
+        output(values.count); output(prefix.count); output(prefix[0]);
+        output(branch.count); output(branch[2000]); output(values[0]);
+        for item in prefix { values.add(item); }
+        output(values.count); output(prefix.count);
+        """)
+        app=self.compile_application(source)
+        runtime=self.runtime.replace('erist_rt_graph_new_capacity:\n',
+            'erist_rt_graph_new_capacity:\n    addq %rdi,.Ltest_initialized_cells(%rip)\n',1)
+        starter="""
+.text
+.globl _start
+_start:
+    call erist_entry
+    cmpq $100000,.Ltest_initialized_cells(%rip)
+    ja .Lgraph_test_fail
+    cmpq $2000,.Ltext_collections(%rip)
+    ja .Lgraph_test_fail
+    jmp .Lgraph_finish
+.bss
+.Ltest_initialized_cells:
+.quad 0
+"""
+        result=self.run_probe('geometric-list-growth',app+starter+FINISH,runtime=runtime,types=False)
+        self.assertEqual((result.returncode,result.stdout,result.stderr),
+                         (0,b'10000\n2000\n0\n2001\n-9\n42\n12000\n2000\n',b''))
 
     def test_real_aggregate_alias_cycle_and_checked_failure_application(self):
         fixture=ROOT/'examples/freestanding_graph_values.eri'

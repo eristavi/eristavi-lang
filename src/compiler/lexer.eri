@@ -6,18 +6,46 @@ import compiler.diagnostic;
 type Scanner {
     input Text;
     index Int;
+    byteIndex Int;
     count Int;
     line Int;
     column Int;
 }
 
+// Text is validated UTF-8. Keep a byte cursor internally so looking ahead does
+// not rescan the whole immutable source for each scalar. Public locations and
+// diagnostic columns still count Unicode scalars.
+function widthAt(input Text, index Int) returns Int {
+    let first be input.bytes[index];
+    if first<128 { return 1; }
+    if first<224 { return 2; }
+    if first<240 { return 3; }
+    return 4;
+}
+
+function scalarAtByte(input Text, index Int) returns Text {
+    if index>=input.bytes.count { return "\0"; }
+    let width be widthAt(input,index); let code be input.bytes[index];
+    if width==2 { code=code-192; }
+    if width==3 { code=code-224; }
+    if width==4 { code=code-240; }
+    let part be 1;
+    while part<width { code=code*64+input.bytes[index+part]-128; part=part+1; }
+    return unicode.fromScalar(code);
+}
+
 function peek(scanner identity Scanner, offset Int) returns Text {
-    return source.scalarAt(scanner.input, scanner.index + offset);
+    let cursor be scanner.byteIndex; let remaining be offset;
+    while remaining>0 and cursor<scanner.input.bytes.count {
+        cursor=cursor+widthAt(scanner.input,cursor); remaining=remaining-1;
+    }
+    return scalarAtByte(scanner.input,cursor);
 }
 
 function advance(scanner identity Scanner) returns Text {
     let ch be peek(scanner, 0);
     scanner.index = scanner.index + 1;
+    scanner.byteIndex = scanner.byteIndex + ch.bytes.count;
     if ch == "\n" { scanner.line = scanner.line + 1; scanner.column = 1; }
     else { scanner.column = scanner.column + 1; }
     return ch;
@@ -207,20 +235,20 @@ function symbolKind(spelling Text) returns Int {
 }
 
 public function lex(input Text) fails diagnostic.LexError {
-    let scanner be identity Scanner { input = input; index = 0; count = input.scalars.count; line = 1; column = 1; };
+    let scanner be identity Scanner { input = input; index = 0; byteIndex = 0; count = input.scalars.count; line = 1; column = 1; };
     // A single initial BOM is ignored, including for source column numbering.
-    if peek(scanner, 0) == "\u{FEFF}" { scanner.index = 1; }
-    let cursor be scanner.index;
+    if peek(scanner, 0) == "\u{FEFF}" { scanner.index = 1; scanner.byteIndex = 3; }
+    let cursor be scanner.byteIndex;
     let bomLine be 1;
     let bomColumn be 1;
-    while cursor < scanner.count {
-        let ch be source.scalarAt(input, cursor);
+    while cursor < input.bytes.count {
+        let ch be scalarAtByte(input, cursor);
         if ch == "\u{FEFF}" {
             fail diagnostic.LexError { message = "BOM is allowed only at the start of a source file"; line = bomLine; column = bomColumn; };
         }
         if ch == "\n" { bomLine = bomLine + 1; bomColumn = 1; }
         else { bomColumn = bomColumn + 1; }
-        cursor = cursor + 1;
+        cursor = cursor + ch.bytes.count;
     }
     let tokens be [];
     while scanner.index < scanner.count {

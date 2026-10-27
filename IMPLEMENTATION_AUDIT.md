@@ -1,5 +1,13 @@
 # Eristavi pre-0.1 Implementation Audit
 
+The historical audit below predates the owned value runtime. PR #36 subsequently
+qualified owned file/process services and deterministic cleanup. The current
+integration batch adds owned static startup/packaging, geometric Lists, indexed
+interior roots, batched graph tracing, linear lexer cursor traversal and transitive
+object-generic linking. The current source tree has 403 test methods; historical
+counts below describe their original audit snapshots. See
+`OWNED_BUILD_INTEGRATION.md` for current qualification and remaining dependencies.
+
 > **Audit date: 2026-10-25**
 >
 > **Scope:** frozen pre-0.1 source contract, bootstrap/reference runtime, generated-C path, verified Universal IR, direct x86-64 GC/runtime with contract-driven physical register allocation and spill-frame compaction, native ARM64 runtime, module artifacts/caching, JavaScript/WebAssembly consumers, Unicode conformance and hosted CI.

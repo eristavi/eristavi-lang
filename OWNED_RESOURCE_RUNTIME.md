@@ -1,6 +1,7 @@
 # Owned Linux file/process services and deterministic cleanup
 
-Status: combined implementation and focused qualification; automatic full CI pending.
+Status: qualified in PR #36, merged as `ebf05cdb834994ccd965ca3097b4578e2e29b05b`.
+All four automatic jobs and three Linux self-build/offline gates passed.
 The previous graph/failure foundation is qualified and merged in PR #35.
 
 `runtime.value_output_x86_64.resourceSource()` and `src/resource_value_runtime.eri`
@@ -40,7 +41,8 @@ argc/argv, aligns the stack, calls `erist_entry` and exits with the selected sta
 It is an explicit startup helper; the module does not inject a competing `_start`.
 Arguments are UTF-8 validated and copied into owned immutable Text. An explicit
 pending List root protects every initialized argument cell during construction and
-collection. This is not yet the default compiler build/startup path.
+collection. The `--runtime owned` packaging path composes this startup in `src/owned_runtime.eri`;
+the default bundle continues to use the qualified bootstrap profile during promotion.
 
 ## Ownership and cleanup
 
@@ -102,8 +104,7 @@ boundaries and four cleanup-failure snapshot boundaries. Production sources cont
 
 The full automatic four-platform CI and Linux self-build/offline gates qualify this
 combined batch once. No workflow jobs are disabled or manually dispatched per helper.
-Full compiler execution on this profile, repeated C-runtime-free self-builds, required
-Python removal, direct object output/linking and independent ARM64/Windows/macOS
-runtime ports remain outstanding. List append and interior-owner lookup performance
-must be addressed or measured before large compiler workloads; this change does not
-claim the bootstrap compiler is already independent.
+Build/startup integration, geometric List backing and indexed interior roots are
+covered by the next batch; see `OWNED_BUILD_INTEGRATION.md` for qualification status.
+Required Python bootstrap removal, direct object output/linking and independent
+ARM64/Windows/macOS runtime ports remain outstanding.

@@ -30,7 +30,12 @@ ir_c.eri             verified IR to C11
 scalar_runtime.eri   bootstrap C runtime with checked Int, binary64 and Text
 ```
 
-Experimental semantic analysis, scalar typed IR, verification and C emission are available through the executable. Later stages extend typed lowering, Universal IR, optimization and native backends. See SCALAR_COMPILATION.md at the repository root. The lexer/parser execute under Stage-0 and as generated-C executables; they do not yet form a self-hosted compiler. `std.unicode` currently requires the reference or C route.
+The Eristavi-written compiler implements parsing, semantic analysis, structural
+lowering, verified Universal IR and native x86-64/ARM64 assembly emission. Linux
+bundles pass repeated native self-build gates with the bootstrap runtime. The
+`--runtime owned` Linux x86-64 build/startup path is being qualified separately;
+see `OWNED_BUILD_INTEGRATION.md`. The Python implementation remains the independent
+reference/bootstrap, and GNU as/ld remain required native build tools.
 
 Compiler code must stay inside the frozen pre-0.1 language. When the compiler needs a data structure not yet present in the standard library, prefer a simple List/arena implementation first; do not add source syntax merely because another implementation language offers a convenient feature.
 

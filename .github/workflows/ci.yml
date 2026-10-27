@@ -48,3 +48,7 @@ jobs:
         if: runner.os == 'Linux'
         timeout-minutes: 45
         run: python tools/build_offline.py --output "$RUNNER_TEMP/erist-offline"
+      - name: Verify owned static build/startup integration
+        if: matrix.os == 'ubuntu-latest' && matrix.cc == 'clang'
+        timeout-minutes: 45
+        run: python tools/build_offline.py --runtime owned --skip-self-build --output "$RUNNER_TEMP/erist-owned"

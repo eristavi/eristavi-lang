@@ -103,7 +103,7 @@ def allocation_probe():
                                b'A\0\xc3\xa9'*2 if name == 'concat' else b'A\0\xc3\xa9')
     code += ['movq .Lkeys(%rip),%rsi', 'movq %r12,%rdi', 'call evn_scope_leave',
              'movq %rax,%r12', 'movq %rax,%rdi', 'call evn_output',
-             'movq $0,.Lvalue_slots(%rip)', 'movq %r12,%rdi', 'call erist_rt_free',
+             'movq $0,.Lvalue_slots(%rip)', 'movq $0,.Lvalue_slot_count(%rip)', 'movq %r12,%rdi', 'call erist_rt_free',
              'testq %rax,%rax', 'jne .Lfail', 'call erist_rt_text_collect',
              'call erist_rt_text_live_buffers', 'testq %rax,%rax', 'jne .Lfail',
              'call erist_rt_allocator_release_all', 'testq %rax,%rax', 'jne .Lfail',

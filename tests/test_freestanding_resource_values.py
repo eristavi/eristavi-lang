@@ -82,7 +82,7 @@ class FreestandingResourceValueTests(unittest.TestCase):
             raise AssertionError('resource generator did not compile')
         emitted=subprocess.run([str(generator)],capture_output=True,text=True,timeout=60)
         if (emitted.returncode,emitted.stderr)!=(0,''):raise AssertionError(emitted.stderr)
-        cls.runtime=emitted.stdout
+        cls.runtime=lifetime_tests.audit_slot_count(emitted.stdout)
         if build_native(ROOT/'src/frontend.eri',cls.frontend,ROOT/'src')!=0:
             raise AssertionError('frontend did not compile')
 
@@ -95,6 +95,42 @@ class FreestandingResourceValueTests(unittest.TestCase):
         compiled=subprocess.run([str(self.frontend),'emit-asm',str(path)],capture_output=True,text=True,timeout=30)
         self.assertEqual((compiled.returncode,compiled.stderr),(0,''))
         return compiled.stdout
+
+    def test_owned_bundle_link_and_wrapper_use_static_startup(self):
+        import test_offline_packaging as packaging
+        import json
+        bundle=self.directory/'owned-bundle'
+        (bundle/'bin').mkdir(parents=True);(bundle/'lib').mkdir()
+        for tool in ('as','ld'):
+            (bundle/'bin'/tool).symlink_to(shutil.which(tool))
+        (bundle/'bin/erist-compiler').symlink_to(self.frontend)
+        (bundle/'platform.json').write_text(json.dumps({'target':'x86_64-linux','runtime':'owned','loader':None}))
+        (bundle/'target').write_text('x86_64-linux\n')
+        (bundle/'runtime-profile').write_text('owned\n')
+        wrapper=bundle/'bin/erist';wrapper.write_text(packaging.builder.WRAPPER);wrapper.chmod(0o755)
+        runtime_source=bundle/'runtime.s'
+        runtime_source.write_text(self.runtime+'\n.text\n.globl _start\n_start:\nmovq %rsp,%rdi\njmp erist_rt_process_start\n.section .note.GNU-stack,"",@progbits\n')
+        runtime=bundle/'lib/erist-runtime.o'
+        subprocess.run(['as','--64',str(runtime_source),'-o',str(runtime)],check=True,capture_output=True)
+        source=self.directory/'bundled.eri'
+        source.write_text('import std.process; let args be process.arguments(); output(args.count); process.setExitCode(3);')
+        assembly=self.directory/'bundled.s';assembly.write_text(self.compile_application(source))
+        outputs=[bundle/'one',bundle/'two']
+        for output in outputs:
+            packaging.builder.link(bundle,assembly,output,runtime)
+            result=subprocess.run([str(output),'argument'],env={'PATH':'/unavailable'},capture_output=True)
+            self.assertEqual((result.returncode,result.stdout,result.stderr),(3,b'1\n',b''))
+        self.assertEqual(outputs[0].read_bytes(),outputs[1].read_bytes())
+        built=bundle/'wrapped'
+        result=subprocess.run([str(wrapper),'build',str(source),'-o',str(built)],capture_output=True,text=True)
+        self.assertEqual((result.returncode,result.stderr),(0,''))
+        packaging.builder.audit_owned(built)
+        self.assertEqual(outputs[0].read_bytes(),built.read_bytes())
+        before=built.read_bytes()
+        invalid=self.directory/'bundled-invalid.eri';invalid.write_text('output(missing);')
+        result=subprocess.run([str(wrapper),'build',str(invalid),'-o',str(built)],capture_output=True)
+        self.assertNotEqual(result.returncode,0)
+        self.assertEqual(built.read_bytes(),before)
 
     def test_file_process_application_matches_existing_runtime_and_reclaims_every_family(self):
         path=self.directory/'roundtrip';path.with_suffix('.bad').write_bytes(b'\xff')

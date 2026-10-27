@@ -1,6 +1,8 @@
-# Eristavi-Lang
+# Eristavi
 
-Eristavi-lang is an experimental general-purpose programming language focused on **readability, strong typing, native performance, universal portability, and controlled simplicity**.
+A readable, strongly typed programming language with its own compiler architecture, machine-neutral IR and native code generators.
+
+Eristavi is currently pre-0.1 and under active development.
 
 > **Complexity belongs in the compiler and runtime, not in the programmer's code.**
 
@@ -49,6 +51,11 @@ root/traversal contract. Optional allocation profiling remains available through
 The lower-level frontend still offers syntax/token/AST inspection plus semantic,
 typed-IR, Universal-IR, C and native-assembly commands. See
 [FRONTEND_TOOL.md](FRONTEND_TOOL.md) and [SELF_HOSTING.md](SELF_HOSTING.md).
+
+The next runtime batch adds opt-in owned Linux x86-64 packaging (`--runtime owned`),
+static startup, geometric List prefix storage and indexed interior GC roots. Its
+compiler self-build qualification and remaining bootstrap boundaries are recorded
+in [OWNED_BUILD_INTEGRATION.md](OWNED_BUILD_INTEGRATION.md).
 
 ### Experimental semantic analysis
 
@@ -244,7 +251,7 @@ erist build-wat examples/hello.eri -o hello.wat
 python -m unittest discover -s tests -v
 ```
 
-The current suite contains **361 tests**. The hosted CI matrix runs:
+The current suite contains **403 tests**. The hosted CI matrix runs:
 
 - GCC / x86-64 Ubuntu / `-O2`;
 - Clang / x86-64 Ubuntu / `-O2`;

@@ -22,11 +22,10 @@ from .typesys import (
     TextViewType,
     TypeLike,
     TypeVar,
-    clone_type,
     describe,
-    has_unresolved,
     resolve,
     unify,
+    unresolved_ids,
 )
 from .unicode_support import UNICODE_VERSION
 
@@ -93,12 +92,14 @@ def _type_from_data(data: dict[str, Any], variables: dict[str, TypeVar] | None =
 
 
 def _unify_argument(expected: TypeLike, actual: TypeLike) -> None:
+    # The decoded interface signature is already fresh. Relate its variables to
+    # this caller so a generic wrapper can preserve inferred result relationships.
     ee = resolve(expected)
     aa = resolve(actual)
     if isinstance(ee, MaybeType) and not isinstance(aa, MaybeType):
-        unify(ee.inner, clone_type(actual))
+        unify(ee.inner, actual)
     else:
-        unify(expected, clone_type(actual))
+        unify(expected, actual)
 
 
 @dataclass(frozen=True)
@@ -190,7 +191,8 @@ class InterfaceFunction:
         for expected, actual in zip(parameter_types, arguments):
             _unify_argument(expected, actual)
         resolved = resolve(result_type)
-        if has_unresolved(resolved):
+        argument_variables=set().union(*(unresolved_ids(arg) for arg in arguments))
+        if unresolved_ids(resolved) - argument_variables:
             raise TypeError(f"interface contract for {self.name!r} leaves its result type unresolved")
         return resolved
 
