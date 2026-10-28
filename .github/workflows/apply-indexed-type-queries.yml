@@ -1,0 +1,45 @@
+name: Apply indexed typed IR queries
+
+on:
+  push:
+    branches: [compiler/index-typed-ir-queries]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      CC: clang
+      CFLAGS: -O2
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: compiler/index-typed-ir-queries
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install bootstrap toolchain
+        run: python -m pip install -e .
+      - name: Apply production source change
+        run: |
+          set -euo pipefail
+          python tools/apply_indexed_type_queries.py
+          git diff --check
+          git diff -- src/compiler/ir_types.eri src/compiler/ir_lower.eri
+      - name: Compile candidate without self-build
+        run: |
+          set -euo pipefail
+          python -u tools/build_offline.py --skip-self-build --trace-phases --command-timeout 300 --output "$RUNNER_TEMP/erist-indexed"
+      - name: Commit validated production change and remove one-shot helpers
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add src/compiler/ir_types.eri src/compiler/ir_lower.eri
+          git rm .github/workflows/apply-indexed-type-queries.yml tools/apply_indexed_type_queries.py
+          git commit -m "Index typed IR queries during lowering"
+          git push origin HEAD:compiler/index-typed-ir-queries
