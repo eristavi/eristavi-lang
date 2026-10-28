@@ -194,6 +194,11 @@ function backendRejected(p identity ir.Program) {
             'let value be discard(node(1,1)); value.next=value; p.entry.body.first=value;',
             'let f be routine(p); f.next=f;',
             'let value be item(false); value.next=value; p.entry.locals=value;',
+            'let a be item(false); let b be item(false); a.next=b; b.next=a; p.entry.locals=a;',
+            'let a be item(false); let b be item(false); let c be item(false); a.next=b; b.next=c; c.next=b; p.entry.locals=a;',
+            'let f be routine(p); let shared be item(false); f.locals=shared; p.entry.locals=shared;',
+            'let f be routine(p); let a be item(false); let b be item(false); let shared be item(false); a.next=shared; b.next=shared; f.locals=a; p.entry.locals=b;',
+
             'let a be node(1,1); let value be node(4,1); value.text="+"; value.first=a; value.second=a; p.entry.body.first=discard(value);',
             'p.entry.locals=item(false);',
             'let value be node(1,2); value.text="1.25; exit(0)"; p.entry.body.first=discard(value);',
@@ -207,15 +212,38 @@ function backendRejected(p identity ir.Program) {
         cases=''
         for index,mutation in enumerate(mutations):
             cases+=f'function case{index}() {{ let p be empty(); {mutation} rejected(p); backendRejected(p); }}\n'
-        source=helpers+cases+'check(empty()); let p be empty(); let f be routine(p); check(p);\n'
-        source+=''.join(f'case{index}();\n' for index in range(len(mutations)))
+        repair="""
+function repaired() {
+    let p be empty(); let f be routine(p); let shared be item(false);
+    p.entry.locals=shared; f.locals=shared;
+    ir_verify.verify(p) else error m.SemanticError {
+        output(error.category); output(error.message); output(error.path); output(error.line); output(error.column);
+    };
+    p.entry.locals=none; f.locals=none; check(p); check(p);
+}
+"""
+        source=helpers+cases+repair+'check(empty()); let p be empty(); let f be routine(p); check(p);\n'
+        source+=''.join(f'case{index}();\n' for index in range(len(mutations)))+'repaired();\n'
+        expected='ok\nok\n'+('ir-verify\nir-verify\n'*len(mutations))
+        expected+='ir-verify\ncyclic or shared local table\ntest.eri\n4\n2\nok\nok\n'
+
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);(root/'compiler').symlink_to(ROOT/'src/compiler',target_is_directory=True)
             entry=root/'app.eri';entry.write_text(source);binary=root/'verify'
             self.assertEqual(build_native(entry,binary,root),0)
             result=subprocess.run([str(binary)],capture_output=True,text=True,timeout=10)
             self.assertEqual(result.returncode,0,result.stderr)
-            self.assertEqual(result.stdout,'ok\nok\n'+('ir-verify\nir-verify\n'*len(mutations)))
+            self.assertEqual(result.stdout,expected)
+            if self.native:
+                emitted=self.invoke(entry,root,'emit-asm')
+                self.assertEqual((emitted.returncode,emitted.stderr),(0,''))
+                assembly=root/'verify.s';assembly.write_text(emitted.stdout)
+                native=root/'verify-native'
+                linked=subprocess.run([*shlex.split(os.environ.get('CC','cc')),str(assembly),str(self.runtime),'-lm','-o',str(native)],capture_output=True,text=True)
+                self.assertEqual(linked.returncode,0,linked.stderr)
+                executed=subprocess.run([str(native)],capture_output=True,text=True,timeout=20)
+                self.assertEqual((executed.returncode,executed.stdout,executed.stderr),(0,result.stdout,''))
+
 
     def test_specializations_are_concrete_cached_and_deterministic(self):
         source=('function echo(value) { return value; } '

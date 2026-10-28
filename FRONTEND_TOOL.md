@@ -150,3 +150,7 @@ exit status; an unmatched `begin` identifies work that did not finish.
 The offline `erist` wrapper also forwards `--trace-phases`. Qualification enables
 it explicitly and retains raw stderr plus timestamped events. Trace I/O can affect
 timings; tracing is diagnostic evidence rather than a performance benchmark.
+
+Typed-IR validation and Universal IR construction have separate nested phase
+records; see [TYPED_IR_VERIFICATION.md](TYPED_IR_VERIFICATION.md) for phase names
+and the local-table ownership optimization.

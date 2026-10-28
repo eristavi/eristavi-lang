@@ -1,9 +1,10 @@
 // Flatten structured typed IR into machine-neutral register operations and CFG.
 import compiler.typed_ir as ir;
 import compiler.ir_verify;
+import compiler.progress;
+import compiler.format;
 import compiler.universal_model as u;
 import compiler.semantic_model as m;
-import compiler.format;
 type Cleanup { index Int; frame Int; next maybe identity Cleanup; }
 type State { builder identity u.Builder; scope Int; cleanups maybe identity Cleanup; }
 function immediate(e identity State,value Int) returns Int { return u.number(e.builder,value); }
@@ -138,9 +139,16 @@ function routine(program identity u.Program,source identity ir.Function) returns
     block(e,source.body); if builder.current.terminator == none { let empty be zero(e,"void"); let final be call(e,"scope_leave",[e.scope,empty]); u.returnValue(builder,final); } return result;
 }
 public function lower(source identity ir.Program) returns identity u.Program fails m.SemanticError {
-    try ir_verify.verify(source);
+    return try lowerWithTracing(source,false);
+}
+public function lowerWithTracing(source identity ir.Program,trace Bool) returns identity u.Program fails m.SemanticError {
+    progress.phase(trace,"begin","typed-ir-verify","");
+    try ir_verify.verifyWithTracing(source,trace);
+    progress.phase(trace,"end","typed-ir-verify","");
     let placeholder be identity u.Function { index=-1; parameters=0; registers=none; registerTail=none; blocks=none; next=none; };
     let result be identity u.Program { types=source; functions=none; entry=placeholder; };
-    result.entry=routine(result,source.entry); let cursor be source.functions;
-    while cursor != none { let value be routine(result,cursor); value.next=result.functions; result.functions=value; cursor=cursor.next; } return result;
+    progress.phase(trace,"begin","universal-lower-function","entry");
+    result.entry=routine(result,source.entry);
+    progress.phase(trace,"end","universal-lower-function","entry"); let cursor be source.functions;
+    while cursor != none { if trace { progress.phase(true,"begin","universal-lower-function","f"+format.integer(cursor.index)+" "+cursor.name); } let value be routine(result,cursor); if trace { progress.phase(true,"end","universal-lower-function","f"+format.integer(cursor.index)+" "+cursor.name); } value.next=result.functions; result.functions=value; cursor=cursor.next; } return result;
 }
