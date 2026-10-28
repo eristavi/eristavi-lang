@@ -9,7 +9,7 @@ import compiler.semantic;
 
 type Source { declaration identity m.Declaration; routine identity ir.Function; map identity m.Clone; key Text; state Int; next maybe identity Source; }
 type Seen { owner identity m.Module; next maybe identity Seen; }
-type Builder { program identity ir.Program; sources maybe identity Source; seen maybe identity Seen; count Int; }
+type Builder { program identity ir.Program; typeRegistry identity ir_types.Registry; sources maybe identity Source; seen maybe identity Seen; count Int; }
 type Binding { name Text; local identity ir.Local; next maybe identity Binding; }
 type Context { builder identity Builder; owner identity m.Module; routine identity ir.Function; bindings maybe identity Binding; count Int; map identity m.Clone; tail maybe identity ir.Local; }
 
@@ -17,7 +17,7 @@ function reject(owner identity m.Module, source identity ast.Node, message Text)
     return try m.reject(m.at(owner,source.token),"lower",message);
 }
 function concrete(builder identity Builder, owner identity m.Module, source identity ast.Node, value identity m.Type, allowVoid Bool) returns Int fails m.SemanticError {
-    let result be try ir_types.register(builder.program,owner,value,m.at(owner,source.token));
+    let result be try ir_types.registerIndexed(builder.typeRegistry,builder.program,owner,value,m.at(owner,source.token));
     if not allowVoid and result == 5 { try reject(owner,source,"ordinary storage requires a value"); } return result;
 }
 function fact(context identity Context, source identity ast.Node) returns identity m.Fact fails m.SemanticError {
@@ -80,7 +80,7 @@ function instantiate(builder identity Builder, declaration identity m.Declaratio
     let result be try concrete(builder,owner,source,types.clone(declaration.result,map),true);
     let cursor be builder.sources;
     while cursor != none { if cursor.declaration == declaration and cursor.key == key { return cursor.routine; } cursor=cursor.next; }
-    let routine be identity ir.Function { index=builder.count; name=owner.name+"."+source.text+key; result=result; locals=none; body=ir.node(0,5,m.at(owner,source.token)); failures=try ir_types.failures(builder.program,owner,declaration.failures,m.at(owner,source.token)); next=builder.program.functions; };
+    let routine be identity ir.Function { index=builder.count; name=owner.name+"."+source.text+key; result=result; locals=none; body=ir.node(0,5,m.at(owner,source.token)); failures=try ir_types.failuresIndexed(builder.typeRegistry,builder.program,owner,declaration.failures,m.at(owner,source.token)); next=builder.program.functions; };
     builder.count=builder.count+1; builder.program.functions=routine;
     builder.sources=identity Source { declaration=declaration; routine=routine; map=map; key=key; state=0; next=builder.sources; };
     let context be identity Context { builder=builder; owner=owner; routine=routine; bindings=none; count=0; map=map; tail=none; };
@@ -113,7 +113,7 @@ function expression(context identity Context, source identity ast.Node) returns 
     let info be try fact(context,source);
     let kind be try concrete(context.builder,context.owner,source,types.clone(info.value,context.map),true);
     let result be ir.node(-1,kind,m.at(context.owner,source.token));
-    result.effects=try ir_types.failures(context.builder.program,context.owner,info.failures,result.location);
+    result.effects=try ir_types.failuresIndexed(context.builder.typeRegistry,context.builder.program,context.owner,info.failures,result.location);
     if source.kind == ast.literalExpr() {
         result.kind=1; result.text=source.text;
         if kind == 1 { result.number=integer(source.text); } if kind == 3 and source.flag { result.number=1; } return result;
@@ -167,7 +167,7 @@ function expression(context identity Context, source identity ast.Node) returns 
         while handler != none {
             let saved be context.bindings; let annotation be handler.first; let errorType be m.makeType(11,"");
             if annotation != none { errorType=try semantic.typeRef(context.owner,annotation); }
-            let typeId be try ir_types.register(context.builder.program,context.owner,errorType,result.location);
+            let typeId be try ir_types.registerIndexed(context.builder.typeRegistry,context.builder.program,context.owner,errorType,result.location);
             let item be local(context,"error",typeId,false,false); let entry be ir.node(42,typeId,m.at(context.owner,handler.token)); entry.index=item.index;
             entry.first=try block(context,m.child(handler.second)); context.bindings=saved;
             if tail == none { result.second=entry; } else { tail.next=entry; } tail=entry; handler=handler.next;
@@ -220,7 +220,7 @@ function statement(context identity Context, source identity ast.Node) returns i
     if source.kind == ast.letStmt() {
         let value be try expression(context,m.child(source.second));
         let expected be value.valueType; let annotation be source.first;
-        if annotation != none { expected=try ir_types.register(context.builder.program,context.owner,try semantic.typeRef(context.owner,annotation),result.location); }
+        if annotation != none { expected=try ir_types.registerIndexed(context.builder.typeRegistry,context.builder.program,context.owner,try semantic.typeRef(context.owner,annotation),result.location); }
         value=try coerce(context,value,expected);
         let item be local(context,source.text,expected,source.flag,false);
         result.kind=10; result.index=item.index; result.first=value; result.immutable=source.flag; return result;
@@ -274,7 +274,7 @@ function block(context identity Context, source identity ast.Node) returns ident
 public function lower(owner identity m.Module) returns identity ir.Program fails m.SemanticError {
     let entry be identity ir.Function { index=-1; name=owner.name; result=5; locals=none; body=ir.node(0,5,m.at(owner,0)); failures=none; next=none; };
     let program be identity ir.Program { functions=none; entry=entry; types=none; };
-    let builder be identity Builder { program=program; sources=none; seen=none; count=0; };
+    let builder be identity Builder { program=program; typeRegistry=ir_types.registry(program); sources=none; seen=none; count=0; };
     try collect(builder,owner);
     let context be identity Context { builder=builder; owner=owner; routine=entry; bindings=none; count=0; map=identity m.Clone { head=none; }; tail=none; };
     progress.phase(owner.trace,"begin","lower-entry",owner.path);
