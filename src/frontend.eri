@@ -29,7 +29,7 @@ function write(path Text, text Text) fails files.FileError {
 
 function universalReport(program identity typed_ir.Program, trace Bool) returns Text fails semantic_model.SemanticError {
     progress.phase(trace,"begin","universal-lower","uir");
-    let lowered be try universal_lower.lower(program);
+    let lowered be try universal_lower.lowerWithTracing(program,trace);
     progress.phase(trace,"end","universal-lower","uir");
     progress.phase(trace,"begin","universal-optimize","uir");
     try universal_optimize.optimize(lowered);

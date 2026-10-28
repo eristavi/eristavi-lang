@@ -178,6 +178,11 @@ class FrontendToolTests(unittest.TestCase):
                         records.append(json.loads(line[len('[erist-phase] '):]))
                     self.assertEqual(records[0],{'event':'begin','phase':'read','subject':str(source)})
                     self.assertTrue(any(row['event']=='end' and row['phase']=='read' for row in records))
+                    if command in ('uir','emit-asm'):
+                        for phase in ('typed-ir-verify','typed-ir-structure','typed-ir-descriptors','typed-ir-function','universal-lower-function'):
+                            events=[row['event'] for row in records if row['phase']==phase]
+                            self.assertTrue(events,phase)
+                            self.assertEqual(events.count('begin'),events.count('end'),phase)
                     if command=='emit-asm':
                         self.assertTrue(any(row['phase']=='emit-function' for row in records))
                         self.assertTrue(any(row['phase']=='lower-function' for row in records))

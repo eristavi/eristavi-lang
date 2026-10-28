@@ -4,6 +4,8 @@ import compiler.semantic_model as m;
 import compiler.lexer;
 import compiler.token;
 import compiler.diagnostic;
+import compiler.progress;
+import compiler.format;
 
 type Active { index Int; next maybe identity Active; }
 type Narrow { index Int; present Bool; next maybe identity Narrow; }
@@ -240,21 +242,45 @@ function layout(shape identity Shape, value identity ir.Function) returns Bool f
     let seen be shape.routines;
     while seen != none { if seen.value == value { try ir.require(false,value.body.location,"cyclic or shared function table"); } seen=seen.next; }
     shape.routines=identity FunctionSeen { value=value; next=shape.routines; };
-    let item be value.locals;
-    while item != none {
+    // Detect cycles before finding the tail. Finite singly linked lists share
+    // a node exactly when their tails are identical; retain one tail per table.
+    let slow be value.locals; let fast be value.locals;
+    while fast != none {
+        fast=fast.next;
+        if fast != none {
+            fast=fast.next; if slow != none { slow=slow.next; }
+            if fast != none and fast == slow { try ir.require(false,value.body.location,"cyclic or shared local table"); }
+        }
+    }
+    let item be value.locals; let tail maybe identity ir.Local be none;
+    while item != none { tail=item; item=item.next; }
+    if tail != none {
         let prior be shape.locals;
-        while prior != none { if prior.value == item { try ir.require(false,value.body.location,"cyclic or shared local table"); } prior=prior.next; }
-        shape.locals=identity LocalSeen { value=item; next=shape.locals; }; item=item.next;
+        while prior != none { if prior.value == tail { try ir.require(false,value.body.location,"cyclic or shared local table"); } prior=prior.next; }
+        shape.locals=identity LocalSeen { value=tail; next=shape.locals; };
     }
     return try tree(shape,value.body);
 }
 
 
+function tracedRoutine(program identity ir.Program,value identity ir.Function,trace Bool) returns Bool fails m.SemanticError {
+    if trace { progress.phase(true,"begin","typed-ir-function","f"+format.integer(value.index)+" "+value.name); }
+    let result be try routine(program,value);
+    if trace { progress.phase(true,"end","typed-ir-function","f"+format.integer(value.index)+" "+value.name); }
+    return result;
+}
 public function verify(program identity ir.Program) returns Bool fails m.SemanticError {
+    return try verifyWithTracing(program,false);
+}
+public function verifyWithTracing(program identity ir.Program,trace Bool) returns Bool fails m.SemanticError {
     try ir.require(program.entry.index == -1 and program.entry.result == 5 and program.entry.next == none and program.entry.failures == none,program.entry.body.location,"invalid entry contract");
     let shape be identity Shape { nodes=none; locals=none; routines=none; };
+    progress.phase(trace,"begin","typed-ir-structure","");
     structure(shape,program) else error m.SemanticError { clearMarks(shape); fail m.SemanticError { message=error.message; category=error.category; path=error.path; line=error.line; column=error.column; }; };
-    clearMarks(shape); let cursor be program.functions;
+    clearMarks(shape);
+    progress.phase(trace,"end","typed-ir-structure","");
+    progress.phase(trace,"begin","typed-ir-descriptors","");
+    let cursor be program.functions;
     let descriptor be program.types; let indices maybe identity Active be none;
     while descriptor != none { try ir.require(descriptor.index >= 6 and not has(indices,descriptor.index) and descriptor.kind >= 6 and descriptor.kind <= 12,typeLocation(program),"invalid descriptor table"); indices=identity Active { index=descriptor.index; next=indices; }; descriptor=descriptor.next; }
     descriptor=program.types;
@@ -263,9 +289,10 @@ public function verify(program identity ir.Program) returns Bool fails m.Semanti
         if descriptor.kind == 12 { try ir.require(descriptor.name == "bytes" or descriptor.name == "scalars" or descriptor.name == "characters",typeLocation(program),"invalid Text view kind"); }
         let field be descriptor.fields; let index be 0; while field != none { try ir.require(field.index == index and ir.ordinary(program,field.valueType),typeLocation(program),"invalid nominal field"); index=index+1; field=field.next; } descriptor=descriptor.next;
     }
+    progress.phase(trace,"end","typed-ir-descriptors","");
     cursor=program.functions; let count be 0; indices=none;
-    while cursor != none { try ir.require(cursor.index >= 0 and not has(indices,cursor.index),cursor.body.location,"invalid function index"); indices=identity Active { index=cursor.index; next=indices; }; try routine(program,cursor); count=count+1; cursor=cursor.next; }
-    let index be 0; while index < count { try ir.require(has(indices,index),program.entry.body.location,"noncontiguous function table"); index=index+1; } return try routine(program,program.entry);
+    while cursor != none { try ir.require(cursor.index >= 0 and not has(indices,cursor.index),cursor.body.location,"invalid function index"); indices=identity Active { index=cursor.index; next=indices; }; try tracedRoutine(program,cursor,trace); count=count+1; cursor=cursor.next; }
+    let index be 0; while index < count { try ir.require(has(indices,index),program.entry.body.location,"noncontiguous function table"); index=index+1; } return try tracedRoutine(program,program.entry,trace);
 }
 function typeLocation(program identity ir.Program) returns identity m.Location { return program.entry.body.location; }
 

@@ -88,7 +88,7 @@ public function emit(source identity ir.Program) returns Text fails m.SemanticEr
 }
 public function emitWithTracing(source identity ir.Program, trace Bool) returns Text fails m.SemanticError {
     progress.phase(trace,"begin","universal-lower","arm64-linux");
-    let program be try universal_lower.lower(source);
+    let program be try universal_lower.lowerWithTracing(source,trace);
     progress.phase(trace,"end","universal-lower","arm64-linux");
     progress.phase(trace,"begin","universal-optimize","arm64-linux");
     try universal_optimize.optimize(program);
