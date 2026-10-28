@@ -1,0 +1,142 @@
+name: Owned compiler 300s diagnostic probe
+
+on:
+  push:
+    branches:
+      - diagnostics/owned-compiler-300s-ab3a606
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      CC: clang
+      CFLAGS: -O2
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install bootstrap toolchain
+        run: python -m pip install -e .
+
+      - name: Build current owned compiler B without self-build
+        run: |
+          set -o pipefail
+          python -u tools/build_offline.py \
+            --runtime owned \
+            --skip-self-build \
+            --trace-phases \
+            --command-timeout 300 \
+            --output "$RUNNER_TEMP/erist-owned-probe" \
+            2>&1 | tee "$RUNNER_TEMP/owned-b-build.log"
+
+      - name: Run exactly one bounded B-to-C compiler emission
+        id: bounded
+        shell: bash
+        run: |
+          set -u
+          bundle="$RUNNER_TEMP/erist-owned-probe"
+          out="$RUNNER_TEMP/compiler-c.partial.s"
+          trace="$RUNNER_TEMP/compiler-c.trace.log"
+          timing="$RUNNER_TEMP/compiler-c.time.txt"
+          rcfile="$RUNNER_TEMP/compiler-c.rc"
+          summary="$RUNNER_TEMP/probe-summary.txt"
+
+          set +e
+          /usr/bin/time -v -o "$timing" \
+            timeout --signal=TERM --kill-after=10s 300s \
+            "$bundle/bin/erist-compiler" emit-asm src/frontend.eri \
+              --source-root src --target x86_64-linux --trace-phases \
+              > "$out" 2> "$trace"
+          rc=$?
+          set -e
+          printf '%s\n' "$rc" > "$rcfile"
+
+          {
+            echo "probe_head=$(git rev-parse HEAD)"
+            echo "exit_code=$rc"
+            echo "compiler_b_sha256=$(sha256sum "$bundle/bin/erist-compiler" | awk '{print $1}')"
+            echo "compiler_b_assembly_sha256=$(sha256sum "$bundle/evidence/compiler-b.s" | awk '{print $1}')"
+            if [ -f "$out" ]; then
+              echo "compiler_c_output_bytes=$(wc -c < "$out")"
+              echo "compiler_c_output_sha256=$(sha256sum "$out" | awk '{print $1}')"
+            fi
+          } > "$summary"
+
+          if [ "$rc" -eq 0 ]; then
+            if cmp -s "$bundle/evidence/compiler-b.s" "$out"; then
+              echo "assembly_BC_match=true" >> "$summary"
+            else
+              echo "assembly_BC_match=false" >> "$summary"
+            fi
+
+            LD_LIBRARY_PATH="$bundle/tool-libs" "$bundle/bin/as" --64 "$out" -o "$RUNNER_TEMP/compiler-c.o"
+            LD_LIBRARY_PATH="$bundle/tool-libs" "$bundle/bin/ld" -nostdlib -static -e _start \
+              -o "$RUNNER_TEMP/compiler-c" "$RUNNER_TEMP/compiler-c.o" "$bundle/lib/erist-runtime.o"
+            echo "compiler_c_sha256=$(sha256sum "$RUNNER_TEMP/compiler-c" | awk '{print $1}')" >> "$summary"
+            if cmp -s "$bundle/bin/erist-compiler" "$RUNNER_TEMP/compiler-c"; then
+              echo "binary_BC_match=true" >> "$summary"
+            else
+              echo "binary_BC_match=false" >> "$summary"
+            fi
+            if readelf -lW "$RUNNER_TEMP/compiler-c" | grep -Eq 'INTERP|DYNAMIC'; then
+              echo "owned_static_audit=false" >> "$summary"
+            elif [ -n "$(nm -u "$RUNNER_TEMP/compiler-c")" ]; then
+              echo "owned_static_audit=false" >> "$summary"
+            else
+              echo "owned_static_audit=true" >> "$summary"
+            fi
+          elif [ "$rc" -eq 124 ]; then
+            echo "bounded_result=timeout_300s" >> "$summary"
+          else
+            echo "bounded_result=unexpected_exit" >> "$summary"
+          fi
+
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "source_tree_unchanged=false" >> "$summary"
+          else
+            echo "source_tree_unchanged=true" >> "$summary"
+          fi
+
+          cat "$summary"
+
+      - name: Preserve bounded probe evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: owned-compiler-300s-probe-${{ github.run_attempt }}
+          retention-days: 14
+          path: |
+            ${{ runner.temp }}/owned-b-build.log
+            ${{ runner.temp }}/compiler-c.partial.s
+            ${{ runner.temp }}/compiler-c.trace.log
+            ${{ runner.temp }}/compiler-c.time.txt
+            ${{ runner.temp }}/compiler-c.rc
+            ${{ runner.temp }}/probe-summary.txt
+            ${{ runner.temp }}/compiler-c
+            ${{ runner.temp }}/erist-owned-probe/self-build.json
+            ${{ runner.temp }}/erist-owned-probe/source-manifest.json
+            ${{ runner.temp }}/erist-owned-probe/evidence/
+
+      - name: Classify bounded result
+        if: always()
+        shell: bash
+        run: |
+          rc=$(cat "$RUNNER_TEMP/compiler-c.rc" 2>/dev/null || echo 999)
+          summary="$RUNNER_TEMP/probe-summary.txt"
+          if [ "$rc" -eq 124 ]; then
+            echo "The owned B-to-C probe reached the intended 300-second cap."
+            exit 0
+          fi
+          if [ "$rc" -ne 0 ]; then
+            echo "Unexpected compiler exit: $rc" >&2
+            exit 1
+          fi
+          grep -q '^assembly_BC_match=true$' "$summary" || { echo 'B/C assembly mismatch' >&2; exit 1; }
+          grep -q '^binary_BC_match=true$' "$summary" || { echo 'B/C binary mismatch' >&2; exit 1; }
+          grep -q '^owned_static_audit=true$' "$summary" || { echo 'owned static audit failed' >&2; exit 1; }
+          grep -q '^source_tree_unchanged=true$' "$summary" || { echo 'source tree changed during probe' >&2; exit 1; }
+          echo "The owned B-to-C probe completed within 300 seconds with matching assembly and binary."
