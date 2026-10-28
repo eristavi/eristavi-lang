@@ -60,7 +60,9 @@ function run() {
         else error m.SemanticError { output(error.message); return; };
 
     output(a); output(b); output(legacyA); output(legacyB);
-    output(created); output(repeated); output(program.types.index);
+    output(created); output(repeated);
+    let head be program.types;
+    if head == none { output(-1); } else { output(head.index); }
 }
 run();
 '''
