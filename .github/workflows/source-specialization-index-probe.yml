@@ -1,0 +1,98 @@
+name: Source specialization index probe
+
+on:
+  push:
+    branches: [compiler/source-specialization-index]
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CC: clang
+      CFLAGS: -O2
+      BASE: 9b8516f1108494fbd7d2ffe36540fc9712d58dfd
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install bootstrap toolchain
+        run: python -m pip install -e .
+      - name: Build baseline and candidate frontends
+        run: |
+          git worktree add "$RUNNER_TEMP/base" "$BASE"
+          python - <<'PY'
+          from pathlib import Path
+          from compiler.erist.cli import build_native
+          import os
+          root=Path.cwd()
+          temp=Path(os.environ['RUNNER_TEMP'])
+          base=temp/'base'
+          if build_native(base/'src/frontend.eri',temp/'baseline-frontend',base/'src'):
+              raise SystemExit('baseline frontend build failed')
+          if build_native(root/'src/frontend.eri',temp/'candidate-frontend',root/'src'):
+              raise SystemExit('candidate frontend build failed')
+          PY
+      - name: Compare collision-heavy specialization outputs
+        run: |
+          set -euo pipefail
+          ROOT="$RUNNER_TEMP/collision"
+          mkdir -p "$ROOT"
+          cat > "$ROOT/a.eri" <<'EOF'
+          public function echo(value) { return value; }
+          EOF
+          cat > "$ROOT/b.eri" <<'EOF'
+          public function echo(value) { return value; }
+          EOF
+          cat > "$ROOT/app.eri" <<'EOF'
+          import a;
+          import b;
+          output(a.echo(1));
+          output(a.echo("A"));
+          output(b.echo(2));
+          output(b.echo("B"));
+          EOF
+          for command in ir emit-asm; do
+            extra=()
+            if [ "$command" = emit-asm ]; then extra=(--target x86_64-linux); fi
+            "$RUNNER_TEMP/baseline-frontend" "$command" "$ROOT/app.eri" --source-root "$ROOT" "${extra[@]}" > "$RUNNER_TEMP/base-$command.out" 2> "$RUNNER_TEMP/base-$command.err"
+            "$RUNNER_TEMP/candidate-frontend" "$command" "$ROOT/app.eri" --source-root "$ROOT" "${extra[@]}" > "$RUNNER_TEMP/candidate-$command.out" 2> "$RUNNER_TEMP/candidate-$command.err"
+            cmp "$RUNNER_TEMP/base-$command.out" "$RUNNER_TEMP/candidate-$command.out"
+            cmp "$RUNNER_TEMP/base-$command.err" "$RUNNER_TEMP/candidate-$command.err"
+            test ! -s "$RUNNER_TEMP/base-$command.err"
+          done
+          sha256sum "$RUNNER_TEMP"/base-*.out "$RUNNER_TEMP"/candidate-*.out | tee "$RUNNER_TEMP/collision-hashes.txt"
+      - name: Serial full-source ABBA comparison
+        run: |
+          set -euo pipefail
+          run_one() {
+            label="$1"; compiler="$2"
+            /usr/bin/time -f 'wall=%e user=%U sys=%S rss_kib=%M' -o "$RUNNER_TEMP/$label.time" \
+              timeout 90s "$compiler" emit-asm src/frontend.eri --source-root src --target x86_64-linux \
+              > "$RUNNER_TEMP/$label.s" 2> "$RUNNER_TEMP/$label.err"
+            test ! -s "$RUNNER_TEMP/$label.err"
+          }
+          run_one A1 "$RUNNER_TEMP/baseline-frontend"
+          run_one B1 "$RUNNER_TEMP/candidate-frontend"
+          run_one B2 "$RUNNER_TEMP/candidate-frontend"
+          run_one A2 "$RUNNER_TEMP/baseline-frontend"
+          cmp "$RUNNER_TEMP/A1.s" "$RUNNER_TEMP/A2.s"
+          cmp "$RUNNER_TEMP/A1.s" "$RUNNER_TEMP/B1.s"
+          cmp "$RUNNER_TEMP/A1.s" "$RUNNER_TEMP/B2.s"
+          sha256sum "$RUNNER_TEMP"/{A1,B1,B2,A2}.s | tee "$RUNNER_TEMP/full-hashes.txt"
+          for label in A1 B1 B2 A2; do printf '%s ' "$label"; cat "$RUNNER_TEMP/$label.time"; done | tee "$RUNNER_TEMP/timings.txt"
+      - name: Preserve probe evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: source-specialization-index-probe
+          retention-days: 7
+          path: |
+            ${{ runner.temp }}/collision-hashes.txt
+            ${{ runner.temp }}/full-hashes.txt
+            ${{ runner.temp }}/timings.txt
+            ${{ runner.temp }}/*.time
+            ${{ runner.temp }}/*.err
