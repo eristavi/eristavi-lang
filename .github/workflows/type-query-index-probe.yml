@@ -1,0 +1,82 @@
+name: Typed IR query index probe
+
+on:
+  push:
+    branches: [diagnostics/type-query-index-571d9c3]
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      CC: clang
+      CFLAGS: -O2
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install bootstrap toolchain
+        run: python -m pip install -e .
+      - name: Prepare baseline and frozen worktrees
+        run: |
+          set -euo pipefail
+          git worktree add "$RUNNER_TEMP/base" efbad895e3f1d528883b175ea2bead2967d38471
+          git worktree add "$RUNNER_TEMP/frozen" ab3a60674b0e862f5a237b5ede84f2dfa94953fe
+      - name: Build baseline and candidate owned compilers
+        run: |
+          set -euo pipefail
+          (cd "$RUNNER_TEMP/base" && python -u tools/build_offline.py --skip-self-build --command-timeout 300 --output "$RUNNER_TEMP/base-bundle" > "$RUNNER_TEMP/base-build.log" 2>&1)
+          python -u tools/build_offline.py --skip-self-build --command-timeout 300 --output "$RUNNER_TEMP/candidate-bundle" > "$RUNNER_TEMP/candidate-build.log" 2>&1
+      - name: Require focused byte identity
+        run: |
+          set -euo pipefail
+          source="$RUNNER_TEMP/base/src/compiler/typed_ir.eri"
+          root="$RUNNER_TEMP/base/src"
+          timeout 90s "$RUNNER_TEMP/base-bundle/bin/erist-compiler" ir "$source" --source-root "$root" > "$RUNNER_TEMP/base.ir"
+          timeout 90s "$RUNNER_TEMP/candidate-bundle/bin/erist-compiler" ir "$source" --source-root "$root" > "$RUNNER_TEMP/candidate.ir"
+          cmp "$RUNNER_TEMP/base.ir" "$RUNNER_TEMP/candidate.ir"
+          timeout 90s "$RUNNER_TEMP/base-bundle/bin/erist-compiler" emit-asm "$source" --source-root "$root" --target x86_64-linux > "$RUNNER_TEMP/base.s"
+          timeout 90s "$RUNNER_TEMP/candidate-bundle/bin/erist-compiler" emit-asm "$source" --source-root "$root" --target x86_64-linux > "$RUNNER_TEMP/candidate.s"
+          cmp "$RUNNER_TEMP/base.s" "$RUNNER_TEMP/candidate.s"
+          sha256sum "$RUNNER_TEMP/base.ir" "$RUNNER_TEMP/candidate.ir" "$RUNNER_TEMP/base.s" "$RUNNER_TEMP/candidate.s" > "$RUNNER_TEMP/focused.sha256"
+      - name: Run one candidate-only 300 second owned trajectory
+        id: trajectory
+        run: |
+          set -u
+          root="$RUNNER_TEMP/frozen/src"
+          set +e
+          /usr/bin/time -v -o "$RUNNER_TEMP/trajectory.time.txt" timeout --signal=TERM --kill-after=10s 300s "$RUNNER_TEMP/candidate-bundle/bin/erist-compiler" emit-asm "$root/frontend.eri" --source-root "$root" --target x86_64-linux --trace-phases > "$RUNNER_TEMP/trajectory.s" 2> "$RUNNER_TEMP/trajectory.trace.log"
+          rc=$?
+          set -e
+          echo "$rc" > "$RUNNER_TEMP/trajectory.rc"
+          begins=$(grep -c '"event":"begin","phase":"lower-function"' "$RUNNER_TEMP/trajectory.trace.log" || true)
+          ends=$(grep -c '"event":"end","phase":"lower-function"' "$RUNNER_TEMP/trajectory.trace.log" || true)
+          echo "lower_function_begins=$begins" | tee "$RUNNER_TEMP/trajectory.summary"
+          echo "lower_function_ends=$ends" | tee -a "$RUNNER_TEMP/trajectory.summary"
+          echo "exit_code=$rc" | tee -a "$RUNNER_TEMP/trajectory.summary"
+          grep '\[erist-phase\]' "$RUNNER_TEMP/trajectory.trace.log" | tail -n 20 >> "$RUNNER_TEMP/trajectory.summary" || true
+          cat "$RUNNER_TEMP/trajectory.time.txt" >> "$RUNNER_TEMP/trajectory.summary"
+          cat "$RUNNER_TEMP/trajectory.summary"
+          if [ "$rc" -ne 0 ] && [ "$rc" -ne 124 ]; then exit "$rc"; fi
+      - name: Preserve evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: type-query-index-probe-${{ github.run_attempt }}
+          retention-days: 14
+          path: |
+            ${{ runner.temp }}/base-build.log
+            ${{ runner.temp }}/candidate-build.log
+            ${{ runner.temp }}/base.ir
+            ${{ runner.temp }}/candidate.ir
+            ${{ runner.temp }}/base.s
+            ${{ runner.temp }}/candidate.s
+            ${{ runner.temp }}/focused.sha256
+            ${{ runner.temp }}/trajectory.rc
+            ${{ runner.temp }}/trajectory.time.txt
+            ${{ runner.temp }}/trajectory.trace.log
+            ${{ runner.temp }}/trajectory.s
+            ${{ runner.temp }}/trajectory.summary
