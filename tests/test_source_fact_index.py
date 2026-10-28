@@ -17,7 +17,7 @@ let loc be identity m.Location { path="probe"; line=1; column=1; next=none; ordi
 let a be ast.make(0,0,none,none,none,"",0,false);
 let b be ast.make(0,0,none,none,none,"",0,false);
 let c be ast.make(0,-1,none,none,none,"",0,false);
-let owner be identity m.Module { name="probe"; path="probe"; root=a; locations=loc; locationIndex=loc; imports=none; declarations=none; facts=none; state=2; entry=true; next=none; };
+let owner be identity m.Module { name="probe"; path="probe"; root=a; locations=loc; locationIndex=loc; imports=none; declarations=none; facts=none; state=2; entry=true; trace=false; next=none; };
 m.remember(owner,a,m.result(m.makeType(1,"")));
 m.remember(owner,b,m.result(m.makeType(2,"")));
 output(kind(owner,a)); output(kind(owner,b));

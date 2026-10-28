@@ -6,9 +6,10 @@ import compiler.parser;
 import compiler.diagnostic;
 import compiler.semantic_model as m;
 import compiler.semantic;
+import compiler.progress;
 
 type Segment { text Text; next maybe identity Segment; }
-type Project { root Text; modules maybe identity m.Module; }
+type Project { root Text; modules maybe identity m.Module; trace Bool; }
 
 function normalize(path Text) returns Text {
     let stack maybe identity Segment be none; let current be ""; let index be 0;
@@ -47,10 +48,11 @@ function modulePath(root Text, name Text) returns Text {
 }
 function tokenAt(tokens, index Int) returns token.Token { return tokens[index]; }
 function makeModule(tree identity ast.Node, tokens, name Text, path Text, entry Bool, project identity Project) returns identity m.Module {
+    progress.phase(project.trace,"begin","index-locations",path);
     let locations maybe identity m.Location be none; let index be tokens.count-1;
     while index >= 0 { let item be tokenAt(tokens,index); locations=identity m.Location { path=path; line=item.line; column=item.column; next=locations; ordinal=index; left=none; right=none; facts=none; }; index=index-1; }
-    let result be identity m.Module { name=name; path=path; root=tree; locations=locations; locationIndex=m.indexLocations(locations,tokens.count); imports=none; declarations=none; facts=none; state=1; entry=entry; next=project.modules; };
-    project.modules=result; return result;
+    let result be identity m.Module { name=name; path=path; root=tree; locations=locations; locationIndex=m.indexLocations(locations,tokens.count); imports=none; declarations=none; facts=none; state=1; entry=entry; trace=project.trace; next=project.modules; };
+    project.modules=result; progress.phase(project.trace,"end","index-locations",path); return result;
 }
 function read(path Text) returns Text fails files.FileError {
     with file be try files.openRead(path) { return try file.readText(); }
@@ -64,9 +66,15 @@ function load(project identity Project, name Text, importer identity m.Module, n
         }
         cursor=cursor.next;
     }
+    progress.phase(project.trace,"begin","read",path);
     let source be read(path) else error files.FileError { fail m.SemanticError { message="cannot resolve module " + name + ": " + error.message; category="module"; path=importer.path; line=m.at(importer,node.token).line; column=m.at(importer,node.token).column; }; };
+    progress.phase(project.trace,"end","read",path);
+    progress.phase(project.trace,"begin","lex",path);
     let tokens be lexer.lex(source) else error diagnostic.LexError { fail m.SemanticError { message=error.message; category="lex"; path=path; line=error.line; column=error.column; }; };
+    progress.phase(project.trace,"end","lex",path);
+    progress.phase(project.trace,"begin","parse",path);
     let tree be parser.parse(tokens) else error diagnostic.ParseError { fail m.SemanticError { message=error.message; category="parse"; path=path; line=error.line; column=error.column; }; };
+    progress.phase(project.trace,"end","parse",path);
     let owner be makeModule(tree,tokens,name,path,false,project);
     try analyzeModule(project,owner); return owner;
 }
@@ -82,7 +90,9 @@ function analyzeModule(project identity Project, owner identity m.Module) return
         }
         cursor=cursor.next;
     }
-    try semantic.analyze(owner); owner.state=2; return true;
+    progress.phase(project.trace,"begin","analyze-module",owner.path);
+    try semantic.analyze(owner); owner.state=2;
+    progress.phase(project.trace,"end","analyze-module",owner.path); return true;
 }
 function inside(root Text, path Text) returns Bool {
     if root == "/" { return true; }
@@ -92,10 +102,13 @@ function inside(root Text, path Text) returns Bool {
     return path.scalars[index] == "/";
 }
 public function analyze(tree identity ast.Node, tokens, path Text, root Text) returns identity m.Module fails m.SemanticError {
+    return try analyzeWithTracing(tree,tokens,path,root,false);
+}
+public function analyzeWithTracing(tree identity ast.Node, tokens, path Text, root Text, trace Bool) returns identity m.Module fails m.SemanticError {
     let canonicalPath be files.canonicalPath(path) else error files.FileError { fail m.SemanticError { message=error.message; category="module"; path=path; line=1; column=1; }; };
     let canonicalRoot be files.canonicalPath(root) else error files.FileError { fail m.SemanticError { message=error.message; category="module"; path=path; line=1; column=1; }; };
     if not inside(canonicalRoot,canonicalPath) { fail m.SemanticError { message="entry file must be inside the configured source root"; category="module"; path=path; line=1; column=1; }; }
-    let project be identity Project { root=canonicalRoot; modules=none; };
+    let project be identity Project { root=canonicalRoot; modules=none; trace=trace; };
     let name be ""; let index be canonicalRoot.scalars.count+1;
     if canonicalRoot == "/" { index=1; }
     let end be canonicalPath.scalars.count; let lastDot be -1; let scan be index;

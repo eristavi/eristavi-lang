@@ -1,4 +1,5 @@
 import compiler.ast;
+import compiler.progress;
 import compiler.semantic_model as m;
 import compiler.semantic_types as t;
 
@@ -298,6 +299,7 @@ function ensureFunction(declaration identity m.Declaration, valueRequired Bool) 
         if valueRequired and not declaration.explicitResult { try failAt(declaration.owner,declaration.node,"inference","recursive result inference requires an explicit returns contract"); }
         return true;
     }
+    progress.phase(declaration.owner.trace,"begin","analyze-function",declaration.node.text);
     declaration.state=1;
     let context be newContext(declaration.owner); context.activeFunction=declaration;
     context.result=declaration.result; context.generics=declaration.parameters;
@@ -313,7 +315,8 @@ function ensureFunction(declaration identity m.Declaration, valueRequired Bool) 
     }
     if context.sawBare and context.sawValue { try require(false,context,declaration.node,"return","cannot mix bare and value returns"); }
     if context.sawValue { declaration.result=context.result; }
-    try validate(context,none); declaration.state=2; return true;
+    try validate(context,none); declaration.state=2;
+    progress.phase(declaration.owner.trace,"end","analyze-function",declaration.node.text); return true;
 }
 function userCall(context identity m.Context, node identity ast.Node, declaration identity m.Declaration, valueRequired Bool, allowChecked Bool) returns m.Result fails m.SemanticError {
     try ensureFunction(declaration,valueRequired);

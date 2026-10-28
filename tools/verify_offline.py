@@ -7,10 +7,30 @@ import json
 import os
 from pathlib import Path
 import shutil
-import subprocess
+import sys
 import tempfile
 
+sys.path.insert(0,str(Path(__file__).resolve().parent))
+from build_events import BuildJournal
+
+def require_expected_failure(result, exit_code, diagnostic):
+    if result.returncode!=exit_code or diagnostic not in result.stderr:
+        raise RuntimeError(f'expected controlled rejection (exit {exit_code}, {diagnostic!r}); got {result.returncode}: {result.stderr}')
+
 def verify(bundle):
+    bundle=Path(bundle).resolve()
+    journal=BuildJournal(bundle/'evidence'/'offline-audit')
+    try:
+        result=_verify(bundle,journal)
+        journal.state.update(status='success',**result)
+        return result
+    except BaseException as error:
+        journal.state.update(status='failed',error=str(error),error_type=type(error).__name__)
+        raise
+    finally:
+        journal.save()
+
+def _verify(bundle,journal):
     bundle=bundle.resolve();compiler=bundle/'bin/erist'
     with tempfile.TemporaryDirectory() as td:
         root=Path(td);minimal=root/'path';minimal.mkdir()
@@ -51,28 +71,48 @@ run();
 '''.replace('$ROOT',str(project)),encoding='utf-8')
         output=project/'application'
         def invoke(*args):
-            return subprocess.run([str(compiler),*map(str,args)],capture_output=True,text=True,env=environment,cwd=root,timeout=180)
-        checked=invoke('check',source)
-        if checked.returncode: raise RuntimeError(checked.stderr)
-        built=invoke('build',source,'-o',output)
-        if built.returncode: raise RuntimeError(built.stderr)
-        run=subprocess.run([str(output)],capture_output=True,text=True,env=environment,timeout=30)
+            return journal.run([compiler,*args],env=environment,cwd=root,timeout=180,check=False,echo_stdout=True)
+        with journal.stage('check-application'):
+            checked=invoke('check',source)
+            if checked.returncode: raise RuntimeError(checked.stderr)
+        with journal.stage('trace-application'):
+            traced=invoke('check',source,'--trace-phases')
+            if traced.returncode or traced.stdout:
+                raise RuntimeError(f'offline traced check failed: {traced}')
+            phases=[]
+            for line in traced.stderr.split("\n"):
+                if not line:continue
+                if not line.startswith('[erist-phase] '):raise RuntimeError(f'unexpected trace diagnostic: {line}')
+                phases.append(json.loads(line[len('[erist-phase] '):]))
+            if not any(row.get('event')=='end' and row.get('phase')=='analyze-project' for row in phases):
+                raise RuntimeError('offline trace did not finish semantic analysis')
+        with journal.stage('build-application'):
+            built=invoke('build',source,'-o',output)
+            if built.returncode: raise RuntimeError(built.stderr)
         expected='6\n2\n42\noffline\nhandled\n'
-        if (run.returncode,run.stdout,run.stderr)!=(0,expected,''):
-            raise RuntimeError(f'offline program mismatch: {run}')
+        with journal.stage('execute-application'):
+            run=journal.run([output],env=environment,timeout=30,check=False)
+            if (run.returncode,run.stdout,run.stderr)!=(0,expected,''):
+                raise RuntimeError(f'offline program mismatch: {run}')
         before=hashlib.sha256(output.read_bytes()).hexdigest()
         invalid=project/'invalid.eri';invalid.write_text('output(missing);')
-        failed=invoke('build',invalid,'-o',output)
-        if failed.returncode==0 or hashlib.sha256(output.read_bytes()).hexdigest()!=before:
-            raise RuntimeError('failed build replaced the previous executable')
+        print('[offline-audit] expected semantic rejection: invalid source',file=sys.stderr,flush=True)
+        with journal.stage('expected-invalid-source'):
+            failed=invoke('build',invalid,'-o',output)
+            require_expected_failure(failed,1,'semantic error [')
+            if hashlib.sha256(output.read_bytes()).hexdigest()!=before:
+                raise RuntimeError('failed build replaced the previous executable')
         source_bytes=source.read_bytes()
-        protected=invoke('build',source,'-o',source)
-        if protected.returncode==0 or source.read_bytes()!=source_bytes:
-            raise RuntimeError('source overwrite was not prevented')
+        print('[offline-audit] expected usage rejection: source overwrite',file=sys.stderr,flush=True)
+        with journal.stage('expected-source-overwrite'):
+            protected=invoke('build',source,'-o',source)
+            require_expected_failure(protected,2,'output must be a file distinct from the source')
+            if source.read_bytes()!=source_bytes:
+                raise RuntimeError('source overwrite was not prevented')
         if calls.exists(): raise RuntimeError('a forbidden bootstrap executable was invoked')
         evidence={'native_application':True,'python_or_c_compiler_invoked':False,'bundled_assembler_linker':True,
                   'unicode_paths':True,'source_preserved':True,'failed_build_preserves_output':True,
-                  'heap_stress_iterations':100000,
+                  'heap_stress_iterations':100000,'compiler_phase_trace':True,
                   'expected_stdout':expected,'target':json.loads((bundle/'platform.json').read_text())['target']}
         (bundle/'offline-tests.json').write_text(json.dumps(evidence,indent=2)+'\n')
         print(json.dumps(evidence,indent=2))

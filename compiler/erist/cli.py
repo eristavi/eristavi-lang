@@ -116,9 +116,10 @@ def build_direct(path:Path,output:Path,source_root:Path|None=None,target:str='x8
         compiler=cc or os.environ.get('CC','cc'); flags=shlex.split(os.environ.get('CFLAGS','')); assembly=backend.emit(lower_universal_file(path,source_root))
         with tempfile.TemporaryDirectory() as td:
             asm=Path(td)/'program.s'; asm.write_text(assembly,encoding='utf-8'); proc=subprocess.run([compiler,*flags,str(asm),'-o',str(output)],capture_output=True,text=True)
+            # Successful compilers/linkers can still report important warnings.
+            if proc.stdout: print(proc.stdout,file=sys.stderr,end='')
+            if proc.stderr: print(proc.stderr,file=sys.stderr,end='')
             if proc.returncode!=0:
-                if proc.stdout: print(proc.stdout,file=sys.stderr,end='')
-                if proc.stderr: print(proc.stderr,file=sys.stderr,end='')
                 return proc.returncode or 1
         return 0
     except (EristaviError,OSError,ValueError) as e: print(e.format() if isinstance(e,EristaviError) else f'error: {e}',file=sys.stderr); return 1
@@ -132,9 +133,10 @@ def build_native(path:Path,output:Path,source_root:Path|None=None,cc:str|None=No
         compiler=cc or os.environ.get('CC','cc'); cflags=shlex.split(os.environ.get('CFLAGS','')); c=CBackend().emit(lower_project(compile_entry(path,source_root)))
         with tempfile.TemporaryDirectory() as td:
             cp=Path(td)/'program.c'; cp.write_text(c,encoding='utf-8'); proc=subprocess.run([compiler,'-std=c11',*cflags,str(cp),'-lm','-o',str(output)],capture_output=True,text=True)
+            # Successful compilers/linkers can still report important warnings.
+            if proc.stdout: print(proc.stdout,file=sys.stderr,end='')
+            if proc.stderr: print(proc.stderr,file=sys.stderr,end='')
             if proc.returncode!=0:
-                if proc.stdout: print(proc.stdout,file=sys.stderr,end='')
-                if proc.stderr: print(proc.stderr,file=sys.stderr,end='')
                 return proc.returncode or 1
         return 0
     except (EristaviError,OSError,ValueError) as e: print(e.format() if isinstance(e,EristaviError) else f'error: {e}',file=sys.stderr); return 1

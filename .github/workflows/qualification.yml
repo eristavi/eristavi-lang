@@ -6,7 +6,7 @@ on:
       profile:
         description: Qualification required by the completed batch
         type: choice
-        options: [full, owned-integration]
+        options: [full, owned-integration, owned-self-build]
         default: full
   pull_request:
     types: [labeled]
@@ -17,9 +17,11 @@ concurrency:
 
 jobs:
   bootstrap:
+    name: Bootstrap self-build (${{ matrix.os }}, ${{ matrix.cc }})
     if: >-
       (github.event_name == 'workflow_dispatch' && inputs.profile == 'full') ||
       github.event.label.name == 'qualification'
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -35,30 +37,86 @@ jobs:
       CC: ${{ matrix.cc }}
       CFLAGS: -O2
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
       - name: Install bootstrap toolchain
         run: python -m pip install -e .
-      - name: Verify native self-build and offline bundle
+      - name: Verify bootstrap self-build and offline bundle
         timeout-minutes: 45
-        run: python tools/build_offline.py --output "$RUNNER_TEMP/erist-offline"
+        run: |
+          set -o pipefail
+          python -u tools/build_offline.py --trace-phases --output "$RUNNER_TEMP/erist-offline" 2>&1 | tee "$RUNNER_TEMP/erist-offline-build.log"
+      - name: Preserve bootstrap qualification evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: bootstrap-${{ matrix.os }}-${{ matrix.cc }}-${{ github.run_attempt }}
+          retention-days: 14
+          path: |
+            ${{ runner.temp }}/erist-offline-build.log
+            ${{ runner.temp }}/erist-offline/*.json
+            ${{ runner.temp }}/erist-offline/evidence/
   owned:
+    name: Owned integration (no compiler self-build)
     if: >-
-      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_dispatch' && inputs.profile != 'owned-self-build') ||
       contains(fromJSON('["qualification", "owned-qualification"]'), github.event.label.name)
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     env:
       CC: clang
       CFLAGS: -O2
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
       - name: Install bootstrap toolchain
         run: python -m pip install -e .
       - name: Verify owned static build/startup integration
         timeout-minutes: 45
-        run: python tools/build_offline.py --runtime owned --skip-self-build --output "$RUNNER_TEMP/erist-owned"
+        run: |
+          set -o pipefail
+          python -u tools/build_offline.py --runtime owned --skip-self-build --trace-phases --output "$RUNNER_TEMP/erist-owned" 2>&1 | tee "$RUNNER_TEMP/erist-owned-build.log"
+      - name: Preserve owned integration evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: owned-integration-${{ github.run_attempt }}
+          retention-days: 14
+          path: |
+            ${{ runner.temp }}/erist-owned-build.log
+            ${{ runner.temp }}/erist-owned/*.json
+            ${{ runner.temp }}/erist-owned/evidence/
+  owned-self-build:
+    name: Owned compiler self-build and offline audit
+    if: github.event_name == 'workflow_dispatch' && inputs.profile == 'owned-self-build'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      CC: clang
+      CFLAGS: -O2
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install bootstrap toolchain
+        run: python -m pip install -e .
+      - name: Verify repeated owned compiler self-build
+        timeout-minutes: 45
+        run: |
+          set -o pipefail
+          python -u tools/build_offline.py --runtime owned --trace-phases --output "$RUNNER_TEMP/erist-owned-self" 2>&1 | tee "$RUNNER_TEMP/erist-owned-self-build.log"
+      - name: Preserve owned self-build evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: owned-self-build-${{ github.run_attempt }}
+          retention-days: 14
+          path: |
+            ${{ runner.temp }}/erist-owned-self-build.log
+            ${{ runner.temp }}/erist-owned-self/*.json
+            ${{ runner.temp }}/erist-owned-self/evidence/

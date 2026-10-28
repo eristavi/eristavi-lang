@@ -100,7 +100,9 @@ class X86_64PreciseRootGCLinuxBackend(X86_64GCLinuxBackend):
         return self._descriptor_label(type_name)
 
     def _descriptor_lines(self) -> list[str]:
-        lines = [".section .rodata", ".align 8"]
+        # Descriptor words contain absolute pointers. PIE loaders must relocate
+        # them in writable storage, then protect them through GNU_RELRO.
+        lines = ['.section .data.rel.ro,"aw",@progbits', ".align 8"]
         for type_name in sorted(self.descriptor_types):
             label = self._descriptor_label(type_name)
             lines.append(f"{label}:")

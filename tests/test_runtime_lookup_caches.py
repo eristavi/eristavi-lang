@@ -16,7 +16,7 @@ FINISH='''
     jmp erist_rt_exit
 '''
 @unittest.skipUnless(platform.system()=='Linux' and platform.machine().lower() in ('x86_64','amd64'),'owned Linux x86-64 caches')
-class RuntimeLookupCacheTests(unittest.TestCase):
+class RuntimeLookupCacheHarness:
  @classmethod
  def setUpClass(cls):
   if not all(shutil.which(t) for t in ('as','ld','nm','readelf')):raise unittest.SkipTest('native tools unavailable')
@@ -26,6 +26,7 @@ class RuntimeLookupCacheTests(unittest.TestCase):
  def probe(self,name,asm,runtime=None):
   v=lifetime.FreestandingTextLifetimeTests._link_run(self,self.directory,name,self.runtime if runtime is None else runtime,descriptors()+asm)
   self.assertEqual((v.returncode,v.stdout,v.stderr),(0,b'',b''))
+class RuntimeLookupCacheTests(RuntimeLookupCacheHarness,unittest.TestCase):
  def test_region_page_cache_reuse_validation_and_release_all(self):
   rt=self.runtime.replace('.Lfree_region_scan:\n','.Lfree_region_scan:\n    incq .Lcache_scans(%rip)\n',1)
   asm='''
