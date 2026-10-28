@@ -20,7 +20,7 @@ spec=importlib.util.spec_from_file_location('observable_builder',ROOT/'tools/bui
 builder=importlib.util.module_from_spec(spec);spec.loader.exec_module(builder)
 spec=importlib.util.spec_from_file_location('observable_audit',ROOT/'tools/verify_offline.py')
 audit=importlib.util.module_from_spec(spec);spec.loader.exec_module(audit)
-from build_events import BuildJournal
+from build_events import BuildJournal, stop_group
 
 class BuildObservabilityTests(unittest.TestCase):
     def test_success_warnings_are_live_and_generated_stdout_is_preserved(self):
@@ -79,8 +79,17 @@ class BuildObservabilityTests(unittest.TestCase):
                 if kind in ('command_end','stage_failed') and journal.stage_name=='native-B-to-C-assembly':
                     raise OSError('simulated evidence write failure')
                 return original_event(journal,kind,**fields)
+            stopped=[];original_wait=subprocess.Popen.wait
+            def stop_once(process):
+                if stopped:raise PermissionError('process group already terminating')
+                stopped.append(process.pid);stop_group(process)
+            def delayed_reap(process,timeout=None):
+                # macOS can expose EOF before wait(0) observes the killed child.
+                if timeout is not None and timeout<=0:
+                    raise subprocess.TimeoutExpired(process.args,timeout)
+                return original_wait(process,timeout=timeout)
             diagnostics=io.StringIO()
-            with patch.object(BuildJournal,'event',evidence_error),patch.object(builder,'_build',side_effect=failed_build),patch.dict(os.environ,{'GITHUB_STEP_SUMMARY':str(root/'summary')}),contextlib.redirect_stderr(diagnostics),contextlib.redirect_stdout(io.StringIO()):
+            with patch('build_events.stop_group',side_effect=stop_once),patch.object(subprocess.Popen,'wait',delayed_reap),patch.object(BuildJournal,'event',evidence_error),patch.object(builder,'_build',side_effect=failed_build),patch.dict(os.environ,{'GITHUB_STEP_SUMMARY':str(root/'summary')}),contextlib.redirect_stderr(diagnostics),contextlib.redirect_stdout(io.StringIO()):
                 with self.assertRaises(subprocess.TimeoutExpired):builder.build(root/'bundle',runtime_profile='owned')
             record=json.loads((root/'bundle/evidence/qualification.json').read_text())
             self.assertEqual((record['status'],record['stage'],record['repeatable']),('timeout','native-B-to-C-assembly',False))
@@ -90,6 +99,7 @@ class BuildObservabilityTests(unittest.TestCase):
             self.assertTrue(heartbeat.exists(),'grandchild did not start before timeout')
             size=heartbeat.stat().st_size;time.sleep(0.1);self.assertEqual(heartbeat.stat().st_size,size)
             self.assertIsNone(builder._ACTIVE_JOURNAL.get())
+            self.assertEqual(len(stopped),1)
             self.assertIn('simulated evidence write failure',diagnostics.getvalue())
 
     def test_offline_audit_owns_timeout_cleanup_and_preserves_primary_failure(self):

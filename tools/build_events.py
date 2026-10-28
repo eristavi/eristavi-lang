@@ -139,7 +139,12 @@ class BuildJournal:
             # Bound parsing memory for an unterminated diagnostic line; raw bytes
             # are still preserved in the command stderr log.
             pending=pending[-65536:]
-        process=None;timed_out=False;drain_deadline=None
+        process=None;timed_out=False;drain_deadline=None;group_stopped=False
+        def terminate_group():
+            nonlocal group_stopped
+            if not group_stopped:
+                stop_group(process)
+                group_stopped=True
         self.event('command_begin',command=self.number,args=args,stage=self.stage_name)
         save_command(True)
         try:
@@ -158,7 +163,7 @@ class BuildJournal:
                 while selector.get_map():
                     remaining=deadline-time.monotonic()
                     if remaining<=0 and not timed_out:
-                        timed_out=True;stop_group(process);drain_deadline=time.monotonic()+2
+                        timed_out=True;terminate_group();drain_deadline=time.monotonic()+2
                     if drain_deadline is not None and time.monotonic()>drain_deadline:
                         command["output_drain_truncated"]=True
                         break
@@ -184,7 +189,7 @@ class BuildJournal:
                 # deadline, rather than waiting indefinitely after EOF.
                 try:code=process.wait(timeout=max(0,deadline-time.monotonic()))
                 except subprocess.TimeoutExpired:
-                    timed_out=True;stop_group(process);code=process.wait()
+                    timed_out=True;terminate_group();code=process.wait()
                 command['returncode']=code
                 if timed_out:
                     command['status']='timeout'
@@ -199,7 +204,7 @@ class BuildJournal:
             raise
         finally:
             if process is not None and process.poll() is None:
-                stop_group(process);process.wait()
+                terminate_group();process.wait()
             def finish():
                 save_command(True)
                 self.event('command_end',command=self.number,status=command['status'],seconds=time.monotonic()-start)

@@ -22,6 +22,8 @@ duplicate coverage. A passing job was not evidence of owned B-to-C repeatability
   ordinary exceptions/timeouts. A host crash/job kill may leave `status: running`;
   that is incomplete evidence, never a pass. A timeout kills the command's process
   group and preserves captured data. Normal command timeout remains 900 seconds.
+  Group termination is idempotent: macOS may reject another signal while the
+  first shutdown is still being reaped. The timeout regression forces that race.
 - Offline negative cases require their intended exit codes and diagnostics. A
   crash or unrelated nonzero exit can no longer masquerade as controlled rejection.
   The offline audit also exercises phase tracing without Python/C compilers in PATH.
