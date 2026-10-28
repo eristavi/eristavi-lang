@@ -134,7 +134,7 @@ static void *eri_realloc_kind(void *p,size_t n,int kind){
 static void *eri_realloc(void *p,size_t n){return eri_realloc_kind(p,n,ERI_HEAP_OTHER);}
 static eri_text eri_text_from_bytes(const unsigned char *s,size_t n){ eri_text r={n,NULL}; if(n){r.data=(unsigned char*)eri_alloc_kind(n,ERI_HEAP_TEXT); memcpy(r.data,s,n);} return r; }
 static eri_text eri_text_from_cstr(const char *s){ return eri_text_from_bytes((const unsigned char*)s,strlen(s)); }
-static bool eri_text_eq(eri_text a,eri_text b){ return a.len==b.len && (!a.len || memcmp(a.data,b.data,a.len)==0); }
+static bool eri_text_eq(eri_text a,eri_text b){ if(!a.len || !b.len)return a.len==b.len; return a.len==b.len && memcmp(a.data,b.data,a.len)==0; }
 
 
 typedef struct eri_text_append_buffer { unsigned char *data; size_t used,capacity; struct eri_text_append_buffer *next; } eri_text_append_buffer;

@@ -84,6 +84,15 @@ propagation and generated error helpers. No fallback value or warning suppressio
 is added. The six checked-error regressions require `-Werror=return-type`;
 22 error/resource/text/diagnostic follow-up checks passed with that strict flag.
 
+The passing GCC job also exposed 23 `-Wnonnull` warnings when it specialized
+Text equality against empty storage. The existing short-circuit expression
+excluded a byte comparison at zero length; an explicit early return when either
+operand is empty now makes that condition clear to GCC. Both bootstrap Text
+implementations retain the same byte comparison for nonempty equal lengths.
+The real generator regression failed before the change with `-Werror=nonnull`
+and passes afterward. Six focused checks passed with both warning categories
+treated as errors, including empty/empty and empty/nonempty equality.
+
 ## Local validation and limits
 
 The initial complete local run executed 422 cases: 410 passed, nine skipped, and

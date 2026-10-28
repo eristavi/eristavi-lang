@@ -35,9 +35,10 @@ class BackendTextRuntimeTests(unittest.TestCase):
         p = self.compile_run(
             'let a be "A\\0"; let b be a + "B"; '
             'output(b == "A\\0B"); output(b != "A"); output(b);'
+            'output("" == ""); output(b == ""); output("" == b);'
         )
         self.assertEqual(p.returncode, 0)
-        self.assertEqual(p.stdout, b"true\ntrue\nA\x00B\n")
+        self.assertEqual(p.stdout, b"true\ntrue\nA\x00B\ntrue\nfalse\nfalse\n")
 
     def test_native_file_roundtrip_preserves_embedded_nul(self):
         with tempfile.TemporaryDirectory() as td:

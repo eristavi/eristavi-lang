@@ -1,10 +1,12 @@
 """Focused proof that free-list traversal/relink uses verifiable region provenance."""
 from pathlib import Path
+import os
 import platform
 import shutil
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from compiler.erist.cli import build_native
 
@@ -19,7 +21,8 @@ class VerifiedFreeListTests(unittest.TestCase):
             if not shutil.which(tool): self.skipTest(f'{tool} unavailable')
         with tempfile.TemporaryDirectory() as td:
             directory=Path(td); generator=directory/'generator'
-            self.assertEqual(build_native(ROOT/'src/verified_freelist_probe.eri',generator,ROOT/'src'),0)
+            with patch.dict(os.environ,{'CFLAGS':os.environ.get('CFLAGS','')+' -O2 -Werror=nonnull'}):
+                self.assertEqual(build_native(ROOT/'src/verified_freelist_probe.eri',generator,ROOT/'src'),0)
             generated=subprocess.run([str(generator)],capture_output=True,text=True,timeout=20)
             self.assertEqual((generated.returncode,generated.stderr),(0,''))
             source=generated.stdout

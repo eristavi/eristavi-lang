@@ -50,7 +50,7 @@ def _text_runtime() -> str:
         "static char *eri_text_add(const char *a,const char *b){ size_t na=strlen(a),nb=strlen(b); char *r=(char*)eri_alloc(na+nb+1); memcpy(r,a,na); memcpy(r+na,b,nb+1); return r; }",
         "static eri_text eri_text_from_bytes(const unsigned char *s,size_t n){ eri_text r={n,NULL}; if(n){r.data=(unsigned char*)eri_alloc(n); memcpy(r.data,s,n);} return r; }\n"
         "static eri_text eri_text_from_cstr(const char *s){ return eri_text_from_bytes((const unsigned char*)s,strlen(s)); }\n"
-        "static bool eri_text_eq(eri_text a,eri_text b){ return a.len==b.len && (!a.len || memcmp(a.data,b.data,a.len)==0); }\n"
+        "static bool eri_text_eq(eri_text a,eri_text b){ if(!a.len || !b.len)return a.len==b.len; return a.len==b.len && memcmp(a.data,b.data,a.len)==0; }\n"
         "static eri_text eri_text_add(eri_text a,eri_text b){ eri_text r={a.len+b.len,NULL}; if(r.len){r.data=(unsigned char*)eri_alloc(r.len); if(a.len)memcpy(r.data,a.data,a.len); if(b.len)memcpy(r.data+a.len,b.data,b.len);} return r; }\n"
         "static char *eri_text_to_c_path(eri_text t){ if(t.len && memchr(t.data,0,t.len))return NULL; char *r=(char*)eri_alloc(t.len+1); if(t.len)memcpy(r,t.data,t.len); r[t.len]='\\0'; return r; }\n"
         "static _Noreturn void eri_fault_text(eri_text t){ fputs(\"Eristavi runtime fault: \",stderr); if(t.len)fwrite(t.data,1,t.len,stderr); fputc('\\n',stderr); exit(1); }\n"
