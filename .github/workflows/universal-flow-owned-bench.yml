@@ -1,0 +1,112 @@
+name: Universal verifier flow index owned benchmark
+
+on:
+  push:
+    branches: [diagnostics/universal-flow-owned-bench-cade856]
+
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CC: clang
+      CFLAGS: -O2
+      PYTHONPATH: tests:.
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 10
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Verify diagnostic-only branch
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor cade8564239287a3c3fa3fece5b701dd3a1c223a HEAD
+          git diff --quiet cade8564239287a3c3fa3fece5b701dd3a1c223a -- src tests runtime compiler tools
+      - name: Install bootstrap toolchain
+        run: python -m pip install -e .
+      - name: Build one shared owned-runtime bundle
+        run: |
+          set -euo pipefail
+          python -u tools/build_offline.py --runtime owned --skip-self-build --trace-phases --command-timeout 300 --output "$RUNNER_TEMP/owned" > "$RUNNER_TEMP/owned-build.log" 2>&1
+      - name: Prepare identical benchmark roots
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/baseline" "$RUNNER_TEMP/candidate"
+          git archive 17a39a508728e42465add23c497189684d6318a9 src | tar -x -C "$RUNNER_TEMP/baseline"
+          cp -a src "$RUNNER_TEMP/candidate/src"
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          from universal_verifier_cases import benchmark_program
+          source = benchmark_program(width=64, chains=300, rounds=6)
+          root = Path(os.environ['RUNNER_TEMP'])
+          (root/'baseline/src/flow_bench.eri').write_text(source, encoding='utf-8')
+          (root/'candidate/src/flow_bench.eri').write_text(source, encoding='utf-8')
+          PY
+          cmp "$RUNNER_TEMP/baseline/src/flow_bench.eri" "$RUNNER_TEMP/candidate/src/flow_bench.eri"
+      - name: Build both benchmark executables with the same compiler and owned runtime
+        run: |
+          set -euo pipefail
+          timeout --signal=TERM --kill-after=10s 180s "$RUNNER_TEMP/owned/bin/erist" build "$RUNNER_TEMP/baseline/src/flow_bench.eri" --source-root "$RUNNER_TEMP/baseline/src" -o "$RUNNER_TEMP/baseline-bench"
+          timeout --signal=TERM --kill-after=10s 180s "$RUNNER_TEMP/owned/bin/erist" build "$RUNNER_TEMP/candidate/src/flow_bench.eri" --source-root "$RUNNER_TEMP/candidate/src" -o "$RUNNER_TEMP/candidate-bench"
+          file "$RUNNER_TEMP/baseline-bench" "$RUNNER_TEMP/candidate-bench" > "$RUNNER_TEMP/binaries.txt"
+      - name: Run serial ABBA benchmark
+        run: |
+          set -euo pipefail
+          run_one() {
+            label="$1"; exe="$2"
+            /usr/bin/time -v -o "$RUNNER_TEMP/$label.time.txt" timeout --signal=TERM --kill-after=10s 120s "$exe" > "$RUNNER_TEMP/$label.out" 2> "$RUNNER_TEMP/$label.err"
+            test ! -s "$RUNNER_TEMP/$label.err"
+          }
+          run_one A1 "$RUNNER_TEMP/baseline-bench"
+          run_one B1 "$RUNNER_TEMP/candidate-bench"
+          run_one B2 "$RUNNER_TEMP/candidate-bench"
+          run_one A2 "$RUNNER_TEMP/baseline-bench"
+          cmp "$RUNNER_TEMP/A1.out" "$RUNNER_TEMP/B1.out"
+          cmp "$RUNNER_TEMP/A1.out" "$RUNNER_TEMP/B2.out"
+          cmp "$RUNNER_TEMP/A1.out" "$RUNNER_TEMP/A2.out"
+          test "$(cat "$RUNNER_TEMP/A1.out")" = "6"
+          sha256sum "$RUNNER_TEMP/A1.out" "$RUNNER_TEMP/B1.out" "$RUNNER_TEMP/B2.out" "$RUNNER_TEMP/A2.out" > "$RUNNER_TEMP/output.sha256"
+      - name: Summarize paired evidence
+        run: |
+          python - <<'PY'
+          import os, re, statistics
+          from pathlib import Path
+          root=Path(os.environ['RUNNER_TEMP'])
+          rows=[]
+          for label in ('A1','B1','B2','A2'):
+              text=(root/f'{label}.time.txt').read_text()
+              user=float(re.search(r'User time \(seconds\): ([0-9.]+)',text).group(1))
+              rss=int(re.search(r'Maximum resident set size \(kbytes\): ([0-9]+)',text).group(1))
+              wall=re.search(r'Elapsed \(wall clock\) time .*: ([0-9:.]+)',text).group(1)
+              parts=[float(x) for x in wall.split(':')]
+              seconds=parts[-1] + (parts[-2]*60 if len(parts)>1 else 0) + (parts[-3]*3600 if len(parts)>2 else 0)
+              rows.append((label,seconds,user,rss))
+          for row in rows: print('%s wall=%.3f user=%.3f rss_kib=%d'%row)
+          a=[r for r in rows if r[0].startswith('A')]
+          b=[r for r in rows if r[0].startswith('B')]
+          print('baseline_wall_median=%.3f'%statistics.median(r[1] for r in a))
+          print('candidate_wall_median=%.3f'%statistics.median(r[1] for r in b))
+          print('baseline_user_median=%.3f'%statistics.median(r[2] for r in a))
+          print('candidate_user_median=%.3f'%statistics.median(r[2] for r in b))
+          PY
+      - name: Preserve benchmark evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: universal-flow-owned-bench-${{ github.run_attempt }}
+          retention-days: 14
+          path: |
+            ${{ runner.temp }}/owned-build.log
+            ${{ runner.temp }}/binaries.txt
+            ${{ runner.temp }}/A1.time.txt
+            ${{ runner.temp }}/B1.time.txt
+            ${{ runner.temp }}/B2.time.txt
+            ${{ runner.temp }}/A2.time.txt
+            ${{ runner.temp }}/A1.out
+            ${{ runner.temp }}/B1.out
+            ${{ runner.temp }}/B2.out
+            ${{ runner.temp }}/A2.out
+            ${{ runner.temp }}/output.sha256
