@@ -12,6 +12,7 @@ from pathlib import Path
 from compiler.erist.cli import build_native
 from compiler.erist.project import compile_entry
 from compiler.erist.runtime_ext import Interpreter
+from typed_ir_verifier_cases import local_regression_program
 
 ROOT=Path(__file__).resolve().parents[1]
 CASES=json.loads((ROOT/'tests/fixtures/scalar_ir_cases.json').read_text())
@@ -244,6 +245,24 @@ function repaired() {
                 executed=subprocess.run([str(native)],capture_output=True,text=True,timeout=20)
                 self.assertEqual((executed.returncode,executed.stdout,executed.stderr),(0,result.stdout,''))
 
+
+    def test_local_verifier_preserves_scope_state_and_exact_diagnostics(self):
+        source,expected=local_regression_program()
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);(root/'compiler').symlink_to(ROOT/'src/compiler',target_is_directory=True)
+            entry=root/'locals.eri';entry.write_text(source);binary=root/'locals'
+            self.assertEqual(build_native(entry,binary,root),0)
+            result=subprocess.run([binary],capture_output=True,text=True,timeout=30)
+            self.assertEqual((result.returncode,result.stdout,result.stderr),(0,expected,''))
+            if self.native:
+                emitted=self.invoke(entry,root,'emit-asm')
+                self.assertEqual((emitted.returncode,emitted.stderr),(0,''))
+                assembly=root/'locals.s';assembly.write_text(emitted.stdout)
+                native=root/'locals-native'
+                linked=subprocess.run([*shlex.split(os.environ.get('CC','cc')),str(assembly),str(self.runtime),'-lm','-o',str(native)],capture_output=True,text=True)
+                self.assertEqual((linked.returncode,linked.stderr),(0,''))
+                executed=subprocess.run([native],capture_output=True,text=True,timeout=30)
+                self.assertEqual((executed.returncode,executed.stdout,executed.stderr),(0,expected,''))
 
     def test_specializations_are_concrete_cached_and_deterministic(self):
         source=('function echo(value) { let copied be value; if true { let branch be value; } else { let other be value; } return copied; } '
