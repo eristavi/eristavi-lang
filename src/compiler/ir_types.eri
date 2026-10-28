@@ -4,9 +4,9 @@ import compiler.semantic_types as t;
 import compiler.semantic;
 
 // Compiler-private lookup state. Program.types remains the canonical public table.
-public type TypeCacheEntry { kind Int; name Text; inner Int; index Int; next maybe identity TypeCacheEntry; }
+public type TypeCacheEntry { kind Int; name Text; inner Int; index Int; value identity ir.Type; next maybe identity TypeCacheEntry; indexNext maybe identity TypeCacheEntry; }
 public type TypeBucket { number Int; entries maybe identity TypeCacheEntry; left maybe identity TypeBucket; right maybe identity TypeBucket; }
-public type Registry { root identity TypeBucket; nextIndex Int; }
+public type Registry { root identity TypeBucket; indexRoot identity TypeBucket; nextIndex Int; }
 
 function bucketTree(first Int, last Int) returns maybe identity TypeBucket {
     if first > last { return none; }
@@ -22,6 +22,23 @@ function typeBucket(indexer identity Registry, number Int) returns identity Type
     }
     return indexer.root;
 }
+function indexBucket(indexer identity Registry, number Int) returns identity TypeBucket {
+    let cursor maybe identity TypeBucket be indexer.indexRoot;
+    while cursor != none {
+        let current be cursor;
+        if current.number == number { return current; }
+        if number < current.number { cursor=current.left; } else { cursor=current.right; }
+    }
+    return indexer.indexRoot;
+}
+function indexHash(index Int) returns Int {
+    let value be index%257; if value < 0 { value=value+257; } return value;
+}
+function cachedIndex(indexer identity Registry, index Int) returns maybe identity ir.Type {
+    let slot be indexBucket(indexer,indexHash(index)); let cursor be slot.entries;
+    while cursor != none { if cursor.index == index { return cursor.value; } cursor=cursor.indexNext; }
+    return none;
+}
 function typeHash(kind Int, name Text, inner Int) returns Int {
     let value be kind%257; if value < 0 { value=value+257; }
     let part be inner%257; if part < 0 { part=part+257; }
@@ -35,16 +52,19 @@ function cached(indexer identity Registry, kind Int, name Text, inner Int) retur
     while cursor != none { if cursor.kind == kind and cursor.name == name and cursor.inner == inner { return cursor.index; } cursor=cursor.next; }
     return -1;
 }
-function remember(indexer identity Registry, kind Int, name Text, inner Int, index Int) {
+function remember(indexer identity Registry, kind Int, name Text, inner Int, index Int, value identity ir.Type) {
     let slot be typeBucket(indexer,typeHash(kind,name,inner));
-    slot.entries=identity TypeCacheEntry { kind=kind; name=name; inner=inner; index=index; next=slot.entries; };
+    let entry be identity TypeCacheEntry { kind=kind; name=name; inner=inner; index=index; value=value; next=slot.entries; indexNext=none; };
+    slot.entries=entry;
+    let byIndex be indexBucket(indexer,indexHash(index)); entry.indexNext=byIndex.entries; byIndex.entries=entry;
 }
 function seed(indexer identity Registry, value maybe identity ir.Type) {
-    if value != none { seed(indexer,value.next); remember(indexer,value.kind,value.name,value.inner,value.index); indexer.nextIndex=indexer.nextIndex+1; }
+    if value != none { seed(indexer,value.next); remember(indexer,value.kind,value.name,value.inner,value.index,value); indexer.nextIndex=indexer.nextIndex+1; }
 }
 public function registry(program identity ir.Program) returns identity Registry {
     let result be identity Registry {
         root=identity TypeBucket { number=128; entries=none; left=bucketTree(0,127); right=bucketTree(129,256); };
+        indexRoot=identity TypeBucket { number=128; entries=none; left=bucketTree(0,127); right=bucketTree(129,256); };
         nextIndex=6;
     };
     seed(result,program.types); return result;
@@ -64,7 +84,7 @@ function registerWith(indexer maybe identity Registry, program identity ir.Progr
         while cursor != none { if cursor.kind == kind and cursor.name == actual.name and cursor.inner == inner { return cursor.index; } index=index+1; cursor=cursor.next; }
     }
     let item be identity ir.Type { index=index; kind=kind; name=actual.name; inner=inner; fields=none; checked=false; next=program.types; }; program.types=item;
-    if indexer != none { remember(indexer,kind,actual.name,inner,index); }
+    if indexer != none { remember(indexer,kind,actual.name,inner,index,item); }
     if kind == 6 {
         if actual.name == "std.files.FileError" { item.checked=true;
             item.fields=identity ir.Field { index=0; name="message"; valueType=4; immutable=false; next=identity ir.Field { index=1; name="path"; valueType=4; immutable=false; next=none; }; }; return index;
@@ -90,6 +110,26 @@ public function register(program identity ir.Program, owner identity m.Module, v
 public function registerIndexed(indexer identity Registry, program identity ir.Program, owner identity m.Module, value identity m.Type, location identity m.Location) returns Int fails m.SemanticError {
     return try registerWith(indexer,program,owner,value,location);
 }
+public function typeAtIndexed(indexer identity Registry, program identity ir.Program, index Int) returns maybe identity ir.Type {
+    let value be cachedIndex(indexer,index); if value != none { return value; } return ir.typeAt(program,index);
+}
+public function kindIndexed(indexer identity Registry, program identity ir.Program, index Int) returns Int {
+    if index >= 1 and index <= 5 { return index; }
+    let value be typeAtIndexed(indexer,program,index); if value != none { return value.kind; } return -1;
+}
+public function innerIndexed(indexer identity Registry, program identity ir.Program, index Int) returns Int {
+    let value be typeAtIndexed(indexer,program,index); if value != none { return value.inner; } return -1;
+}
+public function semanticTypeIndexed(indexer identity Registry, program identity ir.Program, index Int) returns identity m.Type {
+    if index >= 1 and index <= 5 { return m.makeType(index,""); }
+    let item be typeAtIndexed(indexer,program,index);
+    if item != none {
+        let kind be item.kind;
+        if kind == 7 or kind == 8 or kind == 9 { return m.wrap(kind,semanticTypeIndexed(indexer,program,item.inner)); }
+        return m.makeType(kind,item.name);
+    }
+    return m.makeType(5,"");
+}
 public function semanticType(program identity ir.Program, index Int) returns identity m.Type {
     let kind be ir.kind(program,index);
     if index >= 1 and index <= 5 { return m.makeType(index,""); }
@@ -106,6 +146,12 @@ public function failures(program identity ir.Program, owner identity m.Module, n
 }
 public function failuresIndexed(indexer identity Registry, program identity ir.Program, owner identity m.Module, names maybe identity m.Name, location identity m.Location) returns maybe identity ir.Failure fails m.SemanticError {
     return try failureSet(indexer,program,owner,names,location);
+}
+public function fieldIndexed(indexer identity Registry, program identity ir.Program, valueType Int, name Text, location identity m.Location) returns identity ir.Field fails m.SemanticError {
+    let target be valueType; if kindIndexed(indexer,program,target) == 9 { target=innerIndexed(indexer,program,target); }
+    let item be typeAtIndexed(indexer,program,target);
+    if item != none { let cursor be item.fields; while cursor != none { if cursor.name == name { return cursor; } cursor=cursor.next; } }
+    try m.reject(location,"lower","missing nominal field: "+name); return identity ir.Field { index=-1; name=name; valueType=5; immutable=false; next=none; };
 }
 public function field(program identity ir.Program, valueType Int, name Text, location identity m.Location) returns identity ir.Field fails m.SemanticError {
     let target be valueType; if ir.kind(program,target) == 9 { target=ir.inner(program,target); }
