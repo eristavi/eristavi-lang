@@ -114,7 +114,7 @@ static bool {h}_eq({h} a,{h} b){{ if(a.count!=b.count)return false; for(size_t i
         checks=[self._eq_component(f.type_name,f'a.{field_name(f.name)}',f'b.{field_name(f.name)}') for f in s.fields]
         return f'static bool {eq_helper(s.name)}({ctype(s.name)} a, {ctype(s.name)} b) {{ return {" && ".join(checks) if checks else "true"}; }}\n'
     def _error_raise_helper(self,s):
-        ct=ctype(s.name); return f'static void {fail_helper(s.name)}({ct} v) {{ {ct} *p=({ct}*)eri_alloc(sizeof({ct})); *p=v; eri_raise({c_string(s.name)}, p, v.{field_name("message")}); }}\n'
+        ct=ctype(s.name); return f'static _Noreturn void {fail_helper(s.name)}({ct} v) {{ {ct} *p=({ct}*)eri_alloc(sizeof({ct})); *p=v; eri_raise({c_string(s.name)}, p, v.{field_name("message")}); }}\n'
     def _eq_component(self,t,a,b):
         if t.startswith('maybe '): return f'{maybe_eq(t)}({a}, {b})'
         if t.startswith('identity '): return f'({a} == {b})'
@@ -348,20 +348,20 @@ typedef struct { const char *f_message; } eri_error_view;
 static eri_handler_frame *eri_handler_top = NULL;
 static eri_failure_value eri_failure = {NULL,NULL,NULL,NULL};
 
-static void eri_fault(const char *m) { fprintf(stderr, "Eristavi runtime fault: %s\n", m); exit(1); }
+static _Noreturn void eri_fault(const char *m) { fprintf(stderr, "Eristavi runtime fault: %s\n", m); exit(1); }
 static void *eri_alloc(size_t n){ void *p=malloc(n?n:1); if(!p)eri_fault("out of memory"); return p; }
 static void *eri_realloc(void *p,size_t n){ void *q=realloc(p,n?n:1); if(!q)eri_fault("out of memory"); return q; }
 static char *eri_text_dup(const char *s){ size_t n=strlen(s); char *r=(char*)eri_alloc(n+1); memcpy(r,s,n+1); return r; }
 static void eri_attach_secondary(eri_failure_value *primary, eri_failure_value secondary){ eri_secondary_failure *n=(eri_secondary_failure*)eri_alloc(sizeof(*n)); n->type=secondary.type; n->payload=secondary.payload; n->message=secondary.message; n->next=NULL; eri_secondary_failure **p=&primary->secondary; while(*p)p=&(*p)->next; *p=n; }
-static void eri_raise(const char *type, void *payload, const char *message){ eri_failure=(eri_failure_value){type,payload,message,NULL}; if(!eri_handler_top)eri_fault(message?message:"unhandled checked failure"); longjmp(eri_handler_top->env,1); }
-static void eri_propagate_saved(eri_failure_value f){ eri_failure=f; if(!eri_handler_top)eri_fault(f.message?f.message:"unhandled checked failure"); longjmp(eri_handler_top->env,1); }
+static _Noreturn void eri_raise(const char *type, void *payload, const char *message){ eri_failure=(eri_failure_value){type,payload,message,NULL}; if(!eri_handler_top)eri_fault(message?message:"unhandled checked failure"); longjmp(eri_handler_top->env,1); }
+static _Noreturn void eri_propagate_saved(eri_failure_value f){ eri_failure=f; if(!eri_handler_top)eri_fault(f.message?f.message:"unhandled checked failure"); longjmp(eri_handler_top->env,1); }
 static char *eri_text_add(const char *a,const char *b){ size_t na=strlen(a),nb=strlen(b); char *r=(char*)eri_alloc(na+nb+1); memcpy(r,a,na); memcpy(r+na,b,nb+1); return r; }
 
 typedef struct { const char *f_message; const char *f_path; } eri_file_error;
 typedef struct { const char *path; FILE *handle; bool closed; } eri_file;
 static eri_failure_value eri_make_file_failure(const char *message,const char *path){ eri_file_error *e=(eri_file_error*)eri_alloc(sizeof(*e)); e->f_message=eri_text_dup(message?message:"file error"); e->f_path=eri_text_dup(path?path:""); return (eri_failure_value){"std.files.FileError",e,e->f_message,NULL}; }
-static void eri_raise_file_failure(const char *message,const char *path){ eri_failure_value f=eri_make_file_failure(message,path); eri_raise(f.type,f.payload,f.message); }
-static void eri_fail_std_u002e_files_u002e_FileError(eri_file_error v){ eri_file_error *p=(eri_file_error*)eri_alloc(sizeof(*p)); *p=v; eri_raise("std.files.FileError",p,v.f_message); }
+static _Noreturn void eri_raise_file_failure(const char *message,const char *path){ eri_failure_value f=eri_make_file_failure(message,path); eri_raise(f.type,f.payload,f.message); }
+static _Noreturn void eri_fail_std_u002e_files_u002e_FileError(eri_file_error v){ eri_file_error *p=(eri_file_error*)eri_alloc(sizeof(*p)); *p=v; eri_raise("std.files.FileError",p,v.f_message); }
 static eri_file eri_file_open(const char *path){ FILE *h=fopen(path,"r+"); if(!h)eri_raise_file_failure(strerror(errno),path); return (eri_file){path,h,false}; }
 static const char *eri_file_read_text(eri_file *f){ if(!f||f->closed||!f->handle)eri_fault("file resource is closed"); if(fseek(f->handle,0,SEEK_END)!=0)eri_raise_file_failure(strerror(errno),f->path); long n=ftell(f->handle); if(n<0)eri_raise_file_failure(strerror(errno),f->path); rewind(f->handle); char *buf=(char*)eri_alloc((size_t)n+1); size_t got=fread(buf,1,(size_t)n,f->handle); if(got<(size_t)n&&ferror(f->handle))eri_raise_file_failure(strerror(errno),f->path); buf[got]='\0'; return buf; }
 static void eri_file_write_text(eri_file *f,const char *text){ if(!f||f->closed||!f->handle)eri_fault("file resource is closed"); FILE *h=freopen(f->path,"w+",f->handle); if(!h){f->handle=NULL; f->closed=true; eri_raise_file_failure(strerror(errno),f->path);} f->handle=h; size_t n=strlen(text); if(fwrite(text,1,n,h)!=n)eri_raise_file_failure(strerror(errno),f->path); if(fflush(h)!=0)eri_raise_file_failure(strerror(errno),f->path); rewind(h); }

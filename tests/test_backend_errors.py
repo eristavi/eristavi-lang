@@ -1,6 +1,7 @@
 from __future__ import annotations
-import subprocess, tempfile, unittest
+import os, subprocess, tempfile, unittest
 from pathlib import Path
+from unittest.mock import patch
 from compiler.erist.cli import build_native
 
 class BackendErrorTests(unittest.TestCase):
@@ -8,7 +9,10 @@ class BackendErrorTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td); src=root/'app.eri'; exe=root/'app'
             src.write_text(source,encoding='utf-8')
-            self.assertEqual(build_native(src,exe,root),0)
+            # Checked failure helpers never return to their C caller. Enforce
+            # that contract rather than accepting successful warning builds.
+            with patch.dict(os.environ,{'CFLAGS':os.environ.get('CFLAGS','')+' -Werror=return-type'}):
+                self.assertEqual(build_native(src,exe,root),0)
             return subprocess.run([str(exe)],capture_output=True,text=True)
 
     def test_native_catch_all_handler(self):

@@ -72,6 +72,16 @@ with `-z text` (text relocations forbidden), checks that `TEXTREL` is absent and
 RELRO storage is present. The 31-case direct-backend follow-up passed without the
 previous warnings. This does not change the owned runtime's public value ABI.
 
+## Newly exposed C control-flow warnings
+
+The first passing ARM64 CI log exposed `-Wreturn-type` warnings in generated C
+for checked failures and resource handlers. Those paths terminate through
+`longjmp` or process exit, but the C helper declarations did not describe that
+contract. The bootstrap emitter now uses C11 `_Noreturn` for its fault, raise,
+propagation and generated error helpers. No fallback value or warning suppression
+is added. The six checked-error regressions require `-Werror=return-type`;
+22 error/resource/text/diagnostic follow-up checks passed with that strict flag.
+
 ## Local validation and limits
 
 The initial complete local run executed 422 cases: 410 passed, nine skipped, and
@@ -89,8 +99,8 @@ and newline filenames. A real two-second timeout probe using a freshly compiled
 frontend retained `generate-owned-runtime` plus the active `universal-optimize`
 phase, raw output and `status: timeout`, with an unchanged input snapshot. This
 intentional timeout is diagnostic validation, not a compiler self-build attempt.
-The final suite discovers 424 cases after adding the strict PIE and audit-cleanup regressions and
-removing duplicate inherited executions. Normal CI and full bootstrap/owned
+The final suite discovers 424 cases after adding the strict PIE and audit-cleanup
+regressions and removing duplicate inherited executions. Normal CI and full bootstrap/owned
 integration qualification remain required on the final revision.
 
 ## Remaining limits
