@@ -76,7 +76,7 @@ class BuildObservabilityTests(unittest.TestCase):
                     builder.run([sys.executable,'-c',parent],timeout=2,stdout_path=partial)
             original_event=BuildJournal.event
             def evidence_error(journal,kind,**fields):
-                if kind=='command_end' and journal.stage_name=='native-B-to-C-assembly':
+                if kind in ('command_end','stage_failed') and journal.stage_name=='native-B-to-C-assembly':
                     raise OSError('simulated evidence write failure')
                 return original_event(journal,kind,**fields)
             diagnostics=io.StringIO()
@@ -91,6 +91,33 @@ class BuildObservabilityTests(unittest.TestCase):
             size=heartbeat.stat().st_size;time.sleep(0.1);self.assertEqual(heartbeat.stat().st_size,size)
             self.assertIsNone(builder._ACTIVE_JOURNAL.get())
             self.assertIn('simulated evidence write failure',diagnostics.getvalue())
+
+    def test_offline_audit_owns_timeout_cleanup_and_preserves_primary_failure(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);heartbeat=root/'heartbeat'
+            child=('from pathlib import Path; import time\n'
+                   f'p=Path({str(heartbeat)!r})\n'
+                   'while True:\n with p.open("a") as f:f.write(".")\n time.sleep(0.02)\n')
+            parent=('import subprocess,sys,time\n'
+                    f'subprocess.Popen([sys.executable,"-c",{child!r}])\n'
+                    'time.sleep(60)\n')
+            def running_audit(bundle,journal):
+                with journal.stage('execute-application'):
+                    journal.run([sys.executable,'-c',parent])
+            with patch.object(audit,'_verify',side_effect=running_audit),contextlib.redirect_stdout(io.StringIO()),contextlib.redirect_stderr(io.StringIO()):
+                with self.assertRaises(subprocess.TimeoutExpired):audit.verify(root/'bundle',command_timeout=2)
+            record=json.loads((root/'bundle/evidence/offline-audit/qualification.json').read_text())
+            self.assertEqual((record['status'],record['stage']),('timeout','execute-application'))
+            self.assertTrue(heartbeat.exists(),'audit grandchild did not start before timeout')
+            size=heartbeat.stat().st_size;time.sleep(0.1);self.assertEqual(heartbeat.stat().st_size,size)
+            original_save=BuildJournal.save
+            def failed_evidence(journal):
+                if journal.state['status']=='failed':raise OSError('audit evidence unavailable')
+                return original_save(journal)
+            diagnostics=io.StringIO()
+            with patch.object(audit,'_verify',side_effect=RuntimeError('primary audit failure')),patch.object(BuildJournal,'save',failed_evidence),contextlib.redirect_stderr(diagnostics):
+                with self.assertRaisesRegex(RuntimeError,'primary audit failure'):audit.verify(root/'failed-bundle')
+            self.assertIn('audit evidence unavailable',diagnostics.getvalue())
 
     def test_negative_audit_rejects_crash_or_unrelated_failure(self):
         with contextlib.redirect_stderr(io.StringIO()):

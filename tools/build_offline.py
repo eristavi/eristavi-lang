@@ -24,6 +24,7 @@ import time
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(Path(__file__).resolve().parent))
 from build_events import BuildJournal, write_json, record_finally
+from verify_offline import verify as verify_offline
 
 _ACTIVE_JOURNAL=ContextVar('erist_build_journal',default=None)
 OFFLINE_HEAP_GC_INTERVAL=65536
@@ -342,8 +343,10 @@ def _build(destination,compiler,self_build,runtime_profile,trace_phases,journal,
         runtime_note=('Owned Linux x86-64 runtime: compiler and applications are static ELF executables without C runtime, libc, CRT objects or a dynamic loader. Bootstrap creation still uses Python/C; packaged GNU tools and shell utilities retain host dependencies.\n' if runtime_profile=='owned' else 'The runtime remains a prebuilt C bootstrap artifact; a compatible host dynamic loader is required.\n')
         (destination/'README.txt').write_text('Eristavi offline compiler for this Linux host.\nRun bin/erist --help. Normal builds use the bundled assembler, linker and native runtime, with no Python or C compiler.\n'+runtime_note+'POSIX shell and ordinary shell utilities remain prerequisites. This is not a cross-platform production release.\nSee inventory.json, licenses/ and self-build.json for provenance and repeatability evidence.\n')
     with journal.stage('offline-audit'):
-        audit=run([sys.executable,ROOT/'tools/verify_offline.py',destination],cwd=ROOT)
-        print(audit.stdout,end='',flush=True)
+        # Keep the audit in this process: its journal owns each subprocess group
+        # and deadline. Killing an outer audit subprocess could orphan a compiler
+        # that the nested journal had launched in a separate session.
+        verify_offline(destination,command_timeout=min(180,journal.timeout))
     print(destination,flush=True)
     return destination
 

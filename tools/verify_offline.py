@@ -7,28 +7,31 @@ import json
 import os
 from pathlib import Path
 import shutil
+import subprocess
 import sys
 import tempfile
 
 sys.path.insert(0,str(Path(__file__).resolve().parent))
-from build_events import BuildJournal
+from build_events import BuildJournal, record_finally
 
 def require_expected_failure(result, exit_code, diagnostic):
     if result.returncode!=exit_code or diagnostic not in result.stderr:
         raise RuntimeError(f'expected controlled rejection (exit {exit_code}, {diagnostic!r}); got {result.returncode}: {result.stderr}')
 
-def verify(bundle):
+def verify(bundle, *, command_timeout=180):
     bundle=Path(bundle).resolve()
-    journal=BuildJournal(bundle/'evidence'/'offline-audit')
+    if command_timeout<=0:raise ValueError('command timeout must be positive')
+    journal=BuildJournal(bundle/'evidence'/'offline-audit',timeout=command_timeout)
     try:
         result=_verify(bundle,journal)
         journal.state.update(status='success',**result)
         return result
     except BaseException as error:
-        journal.state.update(status='failed',error=str(error),error_type=type(error).__name__)
+        status='timeout' if isinstance(error,subprocess.TimeoutExpired) else ('interrupted' if isinstance(error,KeyboardInterrupt) else 'failed')
+        journal.state.update(status=status,error=str(error),error_type=type(error).__name__)
         raise
     finally:
-        journal.save()
+        record_finally(journal.save)
 
 def _verify(bundle,journal):
     bundle=bundle.resolve();compiler=bundle/'bin/erist'
@@ -71,7 +74,7 @@ run();
 '''.replace('$ROOT',str(project)),encoding='utf-8')
         output=project/'application'
         def invoke(*args):
-            return journal.run([compiler,*args],env=environment,cwd=root,timeout=180,check=False,echo_stdout=True)
+            return journal.run([compiler,*args],env=environment,cwd=root,check=False,echo_stdout=True)
         with journal.stage('check-application'):
             checked=invoke('check',source)
             if checked.returncode: raise RuntimeError(checked.stderr)
@@ -91,7 +94,7 @@ run();
             if built.returncode: raise RuntimeError(built.stderr)
         expected='6\n2\n42\noffline\nhandled\n'
         with journal.stage('execute-application'):
-            run=journal.run([output],env=environment,timeout=30,check=False)
+            run=journal.run([output],env=environment,timeout=min(30,journal.timeout),check=False)
             if (run.returncode,run.stdout,run.stderr)!=(0,expected,''):
                 raise RuntimeError(f'offline program mismatch: {run}')
         before=hashlib.sha256(output.read_bytes()).hexdigest()

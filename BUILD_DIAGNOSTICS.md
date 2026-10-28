@@ -47,6 +47,9 @@ only after a successful emission command; `.partial.s` and raw stdout may be
 incomplete. Presence of an output file alone proves nothing.
 
 The nested `evidence/offline-audit` journal includes expected-negative stages.
+The audit runs in the builder process so each timed command owns and cleans up
+its subprocess group directly. Audit commands honor a shorter requested build
+timeout; cleanup or evidence-write errors preserve the original failure.
 Those command records intentionally show failed commands, while the audit only
 succeeds after checking the exact controlled failure and output preservation.
 `self-build.json` records compiler reproducibility separately from the overall
@@ -86,7 +89,7 @@ and newline filenames. A real two-second timeout probe using a freshly compiled
 frontend retained `generate-owned-runtime` plus the active `universal-optimize`
 phase, raw output and `status: timeout`, with an unchanged input snapshot. This
 intentional timeout is diagnostic validation, not a compiler self-build attempt.
-The final suite discovers 423 cases after adding the strict PIE regression and
+The final suite discovers 424 cases after adding the strict PIE and audit-cleanup regressions and
 removing duplicate inherited executions. Normal CI and full bootstrap/owned
 integration qualification remain required on the final revision.
 

@@ -71,7 +71,7 @@ class BuildJournal:
         try:
             yield
         except BaseException:
-            self.event('stage_failed',stage=name,seconds=time.monotonic()-start)
+            record_finally(lambda:self.event('stage_failed',stage=name,seconds=time.monotonic()-start))
             raise
         else:
             seconds=time.monotonic()-start
