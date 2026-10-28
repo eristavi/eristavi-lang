@@ -55,8 +55,48 @@ dereferences arbitrary keys. Each pass rebuilds and releases its scratch;
 reservation failure uses the original linear membership search. Unbound scopes
 continue to suppress pruning. See `CI_QUALIFICATION.md` for batch validation.
 
-Object pointers use a nonowning 4096-bucket hash index with full-address collision
+Object pointers use a nonowning hash index with full-address collision
 checks. The registry owns the allocations. Sweep rebuilds the index from survivors.
+
+The initial registry has 8,192 static buckets. Growth is attempted at sweep when
+the live graph count exceeds twice the current bucket count, including the first
+growth above 16,384 objects. The previous initial trigger waited until more than
+65,536 objects; the compiler-module accounting in issue #51 measured about 37,000
+objects and 4.827 chain comparisons per lookup without reaching that trigger.
+Later power-of-two growth, the existing capacity limit and exact-key checks are
+unchanged. Failed allocation retains the valid current table and sweep rebuilds
+its chains normally; it does not publish a partial table. An empty heap releases
+dynamic buckets and resets the initial static table. Collection scheduling,
+object layout, root validation and the public value ABI are unchanged.
+
+The initial-load regression checks the exact 16,384/16,385 boundary, forces the
+first growth allocation to fail, validates every retained key plus adjacent
+invalid addresses, retries successfully without a new object allocation, then
+checks reclamation and reuse. Existing larger growth and failed-growth probes
+remain enabled on supported Linux x86-64 runners.
+
+A bounded comparison reused qualified #50 compiler assembly, changing only the
+linked runtime threshold (two bytes in the resulting executable). Both compilers
+processed the same frozen `compiler/typed_ir.eri` source-root snapshot from
+`bca8c97f9080b77efc796e23eebd1d10cfe35c55`, with identical paths, flags and
+environment and a 90-second command cap. The accepted serial pair measured
+15.844s before and 12.027s after, with peak child RSS 18,380/18,460 KiB. Assembly
+was identical, SHA-256
+`172769263e830e6bb555926612972f8b807b8a6f9261e0ca88087165f135cfb7`.
+This single pair is not a general speedup claim; an earlier baseline capture was
+excluded after its raw log failed validation. The accepted pair checked complete
+phase records directly in memory before preserving final logs.
+
+Separate diagnostic counters measured the same 7,194,218 optimizer-phase registry
+lookups using 34,724,544 comparisons before and 11,103,820 after (4.827 to 1.543
+per lookup, about 68% less chain work). The candidate used 32,768 buckets, adding
+a 256-KiB dynamic table while the static table remains reserved. Both diagnostic
+runs recorded exactly 153 collections, 22,584 graph allocations, 22,698 reclaimed
+objects, 5,660,946 sorted index entries and 3,081,514 safe points. Counter overhead
+makes those runs unsuitable for timing claims. Both emitted identical reference
+assembly, with unchanged input hashes, balanced collection records and no
+diagnostics. Collection frequency and index-sort work were not optimized by this
+change. Full owned compiler repeatability remains unproven.
 Interior cell roots are accepted only after finding a tracked owner and proving a
 complete 32-byte cell at an aligned offset inside its initialized data span. Unknown,
 stale and machine-class words are not dereferenced as values. Before marking, a nonowning sorted interval index is prepared over initialized

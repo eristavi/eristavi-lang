@@ -251,7 +251,7 @@ erist build-wat examples/hello.eri -o hello.wat
 python -m unittest discover -s tests -v
 ```
 
-The current suite discovers **427 test cases**. Each runs once per applicable runner;
+The current suite discovers **428 test cases**. Each runs once per applicable runner;
 platform skips and the actual pass/fail totals are recorded in CI artifacts. The hosted CI matrix runs:
 
 - GCC / x86-64 Ubuntu / `-O2`;
