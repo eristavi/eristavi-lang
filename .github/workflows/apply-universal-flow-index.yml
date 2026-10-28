@@ -1,0 +1,51 @@
+name: Apply Universal verifier flow index
+
+on:
+  push:
+    branches: [compiler/index-universal-verifier-blocks]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CC: clang
+      CFLAGS: -O2
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install bootstrap toolchain
+        run: python -m pip install -e .
+      - name: Apply candidate source change
+        run: |
+          set -euo pipefail
+          python tools/apply_universal_flow_index.py
+          git diff --check
+          git diff -- src/compiler/universal_verify.eri tests/universal_verifier_cases.py
+      - name: Run focused public verifier oracle
+        run: |
+          set -euo pipefail
+          PYTHONPATH=tests python -m unittest \
+            test_self_hosting_universal.SelfHostedUniversalTests.test_verifier_preserves_wide_cfg_diagnostics \
+            test_self_hosting_universal.SelfHostedUniversalTests.test_native_verifier_preserves_wide_cfg_diagnostics
+      - name: Verify compiler still builds
+        run: |
+          set -euo pipefail
+          python -u tools/build_offline.py --skip-self-build --trace-phases --command-timeout 300 --output "$RUNNER_TEMP/flow-index-build"
+      - name: Commit validated production tree only
+        run: |
+          set -euo pipefail
+          rm tools/apply_universal_flow_index.py .github/workflows/apply-universal-flow-index.yml
+          git config user.name "Revaz Eristavi"
+          git config user.email "eristavi@gmail.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "Index Universal verifier block lookups"
+          git push origin HEAD:compiler/index-universal-verifier-blocks
