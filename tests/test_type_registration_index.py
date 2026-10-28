@@ -63,13 +63,25 @@ function run() {
     output(created); output(repeated);
     let head be program.types;
     if head == none { output(-1); } else { output(head.index); }
+
+    // Numeric lookup uses a separate exact index while Program.types remains
+    // canonical. Verify seeded entries and a newly registered wrapper agree
+    // with the public records, including kind/inner metadata.
+    let indexedA be ir_types.typeAtIndexed(indexer,program,6);
+    let indexedB be ir_types.typeAtIndexed(indexer,program,7);
+    let indexedCreated be ir_types.typeAtIndexed(indexer,program,created);
+    if indexedA == none { output("missing"); } else { output(indexedA.name); }
+    if indexedB == none { output("missing"); } else { output(indexedB.name); }
+    if indexedCreated == none { output(-1); } else { output(indexedCreated.index); }
+    output(ir_types.kindIndexed(indexer,program,created));
+    output(ir_types.innerIndexed(indexer,program,created));
 }
 run();
 '''
 
 
 class TypeRegistrationIndexTests(unittest.TestCase):
-    def test_collision_exactness_and_public_index_order(self):
+    def test_collision_exactness_public_order_and_numeric_queries(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             (root / 'compiler').symlink_to(ROOT / 'src/compiler', target_is_directory=True)
@@ -79,7 +91,7 @@ class TypeRegistrationIndexTests(unittest.TestCase):
             self.assertEqual(build_native(entry, binary, root), 0)
             result = subprocess.run([str(binary)], capture_output=True, text=True, timeout=20)
             self.assertEqual((result.returncode, result.stdout, result.stderr),
-                             (0, '6\n7\n6\n7\n8\n8\n8\n', ''))
+                             (0, '6\n7\n6\n7\n8\n8\n8\nT0\nT27\n8\n8\n1\n', ''))
 
 
 if __name__ == '__main__':

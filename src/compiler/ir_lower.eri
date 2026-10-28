@@ -68,7 +68,7 @@ function fact(context identity Context, source identity ast.Node) returns identi
 }
 function coerce(context identity Context, value identity ir.Node, expected Int) returns identity ir.Node fails m.SemanticError {
     if value.valueType == expected { return value; }
-    if ir.kind(context.builder.program,expected) == 8 and ir.inner(context.builder.program,expected) == value.valueType {
+    if ir_types.kindIndexed(context.builder.typeRegistry,context.builder.program,expected) == 8 and ir_types.innerIndexed(context.builder.typeRegistry,context.builder.program,expected) == value.valueType {
         let result be ir.node(28,expected,value.location); result.first=value; result.effects=value.effects; return result;
     }
     try reject(context.owner,context.owner.root,"missing implicit optional injection"); return value;
@@ -112,7 +112,7 @@ function instantiate(builder identity Builder, declaration identity m.Declaratio
         let value be types.clone(parameter.value,map);
         if supplied {
             if argument == none { try reject(owner,source,"missing specialization argument"); }
-            else { try types.assign(value,ir_types.semanticType(builder.program,argument.valueType),m.at(owner,source.token)); argument=argument.next; }
+            else { try types.assign(value,ir_types.semanticTypeIndexed(builder.typeRegistry,builder.program,argument.valueType),m.at(owner,source.token)); argument=argument.next; }
         }
         let kind be try concrete(builder,owner,source,value,false); key=key+"$"+format.integer(kind); parameter=parameter.next;
     }
@@ -170,18 +170,18 @@ function expression(context identity Context, source identity ast.Node) returns 
         let left be m.child(source.first); let right be m.child(source.second);
         let first be try expression(context,left); let second be try expression(context,right);
         if source.text == "==" or source.text == "!=" { if left.kind == ast.nameExpr() and right.kind == ast.noneExpr() { first=try place(context,left); } if right.kind == ast.nameExpr() and left.kind == ast.noneExpr() { second=try place(context,right); } }
-        if first.valueType != second.valueType { if ir.kind(context.builder.program,first.valueType) == 8 { second=try coerce(context,second,first.valueType); } else { first=try coerce(context,first,second.valueType); } }
+        if first.valueType != second.valueType { if ir_types.kindIndexed(context.builder.typeRegistry,context.builder.program,first.valueType) == 8 { second=try coerce(context,second,first.valueType); } else { first=try coerce(context,first,second.valueType); } }
         result.first=first; result.second=second; return result;
     }
     if source.kind == ast.identityExpr() { result.kind=26; result.first=try expression(context,m.child(source.first)); return result; }
     if source.kind == ast.listExpr() {
         result.kind=20; let cursor be source.first; let tail maybe identity ir.Node be none;
-        while cursor != none { let value be try coerce(context,try expression(context,cursor),ir.inner(context.builder.program,kind)); if tail == none { result.first=value; } else { tail.next=value; } tail=value; cursor=cursor.next; } return result;
+        while cursor != none { let value be try coerce(context,try expression(context,cursor),ir_types.innerIndexed(context.builder.typeRegistry,context.builder.program,kind)); if tail == none { result.first=value; } else { tail.next=value; } tail=value; cursor=cursor.next; } return result;
     }
     if source.kind == ast.constructionExpr() {
         result.kind=21; let cursor be source.first; let tail maybe identity ir.Node be none;
         while cursor != none {
-            let field be try ir_types.field(context.builder.program,kind,cursor.text,result.location);
+            let field be try ir_types.fieldIndexed(context.builder.typeRegistry,context.builder.program,kind,cursor.text,result.location);
             let value be try coerce(context,try expression(context,m.child(cursor.first)),field.valueType);
             // The field index belongs to an initializer wrapper, never the
             // child's local/call index (which may already have a meaning).
@@ -190,15 +190,15 @@ function expression(context identity Context, source identity ast.Node) returns 
         } return result;
     }
     if source.kind == ast.memberExpr() {
-        let base be try expression(context,m.child(source.first)); let baseKind be ir.kind(context.builder.program,base.valueType);
+        let base be try expression(context,m.child(source.first)); let baseKind be ir_types.kindIndexed(context.builder.typeRegistry,context.builder.program,base.valueType);
         if baseKind == 9 {
-            let innerKind be ir.kind(context.builder.program,ir.inner(context.builder.program,base.valueType));
-            if innerKind == 7 { let payload be ir.node(36,ir.inner(context.builder.program,base.valueType),result.location); payload.first=base; payload.effects=base.effects; base=payload; baseKind=innerKind; }
+            let innerKind be ir_types.kindIndexed(context.builder.typeRegistry,context.builder.program,ir_types.innerIndexed(context.builder.typeRegistry,context.builder.program,base.valueType));
+            if innerKind == 7 { let payload be ir.node(36,ir_types.innerIndexed(context.builder.typeRegistry,context.builder.program,base.valueType),result.location); payload.first=base; payload.effects=base.effects; base=payload; baseKind=innerKind; }
         }
         result.first=base;
         if baseKind == 4 { result.kind=30; result.text=source.text; return result; }
         if (baseKind == 7 or baseKind == 12) and source.text == "count" { result.kind=24; return result; }
-        result.kind=22; result.index=(try ir_types.field(context.builder.program,base.valueType,source.text,result.location)).index; return result;
+        result.kind=22; result.index=(try ir_types.fieldIndexed(context.builder.typeRegistry,context.builder.program,base.valueType,source.text,result.location)).index; return result;
     }
     if source.kind == ast.indexExpr() { result.kind=23; result.first=try expression(context,m.child(source.first)); result.second=try expression(context,m.child(source.second)); return result; }
     if source.kind == ast.tryExpr() { result.kind=40; result.first=try expression(context,m.child(source.first)); return result; }
@@ -223,7 +223,7 @@ function expression(context identity Context, source identity ast.Node) returns 
             let standard be false;
             if imported != none { if imported.target == none { standard=true; result.kind=31; result.text=imported.path+"."+callee.text; } }
             if not standard and imported == none {
-                if callee.text == "add" { result.kind=25; result.first=try place(context,base); let argument be try expression(context,m.child(source.second)); let destination be result.first; if destination != none { result.second=try coerce(context,argument,ir.inner(context.builder.program,destination.valueType)); } }
+                if callee.text == "add" { result.kind=25; result.first=try place(context,base); let argument be try expression(context,m.child(source.second)); let destination be result.first; if destination != none { result.second=try coerce(context,argument,ir_types.innerIndexed(context.builder.typeRegistry,context.builder.program,destination.valueType)); } }
                 else { result.kind=31; result.text="std.files."+callee.text; result.first=try expression(context,base); }
             }
         }
@@ -249,11 +249,11 @@ function place(context identity Context, source identity ast.Node) returns ident
     let location be m.at(context.owner,source.token);
     if source.kind == ast.nameExpr() { let item be try binding(context,source); let result be ir.node(2,item.valueType,location); result.index=item.index; return result; }
     let base be try place(context,m.child(source.first));
-    if ir.kind(context.builder.program,base.valueType) == 8 { let narrowed be ir.node(29,ir.inner(context.builder.program,base.valueType),location); narrowed.first=base; base=narrowed; }
+    if ir_types.kindIndexed(context.builder.typeRegistry,context.builder.program,base.valueType) == 8 { let narrowed be ir.node(29,ir_types.innerIndexed(context.builder.typeRegistry,context.builder.program,base.valueType),location); narrowed.first=base; base=narrowed; }
     if source.kind == ast.memberExpr() {
-        let field be try ir_types.field(context.builder.program,base.valueType,source.text,location); let result be ir.node(22,field.valueType,location); result.index=field.index; result.first=base; return result;
+        let field be try ir_types.fieldIndexed(context.builder.typeRegistry,context.builder.program,base.valueType,source.text,location); let result be ir.node(22,field.valueType,location); result.index=field.index; result.first=base; return result;
     }
-    if source.kind == ast.indexExpr() { let result be ir.node(23,ir.inner(context.builder.program,base.valueType),location); result.first=base; result.second=try expression(context,m.child(source.second)); return result; }
+    if source.kind == ast.indexExpr() { let result be ir.node(23,ir_types.innerIndexed(context.builder.typeRegistry,context.builder.program,base.valueType),location); result.first=base; result.second=try expression(context,m.child(source.second)); return result; }
     try reject(context.owner,source,"unsupported assignment path"); return base;
 }
 function statement(context identity Context, source identity ast.Node) returns identity ir.Node fails m.SemanticError {
@@ -280,7 +280,7 @@ function statement(context identity Context, source identity ast.Node) returns i
     if source.kind == ast.whileStmt() { result.kind=14; result.first=try expression(context,m.child(source.first)); result.second=try block(context,m.child(source.second)); return result; }
     if source.kind == ast.forStmt() {
         result.kind=34; let iterable be try expression(context,m.child(source.first)); result.first=iterable;
-        let saved be context.bindings; let item be local(context,source.text,ir.inner(context.builder.program,iterable.valueType),false,false); result.index=item.index;
+        let saved be context.bindings; let item be local(context,source.text,ir_types.innerIndexed(context.builder.typeRegistry,context.builder.program,iterable.valueType),false,false); result.index=item.index;
         result.second=try block(context,m.child(source.second)); context.bindings=saved; return result;
     }
     if source.kind == ast.failStmt() { result.kind=43; result.first=try expression(context,m.child(source.first)); return result; }
