@@ -1,0 +1,99 @@
+name: Universal optimizer counter diagnostic
+
+on:
+  push:
+    branches: [diagnostics/universal-optimize-counts-17a39a]
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CC: clang
+      CFLAGS: -O2
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install bootstrap toolchain
+        run: python -m pip install -e .
+      - name: Freeze exact merged source workload
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "d56f77708651670c3d493dcda17d8c5c8e9a07b3" || true
+          cp -a src "$RUNNER_TEMP/source-main"
+          (cd "$RUNNER_TEMP/source-main" && find . -type f -print0 | sort -z | xargs -0 sha256sum) > "$RUNNER_TEMP/source-main.sha256"
+      - name: Build uninstrumented control compiler
+        run: |
+          set -euo pipefail
+          python -u tools/build_offline.py --skip-self-build --trace-phases --command-timeout 300 --output "$RUNNER_TEMP/erist-control" > "$RUNNER_TEMP/control-build.log" 2>&1
+      - name: Run control full-source workload
+        run: |
+          set -euo pipefail
+          /usr/bin/time -v -o "$RUNNER_TEMP/control.time.txt" timeout --signal=TERM --kill-after=10s 120s \
+            "$RUNNER_TEMP/erist-control/bin/erist-compiler" emit-asm "$RUNNER_TEMP/source-main/frontend.eri" \
+            --source-root "$RUNNER_TEMP/source-main" --target x86_64-linux --trace-phases \
+            > "$RUNNER_TEMP/control.s" 2> "$RUNNER_TEMP/control.trace.log"
+          sha256sum "$RUNNER_TEMP/control.s" > "$RUNNER_TEMP/control.sha256"
+      - name: Apply optimizer diagnostic counters
+        run: |
+          set -euo pipefail
+          python tools/universal_optimize_probe_patch.py
+          git diff --check
+          git diff -- src/compiler/universal_verify.eri src/compiler/universal_optimize.eri > "$RUNNER_TEMP/optimizer-profile.patch"
+      - name: Build instrumented compiler
+        run: |
+          set -euo pipefail
+          python -u tools/build_offline.py --skip-self-build --trace-phases --command-timeout 300 --output "$RUNNER_TEMP/erist-profile" > "$RUNNER_TEMP/profile-build.log" 2>&1
+      - name: Run bounded profile workload
+        run: |
+          set -u
+          set +e
+          /usr/bin/time -v -o "$RUNNER_TEMP/profile.time.txt" timeout --signal=TERM --kill-after=10s 240s \
+            "$RUNNER_TEMP/erist-profile/bin/erist-compiler" emit-asm "$RUNNER_TEMP/source-main/frontend.eri" \
+            --source-root "$RUNNER_TEMP/source-main" --target x86_64-linux --trace-phases \
+            > "$RUNNER_TEMP/profile.s" 2> "$RUNNER_TEMP/profile.trace.log"
+          rc=$?
+          set -e
+          echo "$rc" > "$RUNNER_TEMP/profile.rc"
+          grep '"phase":"universal-verify-profile"' "$RUNNER_TEMP/profile.trace.log" > "$RUNNER_TEMP/verify-profile.samples" || true
+          grep '"phase":"universal-optimize-profile"' "$RUNNER_TEMP/profile.trace.log" > "$RUNNER_TEMP/optimize-profile.samples" || true
+          if [ "$rc" -eq 0 ]; then
+            sha256sum "$RUNNER_TEMP/profile.s" > "$RUNNER_TEMP/profile.sha256"
+            cmp "$RUNNER_TEMP/control.s" "$RUNNER_TEMP/profile.s"
+          fi
+          echo "exit_code=$rc"
+          cat "$RUNNER_TEMP/verify-profile.samples" || true
+          cat "$RUNNER_TEMP/optimize-profile.samples" || true
+          cat "$RUNNER_TEMP/profile.time.txt"
+      - name: Preserve diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: universal-optimize-counts-${{ github.run_attempt }}
+          retention-days: 14
+          path: |
+            ${{ runner.temp }}/source-main.sha256
+            ${{ runner.temp }}/optimizer-profile.patch
+            ${{ runner.temp }}/control-build.log
+            ${{ runner.temp }}/control.trace.log
+            ${{ runner.temp }}/control.time.txt
+            ${{ runner.temp }}/control.s
+            ${{ runner.temp }}/control.sha256
+            ${{ runner.temp }}/profile-build.log
+            ${{ runner.temp }}/profile.trace.log
+            ${{ runner.temp }}/profile.time.txt
+            ${{ runner.temp }}/profile.rc
+            ${{ runner.temp }}/profile.s
+            ${{ runner.temp }}/profile.sha256
+            ${{ runner.temp }}/verify-profile.samples
+            ${{ runner.temp }}/optimize-profile.samples
+      - name: Classify probe
+        if: always()
+        run: |
+          rc=$(cat "$RUNNER_TEMP/profile.rc" 2>/dev/null || echo 999)
+          if [ "$rc" -ne 0 ] && [ "$rc" -ne 124 ]; then exit 1; fi
+          test -s "$RUNNER_TEMP/verify-profile.samples"
+          test -s "$RUNNER_TEMP/optimize-profile.samples"
+          echo "profile rc=$rc verify_samples=$(wc -l < "$RUNNER_TEMP/verify-profile.samples") optimize_samples=$(wc -l < "$RUNNER_TEMP/optimize-profile.samples")"
