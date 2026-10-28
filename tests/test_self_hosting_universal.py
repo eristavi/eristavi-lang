@@ -11,6 +11,7 @@ import tempfile
 import unittest
 
 from compiler.erist.cli import build_native
+from universal_verifier_cases import regression_program
 
 ROOT=Path(__file__).resolve().parents[1]
 
@@ -137,3 +138,29 @@ function finish(builder identity u.Builder,value Int) { u.returnValue(builder,va
             self.assertEqual(build_native(entry,binary,root),0)
             result=subprocess.run([str(binary)],capture_output=True,text=True)
             self.assertEqual((result.returncode,result.stdout,result.stderr),(0,'αβ\nα\nαγ\ntrue\ntrue\n1\n',''))
+
+    def test_verifier_preserves_wide_cfg_diagnostics(self):
+        source,expected=regression_program()
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);shutil.copytree(ROOT/'src/compiler',root/'compiler')
+            entry=root/'probe.eri';entry.write_text(source,encoding='utf-8');binary=root/'probe'
+            self.assertEqual(build_native(entry,binary,root),0)
+            result=subprocess.run([binary],capture_output=True,text=True,timeout=30)
+            self.assertEqual((result.returncode,result.stdout,result.stderr),(0,expected,''))
+
+    @unittest.skipUnless(platform.system()=='Linux' and platform.machine().lower() in ('x86_64','amd64','aarch64','arm64'),
+                         'native verifier execution requires Linux x86-64/ARM64')
+    def test_native_verifier_preserves_wide_cfg_diagnostics(self):
+        source,expected=regression_program()
+        target='arm64-linux' if platform.machine().lower() in ('aarch64','arm64') else 'x86_64-linux'
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);shutil.copytree(ROOT/'src/compiler',root/'compiler')
+            entry=root/'probe.eri';entry.write_text(source,encoding='utf-8');assembly=root/'probe.s';binary=root/'probe'
+            emitted=subprocess.run([self.binary,'emit-asm',entry,'--source-root',root,'--target',target],capture_output=True,text=True,timeout=60)
+            self.assertEqual(emitted.returncode,0,emitted.stderr);self.assertEqual(emitted.stderr,'')
+            assembly.write_text(emitted.stdout,encoding='utf-8')
+            linked=subprocess.run([*shlex.split(os.environ.get('CC','cc')),*shlex.split(os.environ.get('CFLAGS','')),
+                '-DERIST_NATIVE_RUNTIME','-DERIST_HEAP_GC_INTERVAL=65536',assembly,ROOT/'runtime/native_gc_runtime.c','-lm','-o',binary],capture_output=True,text=True,timeout=60)
+            self.assertEqual((linked.returncode,linked.stdout,linked.stderr),(0,'',''))
+            result=subprocess.run([binary],capture_output=True,text=True,timeout=30,env={'PATH':'','LANG':'C'})
+            self.assertEqual((result.returncode,result.stdout,result.stderr),(0,expected,''))
