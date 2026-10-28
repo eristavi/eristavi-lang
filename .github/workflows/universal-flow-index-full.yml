@@ -1,0 +1,97 @@
+name: Universal flow-index full compiler comparison
+
+on:
+  push:
+    branches: [diagnostics/universal-flow-index-full-c365a55]
+
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CC: clang
+      CFLAGS: -O2
+      BASE_SHA: 17a39a508728e42465add23c497189684d6318a9
+      CANDIDATE_SHA: c365a55357ce4cddd3341e93343fa77a939aa88e
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install bootstrap toolchain
+        run: python -m pip install -e .
+      - name: Materialize exact baseline, candidate and frozen workload
+        run: |
+          set -euo pipefail
+          git worktree add --detach "$RUNNER_TEMP/base-repo" "$BASE_SHA"
+          git worktree add --detach "$RUNNER_TEMP/candidate-repo" "$CANDIDATE_SHA"
+          cp -a "$RUNNER_TEMP/base-repo/src" "$RUNNER_TEMP/frozen-src"
+          (cd "$RUNNER_TEMP/frozen-src" && find . -type f -print0 | sort -z | xargs -0 sha256sum) > "$RUNNER_TEMP/frozen-source.sha256"
+      - name: Build baseline and candidate bootstrap-runtime compiler bundles
+        run: |
+          set -euo pipefail
+          (cd "$RUNNER_TEMP/base-repo" && PYTHONPATH="$RUNNER_TEMP/base-repo" python -u tools/build_offline.py --skip-self-build --trace-phases --command-timeout 300 --output "$RUNNER_TEMP/base-bundle") > "$RUNNER_TEMP/base-build.log" 2>&1
+          (cd "$RUNNER_TEMP/candidate-repo" && PYTHONPATH="$RUNNER_TEMP/candidate-repo" python -u tools/build_offline.py --skip-self-build --trace-phases --command-timeout 300 --output "$RUNNER_TEMP/candidate-bundle") > "$RUNNER_TEMP/candidate-build.log" 2>&1
+          sha256sum "$RUNNER_TEMP/base-bundle/bin/erist-compiler" "$RUNNER_TEMP/candidate-bundle/bin/erist-compiler" > "$RUNNER_TEMP/compiler.sha256"
+      - name: Run serial full-source ABBA
+        run: |
+          set -euo pipefail
+          run_one() {
+            label="$1"; compiler="$2"
+            /usr/bin/time -f '%e %U %S %M' -o "$RUNNER_TEMP/$label.time" \
+              timeout --signal=TERM --kill-after=10s 180s \
+              "$compiler" emit-asm "$RUNNER_TEMP/frozen-src/frontend.eri" \
+              --source-root "$RUNNER_TEMP/frozen-src" --target x86_64-linux --trace-phases \
+              > "$RUNNER_TEMP/$label.s" 2> "$RUNNER_TEMP/$label.trace"
+            sha256sum "$RUNNER_TEMP/$label.s" > "$RUNNER_TEMP/$label.sha256"
+          }
+          run_one A1 "$RUNNER_TEMP/base-bundle/bin/erist-compiler"
+          run_one B1 "$RUNNER_TEMP/candidate-bundle/bin/erist-compiler"
+          run_one B2 "$RUNNER_TEMP/candidate-bundle/bin/erist-compiler"
+          run_one A2 "$RUNNER_TEMP/base-bundle/bin/erist-compiler"
+          cmp "$RUNNER_TEMP/A1.s" "$RUNNER_TEMP/B1.s"
+          cmp "$RUNNER_TEMP/A1.s" "$RUNNER_TEMP/B2.s"
+          cmp "$RUNNER_TEMP/A1.s" "$RUNNER_TEMP/A2.s"
+      - name: Summarize paired measurement
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, statistics
+          from pathlib import Path
+          root=Path(os.environ['RUNNER_TEMP'])
+          rows=[]
+          for label in ('A1','B1','B2','A2'):
+              wall,user,system,rss=root.joinpath(label+'.time').read_text().strip().split()
+              rows.append({'label':label,'side':'base' if label.startswith('A') else 'candidate','wall':float(wall),'user':float(user),'sys':float(system),'maxrss_kib':int(rss)})
+          base=[r['wall'] for r in rows if r['side']=='base']; cand=[r['wall'] for r in rows if r['side']=='candidate']
+          base_user=[r['user'] for r in rows if r['side']=='base']; cand_user=[r['user'] for r in rows if r['side']=='candidate']
+          result={'runs':rows,'base_median_wall':statistics.median(base),'candidate_median_wall':statistics.median(cand),'wall_ratio':statistics.median(cand)/statistics.median(base),'base_median_user':statistics.median(base_user),'candidate_median_user':statistics.median(cand_user),'user_ratio':statistics.median(cand_user)/statistics.median(base_user)}
+          text=json.dumps(result,indent=2,sort_keys=True); root.joinpath('results.json').write_text(text); print(text)
+          print('assembly_sha256',root.joinpath('A1.sha256').read_text().split()[0])
+          PY
+      - name: Preserve evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: universal-flow-index-full-${{ github.run_attempt }}
+          retention-days: 14
+          path: |
+            ${{ runner.temp }}/frozen-source.sha256
+            ${{ runner.temp }}/compiler.sha256
+            ${{ runner.temp }}/base-build.log
+            ${{ runner.temp }}/candidate-build.log
+            ${{ runner.temp }}/A1.time
+            ${{ runner.temp }}/B1.time
+            ${{ runner.temp }}/B2.time
+            ${{ runner.temp }}/A2.time
+            ${{ runner.temp }}/A1.trace
+            ${{ runner.temp }}/B1.trace
+            ${{ runner.temp }}/B2.trace
+            ${{ runner.temp }}/A2.trace
+            ${{ runner.temp }}/A1.sha256
+            ${{ runner.temp }}/B1.sha256
+            ${{ runner.temp }}/B2.sha256
+            ${{ runner.temp }}/A2.sha256
+            ${{ runner.temp }}/results.json
