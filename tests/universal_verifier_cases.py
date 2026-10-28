@@ -73,6 +73,7 @@ def regression_program():
             add(label, f'let b be {constructor}({str(initialized).lower()}); result("{label}",b,false);',
                 None if initialized else 'register is not initialized on every incoming path')
     add('sparse', 'let b be fresh(); let last be u.block(b); last.index=1000000000000; u.jump(b,last); b.current=last; let value be u.zero(b,"void"); u.returnValue(b,value); result("sparse",b,true);')
+    add('sparse-collision', 'let b be fresh(); let first be u.block(b); first.index=257; let second be u.block(b); second.index=514; u.jump(b,first); b.current=first; u.jump(b,second); b.current=second; let value be u.zero(b,"void"); u.returnValue(b,value); result("sparse-collision",b,false);')
     add('duplicate-block', 'let b be fresh(); let last be u.block(b); last.index=0; result("duplicate-block",b,false);', 'cyclic/duplicate block table')
     add('cyclic-block', 'let b be fresh(); b.current.next=b.current; result("cyclic-block",b,false);', 'cyclic/duplicate block table')
     add('cyclic-register', 'let b be fresh(); let value be u.zero(b,"void"); let first be b.routine.registers; if first != none { first.next=first; } result("cyclic-register",b,false);', 'invalid register table')
