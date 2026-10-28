@@ -246,7 +246,7 @@ function repaired() {
 
 
     def test_specializations_are_concrete_cached_and_deterministic(self):
-        source=('function echo(value) { return value; } '
+        source=('function echo(value) { let copied be value; if true { let branch be value; } else { let other be value; } return copied; } '
                 'function wrap(value) { return echo(value); } '
                 'output(wrap(1)); output(wrap(2)); output(wrap(true)); '
                 'output(wrap("text")); output(wrap(1.25));')
@@ -264,6 +264,9 @@ function repaired() {
                     kind=int(routine['name'].split('$')[-1])
                     self.assertEqual(routine['result'],kind)
                     self.assertEqual([p['type'] for p in routine['locals'] if p['parameter']],[kind])
+                    self.assertEqual([p['index'] for p in routine['locals']],list(range(len(routine['locals']))))
+                    if name=='app.echo':
+                        self.assertEqual([p['name'] for p in routine['locals']],['value','copied','branch','other'])
             emitted=self.invoke(entry,root);again=self.invoke(entry,root)
             self.assertEqual(emitted.stdout,again.stdout)
 

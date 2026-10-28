@@ -32,3 +32,12 @@ run() else error m.SemanticError { output(error.message); };
     return (source.replace('{functions}',str(functions))
             .replace('{locals_per_function}',str(locals_per_function))
             .replace('{rounds}',str(rounds)))
+
+
+def lowering_benchmark_program(width=192):
+    """One parameter, many function locals, and locals across entry scopes."""
+    if width < 1:
+        raise ValueError('benchmark width must be positive')
+    declarations=' '.join(f'let x{i} be {i};' for i in range(width))
+    return (f'function wide(seed Int) returns Int {{ {declarations} return x{width-1}+seed; }}\n'
+            'let first be 1; if true { let nested be 2; } let last be 3; output(wide(7));\n')
