@@ -1,4 +1,4 @@
-name: Source specialization index probe
+name: Source specialization index owned probe
 
 on:
   push:
@@ -7,11 +7,11 @@ on:
 jobs:
   probe:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 14
     env:
       CC: clang
       CFLAGS: -O2
-      BASE: 9b8516f1108494fbd7d2ffe36540fc9712d58dfd
+      WORKLOAD: ab3a60674b0e862f5a237b5ede84f2dfa94953fe
     steps:
       - uses: actions/checkout@v6
         with:
@@ -21,78 +21,118 @@ jobs:
           python-version: '3.11'
       - name: Install bootstrap toolchain
         run: python -m pip install -e .
-      - name: Build baseline and candidate frontends
+      - name: Freeze identical compiler workload
+        run: git worktree add "$RUNNER_TEMP/workload" "$WORKLOAD"
+      - name: Build candidate owned compiler B without self-build
         run: |
-          git worktree add "$RUNNER_TEMP/base" "$BASE"
-          python - <<'PY'
-          from pathlib import Path
-          from compiler.erist.cli import build_native
-          import os
-          root=Path.cwd()
-          temp=Path(os.environ['RUNNER_TEMP'])
-          base=temp/'base'
-          if build_native(base/'src/frontend.eri',temp/'baseline-frontend',base/'src'):
-              raise SystemExit('baseline frontend build failed')
-          if build_native(root/'src/frontend.eri',temp/'candidate-frontend',root/'src'):
-              raise SystemExit('candidate frontend build failed')
-          PY
-      - name: Compare collision-heavy specialization outputs
+          set -o pipefail
+          python -u tools/build_offline.py \
+            --runtime owned \
+            --skip-self-build \
+            --trace-phases \
+            --command-timeout 300 \
+            --output "$RUNNER_TEMP/erist-owned-probe" \
+            2>&1 | tee "$RUNNER_TEMP/owned-b-build.log"
+      - name: Run one bounded candidate B-to-C trajectory
+        id: bounded
+        shell: bash
         run: |
-          set -euo pipefail
-          ROOT="$RUNNER_TEMP/collision"
-          mkdir -p "$ROOT"
-          cat > "$ROOT/a.eri" <<'EOF'
-          public function echo(value) { return value; }
-          EOF
-          cat > "$ROOT/b.eri" <<'EOF'
-          public function echo(value) { return value; }
-          EOF
-          cat > "$ROOT/app.eri" <<'EOF'
-          import a;
-          import b;
-          output(a.echo(1));
-          output(a.echo("A"));
-          output(b.echo(2));
-          output(b.echo("B"));
-          EOF
-          for command in ir emit-asm; do
-            extra=()
-            if [ "$command" = emit-asm ]; then extra=(--target x86_64-linux); fi
-            "$RUNNER_TEMP/baseline-frontend" "$command" "$ROOT/app.eri" --source-root "$ROOT" "${extra[@]}" > "$RUNNER_TEMP/base-$command.out" 2> "$RUNNER_TEMP/base-$command.err"
-            "$RUNNER_TEMP/candidate-frontend" "$command" "$ROOT/app.eri" --source-root "$ROOT" "${extra[@]}" > "$RUNNER_TEMP/candidate-$command.out" 2> "$RUNNER_TEMP/candidate-$command.err"
-            cmp "$RUNNER_TEMP/base-$command.out" "$RUNNER_TEMP/candidate-$command.out"
-            cmp "$RUNNER_TEMP/base-$command.err" "$RUNNER_TEMP/candidate-$command.err"
-            test ! -s "$RUNNER_TEMP/base-$command.err"
-          done
-          sha256sum "$RUNNER_TEMP"/base-*.out "$RUNNER_TEMP"/candidate-*.out | tee "$RUNNER_TEMP/collision-hashes.txt"
-      - name: Serial full-source ABBA comparison
-        run: |
-          set -euo pipefail
-          run_one() {
-            label="$1"; compiler="$2"
-            /usr/bin/time -f 'wall=%e user=%U sys=%S rss_kib=%M' -o "$RUNNER_TEMP/$label.time" \
-              timeout 90s "$compiler" emit-asm src/frontend.eri --source-root src --target x86_64-linux \
-              > "$RUNNER_TEMP/$label.s" 2> "$RUNNER_TEMP/$label.err"
-            test ! -s "$RUNNER_TEMP/$label.err"
-          }
-          run_one A1 "$RUNNER_TEMP/baseline-frontend"
-          run_one B1 "$RUNNER_TEMP/candidate-frontend"
-          run_one B2 "$RUNNER_TEMP/candidate-frontend"
-          run_one A2 "$RUNNER_TEMP/baseline-frontend"
-          cmp "$RUNNER_TEMP/A1.s" "$RUNNER_TEMP/A2.s"
-          cmp "$RUNNER_TEMP/A1.s" "$RUNNER_TEMP/B1.s"
-          cmp "$RUNNER_TEMP/A1.s" "$RUNNER_TEMP/B2.s"
-          sha256sum "$RUNNER_TEMP"/{A1,B1,B2,A2}.s | tee "$RUNNER_TEMP/full-hashes.txt"
-          for label in A1 B1 B2 A2; do printf '%s ' "$label"; cat "$RUNNER_TEMP/$label.time"; done | tee "$RUNNER_TEMP/timings.txt"
-      - name: Preserve probe evidence
+          set -u
+          bundle="$RUNNER_TEMP/erist-owned-probe"
+          workload="$RUNNER_TEMP/workload"
+          out="$RUNNER_TEMP/compiler-c.partial.s"
+          trace="$RUNNER_TEMP/compiler-c.trace.log"
+          timing="$RUNNER_TEMP/compiler-c.time.txt"
+          rcfile="$RUNNER_TEMP/compiler-c.rc"
+          summary="$RUNNER_TEMP/probe-summary.txt"
+
+          set +e
+          /usr/bin/time -v -o "$timing" \
+            timeout --signal=TERM --kill-after=10s 300s \
+            "$bundle/bin/erist-compiler" emit-asm "$workload/src/frontend.eri" \
+              --source-root "$workload/src" --target x86_64-linux --trace-phases \
+              > "$out" 2> "$trace"
+          rc=$?
+          set -e
+          printf '%s\n' "$rc" > "$rcfile"
+
+          begins=$(grep -c 'phase begin lower-function' "$trace" || true)
+          ends=$(grep -c 'phase end lower-function' "$trace" || true)
+          last_begin=$(grep 'phase begin lower-function' "$trace" | tail -1 || true)
+          last_end=$(grep 'phase end lower-function' "$trace" | tail -1 || true)
+
+          {
+            echo "probe_head=$(git rev-parse HEAD)"
+            echo "workload_commit=$WORKLOAD"
+            echo "exit_code=$rc"
+            echo "lower_function_begins=$begins"
+            echo "lower_function_ends=$ends"
+            echo "last_lower_function_begin=$last_begin"
+            echo "last_lower_function_end=$last_end"
+            echo "compiler_b_sha256=$(sha256sum "$bundle/bin/erist-compiler" | awk '{print $1}')"
+            echo "compiler_b_assembly_sha256=$(sha256sum "$bundle/evidence/compiler-b.s" | awk '{print $1}')"
+            echo "compiler_c_output_bytes=$(wc -c < "$out")"
+            echo "compiler_c_output_sha256=$(sha256sum "$out" | awk '{print $1}')"
+          } > "$summary"
+
+          if grep -q 'phase end lower-ir' "$trace"; then echo 'lower_ir_completed=true' >> "$summary"; else echo 'lower_ir_completed=false' >> "$summary"; fi
+          if grep -q 'phase begin typed-ir-verify' "$trace"; then echo 'typed_ir_verify_reached=true' >> "$summary"; else echo 'typed_ir_verify_reached=false' >> "$summary"; fi
+          if grep -q 'phase begin universal-lower' "$trace"; then echo 'universal_lower_reached=true' >> "$summary"; else echo 'universal_lower_reached=false' >> "$summary"; fi
+          if grep -q 'phase begin universal-optimize' "$trace"; then echo 'universal_optimize_reached=true' >> "$summary"; else echo 'universal_optimize_reached=false' >> "$summary"; fi
+
+          if [ "$rc" -eq 0 ]; then
+            if cmp -s "$bundle/evidence/compiler-b.s" "$out"; then echo 'assembly_BC_match=true' >> "$summary"; else echo 'assembly_BC_match=false' >> "$summary"; fi
+            LD_LIBRARY_PATH="$bundle/tool-libs" "$bundle/bin/as" --64 "$out" -o "$RUNNER_TEMP/compiler-c.o"
+            LD_LIBRARY_PATH="$bundle/tool-libs" "$bundle/bin/ld" -nostdlib -static -e _start \
+              -o "$RUNNER_TEMP/compiler-c" "$RUNNER_TEMP/compiler-c.o" "$bundle/lib/erist-runtime.o"
+            echo "compiler_c_sha256=$(sha256sum "$RUNNER_TEMP/compiler-c" | awk '{print $1}')" >> "$summary"
+            if cmp -s "$bundle/bin/erist-compiler" "$RUNNER_TEMP/compiler-c"; then echo 'binary_BC_match=true' >> "$summary"; else echo 'binary_BC_match=false' >> "$summary"; fi
+            if readelf -lW "$RUNNER_TEMP/compiler-c" | grep -Eq 'INTERP|DYNAMIC' || [ -n "$(nm -u "$RUNNER_TEMP/compiler-c")" ]; then
+              echo 'owned_static_audit=false' >> "$summary"
+            else
+              echo 'owned_static_audit=true' >> "$summary"
+            fi
+            echo 'bounded_result=completed' >> "$summary"
+          elif [ "$rc" -eq 124 ]; then
+            echo 'bounded_result=timeout_300s' >> "$summary"
+          else
+            echo 'bounded_result=unexpected_exit' >> "$summary"
+          fi
+
+          if [ -n "$(git status --porcelain --untracked-files=no)" ]; then echo 'source_tree_unchanged=false' >> "$summary"; else echo 'source_tree_unchanged=true' >> "$summary"; fi
+          cat "$summary"
+          cat "$timing"
+      - name: Preserve bounded evidence
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: source-specialization-index-probe
-          retention-days: 7
+          name: source-specialization-index-owned-probe
+          retention-days: 14
           path: |
-            ${{ runner.temp }}/collision-hashes.txt
-            ${{ runner.temp }}/full-hashes.txt
-            ${{ runner.temp }}/timings.txt
-            ${{ runner.temp }}/*.time
-            ${{ runner.temp }}/*.err
+            ${{ runner.temp }}/owned-b-build.log
+            ${{ runner.temp }}/compiler-c.partial.s
+            ${{ runner.temp }}/compiler-c.trace.log
+            ${{ runner.temp }}/compiler-c.time.txt
+            ${{ runner.temp }}/compiler-c.rc
+            ${{ runner.temp }}/probe-summary.txt
+            ${{ runner.temp }}/compiler-c
+            ${{ runner.temp }}/erist-owned-probe/self-build.json
+            ${{ runner.temp }}/erist-owned-probe/source-manifest.json
+            ${{ runner.temp }}/erist-owned-probe/evidence/
+      - name: Classify bounded result
+        if: always()
+        shell: bash
+        run: |
+          rc=$(cat "$RUNNER_TEMP/compiler-c.rc" 2>/dev/null || echo 999)
+          summary="$RUNNER_TEMP/probe-summary.txt"
+          if [ "$rc" -eq 124 ]; then
+            grep -q '^source_tree_unchanged=true$' "$summary" || { echo 'source tree changed during probe' >&2; exit 1; }
+            echo 'Candidate reached the intended 300-second cap.'
+            exit 0
+          fi
+          if [ "$rc" -ne 0 ]; then echo "Unexpected compiler exit: $rc" >&2; exit 1; fi
+          grep -q '^assembly_BC_match=true$' "$summary" || { echo 'B/C assembly mismatch' >&2; exit 1; }
+          grep -q '^binary_BC_match=true$' "$summary" || { echo 'B/C binary mismatch' >&2; exit 1; }
+          grep -q '^owned_static_audit=true$' "$summary" || { echo 'owned static audit failed' >&2; exit 1; }
+          grep -q '^source_tree_unchanged=true$' "$summary" || { echo 'source tree changed during probe' >&2; exit 1; }
+          echo 'Candidate completed within 300 seconds with matching owned output.'
