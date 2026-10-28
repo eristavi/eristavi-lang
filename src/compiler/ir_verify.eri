@@ -9,7 +9,37 @@ import compiler.format;
 
 type Active { index Int; next maybe identity Active; }
 type Narrow { index Int; present Bool; next maybe identity Narrow; }
-type State { program identity ir.Program; routine identity ir.Function; active maybe identity Active; declared maybe identity Active; narrow maybe identity Narrow; }
+type LocalState { value identity ir.Local; left maybe identity LocalState; right maybe identity LocalState; active Bool; declared Bool; activeNext maybe identity LocalState; }
+type LocalCursor { current maybe identity ir.Local; }
+type State { program identity ir.Program; routine identity ir.Function; locals maybe identity LocalState; active maybe identity LocalState; narrow maybe identity Narrow; }
+function localTree(cursor identity LocalCursor,count Int) returns maybe identity LocalState {
+    if count == 0 { return none; }
+    let middle be count/2; let left be localTree(cursor,middle); let value be cursor.current;
+    if value != none {
+        cursor.current=value.next; let right be localTree(cursor,count-middle-1);
+        return identity LocalState { value=value; left=left; right=right; active=false; declared=false; activeNext=none; };
+    } return none;
+}
+function localState(state identity State,index Int) returns maybe identity LocalState {
+    let cursor be state.locals;
+    while cursor != none {
+        let current be cursor;
+        if current.value.index == index { return current; }
+        if index < current.value.index { cursor=current.left; } else { cursor=current.right; }
+    } return none;
+}
+function localAt(state identity State,index Int) returns maybe identity ir.Local {
+    let item be localState(state,index); if item != none { return item.value; } return none;
+}
+function active(state identity State,index Int) returns Bool { let item be localState(state,index); if item != none { return item.active; } return false; }
+function restore(state identity State,saved maybe identity LocalState) {
+    let cursor be state.active;
+    while cursor != none { let item be cursor; if item == saved { state.active=saved; return; } item.active=false; cursor=item.activeNext; }
+    state.active=saved;
+}
+function allDeclared(value maybe identity LocalState) returns Bool {
+    if value != none { return value.declared and allDeclared(value.left) and allDeclared(value.right); } return true;
+}
 function has(active maybe identity Active, index Int) returns Bool { let cursor be active; while cursor != none { if cursor.index == index { return true; } cursor=cursor.next; } return false; }
 function present(state identity State,index Int) returns Bool { let cursor be state.narrow; while cursor != none { if cursor.index == index { return cursor.present; } cursor=cursor.next; } return false; }
 function mark(state identity State,index Int,value Bool) { state.narrow=identity Narrow { index=index; present=value; next=state.narrow; }; }
@@ -18,8 +48,8 @@ function union(first maybe identity ir.Failure, second maybe identity ir.Failure
 function operand(state identity State,value maybe identity ir.Node,location identity m.Location) returns identity ir.Node fails m.SemanticError { let result be try child(value,location); try expression(state,result); try ir.require(ir.ordinary(state.program,result.valueType),location,"operand requires an ordinary value"); return result; }
 function clearEffects(node identity ir.Node) returns Bool fails m.SemanticError { return try ir.require(node.effects == none,node.location,"checked failure requires try or a handler"); }
 function introduced(state identity State,index Int,location identity m.Location) returns identity ir.Local fails m.SemanticError {
-    let local be ir.localAt(state.routine,index); try ir.require(local != none and not has(state.declared,index),location,"missing or duplicate local declaration");
-    if local != none { state.active=identity Active { index=index; next=state.active; }; state.declared=identity Active { index=index; next=state.declared; }; return local; }
+    let item be localState(state,index); let allowed be false; if item != none { allowed=not item.declared; } try ir.require(allowed,location,"missing or duplicate local declaration");
+    if item != none { let current be item; current.active=true; current.declared=true; current.activeNext=state.active; state.active=current; return current.value; }
     return identity ir.Local { index=-1; name=""; valueType=5; immutable=false; parameter=false; next=none; };
 }
 function fixedType(program identity ir.Program,index Int,seen maybe identity Active) returns Bool {
@@ -28,7 +58,7 @@ function fixedType(program identity ir.Program,index Int,seen maybe identity Act
     let actual be ir.typeAt(program,index); if actual != none { let field be actual.fields; while field != none { if not fixedType(program,field.valueType,next) { return false; } field=field.next; } } return true;
 }
 function writable(state identity State,node identity ir.Node) returns Bool fails m.SemanticError {
-    if node.kind == 2 { let local be ir.localAt(state.routine,node.index); if local != none { return try ir.require(has(state.active,node.index) and not local.immutable and ir.kind(state.program,local.valueType) != 10,node.location,"mutation of fixed/inactive/resource binding"); } }
+    if node.kind == 2 { let local be localAt(state,node.index); if local != none { return try ir.require(active(state,node.index) and not local.immutable and ir.kind(state.program,local.valueType) != 10,node.location,"mutation of fixed/inactive/resource binding"); } }
     if node.kind == 29 { return try writable(state,try child(node.first,node.location)); }
     if node.kind == 22 {
         let base be try child(node.first,node.location); let kind be ir.kind(state.program,base.valueType); let valueType be base.valueType;
@@ -83,7 +113,7 @@ function expression(state identity State,node identity ir.Node) returns Bool fai
     let effects maybe identity ir.Failure be none; let kind be node.kind; let valueKind be ir.kind(state.program,node.valueType);
     if kind == 1 { try ir.require(ir.scalar(node.valueType) and node.first == none and node.second == none,node.location,"invalid scalar constant"); if node.valueType == 3 { try ir.require(node.number == 0 or node.number == 1,node.location,"invalid Bool constant"); } if node.valueType == 2 { try floatLiteral(node); } }
     else { if kind == 2 {
-        let item be ir.localAt(state.routine,node.index); try ir.require(item != none and has(state.active,node.index) and node.first == none and node.second == none,node.location,"inactive or unknown local read");
+        let item be localAt(state,node.index); try ir.require(item != none and active(state,node.index) and node.first == none and node.second == none,node.location,"inactive or unknown local read");
         if item != none { try ir.require(item.valueType == node.valueType,node.location,"local read descriptor mismatch"); }
     } else { if kind == 3 {
         let first be try operand(state,node.first,node.location); effects=first.effects;
@@ -160,7 +190,7 @@ function expression(state identity State,node identity ir.Node) returns Bool fai
             try ir.require(handler.kind == 42 and not catchAll,handler.location,"invalid handler ordering"); let saved be state.active; let savedNarrow be state.narrow;
             let local be try introduced(state,handler.index,handler.location); try ir.require(local.valueType == handler.valueType and not local.parameter,handler.location,"handler binding mismatch");
             if ir.kind(state.program,handler.valueType) == 11 { catchAll=true; } else { let descriptor be ir.typeAt(state.program,handler.valueType); if descriptor != none { try ir.require(descriptor.checked and not ir.failureHas(covered,descriptor.index),handler.location,"handler requires distinct error types"); } covered=union(covered,identity ir.Failure { valueType=handler.valueType; next=none; }); }
-            let terminated be try block(state,try child(handler.first,handler.location)); try ir.require(not node.immutable or terminated,handler.location,"value handler must terminate"); state.active=saved; state.narrow=savedNarrow; handler=handler.next;
+            let terminated be try block(state,try child(handler.first,handler.location)); try ir.require(not node.immutable or terminated,handler.location,"value handler must terminate"); restore(state,saved); state.narrow=savedNarrow; handler=handler.next;
         } try ir.require(catchAll or ir.failureSubset(base.effects,covered),node.location,"incomplete handler coverage");
     } else { try ir.require(false,node.location,"unknown IR expression opcode"); } } } } } } } } } } } } } }
     return try ir.require(ir.failureSubset(effects,node.effects) and ir.failureSubset(node.effects,effects),node.location,"IR effect annotation mismatch");
@@ -177,11 +207,11 @@ function statement(state identity State,node identity ir.Node) returns Bool fail
     try ir.require(node.valueType == 5,node.location,"statement cannot have a result"); let kind be node.kind;
     if kind == 10 or kind == 11 {
         let value be try operand(state,node.first,node.location); try clearEffects(value);
-        let local be ir.localAt(state.routine,node.index); if kind == 10 { local=try introduced(state,node.index,node.location); }
+        let local be localAt(state,node.index); if kind == 10 { local=try introduced(state,node.index,node.location); }
         try ir.require(local != none and value.next == none and node.second == none and node.third == none,node.location,"invalid declaration/store");
         if local != none { try ir.require(local.valueType == value.valueType and not local.parameter or kind == 11 and local.valueType == value.valueType,node.location,"declaration descriptor mismatch");
             if kind == 10 { try ir.require(local.immutable == node.immutable,node.location,"fixed declaration mismatch"); if local.immutable { try ir.require(fixedType(state.program,local.valueType,none),node.location,"fixed value contains shared identity"); } }
-            else { try ir.require(has(state.active,node.index) and not local.immutable,node.location,"store into fixed/inactive local"); }
+            else { try ir.require(active(state,node.index) and not local.immutable,node.location,"store into fixed/inactive local"); }
             mark(state,node.index,value.kind == 28);
         } return false;
     }
@@ -206,25 +236,30 @@ function statement(state identity State,node identity ir.Node) returns Bool fail
             try ir.require(ir.kind(state.program,value.valueType) == 10 and item.valueType == value.valueType and item.immutable,node.location,"with binding mismatch");
             let cursor be state.program.types; let found be false; while cursor != none { if cursor.name == "std.files.FileError" { found=ir.failureHas(state.routine.failures,cursor.index); } cursor=cursor.next; } try ir.require(found and state.routine.index != -1,node.location,"cleanup failure missing from function contract");
         }
-        try ir.require(value.next == none and node.third == none,node.location,"invalid loop/resource shape"); let terminated be try block(state,try child(node.second,node.location)); state.active=saved; state.narrow=savedNarrow; return kind == 44 and terminated;
+        try ir.require(value.next == none and node.third == none,node.location,"invalid loop/resource shape"); let terminated be try block(state,try child(node.second,node.location)); restore(state,saved); state.narrow=savedNarrow; return kind == 44 and terminated;
     }
     try ir.require(false,node.location,"unknown IR statement opcode"); return false;
 }
 function block(state identity State,node identity ir.Node) returns Bool fails m.SemanticError {
     try ir.require(node.kind == 0 and node.valueType == 5 and node.second == none and node.third == none,node.location,"invalid IR block"); let saved be state.active; let narrow be state.narrow; let cursor be node.first; let terminated be false;
     while cursor != none { try ir.require(not terminated,cursor.location,"unreachable instruction"); terminated=try statement(state,cursor); cursor=cursor.next; }
-    state.active=saved; state.narrow=narrow; return terminated;
+    restore(state,saved); state.narrow=narrow; return terminated;
 }
 function routine(program identity ir.Program,value identity ir.Function) returns Bool fails m.SemanticError {
-    try ir.require(ir.ordinary(program,value.result) or value.result == 5,value.body.location,"invalid function result descriptor"); let state be identity State { program=program; routine=value; active=none; declared=none; narrow=none; };
+    try ir.require(ir.ordinary(program,value.result) or value.result == 5,value.body.location,"invalid function result descriptor"); let state be identity State { program=program; routine=value; locals=none; active=none; narrow=none; };
     let item be value.locals; let count be 0; let sawLocal be false;
     while item != none {
         try ir.require(item.index == count and ir.kind(program,item.valueType) >= 1 and item.valueType != 5,value.body.location,"invalid local index or descriptor"); count=count+1;
-        if item.parameter { try ir.require(not sawLocal and not item.immutable and value.index != -1 and ir.kind(program,item.valueType) != 10,value.body.location,"invalid parameter"); let introduced be try introduced(state,item.index,value.body.location); } else { sawLocal=true; } item=item.next;
+        if item.parameter { try ir.require(not sawLocal and not item.immutable and value.index != -1 and ir.kind(program,item.valueType) != 10,value.body.location,"invalid parameter"); } else { sawLocal=true; } item=item.next;
     }
+    // Parameter introduction cannot fail after the original ordered table checks:
+    // indices are contiguous, so every parameter exists and is distinct.
+    state.locals=localTree(identity LocalCursor { current=value.locals; },count);
+    item=value.locals;
+    while item != none { if item.parameter { let parameter be try introduced(state,item.index,value.body.location); } item=item.next; }
     try failureValid(program,value.failures,value.body.location);
     let failure be value.failures; while failure != none { let descriptor be ir.typeAt(program,failure.valueType); try ir.require(descriptor != none,value.body.location,"missing failure descriptor"); if descriptor != none { try ir.require(descriptor.checked,value.body.location,"fails requires error descriptor"); } failure=failure.next; }
-    let terminated be try block(state,value.body); item=value.locals; while item != none { try ir.require(has(state.declared,item.index),value.body.location,"local has no declaration"); item=item.next; }
+    let terminated be try block(state,value.body); try ir.require(allDeclared(state.locals),value.body.location,"local has no declaration");
     return try ir.require(value.result == 5 or terminated,value.body.location,"function has successful path without result");
 }
 type NodeSeen { value identity ir.Node; next maybe identity NodeSeen; }

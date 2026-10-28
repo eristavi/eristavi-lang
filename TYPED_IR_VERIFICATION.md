@@ -102,3 +102,50 @@ This is a partial compiler-module probe, not an owned compiler self-build or pro
 that Universal IR construction dominates. No unchanged 900-second attempt was
 repeated. Recursive analysis phases may overlap; their durations must not be summed
 as exclusive work.
+
+## Indexed local validation
+
+After local-table and parameter-contract validation, each function now receives a
+private balanced index over its existing local records. Construction consumes the
+validated linked table in O(L) time and uses O(L) managed memory. Lookup uses
+O(log L) comparisons, including negative and oversized lookup IDs; no allocation
+is based on an untrusted index. The public local table is not changed.
+
+Each private index record holds active/declared flags and a link to the previous
+active record. Scope exit clears the active flag only for records introduced
+since the saved scope head. The declared flag remains set across sibling scopes,
+so redeclaration of the same local ID is still rejected. Parameters remain active
+through the function body. The final declaration-coverage check walks the index
+once. Optional presence proofs retain their original separate scope handling.
+
+Parameter introduction moves after table validation. This preserves diagnostics:
+under the original ordered checks, every previously accepted parameter already
+had a unique contiguous index and therefore could not fail introduction. Invalid
+parameter contracts and invalid table entries are still checked in their original
+order. The index and flags are rebuilt for every verification call and never
+survive through mutations of the public program. Descriptor, field, failure and
+other unrelated scans remain unchanged.
+
+The local-scope oracle in `tests/typed_ir_verifier_cases.py` compares 19 cases,
+each checked twice, against exact category/message/path/line/column results.
+Coverage includes empty/wide tables, negative and oversized reads/declarations,
+sparse/duplicate/negative table indices, nested scope exit, stores to inactive
+locals, duplicate declarations in sibling branches, loops, parameters and error
+ordering when multiple contracts are malformed. The preceding implementation and
+the new one agree under bootstrap C, native execution and the qualified owned
+runtime. The native oracle is also included in normal supported Linux CI.
+
+A paired owned-runtime benchmark uses one function with 256 locals and three
+verification calls. The same seed emitted both harnesses; both use the same
+qualified owned runtime object. Two serial samples per implementation, in ABBA
+order, measured:
+
+| Implementation | Wall-time samples | Median | Peak resident memory |
+| --- | --- | ---: | ---: |
+| Linked local/active/declared scans | 9.387s, 4.862s | 7.124s | 9,472 KiB |
+| Private local index and scope flags | 3.028s, 2.716s | 2.872s | 9,472 KiB |
+
+The median is about 2.48× faster for this workload. Host variation is substantial;
+this is not a full self-build speedup claim. A small-function probe (64 functions,
+8 locals each, three verifications) measured 1.516s versus 1.523s in a single pair,
+which does not establish a performance difference. No timing threshold is in CI.
