@@ -1,0 +1,128 @@
+name: Universal optimizer counter profile
+
+on:
+  push:
+    branches: [diagnostics/universal-optimize-profile-17a39a5]
+
+jobs:
+  profile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      CC: clang
+      CFLAGS: -O2
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 8
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Verify production source matches merged main
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor 17a39a508728e42465add23c497189684d6318a9 HEAD
+          git diff --quiet 17a39a508728e42465add23c497189684d6318a9 -- src tests runtime compiler
+      - name: Install bootstrap toolchain
+        run: python -m pip install -e .
+      - name: Freeze exact source workload
+        run: |
+          set -euo pipefail
+          cp -a src "$RUNNER_TEMP/source-main"
+          (cd "$RUNNER_TEMP/source-main" && find . -type f -print0 | sort -z | xargs -0 sha256sum) > "$RUNNER_TEMP/source-main.sha256"
+      - name: Build reference compiler
+        run: |
+          set -euo pipefail
+          python -u tools/build_offline.py --skip-self-build --trace-phases --command-timeout 300 --output "$RUNNER_TEMP/reference" > "$RUNNER_TEMP/reference-build.log" 2>&1
+      - name: Run reference full source
+        run: |
+          set -euo pipefail
+          /usr/bin/time -v -o "$RUNNER_TEMP/reference.time.txt" timeout --signal=TERM --kill-after=10s 120s \
+            "$RUNNER_TEMP/reference/bin/erist-compiler" emit-asm "$RUNNER_TEMP/source-main/frontend.eri" \
+            --source-root "$RUNNER_TEMP/source-main" --target x86_64-linux --trace-phases \
+            > "$RUNNER_TEMP/reference.s" 2> "$RUNNER_TEMP/reference.trace.log"
+          sha256sum "$RUNNER_TEMP/reference.s" > "$RUNNER_TEMP/reference.sha256"
+      - name: Apply counter-only instrumentation
+        run: |
+          set -euo pipefail
+          python tools/universal_optimize_profile_patch.py
+          python tools/universal_optimize_profile_fix.py
+          git diff --check
+          git diff -- src/compiler/universal_verify.eri src/compiler/universal_optimize.eri > "$RUNNER_TEMP/profile.patch"
+          grep -q '\[erist-opt-profile\]' src/compiler/universal_verify.eri
+          grep -q 'pass=post-verify' src/compiler/universal_optimize.eri
+      - name: Build diagnostic compiler
+        run: |
+          set -euo pipefail
+          python -u tools/build_offline.py --skip-self-build --trace-phases --command-timeout 300 --output "$RUNNER_TEMP/profile" > "$RUNNER_TEMP/profile-build.log" 2>&1
+      - name: Run diagnostic full source
+        run: |
+          set -euo pipefail
+          /usr/bin/time -v -o "$RUNNER_TEMP/profile.time.txt" timeout --signal=TERM --kill-after=10s 180s \
+            "$RUNNER_TEMP/profile/bin/erist-compiler" emit-asm "$RUNNER_TEMP/source-main/frontend.eri" \
+            --source-root "$RUNNER_TEMP/source-main" --target x86_64-linux --trace-phases \
+            > "$RUNNER_TEMP/profile.s" 2> "$RUNNER_TEMP/profile.trace.log"
+          sha256sum "$RUNNER_TEMP/profile.s" > "$RUNNER_TEMP/profile.sha256"
+          test "$(sha256sum "$RUNNER_TEMP/reference.s" | awk '{print $1}')" = "$(sha256sum "$RUNNER_TEMP/profile.s" | awk '{print $1}')"
+      - name: Aggregate optimizer counters
+        run: |
+          python - <<'PY'
+          import json, re, os
+          from pathlib import Path
+          root = Path(os.environ['RUNNER_TEMP'])
+          current = None
+          agg = {
+              'pre-verify': {'routines': 0, 'registers': 0, 'blocks': 0, 'iterations': 0, 'flow_calls': 0, 'flow_steps': 0, 'transfers': 0, 'instruction_visits': 0, 'copy_words': 0, 'intersect_words': 0},
+              'post-verify': {'routines': 0, 'registers': 0, 'blocks': 0, 'iterations': 0, 'flow_calls': 0, 'flow_steps': 0, 'transfers': 0, 'instruction_visits': 0, 'copy_words': 0, 'intersect_words': 0},
+          }
+          reachability = {}
+          kv = re.compile(r'([a-z_]+)=(-?\d+)')
+          for line in (root / 'profile.trace.log').read_text().splitlines():
+              if '[erist-opt-profile]' not in line:
+                  continue
+              if 'pass=pre-verify' in line:
+                  current = 'pre-verify'; continue
+              if 'pass=reachability' in line:
+                  current = 'reachability'; continue
+              if 'pass=post-verify' in line:
+                  current = 'post-verify'; continue
+              values = {k: int(v) for k, v in kv.findall(line)}
+              if 'reachability routines=' in line:
+                  reachability = values
+              elif 'routine=' in line and current in agg:
+                  target = agg[current]
+                  target['routines'] += 1
+                  for key in target:
+                      if key != 'routines':
+                          target[key] += values.get(key, 0)
+          summary = {'verify': agg, 'reachability': reachability}
+          (root / 'optimizer-profile-summary.json').write_text(json.dumps(summary, indent=2, sort_keys=True) + '\n')
+          print(json.dumps(summary, indent=2, sort_keys=True))
+          assert agg['pre-verify']['routines'] > 0
+          assert agg['post-verify']['routines'] > 0
+          assert reachability.get('routines', 0) > 0
+          PY
+          echo '--- reference time ---'
+          cat "$RUNNER_TEMP/reference.time.txt"
+          echo '--- diagnostic time ---'
+          cat "$RUNNER_TEMP/profile.time.txt"
+          echo '--- hashes ---'
+          cat "$RUNNER_TEMP/reference.sha256" "$RUNNER_TEMP/profile.sha256"
+      - name: Preserve evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: universal-optimize-profile-${{ github.run_attempt }}
+          retention-days: 14
+          path: |
+            ${{ runner.temp }}/source-main.sha256
+            ${{ runner.temp }}/profile.patch
+            ${{ runner.temp }}/reference-build.log
+            ${{ runner.temp }}/profile-build.log
+            ${{ runner.temp }}/reference.trace.log
+            ${{ runner.temp }}/profile.trace.log
+            ${{ runner.temp }}/reference.time.txt
+            ${{ runner.temp }}/profile.time.txt
+            ${{ runner.temp }}/reference.sha256
+            ${{ runner.temp }}/profile.sha256
+            ${{ runner.temp }}/optimizer-profile-summary.json
