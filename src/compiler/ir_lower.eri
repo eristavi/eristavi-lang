@@ -7,11 +7,51 @@ import compiler.format;
 import compiler.ir_types;
 import compiler.semantic;
 
-type Source { declaration identity m.Declaration; routine identity ir.Function; map identity m.Clone; key Text; state Int; next maybe identity Source; }
+type Source { declaration identity m.Declaration; routine identity ir.Function; map identity m.Clone; key Text; state Int; next maybe identity Source; bucketNext maybe identity Source; }
+type SourceBucket { number Int; entries maybe identity Source; left maybe identity SourceBucket; right maybe identity SourceBucket; }
+type SourceRegistry { root identity SourceBucket; }
 type Seen { owner identity m.Module; next maybe identity Seen; }
-type Builder { program identity ir.Program; typeRegistry identity ir_types.Registry; sources maybe identity Source; seen maybe identity Seen; count Int; }
+type Builder { program identity ir.Program; typeRegistry identity ir_types.Registry; sourceRegistry identity SourceRegistry; sources maybe identity Source; seen maybe identity Seen; count Int; }
 type Binding { name Text; local identity ir.Local; next maybe identity Binding; }
 type Context { builder identity Builder; owner identity m.Module; routine identity ir.Function; bindings maybe identity Binding; count Int; map identity m.Clone; tail maybe identity ir.Local; }
+
+function sourceBucketTree(first Int, last Int) returns maybe identity SourceBucket {
+    if first > last { return none; }
+    let middle be first+(last-first)/2;
+    return identity SourceBucket { number=middle; entries=none; left=sourceBucketTree(first,middle-1); right=sourceBucketTree(middle+1,last); };
+}
+function sourceIndex() returns identity SourceRegistry {
+    return identity SourceRegistry {
+        root=identity SourceBucket { number=128; entries=none; left=sourceBucketTree(0,127); right=sourceBucketTree(129,256); };
+    };
+}
+function sourceBucket(indexer identity SourceRegistry, number Int) returns identity SourceBucket {
+    let cursor maybe identity SourceBucket be indexer.root;
+    while cursor != none {
+        let current be cursor;
+        if current.number == number { return current; }
+        if number < current.number { cursor=current.left; } else { cursor=current.right; }
+    }
+    return indexer.root;
+}
+function sourceHash(declaration identity m.Declaration, key Text) returns Int {
+    let value be declaration.node.token%257; if value < 0 { value=value+257; }
+    let offset be 0;
+    while offset < key.bytes.count { value=(value*131+key.bytes[offset])%257; offset=offset+1; }
+    return value;
+}
+function sourceCached(indexer identity SourceRegistry, declaration identity m.Declaration, key Text) returns maybe identity Source {
+    let slot be sourceBucket(indexer,sourceHash(declaration,key)); let cursor be slot.entries;
+    while cursor != none {
+        if cursor.declaration == declaration and cursor.key == key { return cursor; }
+        cursor=cursor.bucketNext;
+    }
+    return none;
+}
+function rememberSource(indexer identity SourceRegistry, item identity Source) {
+    let slot be sourceBucket(indexer,sourceHash(item.declaration,item.key));
+    item.bucketNext=slot.entries; slot.entries=item;
+}
 
 function reject(owner identity m.Module, source identity ast.Node, message Text) returns Bool fails m.SemanticError {
     return try m.reject(m.at(owner,source.token),"lower",message);
@@ -78,11 +118,12 @@ function instantiate(builder identity Builder, declaration identity m.Declaratio
     }
     if argument != none { try reject(owner,source,"unexpected specialization argument"); }
     let result be try concrete(builder,owner,source,types.clone(declaration.result,map),true);
-    let cursor be builder.sources;
-    while cursor != none { if cursor.declaration == declaration and cursor.key == key { return cursor.routine; } cursor=cursor.next; }
+    let existing be sourceCached(builder.sourceRegistry,declaration,key);
+    if existing != none { return existing.routine; }
     let routine be identity ir.Function { index=builder.count; name=owner.name+"."+source.text+key; result=result; locals=none; body=ir.node(0,5,m.at(owner,source.token)); failures=try ir_types.failuresIndexed(builder.typeRegistry,builder.program,owner,declaration.failures,m.at(owner,source.token)); next=builder.program.functions; };
     builder.count=builder.count+1; builder.program.functions=routine;
-    builder.sources=identity Source { declaration=declaration; routine=routine; map=map; key=key; state=0; next=builder.sources; };
+    let created be identity Source { declaration=declaration; routine=routine; map=map; key=key; state=0; next=builder.sources; bucketNext=none; };
+    builder.sources=created; rememberSource(builder.sourceRegistry,created);
     let context be identity Context { builder=builder; owner=owner; routine=routine; bindings=none; count=0; map=map; tail=none; };
     parameter=declaration.parameters;
     while parameter != none { let kind be try concrete(builder,owner,source,types.clone(parameter.value,map),false); local(context,parameter.name,kind,false,true); parameter=parameter.next; }
@@ -274,7 +315,7 @@ function block(context identity Context, source identity ast.Node) returns ident
 public function lower(owner identity m.Module) returns identity ir.Program fails m.SemanticError {
     let entry be identity ir.Function { index=-1; name=owner.name; result=5; locals=none; body=ir.node(0,5,m.at(owner,0)); failures=none; next=none; };
     let program be identity ir.Program { functions=none; entry=entry; types=none; };
-    let builder be identity Builder { program=program; typeRegistry=ir_types.registry(program); sources=none; seen=none; count=0; };
+    let builder be identity Builder { program=program; typeRegistry=ir_types.registry(program); sourceRegistry=sourceIndex(); sources=none; seen=none; count=0; };
     try collect(builder,owner);
     let context be identity Context { builder=builder; owner=owner; routine=entry; bindings=none; count=0; map=identity m.Clone { head=none; }; tail=none; };
     progress.phase(owner.trace,"begin","lower-entry",owner.path);
