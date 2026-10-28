@@ -60,3 +60,45 @@ This batch improves a proven quadratic scan and exposes the missing phase detail
 it does not establish full owned compiler repeatability. Normal CI and full
 qualification are required before merge. A further owned self-build is justified
 only after the completed batch passes those gates.
+
+## Function-local table construction
+
+The typed lowerer previously walked the entire existing local table on every
+append. A private per-function tail now makes each append O(1), reducing table
+construction from O(L²) to O(L). Parameter construction starts with an empty
+tail; body lowering seeds its tail from the existing parameters. The tail and
+local indices span nested lexical scopes, while name bindings retain their
+existing save/restore behavior. Public typed IR, declaration order and diagnostics
+are unchanged. No runtime or value ABI changes are involved.
+
+`lowering_benchmark_program()` in `tests/typed_ir_verifier_cases.py` creates one
+parameter, 192 ordinary function locals, and three entry locals across scopes.
+The qualified owned compiler from PR #48 and a candidate linked to the same
+qualified runtime object compiled the same source with `ir --trace-phases`.
+Four serial ABBA samples produced byte-identical reports. Captured stderr and
+phase balance were checked within each command; incomplete captures were excluded.
+
+| Typed lowering | Median seconds |
+| --- | ---: |
+| Previous append scan | 0.319 |
+| Cached tail | 0.154 |
+
+This is about 2.07× faster for that phase and workload. Whole-command timings
+varied substantially in report serialization and unrelated phases, so no overall
+compiler speedup is inferred. Existing specialization tests now check parameter
+and nested-branch local order across Int, Float, Bool and Text specializations.
+
+## Bounded owned-runtime probes after PR #48
+
+The qualified owned compiler completed a 32-function scalar source in 9.0 seconds
+and the typed-IR compiler module in about 12 seconds. The scalar source produced
+identical assembly with the qualified bootstrap compiler. Universal IR optimization
+was the largest phase in both small probes (about 3.7 and 3.5 seconds).
+
+A larger `compiler/ir_verify.eri` probe was capped at 90 seconds. It completed
+analysis in 45.1 seconds and typed lowering in 28.0 seconds, then timed out inside
+per-function typed-IR verification. Structural validation completed in 3.9 seconds.
+This is a partial compiler-module probe, not an owned compiler self-build or proof
+that Universal IR construction dominates. No unchanged 900-second attempt was
+repeated. Recursive analysis phases may overlap; their durations must not be summed
+as exclusive work.
