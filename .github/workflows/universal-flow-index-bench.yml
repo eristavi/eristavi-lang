@@ -1,0 +1,115 @@
+name: Universal flow-index owned benchmark
+
+on:
+  push:
+    branches: [diagnostics/universal-flow-index-bench-c365a55]
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CC: clang
+      CFLAGS: -O2
+      BASE_SHA: 17a39a508728e42465add23c497189684d6318a9
+      CANDIDATE_SHA: c365a55357ce4cddd3341e93343fa77a939aa88e
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install bootstrap toolchain
+        run: python -m pip install -e .
+      - name: Materialize exact baseline and candidate source roots
+        run: |
+          set -euo pipefail
+          git worktree add --detach "$RUNNER_TEMP/base-repo" "$BASE_SHA"
+          git worktree add --detach "$RUNNER_TEMP/candidate-repo" "$CANDIDATE_SHA"
+          cp -a "$RUNNER_TEMP/base-repo/src" "$RUNNER_TEMP/base-src"
+          cp -a "$RUNNER_TEMP/candidate-repo/src" "$RUNNER_TEMP/candidate-src"
+          git diff --no-index -- "$RUNNER_TEMP/base-src/compiler/universal_verify.eri" "$RUNNER_TEMP/candidate-src/compiler/universal_verify.eri" > "$RUNNER_TEMP/verifier.diff" || test $? -eq 1
+      - name: Generate established and block-heavy verifier workloads
+        env:
+          PYTHONPATH: tests
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          from universal_verifier_cases import benchmark_program
+          import os
+          root=Path(os.environ['RUNNER_TEMP'])
+          workloads={
+              'established': benchmark_program(width=2000,chains=32,rounds=8),
+              'blocks': benchmark_program(width=64,chains=512,rounds=4),
+          }
+          for name,source in workloads.items():
+              for side in ('base','candidate'):
+                  path=root/f'{side}-src'/f'{name}.eri'
+                  path.write_text(source,encoding='utf-8')
+          PY
+      - name: Build one owned offline bundle
+        run: |
+          set -euo pipefail
+          python -u tools/build_offline.py --runtime owned --skip-self-build --trace-phases --command-timeout 300 --output "$RUNNER_TEMP/owned" > "$RUNNER_TEMP/owned-build.log" 2>&1
+      - name: Compile benchmark executables with identical compiler/runtime
+        run: |
+          set -euo pipefail
+          for name in established blocks; do
+            "$RUNNER_TEMP/owned/bin/erist" build "$RUNNER_TEMP/base-src/$name.eri" --source-root "$RUNNER_TEMP/base-src" -o "$RUNNER_TEMP/base-$name"
+            "$RUNNER_TEMP/owned/bin/erist" build "$RUNNER_TEMP/candidate-src/$name.eri" --source-root "$RUNNER_TEMP/candidate-src" -o "$RUNNER_TEMP/candidate-$name"
+          done
+          sha256sum "$RUNNER_TEMP"/base-* "$RUNNER_TEMP"/candidate-* > "$RUNNER_TEMP/binary.sha256" || true
+      - name: Run serial ABBA owned-runtime measurements
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, resource, subprocess, time
+          from pathlib import Path
+          root=Path(os.environ['RUNNER_TEMP'])
+          all_results={}
+          for workload in ('established','blocks'):
+              rows=[]
+              for label in ('A1','B1','B2','A2'):
+                  side='base' if label.startswith('A') else 'candidate'
+                  exe=root/f'{side}-{workload}'
+                  before=resource.getrusage(resource.RUSAGE_CHILDREN)
+                  start=time.perf_counter()
+                  proc=subprocess.run([str(exe)],capture_output=True,text=True,timeout=120,env={'PATH':'','LANG':'C'})
+                  wall=time.perf_counter()-start
+                  after=resource.getrusage(resource.RUSAGE_CHILDREN)
+                  row={
+                      'label':label,'side':side,'wall':wall,
+                      'user':after.ru_utime-before.ru_utime,
+                      'sys':after.ru_stime-before.ru_stime,
+                      'maxrss_kib':after.ru_maxrss,
+                      'returncode':proc.returncode,'stdout':proc.stdout,'stderr':proc.stderr,
+                  }
+                  if proc.returncode != 0 or proc.stderr or proc.stdout not in ('8\n','4\n'):
+                      raise SystemExit(f'bad {workload} {label}: {row}')
+                  rows.append(row)
+              import statistics
+              base=[r['wall'] for r in rows if r['side']=='base']
+              cand=[r['wall'] for r in rows if r['side']=='candidate']
+              all_results[workload]={
+                  'runs':rows,
+                  'base_median_wall':statistics.median(base),
+                  'candidate_median_wall':statistics.median(cand),
+                  'ratio':statistics.median(cand)/statistics.median(base),
+              }
+          text=json.dumps(all_results,indent=2,sort_keys=True)
+          (root/'results.json').write_text(text)
+          print(text)
+          PY
+      - name: Preserve benchmark evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: universal-flow-index-bench-${{ github.run_attempt }}
+          retention-days: 14
+          path: |
+            ${{ runner.temp }}/verifier.diff
+            ${{ runner.temp }}/owned-build.log
+            ${{ runner.temp }}/binary.sha256
+            ${{ runner.temp }}/results.json
