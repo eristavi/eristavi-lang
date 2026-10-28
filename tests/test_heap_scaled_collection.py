@@ -1,6 +1,7 @@
 """Safe-point budget scales with the retained heap and resets after reclamation."""
+import unittest
 import test_runtime_lookup_caches as caches
-class HeapScaledCollectionTests(caches.RuntimeLookupCacheTests):
+class HeapScaledCollectionTests(caches.RuntimeLookupCacheHarness,unittest.TestCase):
  def test_large_heap_interval_and_empty_heap_reset(self):
   self.probe('heap-scaled-collection', '''
 .text

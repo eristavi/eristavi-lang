@@ -1,0 +1,9 @@
+// Optional compiler diagnostics. Never write progress to generated-code stdout.
+import std.process;
+import compiler.format;
+
+public function phase(enabled Bool, event Text, phase Text, subject Text) {
+    if enabled {
+        process.writeError("[erist-phase] {\"event\":"+format.quote(event)+",\"phase\":"+format.quote(phase)+",\"subject\":"+format.quote(subject)+"}");
+    }
+}

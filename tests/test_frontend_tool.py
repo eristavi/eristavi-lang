@@ -154,3 +154,54 @@ class FrontendToolTests(unittest.TestCase):
             self.assertEqual(interpreter.process_state.exit_code,compiled.returncode)
             self.assertEqual(json.loads(output[0]),json.loads(compiled.stdout))
             self.assertEqual(errors,[])
+
+    def test_opt_in_phase_trace_preserves_reports_assembly_and_unicode_paths(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);source=root/'entry λ\u2028\n.eri'
+            source.write_text('import helper; output(helper.double(2));')
+            (root/'helper.eri').write_text('public function double(x Int) returns Int { return x*2; }')
+            cases=[('check',()),('ast',()),('tokens',()),('analyze',('--source-root',root)),
+                   ('analyze-report',('--source-root',root)),('ir',('--source-root',root)),
+                   ('uir',('--source-root',root)),('emit-c',('--source-root',root)),
+                   ('emit-asm',('--source-root',root,'--target','x86_64-linux')),
+                   ('emit-asm',('--source-root',root,'--target','arm64-linux'))]
+            for command,options in cases:
+                with self.subTest(command=command,options=options):
+                    plain=self.invoke(command,source,*options)
+                    traced=self.invoke(command,source,'--trace-phases',*options)
+                    self.assertEqual((plain.returncode,plain.stderr),(0,''))
+                    self.assertEqual((traced.returncode,traced.stdout),(0,plain.stdout))
+                    records=[]
+                    for line in traced.stderr.split("\n"):
+                        if not line:continue
+                        self.assertTrue(line.startswith('[erist-phase] '),line)
+                        records.append(json.loads(line[len('[erist-phase] '):]))
+                    self.assertEqual(records[0],{'event':'begin','phase':'read','subject':str(source)})
+                    self.assertTrue(any(row['event']=='end' and row['phase']=='read' for row in records))
+                    if command=='emit-asm':
+                        self.assertTrue(any(row['phase']=='emit-function' for row in records))
+                        self.assertTrue(any(row['phase']=='lower-function' for row in records))
+                        self.assertEqual(records[-1]['phase'],'write-output')
+
+    def test_phase_trace_preserves_failure_status_and_original_diagnostics(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);source=root/'input.eri'
+            for contents in ('"unterminated','let value be ;','output(missing);',None):
+                with self.subTest(contents=contents):
+                    if contents is None:source.unlink()
+                    else:source.write_text(contents)
+                    plain=self.invoke('analyze',source,'--source-root',root)
+                    traced=self.invoke('analyze',source,'--source-root',root,'--trace-phases')
+                    self.assertEqual((plain.returncode,traced.returncode),(1,1))
+                    self.assertEqual(traced.stdout,plain.stdout)
+                    diagnostic=re.sub(r'(?m)^\[erist-phase\] [^\n]*\n','',traced.stderr)
+                    self.assertEqual(diagnostic,plain.stderr)
+                    self.assertIn('[erist-phase] ',traced.stderr)
+
+    def test_phase_flag_does_not_hide_duplicate_or_incomplete_options(self):
+        for options in [('--trace-phases','--trace-phases'),('--trace-phases','--source-root'),
+                        ('--trace-phases','--target','unknown'),('--trace-phases','--output','unused')]:
+            with self.subTest(options=options):
+                result=self.invoke('emit-asm',ROOT/'examples/hello.eri',*options)
+                self.assertEqual(result.returncode,2,result.stderr)
+                self.assertIn('Usage:',result.stderr)

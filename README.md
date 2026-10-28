@@ -251,7 +251,8 @@ erist build-wat examples/hello.eri -o hello.wat
 python -m unittest discover -s tests -v
 ```
 
-The current suite contains **414 tests**. The hosted CI matrix runs:
+The current suite discovers **424 test cases**. Each runs once per applicable runner;
+platform skips and the actual pass/fail totals are recorded in CI artifacts. The hosted CI matrix runs:
 
 - GCC / x86-64 Ubuntu / `-O2`;
 - Clang / x86-64 Ubuntu / `-O2`;

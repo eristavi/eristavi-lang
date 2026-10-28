@@ -29,8 +29,8 @@ jobs:
       CFLAGS: -O2
       ERISTAVI_GRAPHEME_BREAK_TEST: /tmp/GraphemeBreakTest-17.0.0.txt
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
       - name: Install bootstrap toolchain
@@ -43,4 +43,15 @@ jobs:
       - name: Compile Python sources
         run: python -m compileall -q compiler tests tools
       - name: Run test suite
-        run: python -m unittest discover -s tests -v
+        run: |
+          set -o pipefail
+          python -u tools/run_ci_tests.py --report "$RUNNER_TEMP/test-results.json" 2>&1 | tee "$RUNNER_TEMP/test-results.log"
+      - name: Preserve test outcomes and diagnostics
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: tests-${{ matrix.os }}-${{ matrix.cc }}-${{ github.run_attempt }}
+          retention-days: 14
+          path: |
+            ${{ runner.temp }}/test-results.json
+            ${{ runner.temp }}/test-results.log

@@ -1,4 +1,5 @@
 import compiler.ast;
+import compiler.progress;
 import compiler.semantic_model as m;
 import compiler.semantic_types as types;
 import compiler.typed_ir as ir;
@@ -275,7 +276,9 @@ public function lower(owner identity m.Module) returns identity ir.Program fails
     let builder be identity Builder { program=program; sources=none; seen=none; count=0; };
     try collect(builder,owner);
     let context be identity Context { builder=builder; owner=owner; routine=entry; bindings=none; count=0; map=identity m.Clone { head=none; }; };
+    progress.phase(owner.trace,"begin","lower-entry",owner.path);
     entry.body=try block(context,owner.root);
+    progress.phase(owner.trace,"end","lower-entry",owner.path);
     let pending be true;
     while pending {
         pending=false; let cursor be builder.sources;
@@ -286,7 +289,9 @@ public function lower(owner identity m.Module) returns identity ir.Program fails
                 let active be identity Context { builder=builder; owner=source.owner; routine=current.routine; bindings=none; count=0; map=current.map; };
                 let parameter be current.routine.locals;
                 while parameter != none { active.bindings=identity Binding { name=parameter.name; local=parameter; next=active.bindings; }; active.count=active.count+1; parameter=parameter.next; }
+                if source.owner.trace { progress.phase(true,"begin","lower-function","f"+format.integer(current.routine.index)+" "+current.routine.name); }
                 current.routine.body=try block(active,m.child(source.node.third)); current.state=2;
+                if source.owner.trace { progress.phase(true,"end","lower-function","f"+format.integer(current.routine.index)+" "+current.routine.name); }
             }
             cursor=current.next;
         }

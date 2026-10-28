@@ -6,6 +6,7 @@ import compiler.universal_verify;
 import compiler.universal_optimize;
 import compiler.semantic_model as m;
 import compiler.format;
+import compiler.progress;
 type Emitter { body Text; data Text; labels Int; program identity u.Program; roots Text; rootCount Int; }
 function line(e identity Emitter,text Text) { e.body=e.body+text+"\n"; }
 function datum(e identity Emitter,text Text) { e.data=e.data+text+"\n"; }
@@ -77,7 +78,25 @@ function descriptors(e identity Emitter) {
     }
 }
 public function emit(source identity ir.Program) returns Text fails m.SemanticError {
-    let program be try universal_lower.lower(source); try universal_optimize.optimize(program);
+    return try emitWithTracing(source,false);
+}
+public function emitWithTracing(source identity ir.Program, trace Bool) returns Text fails m.SemanticError {
+    progress.phase(trace,"begin","universal-lower","x86_64-linux");
+    let program be try universal_lower.lower(source);
+    progress.phase(trace,"end","universal-lower","x86_64-linux");
+    progress.phase(trace,"begin","universal-optimize","x86_64-linux");
+    try universal_optimize.optimize(program);
+    progress.phase(trace,"end","universal-optimize","x86_64-linux");
     let e be identity Emitter { body=".globl erist_entry\n"; data=""; labels=0; program=program; roots=""; rootCount=0; };
-    let cursor be program.functions; while cursor != none { routine(e,cursor,"f"+format.integer(cursor.index)); cursor=cursor.next; } routine(e,program.entry,"erist_entry"); descriptors(e); return e.body+e.data+".section .note.GNU-stack,\"\",@progbits\n";
+    let cursor be program.functions;
+    while cursor != none {
+        let name be "f"+format.integer(cursor.index);
+        progress.phase(trace,"begin","emit-function",name);
+        routine(e,cursor,name);
+        progress.phase(trace,"end","emit-function",name); cursor=cursor.next;
+    }
+    progress.phase(trace,"begin","emit-function","erist_entry"); routine(e,program.entry,"erist_entry");
+    progress.phase(trace,"end","emit-function","erist_entry");
+    progress.phase(trace,"begin","emit-descriptors","x86_64-linux"); descriptors(e);
+    progress.phase(trace,"end","emit-descriptors","x86_64-linux"); return e.body+e.data+".section .note.GNU-stack,\"\",@progbits\n";
 }

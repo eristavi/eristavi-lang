@@ -23,7 +23,7 @@ when the relevant implementation and toolchain inputs are unchanged.
 - Add the `qualification` label to run both owned integration and repeated
   bootstrap self-build/offline audits on all three Linux configurations.
 - The **Eristavi qualification** workflow also offers **Run workflow**, with
-  `full` or `owned-integration`, for an explicitly selected branch/ref.
+  `full`, `owned-integration` or `owned-self-build`, for an explicitly selected branch/ref.
 
 Qualification does not run on ordinary pushes, PR synchronization or main merges.
 A label qualifies the source revision present when it is added. If relevant code
@@ -39,3 +39,22 @@ startup and offline application audit and records `repeatable: false`. It does
 to default. Full qualification retains the three Linux bootstrap gates that passed
 CI #379; those gates are selected explicitly instead of repeating during each
 edit or on the resulting main merge.
+
+## Diagnostic evidence and the explicit owned self-build gate
+
+All qualification commands use `--trace-phases` and retain per-command stdout,
+stderr, phase events, partial emissions, input hashes and qualification status.
+Build stdout/stderr is also tee'd with shell pipe-failure propagation. Evidence is
+uploaded with `if: always()` and 14-day retention even if a build step fails. The
+job summary states repeatability and offline-audit status separately. An interrupted
+job may retain `running` status; do not treat an incomplete record as a success.
+
+The manually selected `owned-self-build` profile runs the owned compiler's full
+B-to-C and C-to-D checks plus offline audit. It is independent of `full`, which
+continues to qualify bootstrap self-builds and owned integration. Ordinary pushes
+and PR synchronization trigger neither expensive profile. The default command
+timeout is still 900 seconds; `--command-timeout` allows short diagnostic probes.
+
+Ordinary CI uses the standard unittest suite with a JSON outcome report and retains
+its raw test log. Platform-specific skips remain visible. See
+[BUILD_DIAGNOSTICS.md](BUILD_DIAGNOSTICS.md) for artifact interpretation and limits.

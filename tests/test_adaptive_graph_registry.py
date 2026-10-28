@@ -1,6 +1,7 @@
 """Adaptive registry publication, exact membership and empty-heap reclamation."""
+import unittest
 import test_runtime_lookup_caches as caches
-class AdaptiveGraphRegistryTests(caches.RuntimeLookupCacheTests):
+class AdaptiveGraphRegistryTests(caches.RuntimeLookupCacheHarness,unittest.TestCase):
  def scenario(self,fail_growth):
   rt=self.runtime
   if fail_growth:

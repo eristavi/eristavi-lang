@@ -1,6 +1,11 @@
 from __future__ import annotations
 
 import platform
+import contextlib
+import io
+import os
+import shutil
+from unittest.mock import patch
 import subprocess
 import tempfile
 import unittest
@@ -88,6 +93,23 @@ class DirectGCTests(unittest.TestCase):
             p = subprocess.run([str(exe)], capture_output=True, text=True)
             self.assertEqual(p.returncode, 0, p.stderr)
             self.assertEqual(p.stdout, "root\n500\n")
+
+    @unittest.skipUnless(DIRECT_HOST, "PIE GC descriptors require native x86-64 Linux")
+    def test_gc_pointer_descriptors_link_as_pie_without_text_relocations(self):
+        if not shutil.which('readelf'):self.skipTest('readelf unavailable')
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);source=root/'app.eri';binary=root/'app'
+            source.write_text('type Item { name Text; } let values be [Item { name="A"; }]; output(values[0].name);')
+            diagnostics=io.StringIO()
+            with patch.dict(os.environ,{'CFLAGS':'-fPIE -pie -Wl,-z,text -Wl,-z,relro,-z,now'}),contextlib.redirect_stderr(diagnostics):
+                self.assertEqual(build_direct(source,binary,root),0,diagnostics.getvalue())
+            self.assertEqual(diagnostics.getvalue(),'')
+            dynamic=subprocess.check_output(['readelf','-dW',binary],text=True)
+            self.assertNotIn('TEXTREL',dynamic)
+            self.assertIn('GNU_RELRO',subprocess.check_output(['readelf','-lW',binary],text=True))
+            self.assertIn('.data.rel.ro',subprocess.check_output(['readelf','-SW',binary],text=True))
+            result=subprocess.run([binary],capture_output=True,text=True,timeout=10)
+            self.assertEqual((result.returncode,result.stdout,result.stderr),(0,'A\n',''))
 
 
 if __name__ == "__main__":

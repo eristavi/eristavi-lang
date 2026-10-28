@@ -131,3 +131,22 @@ flags; native assembly may combine root and target flags. `emit-c` reads the pin
 build/check CLI and bundled assembler/linker/runtime. See OFFLINE_TOOLCHAIN.md for
 full structural coverage, self-build evidence, commands and limitations. Earlier
 sections above describe the original frontend/scalar milestones.
+
+## Opt-in phase tracing
+
+Add `--trace-phases` after the command and source path to write structured progress
+to stderr. AST, IR, generated C/assembly and normal stdout remain unchanged.
+For example: `erist-frontend emit-asm src/frontend.eri --source-root src --target x86_64-linux --trace-phases`.
+
+Records begin with `[erist-phase] ` followed by JSON containing `event`, `phase`,
+and `subject`. Subjects are JSON-quoted, including paths with Unicode or newlines.
+Tracing covers input read/lex/parse, module location indexing and analysis,
+function analysis and lowering, Universal IR conversion/optimization, native
+function/descriptors emission and output. Lowered function subjects include the
+`f` index used by the native emitter, allowing the last emitter record to be
+matched to its source function. An error preserves the original diagnostic and
+exit status; an unmatched `begin` identifies work that did not finish.
+
+The offline `erist` wrapper also forwards `--trace-phases`. Qualification enables
+it explicitly and retains raw stderr plus timestamped events. Trace I/O can affect
+timings; tracing is diagnostic evidence rather than a performance benchmark.
