@@ -1,0 +1,166 @@
+name: Owned runtime type registration index probe
+
+on:
+  push:
+    branches:
+      - compiler/type-registration-index
+
+concurrency:
+  group: owned-type-registration-index-probe
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CC: clang
+      CFLAGS: -O2
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install bootstrap toolchain
+        run: python -m pip install -e .
+
+      - name: Prepare exact merged-main baseline worktree
+        run: |
+          git worktree add "$RUNNER_TEMP/baseline" ab3a60674b0e862f5a237b5ede84f2dfa94953fe
+          git -C "$RUNNER_TEMP/baseline" rev-parse HEAD
+          git rev-parse HEAD
+
+      - name: Build baseline and candidate owned compiler B
+        shell: bash
+        run: |
+          set -euo pipefail
+          (
+            cd "$RUNNER_TEMP/baseline"
+            python -u tools/build_offline.py \
+              --runtime owned \
+              --skip-self-build \
+              --trace-phases \
+              --command-timeout 300 \
+              --output "$RUNNER_TEMP/baseline-owned" \
+              2>&1 | tee "$RUNNER_TEMP/baseline-build.log"
+          )
+          python -u tools/build_offline.py \
+            --runtime owned \
+            --skip-self-build \
+            --trace-phases \
+            --command-timeout 300 \
+            --output "$RUNNER_TEMP/candidate-owned" \
+            2>&1 | tee "$RUNNER_TEMP/candidate-build.log"
+
+          sha256sum "$RUNNER_TEMP/baseline-owned/lib/erist-runtime.o" \
+                    "$RUNNER_TEMP/candidate-owned/lib/erist-runtime.o" \
+                    | tee "$RUNNER_TEMP/runtime-hashes.txt"
+          cmp "$RUNNER_TEMP/baseline-owned/lib/erist-runtime.o" \
+              "$RUNNER_TEMP/candidate-owned/lib/erist-runtime.o"
+
+          sha256sum "$RUNNER_TEMP/baseline-owned/bin/erist-compiler" \
+                    "$RUNNER_TEMP/candidate-owned/bin/erist-compiler" \
+                    | tee "$RUNNER_TEMP/compiler-hashes.txt"
+
+      - name: Run serial ABBA typed-IR measurement on identical source
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="$RUNNER_TEMP/baseline-owned/bin/erist-compiler"
+          cand="$RUNNER_TEMP/candidate-owned/bin/erist-compiler"
+          source="$RUNNER_TEMP/baseline/src/compiler/typed_ir.eri"
+          root="$RUNNER_TEMP/baseline/src"
+
+          run_one() {
+            label="$1"; binary="$2"
+            out="$RUNNER_TEMP/${label}.json"
+            err="$RUNNER_TEMP/${label}.err"
+            timing="$RUNNER_TEMP/${label}.time"
+            set +e
+            /usr/bin/time -f 'wall=%e\nuser=%U\nsystem=%S\nmax_rss_kib=%M' -o "$timing" \
+              timeout --signal=TERM --kill-after=5s 60s \
+              "$binary" ir "$source" --source-root "$root" \
+              >"$out" 2>"$err"
+            rc=$?
+            set -e
+            printf '%s\n' "$rc" > "$RUNNER_TEMP/${label}.rc"
+            echo "[$label] rc=$rc"
+            cat "$timing"
+            if [ "$rc" -ne 0 ]; then
+              cat "$err" >&2
+              return 1
+            fi
+            test ! -s "$err"
+          }
+
+          run_one A1 "$base"
+          run_one B1 "$cand"
+          run_one B2 "$cand"
+          run_one A2 "$base"
+
+          cmp "$RUNNER_TEMP/A1.json" "$RUNNER_TEMP/B1.json"
+          cmp "$RUNNER_TEMP/A1.json" "$RUNNER_TEMP/B2.json"
+          cmp "$RUNNER_TEMP/A1.json" "$RUNNER_TEMP/A2.json"
+          sha256sum "$RUNNER_TEMP/A1.json" "$RUNNER_TEMP/B1.json" \
+                    "$RUNNER_TEMP/B2.json" "$RUNNER_TEMP/A2.json" \
+                    | tee "$RUNNER_TEMP/output-hashes.txt"
+
+          python - <<'PY'
+          import os, pathlib, statistics
+          root=pathlib.Path(os.environ['RUNNER_TEMP'])
+          def read(label):
+              data={}
+              for line in (root/f'{label}.time').read_text().splitlines():
+                  if '=' in line:
+                      k,v=line.split('=',1); data[k]=float(v)
+              return data
+          samples={label:read(label) for label in ('A1','B1','B2','A2')}
+          abase=[samples['A1']['wall'],samples['A2']['wall']]
+          bcand=[samples['B1']['wall'],samples['B2']['wall']]
+          text=(
+              f"baseline_wall_samples={abase}\n"
+              f"candidate_wall_samples={bcand}\n"
+              f"baseline_wall_median={statistics.median(abase):.3f}\n"
+              f"candidate_wall_median={statistics.median(bcand):.3f}\n"
+              f"baseline_user_median={statistics.median([samples['A1']['user'],samples['A2']['user']]):.3f}\n"
+              f"candidate_user_median={statistics.median([samples['B1']['user'],samples['B2']['user']]):.3f}\n"
+              f"baseline_rss_max={max(samples['A1']['max_rss_kib'],samples['A2']['max_rss_kib']):.0f}\n"
+              f"candidate_rss_max={max(samples['B1']['max_rss_kib'],samples['B2']['max_rss_kib']):.0f}\n"
+          )
+          (root/'owned-abba-summary.txt').write_text(text)
+          print(text,end='')
+          PY
+
+      - name: Preserve owned-runtime evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: owned-type-index-probe-${{ github.run_attempt }}
+          retention-days: 14
+          path: |
+            ${{ runner.temp }}/baseline-build.log
+            ${{ runner.temp }}/candidate-build.log
+            ${{ runner.temp }}/runtime-hashes.txt
+            ${{ runner.temp }}/compiler-hashes.txt
+            ${{ runner.temp }}/output-hashes.txt
+            ${{ runner.temp }}/owned-abba-summary.txt
+            ${{ runner.temp }}/A1.time
+            ${{ runner.temp }}/A2.time
+            ${{ runner.temp }}/B1.time
+            ${{ runner.temp }}/B2.time
+            ${{ runner.temp }}/A1.rc
+            ${{ runner.temp }}/A2.rc
+            ${{ runner.temp }}/B1.rc
+            ${{ runner.temp }}/B2.rc
+            ${{ runner.temp }}/A1.err
+            ${{ runner.temp }}/A2.err
+            ${{ runner.temp }}/B1.err
+            ${{ runner.temp }}/B2.err
+            ${{ runner.temp }}/A1.json
+            ${{ runner.temp }}/A2.json
+            ${{ runner.temp }}/B1.json
+            ${{ runner.temp }}/B2.json
