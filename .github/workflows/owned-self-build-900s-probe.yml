@@ -1,0 +1,60 @@
+name: Owned self-build 900s probe
+
+on:
+  push:
+    branches:
+      - diagnostics/owned-self-build-cac2207
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CC: clang
+      CFLAGS: -O2
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install bootstrap toolchain
+        run: python -m pip install -e .
+      - name: Verify exact candidate head
+        run: |
+          test "$(git rev-parse HEAD^)" = "cac2207b2db215dd23cdcac5078e10bb25596b72"
+          git diff --quiet HEAD^ -- src tests tools compiler runtime
+      - name: Run owned compiler self-build with hard 900 second cap
+        run: |
+          set +e
+          set -o pipefail
+          mkdir -p "$RUNNER_TEMP/owned-self-900"
+          /usr/bin/time -v timeout --signal=TERM --kill-after=10s 900s \
+            python -u tools/build_offline.py --runtime owned --trace-phases \
+            --output "$RUNNER_TEMP/owned-self-900/output" \
+            > >(tee "$RUNNER_TEMP/owned-self-900/stdout.log") \
+            2> >(tee "$RUNNER_TEMP/owned-self-900/stderr.log" >&2)
+          rc=$?
+          echo "$rc" > "$RUNNER_TEMP/owned-self-900/exit-code.txt"
+          echo "exit=$rc"
+          exit 0
+      - name: Preserve owned self-build evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: owned-self-build-900s-${{ github.run_attempt }}
+          retention-days: 14
+          path: |
+            ${{ runner.temp }}/owned-self-900/
+      - name: Classify probe
+        run: |
+          rc=$(cat "$RUNNER_TEMP/owned-self-900/exit-code.txt")
+          if [ "$rc" = "0" ]; then
+            echo "owned self-build completed inside 900 seconds"
+            exit 0
+          fi
+          if [ "$rc" = "124" ]; then
+            echo "owned self-build reached the intended 900-second cap"
+            exit 0
+          fi
+          echo "owned self-build failed with unexpected exit $rc"
+          exit 1
