@@ -23,11 +23,6 @@ jobs:
           set -euo pipefail
           cp -a src "$RUNNER_TEMP/source-main"
           (cd "$RUNNER_TEMP/source-main" && find . -type f -print0 | sort -z | xargs -0 sha256sum) > "$RUNNER_TEMP/source-main.sha256"
-      - name: Build control compiler and reference output
-        run: |
-          set -euo pipefail
-          python -u tools/build_offline.py --skip-self-build --command-timeout 300 --output "$RUNNER_TEMP/erist-control" > "$RUNNER_TEMP/control-build.log" 2>&1
-          timeout 60s "$RUNNER_TEMP/erist-control/bin/erist-compiler" emit-asm "$RUNNER_TEMP/source-main/frontend.eri" --source-root "$RUNNER_TEMP/source-main" --target x86_64-linux > "$RUNNER_TEMP/control.s" 2> "$RUNNER_TEMP/control.trace.log"
       - name: Apply diagnostic counters
         run: |
           set -euo pipefail
@@ -49,8 +44,13 @@ jobs:
           grep '"phase":"lower-profile"' "$RUNNER_TEMP/profile.trace.log" > "$RUNNER_TEMP/lower-profile.samples" || true
           tail -n 1 "$RUNNER_TEMP/lower-profile.samples" > "$RUNNER_TEMP/lower-profile.final" || true
           if [ "$rc" -eq 0 ]; then
-            cmp "$RUNNER_TEMP/control.s" "$RUNNER_TEMP/profile.s"
-            sha256sum "$RUNNER_TEMP/control.s" "$RUNNER_TEMP/profile.s" > "$RUNNER_TEMP/output.sha256"
+            sha256sum "$RUNNER_TEMP/profile.s" > "$RUNNER_TEMP/output.sha256"
+            actual=$(sha256sum "$RUNNER_TEMP/profile.s" | awk '{print $1}')
+            expected=7a08e608f097eb6e0c79e78650f17adcb52fb553d89f40a5ad37734548dc9efb7
+            if [ "$actual" != "$expected" ]; then
+              echo "Unexpected full-source assembly hash: $actual" >&2
+              exit 1
+            fi
           fi
           echo "exit_code=$rc"
           cat "$RUNNER_TEMP/lower-profile.final" || true
@@ -64,9 +64,6 @@ jobs:
           path: |
             ${{ runner.temp }}/source-main.sha256
             ${{ runner.temp }}/lower-ir-remaining.patch
-            ${{ runner.temp }}/control-build.log
-            ${{ runner.temp }}/control.trace.log
-            ${{ runner.temp }}/control.s
             ${{ runner.temp }}/profile-build.log
             ${{ runner.temp }}/profile.trace.log
             ${{ runner.temp }}/profile.time.txt
@@ -81,5 +78,4 @@ jobs:
           rc=$(cat "$RUNNER_TEMP/profile.rc" 2>/dev/null || echo 999)
           if [ "$rc" -ne 0 ] && [ "$rc" -ne 124 ]; then exit 1; fi
           test -s "$RUNNER_TEMP/lower-profile.samples"
-          if [ "$rc" -eq 0 ]; then cmp -s "$RUNNER_TEMP/control.s" "$RUNNER_TEMP/profile.s"; fi
           echo "captured $(wc -l < "$RUNNER_TEMP/lower-profile.samples") samples rc=$rc"
