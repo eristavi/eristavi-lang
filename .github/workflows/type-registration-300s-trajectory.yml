@@ -1,0 +1,130 @@
+name: Type registration index 300s trajectory
+
+on:
+  push:
+    branches:
+      - compiler/type-registration-index
+
+concurrency:
+  group: type-registration-index-300s-trajectory
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      CC: clang
+      CFLAGS: -O2
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install bootstrap toolchain
+        run: python -m pip install -e .
+
+      - name: Prepare frozen merged-main workload
+        run: |
+          git worktree add "$RUNNER_TEMP/baseline" ab3a60674b0e862f5a237b5ede84f2dfa94953fe
+          git -C "$RUNNER_TEMP/baseline" rev-parse HEAD
+          git rev-parse HEAD
+
+      - name: Build candidate owned compiler B without self-build
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -u tools/build_offline.py \
+            --runtime owned \
+            --skip-self-build \
+            --trace-phases \
+            --command-timeout 300 \
+            --output "$RUNNER_TEMP/candidate-owned" \
+            2>&1 | tee "$RUNNER_TEMP/candidate-build.log"
+
+          compiler_hash=$(sha256sum "$RUNNER_TEMP/candidate-owned/bin/erist-compiler" | awk '{print $1}')
+          runtime_hash=$(sha256sum "$RUNNER_TEMP/candidate-owned/lib/erist-runtime.o" | awk '{print $1}')
+          printf 'candidate_compiler_sha256=%s\nruntime_sha256=%s\n' "$compiler_hash" "$runtime_hash" | tee "$RUNNER_TEMP/identity.txt"
+          test "$compiler_hash" = "bc791ced3512593d74ae27f1205829ad3e23ecd0da21ed56b741299659ff5ac1"
+          test "$runtime_hash" = "96283828002bfa66e0d987d888b7a2707d7d2c70d22e1654d7d8ba7d107ced91"
+
+      - name: Run exactly one bounded full-source candidate trajectory
+        id: trajectory
+        shell: bash
+        run: |
+          set -u
+          binary="$RUNNER_TEMP/candidate-owned/bin/erist-compiler"
+          source="$RUNNER_TEMP/baseline/src/frontend.eri"
+          root="$RUNNER_TEMP/baseline/src"
+          out="$RUNNER_TEMP/candidate-c.partial.s"
+          trace="$RUNNER_TEMP/candidate-c.trace.log"
+          timing="$RUNNER_TEMP/candidate-c.time.txt"
+
+          set +e
+          /usr/bin/time -v -o "$timing" \
+            timeout --signal=TERM --kill-after=10s 300s \
+            "$binary" emit-asm "$source" --source-root "$root" --target x86_64-linux --trace-phases \
+            >"$out" 2>"$trace"
+          rc=$?
+          set -e
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/candidate-c.rc"
+
+          TRACE="$trace" OUT="$out" RC="$rc" python - <<'PY'
+          import hashlib,json,os,pathlib
+          trace=pathlib.Path(os.environ['TRACE'])
+          out=pathlib.Path(os.environ['OUT'])
+          rc=int(os.environ['RC'])
+          events=[]
+          prefix='[erist-phase] '
+          for raw in trace.read_text(errors='replace').splitlines():
+              if not raw.startswith(prefix):
+                  continue
+              try: events.append(json.loads(raw[len(prefix):]))
+              except Exception: pass
+          lb=[e for e in events if e.get('phase')=='lower-function' and e.get('event')=='begin']
+          le=[e for e in events if e.get('phase')=='lower-function' and e.get('event')=='end']
+          phase_begins=[e.get('phase') for e in events if e.get('event')=='begin']
+          summary={
+              'exit_code':rc,
+              'lower_function_begins':len(lb),
+              'lower_function_ends':len(le),
+              'last_lower_begin':lb[-1].get('subject') if lb else None,
+              'last_lower_end':le[-1].get('subject') if le else None,
+              'active_lower_function':lb[-1].get('subject') if len(lb)>len(le) and lb else None,
+              'entered_typed_ir_verify': any(p in ('typed-ir-verify','typed-ir-verify-structure','typed-ir-verify-functions') for p in phase_begins),
+              'entered_universal_lower': any(p=='universal-lower' for p in phase_begins),
+              'entered_universal_optimize': any(p=='universal-optimize' for p in phase_begins),
+              'output_bytes':out.stat().st_size if out.exists() else 0,
+              'output_sha256':hashlib.sha256(out.read_bytes()).hexdigest() if out.exists() else None,
+          }
+          pathlib.Path(os.environ['RUNNER_TEMP'],'trajectory-summary.json').write_text(json.dumps(summary,indent=2,sort_keys=True)+'\n')
+          print(json.dumps(summary,indent=2,sort_keys=True))
+          PY
+
+          if [ "$rc" -eq 0 ]; then
+            hash=$(sha256sum "$out" | awk '{print $1}')
+            echo "completed_output_sha256=$hash" | tee -a "$RUNNER_TEMP/identity.txt"
+            test "$hash" = "6110323507fbf5c2f5871f5bf0eacc3b35d49412e1a314c741400a7071b1ea30"
+          elif [ "$rc" -ne 124 ]; then
+            echo "Unexpected candidate exit $rc" >&2
+            exit 1
+          fi
+
+      - name: Preserve trajectory evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: type-index-300s-trajectory-${{ github.run_attempt }}
+          retention-days: 14
+          path: |
+            ${{ runner.temp }}/candidate-build.log
+            ${{ runner.temp }}/identity.txt
+            ${{ runner.temp }}/candidate-c.partial.s
+            ${{ runner.temp }}/candidate-c.trace.log
+            ${{ runner.temp }}/candidate-c.time.txt
+            ${{ runner.temp }}/candidate-c.rc
+            ${{ runner.temp }}/trajectory-summary.json
