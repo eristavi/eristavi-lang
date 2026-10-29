@@ -1,0 +1,145 @@
+// Independent scalar U1a metadata. No frontend/Typed IR imports or retained graphs.
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+public type Key { marker Int; }
+public type TypeId { index Int; }
+public type SignatureId { owner identity Key; index Int; }
+public type SourceId { owner identity Key; index Int; }
+public type LocId { owner identity Key; index Int; }
+public type Metadata {
+    key identity Key; owner identity budget.Owner; frozen Bool; closed Bool; control maybe identity budget.Allocation;
+    signatures identity words.Words; types identity words.Words; buckets identity words.Words;
+    sources identity words.Words; bytes identity words.Words; locations identity words.Words;
+}
+public function typeAt(index Int) returns TypeId fails budget.LimitError {
+    if index < 1 or index > 3 { try budget.reject("unsupported U1a type"); }
+    return TypeId { index=index; };
+}
+public function pred() returns TypeId { return TypeId { index=1; }; }
+public function i64() returns TypeId { return TypeId { index=2; }; }
+public function f64() returns TypeId { return TypeId { index=3; }; }
+public function validType(value TypeId) fails budget.LimitError { let checked be try typeAt(value.index); }
+function mutable(meta identity Metadata,phase identity budget.Phase) fails budget.LimitError {
+    try budget.poll(meta.owner);
+    if meta.closed or meta.frozen or phase.owner != meta.owner { try budget.reject("immutable or foreign U1a metadata"); }
+}
+public function create(owner identity budget.Owner,phase identity budget.Phase) returns identity Metadata fails budget.LimitError {
+    if owner.kind != 1 or phase.owner != owner or phase.used != 0 or phase.prepaid != 0 { try budget.reject("metadata requires a fresh shared phase"); }
+    // Bound admission before constructing the initial six stores and bucket pages.
+    let preflight be try budget.reserve(owner,16384); try budget.cancelReservation(preflight);
+    try budget.prepay(phase,1024);
+    let pending be try budget.reserve(owner,768);
+    let meta be identity Metadata { key=identity Key { marker=0; }; owner=owner; frozen=false; closed=false; control=none;
+        signatures=try words.create(owner,6291456); types=try words.create(owner,8388608);
+        buckets=try words.create(owner,64); sources=try words.create(owner,524288);
+        bytes=try words.create(owner,8388608); locations=try words.create(owner,7340032); };
+    let index be 0; while index < 64 { let ignored be try words.push(meta.buckets,phase,0); index=index+1; }
+    meta.control=try budget.commit(pending); return meta;
+}
+function signatureIndex(meta identity Metadata,value SignatureId) returns Int fails budget.LimitError {
+    if meta.closed or value.owner != meta.key or value.index < 1 or value.index > meta.signatures.length/6 { try budget.reject("foreign or invalid U1a SignatureId"); }
+    return (value.index-1)*6;
+}
+public function parameterCount(meta identity Metadata,phase identity budget.Phase,value SignatureId) returns Int fails budget.LimitError {
+    let offset be try signatureIndex(meta,value); return try words.get(meta.signatures,phase,offset+3);
+}
+public function resultCount(meta identity Metadata,phase identity budget.Phase,value SignatureId) returns Int fails budget.LimitError {
+    let offset be try signatureIndex(meta,value); return try words.get(meta.signatures,phase,offset+5);
+}
+public function parameterType(meta identity Metadata,phase identity budget.Phase,value SignatureId,index Int) returns TypeId fails budget.LimitError {
+    let offset be try signatureIndex(meta,value); let count be try parameterCount(meta,phase,value);
+    if index < 0 or index >= count { try budget.reject("U1a parameter index out of range"); }
+    let first be try words.get(meta.signatures,phase,offset+2); return try typeAt(try words.get(meta.types,phase,first+index));
+}
+public function resultType(meta identity Metadata,phase identity budget.Phase,value SignatureId,index Int) returns TypeId fails budget.LimitError {
+    let offset be try signatureIndex(meta,value); let count be try resultCount(meta,phase,value);
+    if index < 0 or index >= count { try budget.reject("U1a result index out of range"); }
+    let first be try words.get(meta.signatures,phase,offset+4); return try typeAt(try words.get(meta.types,phase,first+index));
+}
+function sequenceHash(phase identity budget.Phase,values,seed Int) returns Int fails budget.LimitError {
+    let hash be seed; let index be 0;
+    while index < values.count { try budget.work(phase,1); let value be values[index]; try validType(value); hash=(hash*131+value.index)%2147483629; index=index+1; }
+    return (hash*131+values.count)%2147483629;
+}
+function sameTypes(meta identity Metadata,phase identity budget.Phase,first Int,values) returns Bool fails budget.LimitError {
+    let index be 0;
+    while index < values.count { let value be values[index]; try validType(value); if try words.get(meta.types,phase,first+index) != value.index { return false; } index=index+1; }
+    return true;
+}
+public function signature(meta identity Metadata,phase identity budget.Phase,parameters,results) returns SignatureId fails budget.LimitError {
+    try mutable(meta,phase);
+    let hash be try sequenceHash(phase,results,try sequenceHash(phase,parameters,17)); let bucket be hash%64;
+    let cursor be try words.get(meta.buckets,phase,bucket);
+    while cursor != 0 {
+        let value be SignatureId { owner=meta.key; index=cursor; }; let offset be try signatureIndex(meta,value);
+        if try words.get(meta.signatures,phase,offset) == hash {
+            if try parameterCount(meta,phase,value) == parameters.count and try resultCount(meta,phase,value) == results.count {
+                let first be try words.get(meta.signatures,phase,offset+2); let second be try words.get(meta.signatures,phase,offset+4);
+                if try sameTypes(meta,phase,first,parameters) and try sameTypes(meta,phase,second,results) { return value; }
+            }
+        }
+        cursor=try words.get(meta.signatures,phase,offset+1);
+    }
+    let parameterStart be meta.types.length; let index be 0;
+    while index < parameters.count { let value be parameters[index]; try validType(value); let ignored be try words.push(meta.types,phase,value.index); index=index+1; }
+    let resultStart be meta.types.length; index=0;
+    while index < results.count { let value be results[index]; try validType(value); let ignored be try words.push(meta.types,phase,value.index); index=index+1; }
+    let value be SignatureId { owner=meta.key; index=meta.signatures.length/6+1; };
+    let previous be try words.get(meta.buckets,phase,bucket);
+    let ignored be try words.push(meta.signatures,phase,hash); ignored=try words.push(meta.signatures,phase,previous);
+    ignored=try words.push(meta.signatures,phase,parameterStart); ignored=try words.push(meta.signatures,phase,parameters.count);
+    ignored=try words.push(meta.signatures,phase,resultStart); ignored=try words.push(meta.signatures,phase,results.count);
+    try words.set(meta.buckets,phase,bucket,value.index); return value;
+}
+function appendBytes(meta identity Metadata,phase identity budget.Phase,value Text) returns Int fails budget.LimitError {
+    let first be meta.bytes.length; let index be 0;
+    while index < value.bytes.count { let ignored be try words.push(meta.bytes,phase,value.bytes[index]); index=index+1; } return first;
+}
+function sameBytes(meta identity Metadata,phase identity budget.Phase,first Int,count Int,value Text) returns Bool fails budget.LimitError {
+    if count != value.bytes.count { return false; } let index be 0;
+    while index < count { if try words.get(meta.bytes,phase,first+index) != value.bytes[index] { return false; } index=index+1; } return true;
+}
+public function source(meta identity Metadata,phase identity budget.Phase,name Text,digest Text,length Int) returns SourceId fails budget.LimitError {
+    try mutable(meta,phase);
+    if name.bytes.count == 0 or digest.bytes.count != 64 or length < 0 { try budget.reject("invalid U1a source identity"); }
+    let index be 0;
+    while index < 64 { let value be digest.bytes[index]; if not (value >= 48 and value <= 57) and not (value >= 97 and value <= 102) { try budget.reject("source digest must be lowercase SHA-256 hex"); } index=index+1; }
+    index=0;
+    while index < meta.sources.length/4 {
+        let offset be index*4; let nameStart be try words.get(meta.sources,phase,offset); let nameSize be try words.get(meta.sources,phase,offset+1);
+        if try sameBytes(meta,phase,nameStart,nameSize,name) {
+            let digestStart be try words.get(meta.sources,phase,offset+2);
+            if not (try sameBytes(meta,phase,digestStart,64,digest)) or try words.get(meta.sources,phase,offset+3) != length { try budget.reject("conflicting source revision"); }
+            return SourceId { owner=meta.key; index=index+1; };
+        } index=index+1;
+    }
+    let nameStart be try appendBytes(meta,phase,name); let digestStart be try appendBytes(meta,phase,digest);
+    let value be SourceId { owner=meta.key; index=meta.sources.length/4+1; };
+    let ignored be try words.push(meta.sources,phase,nameStart); ignored=try words.push(meta.sources,phase,name.bytes.count);
+    ignored=try words.push(meta.sources,phase,digestStart); ignored=try words.push(meta.sources,phase,length); return value;
+}
+public function location(meta identity Metadata,phase identity budget.Phase,source SourceId,start Int,end Int,anchor Int,line Int,column Int) returns LocId fails budget.LimitError {
+    try mutable(meta,phase);
+    if source.owner != meta.key or source.index < 1 or source.index > meta.sources.length/4 { try budget.reject("foreign or invalid U1a SourceId"); }
+    let length be try words.get(meta.sources,phase,(source.index-1)*4+3);
+    if start < 0 or end < start or end > length or anchor < start or anchor > end or line < 1 or column < 1 { try budget.reject("invalid U1a source span"); }
+    let value be LocId { owner=meta.key; index=meta.locations.length/7+1; };
+    let ignored be try words.push(meta.locations,phase,source.index); ignored=try words.push(meta.locations,phase,start);
+    ignored=try words.push(meta.locations,phase,end); ignored=try words.push(meta.locations,phase,anchor);
+    ignored=try words.push(meta.locations,phase,line); ignored=try words.push(meta.locations,phase,column);
+    ignored=try words.push(meta.locations,phase,0); return value;
+}
+public function validLocation(meta identity Metadata,value LocId) fails budget.LimitError {
+    if meta.closed or value.owner != meta.key or value.index < 1 or value.index > meta.locations.length/7 { try budget.reject("foreign or invalid U1a LocId"); }
+}
+public function freeze(meta identity Metadata) fails budget.LimitError {
+    try budget.poll(meta.owner); if meta.closed { try budget.reject("closed U1a metadata"); }
+    try words.freeze(meta.signatures); try words.freeze(meta.types); try words.freeze(meta.buckets);
+    try words.freeze(meta.sources); try words.freeze(meta.bytes); try words.freeze(meta.locations); meta.frozen=true;
+}
+public function close(meta identity Metadata) fails budget.LimitError {
+    if meta.closed { try budget.reject("double close of U1a metadata"); } meta.closed=true;
+    try words.close(meta.signatures); try words.close(meta.types); try words.close(meta.buckets);
+    try words.close(meta.sources); try words.close(meta.bytes); try words.close(meta.locations);
+    let control be meta.control; meta.control=none; if control != none { try budget.release(control); }
+}

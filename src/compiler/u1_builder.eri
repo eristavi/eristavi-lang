@@ -1,0 +1,200 @@
+// Private complete-construction builder. Completion is NOT verification.
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+import compiler.u1_meta as meta;
+import compiler.u1_ops as ops;
+public type BlockId { owner identity meta.Key; index Int; }
+public type ValueId { owner identity meta.Key; index Int; }
+public type InstId { owner identity meta.Key; index Int; }
+public type Pair { value ValueId; overflow ValueId; }
+public type Function {
+    key identity meta.Key; metadata identity meta.Metadata; signature meta.SignatureId;
+    owner identity budget.Owner; phase identity budget.Phase; state Int; revision Int;
+    control maybe identity budget.Allocation;
+    blocks identity words.Words; values identity words.Words; instructions identity words.Words;
+    operands identity words.Words; edges identity words.Words; arguments identity words.Words;
+}
+function mutable(routine identity Function) fails budget.LimitError {
+    try budget.poll(routine.owner);
+    if routine.state != 0 { try budget.reject("U1a function construction is closed"); }
+}
+function blockOffset(routine identity Function,block BlockId) returns Int fails budget.LimitError {
+    if routine.state == 2 or block.owner != routine.key or block.index < 1 or block.index > routine.blocks.length/5 { try budget.reject("foreign or invalid U1a BlockId"); }
+    return (block.index-1)*5;
+}
+function valueOffset(routine identity Function,value ValueId) returns Int fails budget.LimitError {
+    if routine.state == 2 or value.owner != routine.key or value.index < 1 or value.index > routine.values.length/4 { try budget.reject("foreign or invalid U1a ValueId"); }
+    return (value.index-1)*4;
+}
+function instOffset(routine identity Function,value InstId) returns Int fails budget.LimitError {
+    if routine.state == 2 or value.owner != routine.key or value.index < 1 or value.index > routine.instructions.length/10 { try budget.reject("foreign or invalid U1a InstId"); }
+    return (value.index-1)*10;
+}
+public function create(metadata identity meta.Metadata,signature meta.SignatureId,owner identity budget.Owner,phase identity budget.Phase) returns identity Function fails budget.LimitError {
+    if not metadata.frozen or metadata.closed or owner.kind != 2 or phase.owner != owner or owner.parent != metadata.owner.parent { try budget.reject("U1a function requires immutable metadata and its own phase"); }
+    let checked be try meta.resultCount(metadata,phase,signature);
+    let preflight be try budget.reserve(owner,8192); try budget.cancelReservation(preflight);
+    let pending be try budget.reserve(owner,1024);
+    let routine be identity Function { key=identity meta.Key { marker=0; }; metadata=metadata; signature=signature;
+        owner=owner; phase=phase; state=0; revision=0; control=none;
+        blocks=try words.create(owner,327680); values=try words.create(owner,4194304);
+        instructions=try words.create(owner,10485760); operands=try words.create(owner,16777216);
+        edges=try words.create(owner,786432); arguments=try words.create(owner,4194304); };
+    routine.control=try budget.commit(pending); return routine;
+}
+public function valueType(routine identity Function,value ValueId) returns meta.TypeId fails budget.LimitError {
+    let offset be try valueOffset(routine,value); return try meta.typeAt(try words.get(routine.values,routine.phase,offset));
+}
+public function block(routine identity Function,parameters) returns BlockId fails budget.LimitError {
+    try mutable(routine);
+    if routine.blocks.length/5 >= 65536 or parameters.count > 1048576-routine.values.length/4 { try budget.exceed(routine.owner,1,0); }
+    let index be 0; while index < parameters.count { try meta.validType(parameters[index]); index=index+1; }
+    let value be BlockId { owner=routine.key; index=routine.blocks.length/5+1; }; let first be 0;
+    if parameters.count > 0 { first=routine.values.length/4+1; }
+    let ignored be try words.push(routine.blocks,routine.phase,first); ignored=try words.push(routine.blocks,routine.phase,parameters.count);
+    ignored=try words.push(routine.blocks,routine.phase,0); ignored=try words.push(routine.blocks,routine.phase,0); ignored=try words.push(routine.blocks,routine.phase,0);
+    index=0;
+    while index < parameters.count {
+        let valueType be parameters[index]; ignored=try words.push(routine.values,routine.phase,valueType.index);
+        ignored=try words.push(routine.values,routine.phase,0); ignored=try words.push(routine.values,routine.phase,value.index);
+        ignored=try words.push(routine.values,routine.phase,index); index=index+1;
+    }
+    routine.revision=routine.revision+1; return value;
+}
+public function parameter(routine identity Function,block BlockId,index Int) returns ValueId fails budget.LimitError {
+    let offset be try blockOffset(routine,block); let count be try words.get(routine.blocks,routine.phase,offset+1);
+    if index < 0 or index >= count { try budget.reject("U1a block parameter index out of range"); }
+    let first be try words.get(routine.blocks,routine.phase,offset); return ValueId { owner=routine.key; index=first+index; };
+}
+function openBlock(routine identity Function,block BlockId) returns Int fails budget.LimitError {
+    try mutable(routine); let offset be try blockOffset(routine,block);
+    if try words.get(routine.blocks,routine.phase,offset+4) != 0 { try budget.reject("U1a block already terminated"); } return offset;
+}
+function checkEdge(routine identity Function,target BlockId,arguments) fails budget.LimitError {
+    if target.index == 1 { try budget.reject("U1a entry cannot have predecessors"); }
+    let offset be try blockOffset(routine,target); let count be try words.get(routine.blocks,routine.phase,offset+1);
+    if count != arguments.count { try budget.reject("U1a edge arity mismatch"); }
+    let index be 0;
+    while index < count {
+        let actual be try valueType(routine,arguments[index]); let expected be try valueType(routine,try parameter(routine,target,index));
+        if actual.index != expected.index { try budget.reject("U1a edge type mismatch"); } index=index+1;
+    }
+}
+function appendEdge(routine identity Function,target BlockId,arguments) returns Int fails budget.LimitError {
+    if routine.edges.length/3 >= 262144 or arguments.count > 4194304-routine.arguments.length { try budget.exceed(routine.owner,1,0); }
+    let first be routine.arguments.length; let index be 0;
+    while index < arguments.count { let value be arguments[index]; let checked be try valueType(routine,value); let ignored be try words.push(routine.arguments,routine.phase,value.index); index=index+1; }
+    let result be routine.edges.length/3+1;
+    let ignored be try words.push(routine.edges,routine.phase,target.index); ignored=try words.push(routine.edges,routine.phase,first);
+    ignored=try words.push(routine.edges,routine.phase,arguments.count); return result;
+}
+function append(routine identity Function,block BlockId,op Int,arguments,location meta.LocId,payload Int,extra Int) returns InstId fails budget.LimitError {
+    let offset be try openBlock(routine,block); try meta.validLocation(routine.metadata,location);
+    if not ops.known(op) { try budget.reject("unsupported U1a operation"); }
+    let count be ops.operands(op);
+    if count >= 0 and arguments.count != count { try budget.reject("U1a instruction arity mismatch"); }
+    let index be 0;
+    while index < arguments.count {
+        let valueType be try valueType(routine,arguments[index]);
+        if op != 8 { if valueType.index != ops.operandType(op,index) { try budget.reject("U1a operand type mismatch"); } } index=index+1;
+    }
+    if op == 2 and payload != 0 and payload != 1 { try budget.reject("invalid U1a predicate constant"); }
+    if op == 5 and (payload < 1 or payload > 4) { try budget.reject("invalid U1a trap code"); }
+    if routine.instructions.length/10 >= 1048576 or ops.results(op) > 1048576-routine.values.length/4 { try budget.exceed(routine.owner,1,0); }
+    let first be routine.operands.length; index=0;
+    while index < arguments.count { let value be arguments[index]; let ignored be try words.push(routine.operands,routine.phase,value.index); index=index+1; }
+    let result be InstId { owner=routine.key; index=routine.instructions.length/10+1; }; let firstResult be 0;
+    if ops.results(op) > 0 { firstResult=routine.values.length/4+1; }
+    index=0;
+    while index < ops.results(op) {
+        let ignored be try words.push(routine.values,routine.phase,ops.resultType(op,index)); ignored=try words.push(routine.values,routine.phase,1);
+        ignored=try words.push(routine.values,routine.phase,result.index); ignored=try words.push(routine.values,routine.phase,index); index=index+1;
+    }
+    let ignored be try words.push(routine.instructions,routine.phase,op); ignored=try words.push(routine.instructions,routine.phase,block.index);
+    ignored=try words.push(routine.instructions,routine.phase,first); ignored=try words.push(routine.instructions,routine.phase,arguments.count);
+    ignored=try words.push(routine.instructions,routine.phase,firstResult); ignored=try words.push(routine.instructions,routine.phase,ops.results(op));
+    ignored=try words.push(routine.instructions,routine.phase,location.index); ignored=try words.push(routine.instructions,routine.phase,payload);
+    ignored=try words.push(routine.instructions,routine.phase,extra); ignored=try words.push(routine.instructions,routine.phase,0);
+    if ops.terminal(op) { try words.set(routine.blocks,routine.phase,offset+4,result.index); }
+    else {
+        let previous be try words.get(routine.blocks,routine.phase,offset+3);
+        if previous == 0 { try words.set(routine.blocks,routine.phase,offset+2,result.index); }
+        else { try words.set(routine.instructions,routine.phase,(previous-1)*10+9,result.index); }
+        try words.set(routine.blocks,routine.phase,offset+3,result.index);
+    }
+    routine.revision=routine.revision+1; return result;
+}
+public function result(routine identity Function,instruction InstId,index Int) returns ValueId fails budget.LimitError {
+    let offset be try instOffset(routine,instruction); let count be try words.get(routine.instructions,routine.phase,offset+5);
+    if index < 0 or index >= count { try budget.reject("U1a instruction result index out of range"); }
+    let first be try words.get(routine.instructions,routine.phase,offset+4); return ValueId { owner=routine.key; index=first+index; };
+}
+public function integer(routine identity Function,block BlockId,value Int,location meta.LocId) returns ValueId fails budget.LimitError {
+    return try result(routine,try append(routine,block,1,[],location,value,0),0);
+}
+public function predicate(routine identity Function,block BlockId,value Bool,location meta.LocId) returns ValueId fails budget.LimitError {
+    let bits be 0; if value { bits=1; } return try result(routine,try append(routine,block,2,[],location,bits,0),0);
+}
+public function floatBits(routine identity Function,block BlockId,bits Int,location meta.LocId) returns ValueId fails budget.LimitError {
+    return try result(routine,try append(routine,block,9,[],location,bits,0),0);
+}
+public function addOverflow(routine identity Function,block BlockId,first ValueId,second ValueId,location meta.LocId) returns Pair fails budget.LimitError {
+    let instruction be try append(routine,block,3,[first,second],location,0,0);
+    return Pair { value=try result(routine,instruction,0); overflow=try result(routine,instruction,1); };
+}
+public function negatePredicate(routine identity Function,block BlockId,value ValueId,location meta.LocId) returns ValueId fails budget.LimitError {
+    return try result(routine,try append(routine,block,4,[value],location,0,0),0);
+}
+public function guard(routine identity Function,block BlockId,value ValueId,trap Int,location meta.LocId) fails budget.LimitError {
+    let ignored be try append(routine,block,5,[value],location,trap,0);
+}
+public function jump(routine identity Function,block BlockId,target BlockId,arguments,location meta.LocId) fails budget.LimitError {
+    let checked be try openBlock(routine,block); try meta.validLocation(routine.metadata,location); try checkEdge(routine,target,arguments);
+    let edge be try appendEdge(routine,target,arguments); let ignored be try append(routine,block,6,[],location,edge,0);
+}
+public function branch(routine identity Function,block BlockId,test ValueId,first BlockId,firstArguments,second BlockId,secondArguments,location meta.LocId) fails budget.LimitError {
+    let checked be try openBlock(routine,block); try meta.validLocation(routine.metadata,location); let valueType be try valueType(routine,test);
+    if valueType.index != 1 { try budget.reject("U1a branch requires pred"); }
+    try checkEdge(routine,first,firstArguments); try checkEdge(routine,second,secondArguments);
+    let firstEdge be try appendEdge(routine,first,firstArguments); let secondEdge be try appendEdge(routine,second,secondArguments);
+    let ignored be try append(routine,block,7,[test],location,firstEdge,secondEdge);
+}
+public function returnValues(routine identity Function,block BlockId,values,location meta.LocId) fails budget.LimitError {
+    let checked be try openBlock(routine,block); let count be try meta.resultCount(routine.metadata,routine.phase,routine.signature);
+    if values.count != count { try budget.reject("U1a return arity mismatch"); }
+    let index be 0;
+    while index < count {
+        let valueType be try valueType(routine,values[index]); let expected be try meta.resultType(routine.metadata,routine.phase,routine.signature,index);
+        if valueType.index != expected.index { try budget.reject("U1a return type mismatch"); } index=index+1;
+    }
+    let ignored be try append(routine,block,8,values,location,0,0);
+}
+public function edgeArgument(routine identity Function,edge Int,index Int) returns ValueId fails budget.LimitError {
+    if edge < 1 or edge > routine.edges.length/3 { try budget.reject("invalid U1a edge"); }
+    let offset be (edge-1)*3; let count be try words.get(routine.edges,routine.phase,offset+2);
+    if index < 0 or index >= count { try budget.reject("U1a edge argument index out of range"); }
+    let first be try words.get(routine.edges,routine.phase,offset+1);
+    return ValueId { owner=routine.key; index=try words.get(routine.arguments,routine.phase,first+index); };
+}
+public function complete(routine identity Function) fails budget.LimitError {
+    try mutable(routine);
+    if routine.blocks.length == 0 { try budget.reject("U1a function has no entry"); }
+    let entry be BlockId { owner=routine.key; index=1; }; let count be try meta.parameterCount(routine.metadata,routine.phase,routine.signature);
+    if try words.get(routine.blocks,routine.phase,1) != count { try budget.reject("U1a entry signature mismatch"); }
+    let index be 0;
+    while index < count {
+        let actual be try valueType(routine,try parameter(routine,entry,index)); let expected be try meta.parameterType(routine.metadata,routine.phase,routine.signature,index);
+        if actual.index != expected.index { try budget.reject("U1a entry type mismatch"); } index=index+1;
+    }
+    index=0; while index < routine.blocks.length/5 { if try words.get(routine.blocks,routine.phase,index*5+4) == 0 { try budget.reject("unterminated U1a block"); } index=index+1; }
+    try words.freeze(routine.blocks); try words.freeze(routine.values); try words.freeze(routine.instructions);
+    try words.freeze(routine.operands); try words.freeze(routine.edges); try words.freeze(routine.arguments);
+    routine.state=1;
+    // No 'verified' bit, source compilation route, or executable publication.
+}
+public function close(routine identity Function) fails budget.LimitError {
+    if routine.state == 2 { try budget.reject("double close of U1a function"); } routine.state=2;
+    try words.close(routine.blocks); try words.close(routine.values); try words.close(routine.instructions);
+    try words.close(routine.operands); try words.close(routine.edges); try words.close(routine.arguments);
+    let control be routine.control; routine.control=none; if control != none { try budget.release(control); }
+}

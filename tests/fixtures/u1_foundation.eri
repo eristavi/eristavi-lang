@@ -1,0 +1,254 @@
+import std.process;
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+import compiler.u1_meta as meta;
+import compiler.u1_builder as build;
+
+error ProbeError { message Text; }
+function check(value Bool,label Text) fails ProbeError { if not value { fail ProbeError { message=label; }; } }
+function transferAttempt(allocation identity budget.Allocation,owner identity budget.Owner) returns Bool fails budget.LimitError { try budget.transfer(allocation,owner); return false; }
+function commitAttempt(value identity budget.Reservation) returns Bool fails budget.LimitError { let result be try budget.commit(value); return false; }
+function releaseAttempt(value identity budget.Allocation) returns Bool fails budget.LimitError { try budget.release(value); return false; }
+function workAttempt(phase identity budget.Phase,count Int) returns Bool fails budget.LimitError { try budget.prepay(phase,count); return false; }
+function writeAttempt(store identity words.Words,phase identity budget.Phase) returns Bool fails budget.LimitError { try words.set(store,phase,0,9); return false; }
+function completeAttempt(routine identity build.Function) returns Bool fails budget.LimitError { try build.complete(routine); return false; }
+function badEdge(routine identity build.Function,entry build.BlockId,test build.ValueId,first build.BlockId,second build.BlockId,value build.ValueId,location meta.LocId) returns Bool fails budget.LimitError { try build.branch(routine,entry,test,first,[],second,[value],location); return false; }
+function scalarAttempt(routine identity build.Function,entry build.BlockId,location meta.LocId) returns Bool fails budget.LimitError { let ignored be try build.integer(routine,entry,0,location); return false; }
+function expectIncomplete(routine identity build.Function) returns Bool fails budget.LimitError,ProbeError {
+    let unexpected be completeAttempt(routine) else error budget.LimitError { try check(error.category == "invalid-state" and routine.state == 0,"incomplete construction"); return true; };
+    fail ProbeError { message="incomplete builder must reject"; };
+}
+function expectFrozenMetadata(data identity meta.Metadata,phase identity budget.Phase) returns Bool fails budget.LimitError,ProbeError {
+    let unexpected be meta.signature(data,phase,[],[]) else error budget.LimitError { try check(error.category == "invalid-state","immutable metadata"); return true; };
+    fail ProbeError { message="frozen metadata must reject"; };
+}
+function expectFrozenBuilder(routine identity build.Function,entry build.BlockId,location meta.LocId) returns Bool fails budget.LimitError,ProbeError {
+    let count be routine.instructions.length;
+    let unexpected be scalarAttempt(routine,entry,location) else error budget.LimitError { try check(error.category == "invalid-state" and routine.instructions.length == count,"immutable completed construction"); return true; };
+    fail ProbeError { message="completed builder must reject"; };
+}
+function expectBadEdge(routine identity build.Function,entry build.BlockId,test build.ValueId,first build.BlockId,second build.BlockId,value build.ValueId,location meta.LocId) returns Bool fails budget.LimitError,ProbeError {
+    let unexpected be badEdge(routine,entry,test,first,second,value,location) else error budget.LimitError { try check(error.category == "invalid-state" and routine.edges.length == 0,"validate both edges before mutation"); return true; };
+    fail ProbeError { message="wrong edge type must reject"; };
+}
+function expectBadSource(data identity meta.Metadata,phase identity budget.Phase,source meta.SourceId) returns Bool fails budget.LimitError,ProbeError {
+    let before be data.locations.length;
+    let unexpected be meta.location(data,phase,source,0,129,0,1,1) else error budget.LimitError { try check(error.category == "invalid-state" and data.locations.length == before,"source span before mutation"); return true; };
+    fail ProbeError { message="invalid source span must reject"; };
+}
+function expectRevisionConflict(data identity meta.Metadata,phase identity budget.Phase) returns Bool fails budget.LimitError,ProbeError {
+    let before be data.bytes.length;
+    let unexpected be meta.source(data,phase,"probe","1111111111111111111111111111111111111111111111111111111111111111",128) else error budget.LimitError { try check(error.category == "invalid-state" and data.bytes.length == before,"source revision before mutation"); return true; };
+    fail ProbeError { message="conflicting source must reject"; };
+}
+
+function reservations() fails budget.LimitError,ProbeError {
+    let root be try budget.request(100,100,100); let owner be try budget.child(root,2,80,80,80);
+    let pending be try budget.reserve(owner,20);
+    try check(owner.live == 0 and owner.pending == 20 and root.pending == 20,"pending admission");
+    try check(owner.traffic == 0 and owner.peak == 0 and owner.reservedPeak == 20,"pending versus committed peak");
+    try budget.cancelReservation(pending);
+    try check(root.pending == 0 and root.traffic == 0,"cancelled reservation is not allocation traffic");
+    let second be try budget.reserve(owner,30); let allocation be try budget.commit(second);
+    try check(root.live == 30 and owner.live == 30 and root.traffic == 30,"committed allocation");
+    let tail be try budget.split(allocation,7); try check(allocation.bytes == 23 and tail.bytes == 7,"split capacity");
+    try budget.release(allocation); try budget.release(tail);
+    try check(root.live == 0 and root.traffic == 30,"release retains allocation traffic");
+    try budget.close(owner); try budget.close(root); output("reservations:ok");
+}
+function failedCapacity() fails budget.LimitError,ProbeError {
+    let root be try budget.request(100,100,100); let owner be try budget.child(root,2,16,100,100);
+    let allocation be try budget.commit(try budget.reserve(owner,12));
+    let unexpected be budget.reserve(owner,8) else error budget.LimitError {
+        try check(error.category == "resource-limit" and error.remaining == 4,"capacity error detail");
+        try check(root.live == 12 and root.pending == 0 and root.traffic == 12 and owner.state == 1,"no partial ancestor mutation");
+        try budget.release(allocation); try budget.close(owner); try budget.close(root); output("capacity:ok"); return;
+    };
+    fail ProbeError { message="capacity must reject"; };
+}
+function failedParent() fails budget.LimitError,ProbeError {
+    let root be try budget.request(10,100,100); let owner be try budget.child(root,2,100,100,100);
+    let unexpected be budget.reserve(owner,11) else error budget.LimitError {
+        try check(error.category == "resource-limit" and root.live == 0 and root.pending == 0 and owner.pending == 0,"parent admission is atomic");
+        try budget.close(owner); try budget.close(root); output("parent:ok"); return;
+    };
+    fail ProbeError { message="parent must reject"; };
+}
+function failedTraffic() fails budget.LimitError,ProbeError {
+    let root be try budget.request(100,12,100); let owner be try budget.child(root,2,100,100,100);
+    let allocation be try budget.commit(try budget.reserve(owner,12)); try budget.release(allocation);
+    let unexpected be budget.reserve(owner,1) else error budget.LimitError {
+        try check(error.category == "resource-limit" and root.live == 0 and root.pending == 0 and root.traffic == 12,"traffic cannot be reclaimed");
+        try budget.close(owner); try budget.close(root); output("traffic:ok"); return;
+    };
+    fail ProbeError { message="traffic must reject"; };
+}
+function transferCapacity() fails budget.LimitError,ProbeError {
+    let root be try budget.request(100,100,100); let first be try budget.child(root,2,50,50,50); let second be try budget.child(root,2,50,50,50);
+    let allocation be try budget.commit(try budget.reserve(first,8)); try budget.transfer(allocation,second);
+    try check(first.live == 0 and second.live == 8 and root.live == 8 and root.traffic == 8 and second.traffic == 0,"sibling transfer");
+    try check(allocation.owner == second,"allocation owner transfer"); try budget.release(allocation);
+    try budget.close(first); try budget.close(second); try budget.close(root); output("transfer:ok");
+}
+function failedTransfer() fails budget.LimitError,ProbeError {
+    let root be try budget.request(100,100,100); let first be try budget.child(root,2,50,50,50); let second be try budget.child(root,2,4,50,50);
+    let allocation be try budget.commit(try budget.reserve(first,8));
+    let unexpected be transferAttempt(allocation,second) else error budget.LimitError {
+        try check(error.category == "resource-limit" and allocation.owner == first and first.live == 8 and second.live == 0 and root.live == 8,"failed transfer is atomic");
+        try budget.release(allocation); try budget.close(first); try budget.close(second); try budget.close(root); output("transfer-reject:ok"); return;
+    };
+    fail ProbeError { message="transfer must reject"; };
+}
+function transferKind() fails budget.LimitError,ProbeError {
+    let root be try budget.request(100,100,100); let first be try budget.child(root,2,50,50,50); let shared be try budget.child(root,1,50,50,50);
+    let allocation be try budget.commit(try budget.reserve(first,8));
+    let unexpected be transferAttempt(allocation,shared) else error budget.LimitError {
+        try check(error.category == "invalid-state" and allocation.owner == first and first.live == 8 and shared.live == 0,"function storage cannot become shared metadata");
+        try budget.release(allocation); try budget.close(first); try budget.close(shared); try budget.close(root); output("transfer-kind:ok"); return;
+    }; fail ProbeError { message="cross-kind transfer must reject"; };
+}
+function duplicateCommit() fails budget.LimitError,ProbeError {
+    let root be try budget.request(100,100,100); let reservation be try budget.reserve(root,8); let allocation be try budget.commit(reservation);
+    let unexpected be commitAttempt(reservation) else error budget.LimitError {
+        try check(error.category == "invalid-state" and root.live == 8 and root.traffic == 8,"single-use commit");
+        try budget.release(allocation); try budget.close(root); output("commit-once:ok"); return;
+    }; fail ProbeError { message="duplicate commit must reject"; };
+}
+function duplicateRelease() fails budget.LimitError,ProbeError {
+    let root be try budget.request(100,100,100); let allocation be try budget.commit(try budget.reserve(root,8)); try budget.release(allocation);
+    let unexpected be releaseAttempt(allocation) else error budget.LimitError {
+        try check(error.category == "invalid-state" and root.live == 0 and root.traffic == 8,"single-use release");
+        try budget.close(root); output("release-once:ok"); return;
+    }; fail ProbeError { message="duplicate release must reject"; };
+}
+function workCredits() fails budget.LimitError,ProbeError {
+    let root be try budget.request(100,100,100); let owner be try budget.child(root,2,100,100,100); let phase be try budget.phase(owner,10);
+    try budget.prepay(phase,8); try budget.consume(phase,3);
+    try check(phase.used == 3 and phase.prepaid == 5 and root.work == 8,"consumed and prepaid work");
+    let unexpected be workAttempt(phase,4) else error budget.LimitError {
+        try check(error.category == "resource-limit" and root.work == 8 and phase.used == 3 and phase.prepaid == 5,"work admission atomicity");
+        try budget.close(owner); try budget.close(root); output("work:ok"); return;
+    }; fail ProbeError { message="work limit must reject"; };
+}
+function requestWork() fails budget.LimitError,ProbeError {
+    let root be try budget.request(100,100,5); let first be try budget.child(root,2,100,100,100); let second be try budget.child(root,2,100,100,100);
+    let phase be try budget.phase(first,100); try budget.work(phase,3); let next be try budget.phase(second,100);
+    let unexpected be workAttempt(next,3) else error budget.LimitError {
+        try check(error.category == "resource-limit" and root.work == 3 and second.work == 0,"request work survives child attempts");
+        let retry be try budget.child(root,2,100,100,100); let retryPhase be try budget.phase(retry,100); try budget.work(retryPhase,2);
+        try check(root.work == 5,"retry consumes remaining request work"); try budget.close(first); try budget.close(second); try budget.close(retry); try budget.close(root); output("request-work:ok"); return;
+    }; fail ProbeError { message="request work must reject"; };
+}
+function cancellation() fails budget.LimitError,ProbeError {
+    let root be try budget.request(100,100,100); let owner be try budget.child(root,2,100,100,100); let reservation be try budget.reserve(owner,8); budget.cancel(root);
+    let unexpected be commitAttempt(reservation) else error budget.LimitError {
+        try check(error.category == "cancelled" and root.live == 0 and root.pending == 8,"cancel blocks commit");
+        try budget.cancelReservation(reservation); try budget.close(owner); try budget.close(root); output("cancel:ok"); return;
+    }; fail ProbeError { message="cancelled commit must reject"; };
+}
+function abandonedAttempt() fails budget.LimitError,ProbeError {
+    let root be try budget.request(100,100,100); let owner be try budget.child(root,2,100,100,100);
+    let allocation be try budget.commit(try budget.reserve(owner,8)); let pending be try budget.reserve(owner,4);
+    let phase be try budget.phase(owner,100); try budget.work(phase,5); budget.cancel(owner); try budget.abandon(owner);
+    try check(root.live == 0 and root.pending == 0 and root.traffic == 8 and root.work == 5,"abandon keeps historical charges");
+    let unexpected be releaseAttempt(allocation) else error budget.LimitError {
+        try check(error.category == "invalid-state","stale abandoned handle"); try budget.close(root); output("abandon:ok"); return;
+    }; fail ProbeError { message="abandoned handle must reject"; };
+}
+function arithmeticBoundary() fails budget.LimitError,ProbeError {
+    let root be try budget.request(9223372036854775807,9223372036854775807,100);
+    let allocation be try budget.commit(try budget.reserve(root,9223372036854775807));
+    let unexpected be budget.reserve(root,1) else error budget.LimitError {
+        try check(error.category == "resource-limit" and error.remaining == 0 and root.live == 9223372036854775807,"no signed counter overflow");
+        try budget.release(allocation); try budget.close(root); output("counter-boundary:ok"); return;
+    }; fail ProbeError { message="boundary must reject"; };
+}
+function pageStorage() fails budget.LimitError,ProbeError {
+    let root be try budget.developmentRequest(); let owner be try budget.functionOwner(root,true); let phase be try budget.phase(owner,16777216);
+    let store be try words.create(owner,400); let index be 0;
+    while index < 300 { let ignored be try words.push(store,phase,index*3); index=index+1; }
+    index=0; while index < 300 { try check(try words.get(store,phase,index) == index*3,"radix page contents"); index=index+1; }
+    try words.set(store,phase,15,101); try words.set(store,phase,16,202); try words.set(store,phase,255,303); try words.set(store,phase,256,404);
+    try check(try words.get(store,phase,15) == 101 and try words.get(store,phase,16) == 202 and try words.get(store,phase,255) == 303 and try words.get(store,phase,256) == 404,"page boundaries");
+    try words.freeze(store);
+    let unexpected be writeAttempt(store,phase) else error budget.LimitError {
+        try check(error.category == "invalid-state" and try words.get(store,phase,0) == 0,"frozen storage");
+        try words.close(store); try check(root.live == 0 and root.pending == 0,"storage charges released");
+        try budget.close(owner); try budget.close(root); output("pages:ok"); return;
+    }; fail ProbeError { message="frozen store must reject"; };
+}
+function metadataAndBuilders() fails budget.LimitError,ProbeError {
+    let root be try budget.developmentRequest(); let shared be try budget.child(root,1,134217728,2147483648,268435456); let phase be try budget.phase(shared,16777216);
+    let data be try meta.create(shared,phase); let parameters be [meta.i64(),meta.i64()]; let results be [meta.i64(),meta.pred()];
+    let signature be try meta.signature(data,phase,parameters,results); let again be try meta.signature(data,phase,parameters,results);
+    try check(signature.index == again.index and data.signatures.length == 6,"canonical signature");
+    // Deliberately share bucket 49 with different full hashes and arities.
+    let collisionA be try meta.signature(data,phase,[meta.pred(),meta.pred()],[]);
+    let collisionB be try meta.signature(data,phase,[meta.pred(),meta.i64(),meta.f64()],[]);
+    let collisionAgain be try meta.signature(data,phase,[meta.pred(),meta.pred()],[]);
+    try check(collisionA.index != collisionB.index and collisionA.index == collisionAgain.index,"exact signature equality after hash collision");
+    parameters[0]=meta.f64(); try check((try meta.parameterType(data,phase,signature,0)).index == 2,"signature owns copied type ids");
+    let loopSignature be try meta.signature(data,phase,[meta.i64(),meta.i64(),meta.pred()],[meta.i64()]);
+    let source be try meta.source(data,phase,"probe","0000000000000000000000000000000000000000000000000000000000000000",128);
+    let sameSource be try meta.source(data,phase,"probe","0000000000000000000000000000000000000000000000000000000000000000",128);
+    try check(source.index == sameSource.index,"canonical source revision");
+    let validSource be try expectBadSource(data,phase,source); let validRevision be try expectRevisionConflict(data,phase);
+    let location be try meta.location(data,phase,source,0,10,2,1,3); try meta.freeze(data);
+    let owner be try budget.functionOwner(root,true); let functionPhase be try budget.phase(owner,16777216); let routine be try build.create(data,signature,owner,functionPhase);
+    let entry be try build.block(routine,[meta.i64(),meta.i64()]); let first be try build.parameter(routine,entry,0); let second be try build.parameter(routine,entry,1);
+    let sum be try build.addOverflow(routine,entry,first,second,location); let ok be try build.negatePredicate(routine,entry,sum.overflow,location);
+    try build.guard(routine,entry,ok,1,location); try build.returnValues(routine,entry,[sum.value,sum.overflow],location); try build.complete(routine);
+    try check(routine.state == 1 and routine.values.length/4 == 5 and routine.instructions.length/10 == 4,"multi-result and no fake void values");
+    let immutable be try expectFrozenBuilder(routine,entry,location);
+    let reading be try budget.verificationPhase(shared); let frozen be try expectFrozenMetadata(data,reading); try budget.finishPhase(reading);
+    let loopOwner be try budget.functionOwner(root,true); let loopPhase be try budget.phase(loopOwner,16777216); let loop be try build.create(data,loopSignature,loopOwner,loopPhase);
+    let start be try build.block(loop,[meta.i64(),meta.i64(),meta.pred()]); let header be try build.block(loop,[meta.i64(),meta.i64()]); let done be try build.block(loop,[meta.i64()]);
+    let a be try build.parameter(loop,start,0); let b be try build.parameter(loop,start,1); let test be try build.parameter(loop,start,2);
+    let x be try build.parameter(loop,header,0); let y be try build.parameter(loop,header,1);
+    try build.jump(loop,start,header,[a,b],location); try build.branch(loop,header,test,header,[y,x],done,[x],location);
+    try build.returnValues(loop,done,[try build.parameter(loop,done,0)],location); try build.complete(loop);
+    try check((try build.edgeArgument(loop,2,0)).index == y.index and (try build.edgeArgument(loop,2,1)).index == x.index,"parallel loop arguments");
+    let wrong be build.valueType(loop,first) else error budget.LimitError {
+        try check(error.category == "invalid-state","cross-function ValueId");
+        try build.close(routine); try build.close(loop); try meta.close(data);
+        try check(root.live == 0 and root.pending == 0,"all tracked capacities released");
+        try budget.close(owner); try budget.close(loopOwner); try budget.close(shared); try budget.close(root);
+        output("metadata:ok"); output("signature-collision:ok"); output("source-spans:ok"); output("builder:ok"); output("immutable:ok"); output("loop-edges:ok"); output("foreign-id:ok"); return;
+    }; fail ProbeError { message="foreign ValueId must reject"; };
+}
+function failedConstruction() fails budget.LimitError,ProbeError {
+    let root be try budget.developmentRequest(); let shared be try budget.metadataOwner(root); let phase be try budget.constructionPhase(shared);
+    let data be try meta.create(shared,phase); let signature be try meta.signature(data,phase,[],[]); try meta.freeze(data);
+    let owner be try budget.child(root,2,8192,100000,100000); let construction be try budget.constructionPhase(owner);
+    let routine be try build.create(data,signature,owner,construction);
+    let unexpected be build.block(routine,[]) else error budget.LimitError {
+        try check(error.category == "resource-limit" and owner.state == 1 and routine.state == 0,"failed construction is not complete");
+        try build.close(routine); try check(owner.live == 0 and owner.pending == 0 and root.live == shared.live,"partial pages cleaned up");
+        try check(root.traffic > shared.traffic,"failed attempt traffic retained");
+        try meta.close(data); try budget.close(owner); try budget.close(shared); try budget.close(root); output("construction-failure:ok"); return;
+    }; fail ProbeError { message="construction must exhaust small budget"; };
+}
+function structuralRejections() fails budget.LimitError,ProbeError {
+    let root be try budget.developmentRequest(); let shared be try budget.metadataOwner(root); let phase be try budget.constructionPhase(shared);
+    let data be try meta.create(shared,phase); let signature be try meta.signature(data,phase,[meta.pred()],[meta.i64()]);
+    let source be try meta.source(data,phase,"structural","1111111111111111111111111111111111111111111111111111111111111111",8);
+    let location be try meta.location(data,phase,source,0,8,0,1,1); try meta.freeze(data); try budget.finishPhase(phase);
+    let owner be try budget.functionOwner(root,true); let construction be try budget.constructionPhase(owner); let routine be try build.create(data,signature,owner,construction);
+    let entry be try build.block(routine,[meta.pred()]); let first be try build.block(routine,[]); let second be try build.block(routine,[meta.pred()]);
+    let number be try build.integer(routine,entry,42,location); let test be try build.parameter(routine,entry,0);
+    let incomplete be try expectIncomplete(routine); let rejected be try expectBadEdge(routine,entry,test,first,second,number,location);
+    try build.branch(routine,entry,test,first,[],second,[test],location);
+    try build.returnValues(routine,first,[number],location); try build.returnValues(routine,second,[number],location); try build.complete(routine);
+    try build.close(routine); try meta.close(data); try check(root.live == 0,"structural cleanup");
+    try budget.close(owner); try budget.close(shared); try budget.close(root); output("structural-rejections:ok");
+}
+function run() returns Bool fails budget.LimitError,ProbeError {
+    try reservations(); try failedCapacity(); try failedParent(); try failedTraffic(); try transferCapacity(); try failedTransfer(); try transferKind();
+    try duplicateCommit(); try duplicateRelease(); try workCredits(); try requestWork(); try cancellation(); try abandonedAttempt();
+    try arithmeticBoundary(); try pageStorage(); try metadataAndBuilders(); try structuralRejections(); try failedConstruction(); return true;
+}
+function main() {
+    let done be run() else error budget.LimitError { output(error.category+":"+error.message); process.setExitCode(1); return; }
+    else error ProbeError { output("probe:"+error.message); process.setExitCode(1); return; };
+}
+main();
