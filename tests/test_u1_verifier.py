@@ -43,6 +43,9 @@ PROTOCOL = ''.join(name + ':ok\n' for name in (
     'narrow-core-signatures', 'narrow-type-mismatch', 'narrow-type-restored',
     'narrow-constant-valid', 'narrow-constant-overflow', 'narrow-constant-width',
     'narrow-constant-result-type', 'narrow-constant-restored',
+    'narrow-arith-valid', 'narrow-arith-mode', 'narrow-arith-width',
+    'narrow-arith-cmp', 'narrow-arith-operand', 'narrow-arith-result',
+    'narrow-arith-restored', 'narrow-arith-dead-valid', 'narrow-arith-dead-mode',
     'many-dominated-uses'))
 
 

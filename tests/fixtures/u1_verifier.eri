@@ -433,6 +433,56 @@ function narrowConstantContract() fails budget.LimitError,verify.InvalidIR,Probe
     try accepted(harness,1,"narrow-constant-restored"); try close(harness);
 }
 
+
+function narrowArithmeticContract() fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let width be meta.i8();
+    let harness be try create([width,width,meta.i64()],
+        [width,width,meta.pred(),width,meta.pred(),meta.pred()]);
+    let routine be harness.routine;
+    let entry be try build.block(routine,[width,width,meta.i64()]);
+    let a be try build.parameter(routine,entry,0); let b be try build.parameter(routine,entry,1);
+    let wrong be try build.parameter(routine,entry,2);
+    let sum be try build.narrowWrap(routine,entry,a,b,1,width,harness.location);
+    let signed be try build.narrowSignedOverflow(routine,entry,a,b,2,width,harness.location);
+    let unsigned be try build.narrowUnsignedOverflow(routine,entry,a,b,3,width,harness.location);
+    let cmp be try build.narrowCompare(routine,entry,a,b,7,width,harness.location);
+    try build.returnValues(routine,entry,[sum,signed.value,signed.overflow,
+        unsigned.value,unsigned.overflow,cmp],harness.location);
+    try build.complete(routine); try accepted(harness,1,"narrow-arith-valid");
+    let edit be try budget.constructionPhase(harness.owner);
+    try change(routine.instructions,edit,7,0);
+    try rejected(harness,2,1,"narrow-arith-mode");
+    try change(routine.instructions,edit,7,1);
+    try change(routine.instructions,edit,8,2);
+    try rejected(harness,2,1,"narrow-arith-width");
+    try change(routine.instructions,edit,8,width.index);
+    try change(routine.instructions,edit,37,11);
+    try rejected(harness,2,1,"narrow-arith-cmp");
+    try change(routine.instructions,edit,37,7);
+    try change(routine.operands,edit,1,wrong.index);
+    try rejected(harness,2,1,"narrow-arith-operand");
+    try change(routine.operands,edit,1,b.index);
+    try change(routine.values,edit,12,2);
+    try rejected(harness,2,1,"narrow-arith-result");
+    try change(routine.values,edit,12,width.index);
+    try accepted(harness,1,"narrow-arith-restored"); try close(harness);
+}
+function narrowArithmeticDead() fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let harness be try create([],[meta.i8()]); let routine be harness.routine;
+    let entry be try build.block(routine,[]); let dead be try build.block(routine,[]);
+    let zero be try build.narrowBits(routine,entry,0,meta.i8(),harness.location);
+    try build.returnValues(routine,entry,[zero],harness.location);
+    let a be try build.narrowBits(routine,dead,127,meta.i8(),harness.location);
+    let b be try build.narrowBits(routine,dead,1,meta.i8(),harness.location);
+    let result be try build.narrowWrap(routine,dead,a,b,1,meta.i8(),harness.location);
+    let instruction be routine.instructions.length/10;
+    try build.returnValues(routine,dead,[result],harness.location);
+    try build.complete(routine); try accepted(harness,1,"narrow-arith-dead-valid");
+    let edit be try budget.constructionPhase(harness.owner);
+    try change(routine.instructions,edit,(instruction-1)*10+7,0);
+    try rejected(harness,2,2,"narrow-arith-dead-mode"); try close(harness);
+}
+
 function manyUses() fails budget.LimitError,verify.InvalidIR,ProbeError {
     let harness be try create([meta.pred()],[]); let routine be harness.routine;
     let entry be try build.block(routine,[meta.pred()]); let body be try build.block(routine,[]);
@@ -444,7 +494,7 @@ function manyUses() fails budget.LimitError,verify.InvalidIR,ProbeError {
 }
 function run() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError {
     try mutations(); try orphanRecords(); try diamond(); try loop(); try dead(); try repeatedTarget(); try limits(); try cancellation();
-    try scalarShapes(); try predicateOperations(); try predicateDead(); try integerOperations(); try integerDead(); try divremContracts(); try divremDead(); try floatOperations(); try floatDead(); try syntheticOrigins(); try switchContracts(); try switchEmpty(); try narrowTypeShapes(); try narrowConstantContract(); try manyUses(); return true;
+    try scalarShapes(); try predicateOperations(); try predicateDead(); try integerOperations(); try integerDead(); try divremContracts(); try divremDead(); try floatOperations(); try floatDead(); try syntheticOrigins(); try switchContracts(); try switchEmpty(); try narrowTypeShapes(); try narrowConstantContract(); try narrowArithmeticContract(); try narrowArithmeticDead(); try manyUses(); return true;
 }
 function main() {
     let done be run() else error budget.LimitError { output(error.category+":"+error.message); process.setExitCode(1); return; }
