@@ -12,12 +12,17 @@ public type Metadata {
     sources identity words.Words; bytes identity words.Words; locations identity words.Words;
 }
 public function typeAt(index Int) returns TypeId fails budget.LimitError {
-    if index < 1 or index > 3 { try budget.reject("unsupported U1a type"); }
+    if index < 1 or index > 6 { try budget.reject("unsupported U1 core type"); }
     return TypeId { index=index; };
 }
 public function pred() returns TypeId { return TypeId { index=1; }; }
 public function i64() returns TypeId { return TypeId { index=2; }; }
 public function f64() returns TypeId { return TypeId { index=3; }; }
+// Additional internal U1b fixed-width bit types. These are not new Eristavi
+// source-level numeric kinds and have no implicit i64 arithmetic conversions.
+public function i8() returns TypeId { return TypeId { index=4; }; }
+public function i16() returns TypeId { return TypeId { index=5; }; }
+public function i32() returns TypeId { return TypeId { index=6; }; }
 public function validType(value TypeId) fails budget.LimitError { let checked be try typeAt(value.index); }
 function mutable(meta identity Metadata,phase identity budget.Phase) fails budget.LimitError {
     try budget.poll(meta.owner);
