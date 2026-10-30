@@ -595,3 +595,12 @@ Implemented, isolated U1a: private binary64 add/sub/mul/div/neg and six comparis
 - Details and residual gates: `UIR_U1B_NARROW_ARITHMETIC.md`.
 - **Status at commit creation: draft implementation, CI/qualification not yet validated**. Requalify after PR #83 and PR #84 have been merged and the final tree reconciled; do not merge or retire the production compiler before the complete gates.
 - Still open: narrow div/rem, immutable aggregate U1b, U1a multi-function execution/imported effects, strict native Float, complete origins, U2 managed/failure/resource profile, U3 direct frontend→UIR/native adapter.
+
+
+## 21. Proposed narrow division/remainder slice (2026-10-30)
+
+- Branch `compiler/u1b-narrow-divrem` is stacked on `compiler/u1b-narrow-arithmetic` (PR #86) after the narrow type/constant stack (PR #84), itself based on call+switch integration (PR #83).
+- Private op41 and op42 implement signed/unsigned i8/i16/i32 division and remainder with exact terminal trap semantics: zero divisor code2 and signed min/-1 code1 for **both div/rem**, original LocId and no produced value on fault.
+- Independent exact arithmetic oracle and SSA promotion use 12 direct width/signedness/op fixtures and one i8-cell diamond with first-fault ordering. The suite expects **52** before/after promotion snapshots. Malformed verifier tests include bad mode, width, operand/result type, location and unreachable records.
+- Full details: `UIR_U1B_NARROW_DIVREM.md`. **At initial commit: draft/unqualified, no merge**. Require four-platform CI and full completed-batch qualification after parent PR merge/rebase, and verify final tested-versus-main Git trees. Do not run 900-second owned experimental compiler self-build by default.
+- Immutable U1b aggregates and all U2/U3 native/frontend tasks remain; this does not change frozen language or current production lowering.
