@@ -1,0 +1,337 @@
+// Bounded, independent evaluator for verified, linked U1a scalar call graphs.
+// Internal reference execution, NOT the production compiler or native ABI.
+// Supports pred/i64 scalar operations, direct calls, CFG edges and selected
+// versioned test imports. Unimplemented UIR opcodes fail explicitly.
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+import compiler.u1_meta as meta;
+import compiler.u1_builder as build;
+import compiler.u1_module as link;
+import compiler.u1_imports as imports;
+import compiler.u1_effects as effects;
+import compiler.u1_verify as verify;
+import compiler.u1_ops as ops;
+import compiler.format as format;
+
+public type Slot { bits Int; next maybe identity Slot; }
+public type Outcome {
+    kind Int; code Int; location Int;
+    first maybe identity Slot; count Int; trace Text;
+}
+public type Machine { fuel Int; steps Int; depthLimit Int; trace Text; }
+type Frame { routine identity build.Function; phase identity budget.Phase;
+    values identity words.Words; }
+function outcome(kind Int,code Int,location Int,first maybe identity Slot,count Int)
+    returns identity Outcome {
+    return identity Outcome { kind=kind; code=code; location=location;
+        first=first; count=count; trace=""; };
+}
+public function value(result identity Outcome,index Int) returns Int fails budget.LimitError {
+    if result.kind != 0 or index < 0 or index >= result.count {
+        try budget.reject("invalid U1a result access");
+    }
+    let cursor be result.first; let item be 0;
+    while cursor != none {
+        if item == index { return cursor.bits; }
+        cursor=cursor.next; item=item+1;
+    }
+    fail budget.LimitError { message="missing U1a result element";
+        category="invalid-state"; requested=0; remaining=0; };
+}
+function get(frame identity Frame,index Int) returns Int fails budget.LimitError {
+    if index < 1 or index > frame.values.length { try budget.reject("invalid U1a value slot"); }
+    return try words.get(frame.values,frame.phase,index-1);
+}
+function put(frame identity Frame,index Int,bits Int) fails budget.LimitError {
+    if index < 1 or index > frame.values.length { try budget.reject("invalid U1a result slot"); }
+    try words.set(frame.values,frame.phase,index-1,bits);
+}
+function field(frame identity Frame,table identity words.Words,index Int)
+    returns Int fails budget.LimitError {
+    return try words.get(table,frame.phase,index);
+}
+function arguments(frame identity Frame,table identity words.Words,first Int,count Int)
+    returns maybe identity Slot fails budget.LimitError {
+    let head maybe identity Slot be none;
+    let tail maybe identity Slot be none; let item be 0;
+    while item < count {
+        let source be try field(frame,table,first+item);
+        let next be identity Slot { bits=try get(frame,source); next=none; };
+        if tail == none { head=next; } else { tail.next=next; }
+        tail=next; item=item+1;
+    }
+    return head;
+}
+function assign(frame identity Frame,start Int,values maybe identity Slot,count Int)
+    fails budget.LimitError {
+    let cursor be values; let item be 0;
+    while item < count {
+        if cursor != none {
+            try put(frame,start+item,cursor.bits);
+            cursor=cursor.next;
+        } else { try budget.reject("missing U1a argument value"); }
+        item=item+1;
+    }
+    if cursor != none { try budget.reject("excess U1a argument value"); }
+}
+function jump(frame identity Frame,edge Int) returns Int fails budget.LimitError {
+    let base be (edge-1)*3;
+    let target be try field(frame,frame.routine.edges,base);
+    let first be try field(frame,frame.routine.edges,base+1);
+    let count be try field(frame,frame.routine.edges,base+2);
+    // Snapshot every source before writing any destination (parallel phi).
+    let saved be try arguments(frame,frame.routine.arguments,first,count);
+    let destination be try field(frame,frame.routine.blocks,(target-1)*5);
+    try assign(frame,destination,saved,count);
+    return target;
+}
+function signedLess(a Int,b Int) returns Bool { return a < b; }
+function unsignedLess(a Int,b Int) returns Bool { return ops.unsignedLess(a,b); }
+function cmp(a Int,b Int,relation Int) returns Int {
+    let okay be false;
+    if relation == 1 { okay=a==b; }
+    if relation == 2 { okay=a!=b; }
+    if relation == 3 { okay=signedLess(a,b); }
+    if relation == 4 { okay=a<=b; }
+    if relation == 5 { okay=a>b; }
+    if relation == 6 { okay=a>=b; }
+    if relation == 7 { okay=unsignedLess(a,b); }
+    if relation == 8 { okay=not unsignedLess(b,a); }
+    if relation == 9 { okay=unsignedLess(b,a); }
+    if relation == 10 { okay=not unsignedLess(a,b); }
+    if okay { return 1; }
+    return 0;
+}
+// Total modulo-2^64 arithmetic; no unchecked host overflow.
+function wrapAdd(a Int,b Int) returns Int {
+    let top be 9223372036854775807;
+    let bottom be -9223372036854775807-1;
+    if b > 0 and a > top-b {
+        let rest be a-(top-b);
+        return bottom+(rest-1);
+    }
+    if b < 0 and a < bottom-b {
+        let rest be (bottom-b)-a;
+        return top-(rest-1);
+    }
+    return a+b;
+}
+function wrapSub(a Int,b Int) returns Int {
+    let top be 9223372036854775807;
+    let bottom be -9223372036854775807-1;
+    if b > 0 and a < bottom+b {
+        let rest be (bottom+b)-a;
+        return top-(rest-1);
+    }
+    if b < 0 and a > top+b {
+        let rest be a-(top+b);
+        return bottom+(rest-1);
+    }
+    return a-b;
+}
+function wrapMul(a Int,b Int) returns Int {
+    let result be 0; let item be b; let power be a;
+    while item != 0 {
+        let odd be item%2;
+        if odd > 0 { result=wrapAdd(result,power); }
+        if odd < 0 { result=wrapSub(result,power); }
+        item=item/2;
+        power=wrapAdd(power,power);
+    }
+    return result;
+}
+function selected(program identity link.Program,policy identity imports.Policy,
+    target meta.FunctionId,values maybe identity Slot,count Int,state identity Machine)
+    returns identity Outcome fails budget.LimitError {
+    let adapter be try imports.adapter(policy,target);
+    if count != 1 { try budget.reject("trusted import argument shape mismatch"); }
+    if values != none {
+        if values.next != none { try budget.reject("trusted import argument shape mismatch"); }
+        if adapter == 1 {
+            state.trace=state.trace+"trace:"+format.integer(values.bits)+";";
+            return outcome(0,0,0,none,0);
+        }
+        if adapter == 2 {
+            return outcome(0,0,0,identity Slot { bits=values.bits; next=none; },1);
+        }
+    } else { try budget.reject("trusted import has no argument"); }
+    try budget.reject("unsupported trusted U1a import adapter");
+    return outcome(3,adapter,0,none,0);
+}
+function step(machine identity Machine,location Int) returns Bool {
+    if machine.fuel <= 0 { return false; }
+    machine.fuel=machine.fuel-1; machine.steps=machine.steps+1; return true;
+}
+function invoke(program identity link.Program,policy identity imports.Policy,
+    target meta.FunctionId,inputs maybe identity Slot,count Int,state identity Machine,
+    depth Int,site Int) returns identity Outcome fails budget.LimitError {
+    if depth > state.depthLimit { return outcome(2,0,site,none,0); }
+    let routine be try link.resolve(program,target);
+    let phase be try budget.verificationPhase(routine.owner);
+    let values be try words.create(routine.owner,1048576);
+    let total be routine.values.length/4; let item be 0;
+    while item < total {
+        let ignored be try words.push(values,phase,0);
+        item=item+1;
+    }
+    let frame be identity Frame { routine=routine; phase=phase; values=values; };
+    let finished be walk(program,policy,frame,inputs,count,state,depth)
+        else error budget.LimitError {
+            try words.close(values); try budget.finishPhase(phase); fail error;
+        };
+    try words.close(values); try budget.finishPhase(phase);
+    return finished;
+}
+function walk(program identity link.Program,policy identity imports.Policy,
+    frame identity Frame,inputs maybe identity Slot,count Int,state identity Machine,
+    depth Int) returns identity Outcome fails budget.LimitError {
+    let routine be frame.routine;
+    let entryFirst be try field(frame,routine.blocks,0);
+    let entryCount be try field(frame,routine.blocks,1);
+    if count != entryCount { try budget.reject("U1a entry argument count mismatch"); }
+    try assign(frame,entryFirst,inputs,count);
+    let block be 1;
+    while true {
+        let base be (block-1)*5;
+        let instruction be try field(frame,routine.blocks,base+2);
+        let terminator be try field(frame,routine.blocks,base+4);
+        while instruction != 0 or terminator != 0 {
+            let current be instruction;
+            if current == 0 { current=terminator; }
+            if current == terminator { terminator=0; }
+            else { instruction=try field(frame,routine.instructions,(current-1)*10+9); }
+            let offset be (current-1)*10;
+            let op be try field(frame,routine.instructions,offset);
+            let first be try field(frame,routine.instructions,offset+2);
+            let operandCount be try field(frame,routine.instructions,offset+3);
+            let resultStart be try field(frame,routine.instructions,offset+4);
+            let resultCount be try field(frame,routine.instructions,offset+5);
+            let loc be try field(frame,routine.instructions,offset+6);
+            let payload be try field(frame,routine.instructions,offset+7);
+            if not step(state,loc) { return outcome(2,0,loc,none,0); }
+            let a be 0; let b be 0;
+            if operandCount > 0 { a=try get(frame,try field(frame,routine.operands,first)); }
+            if operandCount > 1 { b=try get(frame,try field(frame,routine.operands,first+1)); }
+            if op == 1 or op == 2 {
+                try put(frame,resultStart,payload);
+            }
+            if op == 4 {
+                let answer be 1;
+                if a != 0 { answer=0; }
+                try put(frame,resultStart,answer);
+            }
+            if op == 13 or op == 14 {
+                let answer be 0;
+                if (op == 13 and a != 0 and b != 0) or
+                   (op == 14 and (a != 0 or b != 0)) { answer=1; }
+                try put(frame,resultStart,answer);
+            }
+            if op == 15 or op == 16 or op == 17 {
+                let answer be wrapAdd(a,b);
+                if op == 16 { answer=wrapSub(a,b); }
+                if op == 17 { answer=wrapMul(a,b); }
+                try put(frame,resultStart,answer);
+            }
+            if op == 18 {
+                try put(frame,resultStart,cmp(a,b,payload));
+            }
+            if op == 24 or op == 25 {
+                if b == 0 { return outcome(1,2,loc,none,0); }
+                let bottom be -9223372036854775807-1;
+                if a == bottom and b == -1 { return outcome(1,1,loc,none,0); }
+                let answer be a/b;
+                if op == 25 { answer=a%b; }
+                try put(frame,resultStart,answer);
+            }
+            if op == 5 {
+                if a == 0 { return outcome(1,payload,loc,none,0); }
+            }
+            if op == 34 {
+                let target be meta.FunctionId { owner=program.metadata.key; index=payload; };
+                let callArgs be try arguments(frame,routine.operands,first,operandCount);
+                let kind be try field(frame,program.metadata.declarations,(payload-1)*6+3);
+                let returned be outcome(3,34,loc,none,0);
+                if kind == 1 {
+                    returned=try invoke(program,policy,target,callArgs,operandCount,state,depth+1,loc);
+                } else {
+                    returned=try selected(program,policy,target,callArgs,operandCount,state);
+                }
+                if returned.kind != 0 { return returned; }
+                if returned.count != resultCount { try budget.reject("U1a call returned wrong arity"); }
+                try assign(frame,resultStart,returned.first,returned.count);
+            }
+            if op == 8 {
+                let results be try arguments(frame,routine.operands,first,operandCount);
+                return outcome(0,0,0,results,operandCount);
+            }
+            if op == 6 or op == 7 {
+                let edge be payload;
+                if op == 7 and a == 0 {
+                    edge=try field(frame,routine.instructions,offset+8);
+                }
+                block=try jump(frame,edge);
+                instruction=0; terminator=0;
+            }
+            if op == 35 {
+                let header be (payload-1)*3;
+                let begin be try field(frame,routine.switches,header);
+                let cases be try field(frame,routine.switches,header+1);
+                let edge be try field(frame,routine.switches,header+2);
+                let cursor be 0;
+                while cursor < cases {
+                    let bits be try field(frame,routine.cases,(begin+cursor)*2);
+                    if a == bits {
+                        edge=try field(frame,routine.cases,(begin+cursor)*2+1);
+                        cursor=cases;
+                    } else { cursor=cursor+1; }
+                }
+                block=try jump(frame,edge);
+                instruction=0; terminator=0;
+            }
+            if op != 1 and op != 2 and op != 4 and op != 13 and op != 14 and
+               op != 15 and op != 16 and op != 17 and op != 18 and
+               op != 24 and op != 25 and op != 5 and op != 34 and
+               op != 8 and op != 6 and op != 7 and op != 35 {
+                // Never guess strict f64, narrow widths, checked-overflow
+                // or future managed/checked continuation semantics.
+                return outcome(3,op,loc,none,0);
+            }
+        }
+    }
+    return outcome(3,0,0,none,0);
+}
+public function run(program identity link.Program,policy identity imports.Policy,
+    target meta.FunctionId,inputs,fuel Int,depthLimit Int)
+    returns identity Outcome fails budget.LimitError,verify.InvalidIR {
+    if fuel < 1 or fuel > 1048576 or depthLimit < 1 or depthLimit > 1024 {
+        try budget.reject("invalid bounded U1a evaluation limits");
+    }
+    // Cheap entry validation must not allocate a derived-effect snapshot.
+    let data be program.metadata;
+    if target.owner != data.key { try budget.reject("foreign U1a entry FunctionId"); }
+    let signaturePhase be try budget.verificationPhase(data.owner);
+    let signature be try meta.functionSignature(data,signaturePhase,target);
+    let count be try meta.parameterCount(data,signaturePhase,signature);
+    if count != inputs.count { try budget.reject("U1a entry arity mismatch"); }
+    let head maybe identity Slot be none; let tail maybe identity Slot be none;
+    let index be 0;
+    while index < inputs.count {
+        let kind be (try meta.parameterType(data,signaturePhase,signature,index)).index;
+        if kind != 1 and kind != 2 { try budget.reject("unsupported U1a entry type"); }
+        if kind == 1 and inputs[index] != 0 and inputs[index] != 1 {
+            try budget.reject("invalid U1a entry predicate bits");
+        }
+        let next be identity Slot { bits=inputs[index]; next=none; };
+        if tail == none { head=next; } else { tail.next=next; }
+        tail=next; index=index+1;
+    }
+    try budget.finishPhase(signaturePhase);
+    // Fresh, independently reverified effect closure; release on every exit.
+    let checked be try effects.inspect(program,policy);
+    let machine be identity Machine { fuel=fuel; steps=0; depthLimit=depthLimit; trace=""; };
+    let result be invoke(program,policy,target,head,count,machine,1,0)
+        else error budget.LimitError { try effects.close(checked); fail error; };
+    try effects.close(checked);
+    result.trace=machine.trace;
+    return result;
+}

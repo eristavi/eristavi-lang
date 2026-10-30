@@ -1,0 +1,134 @@
+// Selected, versioned U1a import adapters. This is an intentionally
+// closed *test* trust catalog, not arbitrary native/foreign execution.
+// No per-call effect claims or unchecked callbacks may be supplied.
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+import compiler.u1_meta as meta;
+import compiler.u1_module as link;
+
+public type Selection {
+    target meta.FunctionId; adapter Int; revision Int;
+    charge identity budget.Allocation; next maybe identity Selection;
+}
+public type Policy {
+    program identity link.Program; selected maybe identity Selection;
+    frozen Bool; closed Bool; charge identity budget.Allocation;
+}
+function active(policy identity Policy) fails budget.LimitError {
+    try budget.poll(policy.program.metadata.owner);
+    if policy.closed or policy.program.closed or not policy.program.sealed or
+       policy.program.metadata.closed or not policy.program.metadata.frozen {
+        try budget.reject("invalid U1a trusted import context");
+    }
+}
+public function create(program identity link.Program) returns identity Policy fails budget.LimitError {
+    if not program.sealed or program.closed { try budget.reject("imports require sealed definitions"); }
+    let pending be try budget.reserve(program.metadata.owner,128);
+    return identity Policy { program=program; selected=none; frozen=false;
+        closed=false; charge=try budget.commit(pending); };
+}
+function matches(data identity meta.Metadata,phase identity budget.Phase,
+    index Int,symbol Text) returns Bool fails budget.LimitError {
+    let offset be (index-1)*6;
+    let start be try words.get(data.declarations,phase,offset+1);
+    let size be try words.get(data.declarations,phase,offset+2);
+    if size != symbol.bytes.count { return false; }
+    let item be 0;
+    while item < size {
+        if try words.get(data.symbolBytes,phase,start+item) != symbol.bytes[item] { return false; }
+        item=item+1;
+    }
+    return true;
+}
+// The two permitted adapters are deterministic and can be independently
+// modeled by an oracle: trace(i64)->() with external effect 4 and
+// identity(i64)->i64 with empty effect 0. Both require contract version 1.
+function contract(policy identity Policy,target meta.FunctionId,adapter Int)
+    fails budget.LimitError {
+    let data be policy.program.metadata;
+    if target.owner != data.key or target.index < 1 or
+       target.index > data.declarations.length/6 or (adapter != 1 and adapter != 2) {
+        try budget.reject("untrusted U1a imported FunctionId");
+    }
+    let phase be try budget.verificationPhase(data.owner);
+    let offset be (target.index-1)*6;
+    let kind be try words.get(data.declarations,phase,offset+3);
+    let effects be try words.get(data.declarations,phase,offset+4);
+    let version be try words.get(data.declarations,phase,offset+5);
+    let signature be try meta.functionSignature(data,phase,target);
+    let name be "u1.test.trace";
+    let expectedEffects be 4; let expectedResults be 0;
+    if adapter == 2 {
+        name="u1.test.identity"; expectedEffects=0; expectedResults=1;
+    }
+    let okay be kind == 2 and version == 1 and effects == expectedEffects and
+        try matches(data,phase,target.index,name) and
+        (try meta.parameterCount(data,phase,signature)) == 1 and
+        (try meta.resultCount(data,phase,signature)) == expectedResults and
+        (try meta.parameterType(data,phase,signature,0)).index == 2;
+    if okay and expectedResults == 1 {
+        okay=(try meta.resultType(data,phase,signature,0)).index == 2;
+    }
+    try budget.finishPhase(phase);
+    if not okay { try budget.reject("untrusted or stale U1a import contract"); }
+}
+public function select(policy identity Policy,target meta.FunctionId,adapter Int)
+    returns Int fails budget.LimitError {
+    try active(policy);
+    if policy.frozen { try budget.reject("U1a import selection is frozen"); }
+    try contract(policy,target,adapter);
+    let cursor be policy.selected;
+    while cursor != none {
+        if cursor.target.index == target.index { try budget.reject("duplicate U1a import selection"); }
+        cursor=cursor.next;
+    }
+    let pending be try budget.reserve(policy.program.metadata.owner,128);
+    let selected be identity Selection { target=target; adapter=adapter; revision=1;
+        charge=try budget.commit(pending); next=policy.selected; };
+    policy.selected=selected;
+    return adapter;
+}
+public function freeze(policy identity Policy) returns Int fails budget.LimitError {
+    try active(policy);
+    if policy.frozen { try budget.reject("duplicate import selection freeze"); }
+    let data be policy.program.metadata;
+    let index be 1;
+    while index <= data.declarations.length/6 {
+        let phase be try budget.verificationPhase(data.owner);
+        let kind be try words.get(data.declarations,phase,(index-1)*6+3);
+        try budget.finishPhase(phase);
+        if kind == 2 {
+            let target be meta.FunctionId { owner=data.key; index=index; };
+            let adapter be try adapter(policy,target);
+            try contract(policy,target,adapter);
+        }
+        index=index+1;
+    }
+    policy.frozen=true;
+    return data.declarations.length/6;
+}
+public function adapter(policy identity Policy,target meta.FunctionId)
+    returns Int fails budget.LimitError {
+    try active(policy);
+    if target.owner != policy.program.metadata.key { try budget.reject("foreign U1a import"); }
+    let cursor be policy.selected;
+    while cursor != none {
+        if cursor.target.index == target.index {
+            try contract(policy,target,cursor.adapter);
+            return cursor.adapter;
+        }
+        cursor=cursor.next;
+    }
+    fail budget.LimitError { message="no trusted U1a import selection";
+        category="invalid-state"; requested=0; remaining=0; };
+}
+public function close(policy identity Policy) fails budget.LimitError {
+    if policy.closed { try budget.reject("double close of import context"); }
+    policy.closed=true;
+    let cursor be policy.selected; policy.selected=none;
+    while cursor != none {
+        let selected be cursor; cursor=selected.next; selected.next=none;
+        try budget.release(selected.charge);
+    }
+    try budget.release(policy.charge);
+}
