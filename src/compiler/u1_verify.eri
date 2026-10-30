@@ -191,7 +191,25 @@ function locations(context identity Context) fails budget.LimitError,InvalidIR {
         let anchor be try read(context,data.locations,offset+3);
         try require(context,start >= 0 and end >= start and end <= length and anchor >= start and anchor <= end,"invalid source span or anchor");
         try require(context,try read(context,data.locations,offset+4) >= 1 and try read(context,data.locations,offset+5) >= 1,"invalid source line or column");
-        try require(context,try read(context,data.locations,offset+6) == 0,"origin chains unsupported in foundation profile"); index=index+1;
+                let origin be try read(context,data.locations,offset+6);
+        try require(context,origin >= 0,"negative synthetic origin encoding");
+        if origin != 0 {
+            let reason be origin/1048577; let parent be origin%1048577;
+            try require(context,reason >= 1 and reason <= 4,"invalid synthetic origin reason");
+            if parent == 0 { try require(context,reason == 1,"unsupported root synthetic reason"); }
+            else {
+                try require(context,parent <= index,"cyclic or forward synthetic origin");
+                // A synthetic child may not silently attribute its parent's
+                // diagnostic to a different source revision or byte range.
+                let item be 0; let oldOffset be (parent-1)*7;
+                while item < 6 {
+                    try require(context,try read(context,data.locations,offset+item) ==
+                        try read(context,data.locations,oldOffset+item),"synthetic origin changed source/anchor");
+                    item=item+1;
+                }
+            }
+        }
+        index=index+1;
     }
     context.block=1;
     while context.block <= context.routine.blocks.length/5 {
