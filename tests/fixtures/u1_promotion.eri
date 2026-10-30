@@ -55,7 +55,8 @@ function dumpTable(table identity words.Words,phase identity budget.Phase) fails
 function dump(routine identity build.Function) fails budget.LimitError {
     let phase be try budget.verificationPhase(routine.owner);
     try dumpTable(routine.blocks,phase); try dumpTable(routine.values,phase); try dumpTable(routine.instructions,phase);
-    try dumpTable(routine.operands,phase); try dumpTable(routine.edges,phase); try dumpTable(routine.arguments,phase); try dumpTable(routine.cells,phase); try budget.finishPhase(phase);
+    try dumpTable(routine.operands,phase); try dumpTable(routine.edges,phase); try dumpTable(routine.arguments,phase); try dumpTable(routine.cells,phase);
+    try dumpTable(routine.switches,phase); try dumpTable(routine.cases,phase); try budget.finishPhase(phase);
 }
 function hashTable(table identity words.Words,phase identity budget.Phase,seed Int) returns Int fails budget.LimitError {
     let hash be seed; let index be 0;
@@ -66,6 +67,7 @@ function fingerprint(routine identity build.Function) returns Int fails budget.L
     let phase be try budget.verificationPhase(routine.owner); let hash be 17;
     hash=try hashTable(routine.blocks,phase,hash); hash=try hashTable(routine.values,phase,hash); hash=try hashTable(routine.instructions,phase,hash);
     hash=try hashTable(routine.operands,phase,hash); hash=try hashTable(routine.edges,phase,hash); hash=try hashTable(routine.arguments,phase,hash); hash=try hashTable(routine.cells,phase,hash);
+    hash=try hashTable(routine.switches,phase,hash); hash=try hashTable(routine.cases,phase,hash);
     try budget.finishPhase(phase); return hash;
 }
 function promoted(harness identity Harness,name Text,parameters Int,arguments Int) fails budget.LimitError,verify.InvalidIR,ProbeError {
@@ -449,6 +451,46 @@ function floatNonContraction() fails budget.LimitError,verify.InvalidIR,ProbeErr
     let sum be try build.addFloat(routine,entry,rounded,c,harness.location);
     try build.returnValues(routine,entry,[sum],harness.location);
     try build.complete(routine); try promoted(harness,"float-nonfma",0,0);
+}
+
+
+function switchFlow() fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let harness be try create([meta.i64()],[meta.i64()],true); let routine be harness.routine;
+    let entry be try build.block(routine,[meta.i64()]);
+    let zero be try build.block(routine,[]); let high be try build.block(routine,[]);
+    let low be try build.block(routine,[]); let other be try build.block(routine,[]);
+    let join be try build.block(routine,[]);
+    let selector be try build.parameter(routine,entry,0);
+    let local be try build.cell(routine,meta.i64());
+    try build.initialize(routine,entry,local,selector,harness.location);
+    let eZero be try build.edge(routine,zero,[]); let eHigh be try build.edge(routine,high,[]);
+    let eLow be try build.edge(routine,low,[]); let eOther be try build.edge(routine,other,[]);
+    try build.switchInteger(routine,entry,selector,[0,9223372036854775807,-9223372036854775807-1],
+        [eZero,eHigh,eLow],eOther,harness.location);
+    let ten be try build.integer(routine,zero,10,harness.location);
+    try build.writeCell(routine,zero,local,ten,harness.location); try build.jump(routine,zero,join,[],harness.location);
+    let twenty be try build.integer(routine,high,20,harness.location);
+    try build.writeCell(routine,high,local,twenty,harness.location); try build.jump(routine,high,join,[],harness.location);
+    let thirty be try build.integer(routine,low,30,harness.location);
+    try build.writeCell(routine,low,local,thirty,harness.location); try build.jump(routine,low,join,[],harness.location);
+    let forty be try build.integer(routine,other,40,harness.location);
+    try build.writeCell(routine,other,local,forty,harness.location); try build.jump(routine,other,join,[],harness.location);
+    let value be try build.readCell(routine,join,local,harness.location);
+    try build.returnValues(routine,join,[value],harness.location);
+    try build.complete(routine); try promoted(harness,"switch-flow",1,4);
+}
+function switchDistinctEdges() fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let harness be try create([meta.i64(),meta.i64(),meta.i64(),meta.i64()],[meta.i64()],true);
+    let routine be harness.routine; let entry be try build.block(routine,[meta.i64(),meta.i64(),meta.i64(),meta.i64()]);
+    let join be try build.block(routine,[meta.i64()]);
+    let selector be try build.parameter(routine,entry,0);
+    let left be try build.parameter(routine,entry,1); let right be try build.parameter(routine,entry,2);
+    let fallback be try build.parameter(routine,entry,3);
+    let first be try build.edge(routine,join,[left]); let second be try build.edge(routine,join,[right]);
+    let otherwise be try build.edge(routine,join,[fallback]);
+    try build.switchInteger(routine,entry,selector,[0,9223372036854775807],[first,second],otherwise,harness.location);
+    try build.returnValues(routine,join,[try build.parameter(routine,join,0)],harness.location);
+    try build.complete(routine); try promoted(harness,"switch-multi-edge",0,0);
 }
 
 // The Python harness appends run()/main() with its selected cases.

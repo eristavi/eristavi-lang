@@ -4,12 +4,14 @@ import compiler.u1_words as words;
 public type Key { marker Int; }
 public type TypeId { index Int; }
 public type SignatureId { owner identity Key; index Int; }
+public type FunctionId { owner identity Key; index Int; }
 public type SourceId { owner identity Key; index Int; }
 public type LocId { owner identity Key; index Int; }
 public type Metadata {
     key identity Key; owner identity budget.Owner; frozen Bool; closed Bool; control maybe identity budget.Allocation;
     signatures identity words.Words; types identity words.Words; buckets identity words.Words;
     sources identity words.Words; bytes identity words.Words; locations identity words.Words;
+    declarations identity words.Words; symbolBytes identity words.Words;
 }
 public function typeAt(index Int) returns TypeId fails budget.LimitError {
     if index < 1 or index > 3 { try budget.reject("unsupported U1a type"); }
@@ -25,14 +27,15 @@ function mutable(meta identity Metadata,phase identity budget.Phase) fails budge
 }
 public function create(owner identity budget.Owner,phase identity budget.Phase) returns identity Metadata fails budget.LimitError {
     if owner.kind != 1 or phase.owner != owner or phase.used != 0 or phase.prepaid != 0 { try budget.reject("metadata requires a fresh shared phase"); }
-    // Bound admission before constructing the initial six stores and bucket pages.
+    // Bound admission before constructing owned metadata stores and bucket pages.
     let preflight be try budget.reserve(owner,16384); try budget.cancelReservation(preflight);
     try budget.prepay(phase,1024);
     let pending be try budget.reserve(owner,768);
     let meta be identity Metadata { key=identity Key { marker=0; }; owner=owner; frozen=false; closed=false; control=none;
         signatures=try words.create(owner,6291456); types=try words.create(owner,8388608);
         buckets=try words.create(owner,64); sources=try words.create(owner,524288);
-        bytes=try words.create(owner,8388608); locations=try words.create(owner,7340032); };
+        bytes=try words.create(owner,8388608); locations=try words.create(owner,7340032);
+        declarations=try words.create(owner,393216); symbolBytes=try words.create(owner,16777216); };
     let index be 0; while index < 64 { let ignored be try words.push(meta.buckets,phase,0); index=index+1; }
     meta.control=try budget.commit(pending); return meta;
 }
@@ -99,6 +102,62 @@ function sameBytes(meta identity Metadata,phase identity budget.Phase,first Int,
     if count != value.bytes.count { return false; } let index be 0;
     while index < count { if try words.get(meta.bytes,phase,first+index) != value.bytes[index] { return false; } index=index+1; } return true;
 }
+
+// Owned, closed-profile function declarations. Record width six:
+// [signature index, symbol byte start/count, kind, effects, import version].
+// Kind 1 defined (version 0); kind 2 imported (trusted version >=1).
+// Effect flags: read 1, write 2, external 4, allocation 8, trap 16, diverge 32.
+// This slice conservatively treats calls as observable; effect closure and
+// imported contract trust are separate gates, not guessed optimizer privileges.
+public function functionSignature(meta identity Metadata,phase identity budget.Phase,target FunctionId) returns SignatureId fails budget.LimitError {
+    if meta.closed or target.owner != meta.key or target.index < 1 or target.index > meta.declarations.length/6 {
+        try budget.reject("foreign or invalid U1a FunctionId");
+    }
+    let index be try words.get(meta.declarations,phase,(target.index-1)*6);
+    return SignatureId { owner=meta.key; index=index; };
+}
+public function declaration(meta identity Metadata,phase identity budget.Phase,signature SignatureId,symbol Text,
+    kind Int,effects Int,version Int) returns FunctionId fails budget.LimitError {
+    try mutable(meta,phase);
+    let checked be try signatureIndex(meta,signature);
+    if kind < 1 or kind > 2 or effects < 0 or effects > 63 or symbol.bytes.count == 0 or symbol.bytes.count > 1024 {
+        try budget.reject("invalid U1a function declaration");
+    }
+    if (kind == 1 and version != 0) or (kind == 2 and version < 1) {
+        try budget.reject("invalid U1a import contract version");
+    }
+    if meta.declarations.length/6 >= 65536 or symbol.bytes.count > 16777216-meta.symbolBytes.length {
+        try budget.exceed(meta.owner,symbol.bytes.count,0);
+    }
+    let old be 0;
+    while old < meta.declarations.length/6 {
+        let base be old*6;
+        let first be try words.get(meta.declarations,phase,base+1);
+        let count be try words.get(meta.declarations,phase,base+2);
+        if count == symbol.bytes.count {
+            let index be 0; let same be true;
+            while index < count {
+                if try words.get(meta.symbolBytes,phase,first+index) != symbol.bytes[index] { same=false; }
+                index=index+1;
+            }
+            if same { try budget.reject("duplicate U1a function symbol"); }
+        }
+        old=old+1;
+    }
+    let start be meta.symbolBytes.length; let index be 0;
+    while index < symbol.bytes.count {
+        let ignored be try words.push(meta.symbolBytes,phase,symbol.bytes[index]); index=index+1;
+    }
+    let value be FunctionId { owner=meta.key; index=meta.declarations.length/6+1; };
+    let ignored be try words.push(meta.declarations,phase,signature.index);
+    ignored=try words.push(meta.declarations,phase,start);
+    ignored=try words.push(meta.declarations,phase,symbol.bytes.count);
+    ignored=try words.push(meta.declarations,phase,kind);
+    ignored=try words.push(meta.declarations,phase,effects);
+    ignored=try words.push(meta.declarations,phase,version);
+    return value;
+}
+
 public function source(meta identity Metadata,phase identity budget.Phase,name Text,digest Text,length Int) returns SourceId fails budget.LimitError {
     try mutable(meta,phase);
     if name.bytes.count == 0 or digest.bytes.count != 64 or length < 0 { try budget.reject("invalid U1a source identity"); }
@@ -129,9 +188,6 @@ public function location(meta identity Metadata,phase identity budget.Phase,sour
     ignored=try words.push(meta.locations,phase,line); ignored=try words.push(meta.locations,phase,column);
     ignored=try words.push(meta.locations,phase,0); return value;
 }
-
-// Explicit synthetic roots support hand-built UIR without claiming a real
-// source expression. Callers provide an owned logical SourceId and digest.
 public function syntheticRoot(meta identity Metadata,phase identity budget.Phase,
     source SourceId,start Int,end Int,anchor Int,line Int,column Int) returns LocId fails budget.LimitError {
     let value be try location(meta,phase,source,start,end,anchor,line,column);
@@ -164,11 +220,13 @@ public function validLocation(meta identity Metadata,value LocId) fails budget.L
 public function freeze(meta identity Metadata) fails budget.LimitError {
     try budget.poll(meta.owner); if meta.closed { try budget.reject("closed U1a metadata"); }
     try words.freeze(meta.signatures); try words.freeze(meta.types); try words.freeze(meta.buckets);
-    try words.freeze(meta.sources); try words.freeze(meta.bytes); try words.freeze(meta.locations); meta.frozen=true;
+    try words.freeze(meta.sources); try words.freeze(meta.bytes); try words.freeze(meta.locations);
+    try words.freeze(meta.declarations); try words.freeze(meta.symbolBytes); meta.frozen=true;
 }
 public function close(meta identity Metadata) fails budget.LimitError {
     if meta.closed { try budget.reject("double close of U1a metadata"); } meta.closed=true;
     try words.close(meta.signatures); try words.close(meta.types); try words.close(meta.buckets);
     try words.close(meta.sources); try words.close(meta.bytes); try words.close(meta.locations);
+    try words.close(meta.declarations); try words.close(meta.symbolBytes);
     let control be meta.control; meta.control=none; if control != none { try budget.release(control); }
 }

@@ -569,3 +569,11 @@ Implemented, isolated U1a: private binary64 add/sub/mul/div/neg and six comparis
 - [Issues #73–#75](https://github.com/eristavi/eristavi-lang/issues/73) remain distinct substantial U1b (extra widths + immutable aggregates), U2 (managed values, checked failures, cleanup, roots), and U3 (direct frontend→UIR and one-native-target) implementation gates. Issues #76–#77 retain strict native f64 and complete origin/revision goals.
 
 **Next safe steps:** diagnose and fix each draft from its actual CI logs; finish independent call execution and switch semantics; rebase/merge **only tested** branches one at a time; update this handover after each qualified merge; continue U1b→U2→U3 behind working compiler compatibility gates. Keep the historical 900-second experimental B→C self-build out of automated qualification. Do not report completed redesign or v0.1.0 from isolated UIR tests.
+
+
+## 18. U1a direct calls + switches integration candidate (2026-10-30)
+
+- Branch `compiler/u1a-calls-switch-integration` combines **both** [PR #78](https://github.com/eristavi/eristavi-lang/pull/78) typed owned direct FunctionId declarations and [PR #79](https://github.com/eristavi/eristavi-lang/pull/79) sparse i64 switches, including their original head commits as Git parents.
+- Three shared-line conflicts resolved explicitly: known opcodes 34/35, dynamic call operand count versus switch selector count, and foundation opcode probe range. Shared builder/verifier changes otherwise retained from both branches, with their focused suites.
+- Candidate documentation in `UIR_U1A_CALL_SWITCH_INTEGRATION.md`. **Status at creation: unqualified integration; do not merge before CI+completed-batch qualification on exact final revision.**
+- These U1a features are still isolated UIR. Full function-call execution, imported effect trust and SCC summaries remain pending. Do not claim U1a complete; U1b/U2/U3 remain separate.
