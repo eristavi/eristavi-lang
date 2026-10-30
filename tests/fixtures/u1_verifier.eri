@@ -6,7 +6,7 @@ import compiler.u1_builder as build;
 import compiler.u1_verify as verify;
 error ProbeError { message Text; }
 type Harness { root identity budget.Owner; shared identity budget.Owner; data identity meta.Metadata;
-    owner identity budget.Owner; construct identity budget.Phase; routine identity build.Function; location meta.LocId; }
+    owner identity budget.Owner; construct identity budget.Phase; routine identity build.Function; location meta.LocId; alternate meta.LocId; }
 function check(condition Bool,message Text) fails ProbeError { if not condition { fail ProbeError { message=message; }; } }
 function create(parameters,results) returns identity Harness fails budget.LimitError {
     let root be try budget.developmentRequest(); let shared be try budget.metadataOwner(root); let phase be try budget.constructionPhase(shared);
@@ -14,10 +14,11 @@ function create(parameters,results) returns identity Harness fails budget.LimitE
     let collision be try meta.signature(data,phase,[meta.pred(),meta.pred()],[]);
     collision=try meta.signature(data,phase,[meta.pred(),meta.i64(),meta.f64()],[]);
     let source be try meta.source(data,phase,"verifier-α","0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",32);
-    let location be try meta.location(data,phase,source,0,8,3,1,4); try meta.freeze(data); try budget.finishPhase(phase);
+    let location be try meta.location(data,phase,source,0,8,3,1,4);
+    let alternate be try meta.location(data,phase,source,9,17,4,1,4); try meta.freeze(data); try budget.finishPhase(phase);
     let owner be try budget.functionOwner(root,false); let construct be try budget.constructionPhase(owner);
     return identity Harness { root=root; shared=shared; data=data; owner=owner; construct=construct;
-        routine=try build.create(data,signature,owner,construct); location=location; };
+        routine=try build.create(data,signature,owner,construct); location=location; alternate=alternate; };
 }
 function close(harness identity Harness) fails budget.LimitError,ProbeError {
     try build.close(harness.routine); try meta.close(harness.data);
