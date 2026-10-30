@@ -3,6 +3,7 @@ import std.process;
 import compiler.u1_budget as budget;
 import compiler.u1_meta as meta;
 import compiler.u1_builder as build;
+import compiler.u1_words as words;
 import compiler.u1_verify as verify;
 import compiler.u1_module as link;
 error ProbeError { message Text; }
@@ -16,6 +17,14 @@ function deniedBind(registry identity link.Program,target meta.FunctionId,
         output(label+":ok"); return true;
     } else error verify.InvalidIR { fail error; };
     fail ProbeError { message="accepted invalid binding: "+label; };
+}
+function deniedMalformed(registry identity link.Program,target meta.FunctionId,
+    body identity build.Function) returns Bool fails budget.LimitError,ProbeError {
+    let count be link.bind(registry,target,body) else error verify.InvalidIR {
+        try check(error.stage == 2,"dead-block call must fail structural verification");
+        output("malformed-unreachable-call:ok"); return true;
+    } else error budget.LimitError { fail error; };
+    fail ProbeError { message="accepted malformed unreachable U1 call"; };
 }
 function deniedSeal(registry identity link.Program) returns Bool fails ProbeError,verify.InvalidIR {
     let count be link.seal(registry) else error budget.LimitError {
@@ -78,6 +87,12 @@ function run() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError 
     let bodyC be try build.create(data,zero,ownerC,phaseC);
     let blockC be try build.block(bodyC,[meta.i64()]);
     try build.returnValues(bodyC,blockC,[],loc);
+    // Structurally valid unreachable block, whose call target will later be
+    // corrupted to prove the fresh verifier checks dead instructions too.
+    let deadC be try build.block(bodyC,[meta.i64()]);
+    let deadArg be try build.parameter(bodyC,deadC,0);
+    let deadCall be try build.call(bodyC,deadC,second,[deadArg],loc);
+    try build.returnValues(bodyC,deadC,[],loc);
     try build.complete(bodyC); try budget.finishPhase(phaseC);
 
     // Independent rejection before any binding; neither attempt mutates it.
@@ -92,6 +107,17 @@ function run() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError 
     output("forward-and-mutual-calls:ok");
     bad=try deniedBind(registry,second,bodyB,"duplicate-definition");
     bad=try deniedSeal(registry);
+
+    let editC be try budget.constructionPhase(ownerC);
+    let payloadIndex be (deadCall.index-1)*10+7;
+    bodyC.instructions.frozen=false;
+    try words.set(bodyC.instructions,editC,payloadIndex,999);
+    bodyC.instructions.frozen=true;
+    bad=try deniedMalformed(registry,third,bodyC);
+    bodyC.instructions.frozen=false;
+    try words.set(bodyC.instructions,editC,payloadIndex,second.index);
+    bodyC.instructions.frozen=true;
+    try budget.finishPhase(editC);
 
     count=try link.bind(registry,third,bodyC);
     try check(count == 3,"zero-result body linked");
