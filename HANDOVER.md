@@ -1,10 +1,10 @@
 # Eristavi compiler — current handover
 
-**Authoritative recovery checkpoint: 30 October 2026, Asia/Nicosia.** Start here. Older numbered sections are retained as historical evidence; draft statuses in them are *not* current instructions. Section 24 records the latest qualified integration checkpoint.
+**Authoritative recovery checkpoint: 30 October 2026, Asia/Nicosia.** Start here. Older numbered sections are retained as historical evidence; draft statuses in them are *not* current instructions. Section 25 records the latest qualified integration and CI-policy checkpoint.
 
 ## Start a new chat with this
 
-> Continue development of Eristavi Lang from HANDOVER.md section 24 and the
+> Continue development of Eristavi Lang from HANDOVER.md section 25 and the
 > current GitHub main, verifying new commits/PRs and CI before changing code.
 > U1a typed Universal IR foundation, direct-call declarations, sparse switches,
 > strict scalar f64 operations and synthetic provenance are implemented as
@@ -17,7 +17,7 @@
 > publication/provenance gates; then immutable U1b aggregates, U2 managed
 > failures/resources, and U3 shadow frontend/native integration. PR #85 is now a merged, four-platform-tested Stage-0/native parity baseline;
 > it does NOT implement new-UIR frontend lowering or a new native compiler. Keep each slice small, independently verified, and require
-> four-platform CI plus completed-batch qualification for compiler changes.
+> final four-platform CI plus completed-batch qualification for compiler changes;\n> routine source edits use focused smoke checks and documentation edits use a patch check.
 > Never auto-run the separate experimental 900-second owned self-build.
 
 ## Current verified status — read before historical sections
@@ -26,7 +26,7 @@
 | --- | --- |
 | Repository | https://github.com/eristavi/eristavi-lang |
 | Last qualified compiler-code merge | `9824be1fa5103c7e7b59215b1879642c159074cc` (PR #87) |
-| GitHub main at this checkpoint (includes test/docs-only PR #85) | `f212b02de881d79d8837f2f4d859c92bf6d4f635` |
+| GitHub main at this checkpoint (includes CI-policy PR #91) | `674312a4f107b6e3de3b9abad39dedf2d68d92af` |
 | Exact qualified / merged implementation tree | `566a71120f474ae47ecc7e84dc2f4c3d745bc21b` |
 | Four-platform PR #87 CI | [41126307289](https://github.com/eristavi/eristavi-lang/actions/runs/41126307289), success |
 | Completed-batch PR #87 qualification | [41127592252](https://github.com/eristavi/eristavi-lang/actions/runs/41127592252), success: three bootstrap/offline Linux jobs and owned integration |
@@ -37,7 +37,7 @@
 | U3 | No direct AST/semantic-facts → redesigned UIR production path or new verified native target; PR #85 is a merged test-only parity baseline |
 | Production compiler | Still runs existing pipeline and must remain intact until explicit U2/U3 compatibility and native conformance gates |
 
-**Reading rule:** Sections 1–23 show successive checkpoints. Do not execute their superseded "next steps" or treat historical draft statements as current. The latest merge checkpoint is in section 24 below; section 23 retains the qualified compiler-code evidence.
+**Reading rule:** Sections 1–24 are historical checkpoints. Current CI and measured performance evidence are in section 25 below; section 23 retains the qualified compiler-code evidence.
 
 ## 1. Verified repository checkpoint
 
@@ -710,3 +710,19 @@ The frozen source-language semantics and current production compiler remain unto
 Follow [issue #71](https://github.com/eristavi/eristavi-lang/issues/71) first: implement defined-function body binding and independently evaluated forward/mutually recursive calls, with zero/multiple result propagation and exact first-observable-effect/fault order. Then add SCC/worklist conservative effect summaries and trusted versioned imports in separately reviewable increments. Preserve all verified U1a scalar and U1b width operations, original LocIds, transactional SSA promotion, budgets/cancellation and malformed dead-block rejection. Run four-platform CI and completed-batch qualification on the **exact final compiler-code PR head** before merging.
 
 The other independent remaining U1a gates are native strict binary64 execution and full source-origin/publication revisions (issues #76/#77). U1b immutable structural aggregates are still pending under issue #73; U2 managed values, checked failures and deterministic cleanup under issue #74; actual U3 shadow AST+semantic-facts→new-UIR and native integration under issue #75. Never retire the old compiler or claim complete U1b/U2/U3 based on scalar tests or the PR #85 baseline.
+
+
+## 25. Verified CI cost reduction and native verifier timing — 2026-10-30
+
+**This is the current testing policy, overriding historical claims that every PR, documentation update and post-merge main push must run four-platform full tests.**
+
+- [PR #91](https://github.com/eristavi/eristavi-lang/pull/91) merged as `674312a4f107b6e3de3b9abad39dedf2d68d92af` after exact-head [four-platform full CI 41132849760](https://github.com/eristavi/eristavi-lang/actions/runs/41132849760) succeeded, tested head `84784bf2f365e7fa9aa864891c393fc863dbc590`; tested/merged tree `70b52698b5fbd28bec6e553837863351043f08bc` matches. **No production compiler, UIR runtime code, source semantics or ABI changed.**
+- Ordinary implementation PR edits now get a single Ubuntu Clang smoke suite; [initial seven-test smoke run 41132705088](https://github.com/eristavi/eristavi-lang/actions/runs/41132705088) passed in approximately 14 seconds of test execution. Markdown-only changes get changed-file classification and `git diff --check`, with **no system compiler/test matrix**.
+- Complete four-platform CI runs only when explicitly requested for the final code revision: mark a draft PR Ready for review, use GitHub Actions workflow dispatch with `profile=full`, or add `qualification`/`owned-qualification` if their build audits are also needed. Completed-batch compiler-code qualification still requires the full bootstrap/offline and owned-integration jobs at that exact head. No automatic duplicate full matrix runs on main push; the latest tested/merged Git tree must be compared explicitly. After relevant commits, manually rerun full and qualification on the new exact head; previous green status is stale.
+- `tools/run_ci_tests.py --profile full` still discovers and runs all existing tests; the smoke profile is deliberately small. The complete suite, native-runtime parity, malformed-IR, and 900-second separately-selected owned compiler self-build profiles were **not** deleted or silently weakened.
+- `tests/u1_native_tools.py` caches C-bootstrap frontend and owned-runtime generator binaries only within the current Python test process, keyed by CC/CFLAGS; it retains the original `-O2` builds and never reuses artifacts across commits/jobs. U1 foundation, promotion and verifier tests still build, link and execute their own actual test programs against independent native-C and owned runtimes.
+- The slow `test_eristavi_emitted_verifier_and_oracle_on_both_runtimes` is primarily **owned-runtime execution**, not code compilation. Measured GCC: about 88.6s total, with 32.5s executing the owned verifier protocol and 48.6s executing the owned graph oracle; assembly emission for both programs about 1.9s. Clang: about 136.5s total, with about 48.1s and 76.7s in those same owned-runtime execution phases. Native-C executions took only a few seconds each. These are variable hosted runner timings and do not alone demonstrate a universal speedup or identify a specific owned-runtime code-level hotspot.
+- GCC completed the full 443-test discovery run in about 301s, versus about 517s in an earlier run; Clang took about 477s in this validation, versus about 303s previously. Performance measurements vary significantly by runner load. **Do not mistake the longer CI test line for a compiler regression.** Profile owned-runtime verifier/graph execution separately before changing runtime, allocator, IR semantics or stress coverage.
+- Canonical implementation and release gates: [CI_QUALIFICATION.md](CI_QUALIFICATION.md). For next implementation, continue [issue #71](https://github.com/eristavi/eristavi-lang/issues/71) as small isolated U1a defined-function body binding/evaluator and conservative effect-contract slices, followed by independent U1b aggregates, U2 and U3 shadow integration. Preserve frozen language and the current production compiler.
+
+The PR #91 change is a CI/test-harness optimization, **not** completion of full owned runtime performance work, new U1a executable calls, U1b aggregates, U2 managed resources or U3 native integration.
