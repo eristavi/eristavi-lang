@@ -199,6 +199,37 @@ function predicateDead() fails budget.LimitError,verify.InvalidIR,ProbeError {
     try close(harness);
 }
 
+
+function integerOperations() fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let harness be try create([meta.i64(),meta.i64(),meta.pred()],[meta.i64(),meta.pred()]); let routine be harness.routine;
+    let entry be try build.block(routine,[meta.i64(),meta.i64(),meta.pred()]);
+    let a be try build.parameter(routine,entry,0); let b be try build.parameter(routine,entry,1); let wrong be try build.parameter(routine,entry,2);
+    let sum be try build.wrapAdd(routine,entry,a,b,harness.location);
+    let compared be try build.compareInteger(routine,entry,a,b,7,harness.location);
+    try build.returnValues(routine,entry,[sum,compared],harness.location); try build.complete(routine);
+    try accepted(harness,1,"integer-ops");
+    let edit be try budget.constructionPhase(harness.owner);
+    try change(routine.instructions,edit,7,1); try rejected(harness,2,1,"integer-wrap-payload"); try change(routine.instructions,edit,7,0);
+    try change(routine.instructions,edit,17,11); try rejected(harness,2,1,"integer-cmp-relation"); try change(routine.instructions,edit,17,7);
+    try change(routine.operands,edit,1,wrong.index); try rejected(harness,2,1,"integer-type"); try change(routine.operands,edit,1,b.index);
+    try change(routine.values,edit,12,1); try rejected(harness,2,1,"integer-result-type"); try change(routine.values,edit,12,2);
+    try accepted(harness,1,"integer-restored"); try close(harness);
+}
+function integerDead() fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let harness be try create([],[meta.i64()]); let routine be harness.routine;
+    let entry be try build.block(routine,[]); let dead be try build.block(routine,[]);
+    let zero be try build.integer(routine,entry,0,harness.location);
+    try build.returnValues(routine,entry,[zero],harness.location);
+    let a be try build.integer(routine,dead,2,harness.location); let b be try build.integer(routine,dead,3,harness.location);
+    let sum be try build.wrapMultiply(routine,dead,a,b,harness.location);
+    let instruction be routine.instructions.length/10;
+    try build.returnValues(routine,dead,[sum],harness.location); try build.complete(routine);
+    try accepted(harness,1,"integer-dead-ok");
+    let edit be try budget.constructionPhase(harness.owner);
+    try change(routine.instructions,edit,(instruction-1)*10+7,1);
+    try rejected(harness,2,2,"integer-dead-payload"); try close(harness);
+}
+
 function manyUses() fails budget.LimitError,verify.InvalidIR,ProbeError {
     let harness be try create([meta.pred()],[]); let routine be harness.routine;
     let entry be try build.block(routine,[meta.pred()]); let body be try build.block(routine,[]);
@@ -210,7 +241,7 @@ function manyUses() fails budget.LimitError,verify.InvalidIR,ProbeError {
 }
 function run() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError {
     try mutations(); try orphanRecords(); try diamond(); try loop(); try dead(); try repeatedTarget(); try limits(); try cancellation();
-    try scalarShapes(); try predicateOperations(); try predicateDead(); try manyUses(); return true;
+    try scalarShapes(); try predicateOperations(); try predicateDead(); try integerOperations(); try integerDead(); try manyUses(); return true;
 }
 function main() {
     let done be run() else error budget.LimitError { output(error.category+":"+error.message); process.setExitCode(1); return; }

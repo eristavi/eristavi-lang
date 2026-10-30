@@ -79,7 +79,7 @@ function prepare(state identity State) fails budget.LimitError {
             }
             let cursor be try get(state,routine.blocks,(block-1)*5+2);
             while cursor != 0 {
-                if try instruction(state,cursor,0) >= 10 {
+                if ops.isCell(try instruction(state,cursor,0)) {
                     let cell be try instruction(state,cursor,7); let tail be try read(state,state.cellTails,cell);
                     if tail == 0 { try set(state,state.cellHeads,cell,cursor); } else { try set(state,state.nextOp,tail,cursor); }
                     try set(state,state.cellTails,cell,cursor);

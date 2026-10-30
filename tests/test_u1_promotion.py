@@ -82,6 +82,28 @@ def evaluate(ir, parameters, fuel=50000):
             elif op == 4: outputs = [not operands[0]]
             elif op == 13: outputs = [bool(operands[0]) and bool(operands[1])]
             elif op == 14: outputs = [bool(operands[0]) or bool(operands[1])]
+
+            elif op in (15, 16, 17, 19, 20, 21, 22, 23):
+                # Interpret i64 arguments as bits; unsigned overflow is computed
+                # from unsigned mathematical operands, never Python signed order.
+                a, b = operands
+                ua, ub = a & ((1 << 64) - 1), b & ((1 << 64) - 1)
+                unsigned = op in (21, 22, 23)
+                x, y = (ua, ub) if unsigned else (a, b)
+                if op in (15, 21): exact = x + y
+                elif op in (16, 19, 22): exact = x - y
+                else: exact = x * y
+                wrapped = ((exact + (1 << 63)) % (1 << 64)) - (1 << 63)
+                outputs = [wrapped]
+                if op >= 19:
+                    outputs.append(not (0 <= exact <= (1 << 64) - 1)
+                                   if unsigned else not MIN <= exact <= MAX)
+            elif op == 18:
+                a, b = operands
+                ua, ub = a & ((1 << 64) - 1), b & ((1 << 64) - 1)
+                relations = (a == b, a != b, a < b, a <= b, a > b, a >= b,
+                             ua < ub, ua <= ub, ua > ub, ua >= ub)
+                outputs = [relations[payload - 1]]
             elif op == 5:
                 trace.append((payload, location, bool(operands[0])))
                 if not operands[0]: return ('trap', (payload, location)), tuple(trace)
@@ -148,6 +170,39 @@ def cases_for(name, before):
             chosen = right if left else left
             a = chosen if name == 'pred-merge' else left
             yield (left, right), ('return', (a and right, a or right))
+
+    elif name in ('i64-arithmetic', 'i64-merge'):
+        boundaries = (MIN, MIN+1, -(1 << 32), -2, -1, 0, 1, 2, (1 << 32), MAX-1, MAX)
+        bits = (1 << 64) - 1
+
+        def signed_bits(x):
+            return ((x & bits) ^ (1 << 63)) - (1 << 63)
+
+        for a, b in itertools.product(boundaries, repeat=2):
+            ua, ub = a & bits, b & bits
+            if name == 'i64-arithmetic':
+                signed_exact = (a+b, a-b, a*b)
+                unsigned_exact = (ua+ub, ua-ub, ua*ub)
+                values = [signed_bits(x) for x in signed_exact]
+                values.extend((signed_bits(x), x < MIN or x > MAX) for x in signed_exact)
+                # Flatten three signed overflow pairs after the three wrap values.
+                values = values[:3] + [item for pair in values[3:] for item in pair]
+                values.extend(item for x in unsigned_exact
+                              for item in (signed_bits(x), x < 0 or x > bits))
+                values.extend((a == b, a != b, a < b, a <= b, a > b, a >= b,
+                               ua < ub, ua <= ub, ua > ub, ua >= ub))
+                yield (a, b), ('return', tuple(values))
+            else:
+                for flag in (False, True):
+                    selected = b if flag else a
+                    unsigned_selected = selected & bits
+                    exact_multiply = selected * b
+                    yield (a, b, flag), ('return', (
+                        signed_bits(selected + b),
+                        unsigned_selected < ub,
+                        exact_multiply < MIN or exact_multiply > MAX,
+                        unsigned_selected + ub > bits,
+                    ))
     else: raise AssertionError(f'unknown fixture {name}')
 
 
@@ -159,7 +214,7 @@ class U1PromotionTests(unittest.TestCase):
         (cls.root / 'compiler').symlink_to(ROOT / 'src/compiler', target_is_directory=True)
         cls.calls = [f'{family}({width}{",false" if family == "diamond" else ""})'
                      for family in ('diamond', 'loop', 'sequential') for width in (8, 32, 128)]
-        cls.calls += ['diamond(2,true)', 'swap()', 'reset()', 'irreducible()', 'dead(false)', 'faults(false)', 'faults(true)', 'floatCell()', 'passthrough()', 'predicateTruth()', 'predicateMerge()',
+        cls.calls += ['diamond(2,true)', 'swap()', 'reset()', 'irreducible()', 'dead(false)', 'faults(false)', 'faults(true)', 'floatCell()', 'passthrough()', 'predicateTruth()', 'predicateMerge()', 'integerArithmetic()', 'integerMerge()',
                       'invalidCell(0)', 'invalidCell(1)', 'invalidCell(2)', 'dead(true)', 'failedWork()', 'canonicalReject()', 'failedOutput()', 'cancelled()']
         cls.source = cls.root / 'promotion.eri'; cls.source.write_text(probe_source(cls.calls))
         cls.binary = cls.root / 'promotion-c'
@@ -189,7 +244,7 @@ class U1PromotionTests(unittest.TestCase):
         result = subprocess.run([str(self.binary)], capture_output=True, text=True, timeout=120)
         self.assertEqual((result.returncode, result.stderr), (0, ''), result.stdout[-300:])
         snapshots, labels = self.check_snapshots(result.stdout)
-        self.assertEqual(len(snapshots), 20)
+        self.assertEqual(len(snapshots), 22)
         self.assertEqual(labels, ['invalid-init:ok']*3 + ['malformed-dead:ok', 'promotion-limit:ok', 'canonical-reject:ok', 'partial-output:ok', 'cancelled:ok'])
         again = subprocess.run([str(self.binary)], capture_output=True, text=True, timeout=120)
         self.assertEqual((again.returncode, again.stdout, again.stderr), (0, result.stdout, ''))

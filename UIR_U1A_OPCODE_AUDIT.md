@@ -49,3 +49,6 @@ References: `HANDOVER.md`, `UIR_U1A_FOUNDATION.md`, `UIR_U1A_VERIFIER.md`, `UIR_
 ## Follow-on isolated predicate extension (next branch, 2026-10-30)
 
 The original closed foundation registry documented above is the pre-extension baseline. The later isolated predicate slice adds op 13 `pred.and` and op 14 `pred.or` without widening the private cell category (still **exactly** 10/11/12) or the inline CFG edge profile. See `UIR_U1A_PREDICATES.md`. This does not authorize switch/call/strict-Float schema changes.
+## CI-detected missed opcode threshold (2026-10-30)
+
+The initial U1a i64 candidate exposed a previously missed `instruction(state,cursor,0) >= 10` in `u1_promote.eri:prepare`. It misclassified new canonical op IDs as temporary cells when preparing cell instruction chains, and the i64 diamond fixture failed its exact SSA-promotion shape check. Fix: use `ops.isCell(...)` and extend the static test guard to reject direct opcode-read thresholds, not just local `op >= 10` comparisons. Preserve the strong one-parameter/two-edge merge shape assertion; do not weaken it to conceal the error. Initial ARM64 CI failed on pre-fix `8df153aa`; only fresh CI on the corrected head can qualify this change.

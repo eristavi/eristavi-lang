@@ -284,4 +284,59 @@ function predicateMerge() fails budget.LimitError,verify.InvalidIR,ProbeError {
     try build.complete(routine); try promoted(harness,"pred-merge",1,2);
 }
 
+
+function integerArithmetic() fails budget.LimitError,verify.InvalidIR,ProbeError {
+    // A single canonical i64 routine exercises all new integer arities and modes.
+    let types be [meta.i64(),meta.i64(),meta.i64(),
+        meta.i64(),meta.pred(),meta.i64(),meta.pred(),meta.i64(),meta.pred(),
+        meta.i64(),meta.pred(),meta.i64(),meta.pred(),meta.i64(),meta.pred(),
+        meta.pred(),meta.pred(),meta.pred(),meta.pred(),meta.pred(),
+        meta.pred(),meta.pred(),meta.pred(),meta.pred(),meta.pred()];
+    let harness be try create([meta.i64(),meta.i64()],types,true); let routine be harness.routine;
+    let entry be try build.block(routine,[meta.i64(),meta.i64()]);
+    let a be try build.parameter(routine,entry,0); let b be try build.parameter(routine,entry,1);
+    let add be try build.wrapAdd(routine,entry,a,b,harness.location);
+    let sub be try build.wrapSubtract(routine,entry,a,b,harness.location);
+    let mul be try build.wrapMultiply(routine,entry,a,b,harness.location);
+    let signedAdd be try build.addOverflow(routine,entry,a,b,harness.alternate);
+    let signedSub be try build.subtractOverflow(routine,entry,a,b,harness.alternate);
+    let signedMul be try build.multiplyOverflow(routine,entry,a,b,harness.alternate);
+    let unsignedAdd be try build.unsignedAddOverflow(routine,entry,a,b,harness.alternate);
+    let unsignedSub be try build.unsignedSubtractOverflow(routine,entry,a,b,harness.alternate);
+    let unsignedMul be try build.unsignedMultiplyOverflow(routine,entry,a,b,harness.alternate);
+    let eq be try build.compareInteger(routine,entry,a,b,1,harness.location);
+    let ne be try build.compareInteger(routine,entry,a,b,2,harness.location);
+    let slt be try build.compareInteger(routine,entry,a,b,3,harness.location);
+    let sle be try build.compareInteger(routine,entry,a,b,4,harness.location);
+    let sgt be try build.compareInteger(routine,entry,a,b,5,harness.location);
+    let sge be try build.compareInteger(routine,entry,a,b,6,harness.location);
+    let ult be try build.compareInteger(routine,entry,a,b,7,harness.location);
+    let ule be try build.compareInteger(routine,entry,a,b,8,harness.location);
+    let ugt be try build.compareInteger(routine,entry,a,b,9,harness.location);
+    let uge be try build.compareInteger(routine,entry,a,b,10,harness.location);
+    try build.returnValues(routine,entry,[add,sub,mul,
+        signedAdd.value,signedAdd.overflow,signedSub.value,signedSub.overflow,signedMul.value,signedMul.overflow,
+        unsignedAdd.value,unsignedAdd.overflow,unsignedSub.value,unsignedSub.overflow,unsignedMul.value,unsignedMul.overflow,
+        eq,ne,slt,sle,sgt,sge,ult,ule,ugt,uge],harness.location);
+    try build.complete(routine); try promoted(harness,"i64-arithmetic",0,0);
+}
+function integerMerge() fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let harness be try create([meta.i64(),meta.i64(),meta.pred()],
+        [meta.i64(),meta.pred(),meta.pred(),meta.pred()],true); let routine be harness.routine;
+    let entry be try build.block(routine,[meta.i64(),meta.i64(),meta.pred()]);
+    let left be try build.block(routine,[]); let right be try build.block(routine,[]); let join be try build.block(routine,[]);
+    let a be try build.parameter(routine,entry,0); let b be try build.parameter(routine,entry,1);
+    let local be try build.cell(routine,meta.i64()); try build.initialize(routine,entry,local,a,harness.location);
+    try build.branch(routine,entry,try build.parameter(routine,entry,2),left,[],right,[],harness.location);
+    try build.writeCell(routine,left,local,b,harness.location);
+    try build.jump(routine,left,join,[],harness.location); try build.jump(routine,right,join,[],harness.location);
+    let selected be try build.readCell(routine,join,local,harness.location);
+    let added be try build.wrapAdd(routine,join,selected,b,harness.location);
+    let less be try build.compareInteger(routine,join,selected,b,7,harness.alternate);
+    let signed be try build.multiplyOverflow(routine,join,selected,b,harness.alternate);
+    let unsigned be try build.unsignedAddOverflow(routine,join,selected,b,harness.alternate);
+    try build.returnValues(routine,join,[added,less,signed.overflow,unsigned.overflow],harness.location);
+    try build.complete(routine); try promoted(harness,"i64-merge",1,2);
+}
+
 // The Python harness appends run()/main() with its selected cases.
