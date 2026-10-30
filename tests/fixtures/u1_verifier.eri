@@ -399,6 +399,40 @@ function syntheticOrigins() fails budget.LimitError,verify.InvalidIR,ProbeError 
     try close(harness);
 }
 
+
+function narrowTypeShapes() fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let harness be try create([meta.i8(),meta.i16(),meta.i32()],[meta.i8(),meta.i16(),meta.i32()]);
+    let routine be harness.routine; let entry be try build.block(routine,[meta.i8(),meta.i16(),meta.i32()]);
+    let a be try build.parameter(routine,entry,0); let b be try build.parameter(routine,entry,1);
+    let c be try build.parameter(routine,entry,2);
+    try build.returnValues(routine,entry,[a,b,c],harness.location); try build.complete(routine);
+    try accepted(harness,1,"narrow-core-signatures");
+    let edit be try budget.constructionPhase(harness.owner);
+    try change(routine.values,edit,0,2);
+    try rejected(harness,2,1,"narrow-type-mismatch");
+    try change(routine.values,edit,0,4);
+    try accepted(harness,1,"narrow-type-restored"); try close(harness);
+}
+
+
+function narrowConstantContract() fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let harness be try create([],[meta.i8(),meta.i16(),meta.i32()]);
+    let routine be harness.routine; let entry be try build.block(routine,[]);
+    let a be try build.narrowBits(routine,entry,255,meta.i8(),harness.location);
+    let b be try build.narrowBits(routine,entry,65535,meta.i16(),harness.location);
+    let c be try build.narrowBits(routine,entry,4294967295,meta.i32(),harness.location);
+    try build.returnValues(routine,entry,[a,b,c],harness.location);
+    try build.complete(routine); try accepted(harness,1,"narrow-constant-valid");
+    let edit be try budget.constructionPhase(harness.owner);
+    try change(routine.instructions,edit,7,256);
+    try rejected(harness,2,1,"narrow-constant-overflow"); try change(routine.instructions,edit,7,255);
+    try change(routine.instructions,edit,8,3);
+    try rejected(harness,2,1,"narrow-constant-width"); try change(routine.instructions,edit,8,4);
+    try change(routine.values,edit,0,2);
+    try rejected(harness,2,1,"narrow-constant-result-type"); try change(routine.values,edit,0,4);
+    try accepted(harness,1,"narrow-constant-restored"); try close(harness);
+}
+
 function manyUses() fails budget.LimitError,verify.InvalidIR,ProbeError {
     let harness be try create([meta.pred()],[]); let routine be harness.routine;
     let entry be try build.block(routine,[meta.pred()]); let body be try build.block(routine,[]);
@@ -410,7 +444,7 @@ function manyUses() fails budget.LimitError,verify.InvalidIR,ProbeError {
 }
 function run() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError {
     try mutations(); try orphanRecords(); try diamond(); try loop(); try dead(); try repeatedTarget(); try limits(); try cancellation();
-    try scalarShapes(); try predicateOperations(); try predicateDead(); try integerOperations(); try integerDead(); try divremContracts(); try divremDead(); try floatOperations(); try floatDead(); try syntheticOrigins(); try switchContracts(); try switchEmpty(); try manyUses(); return true;
+    try scalarShapes(); try predicateOperations(); try predicateDead(); try integerOperations(); try integerDead(); try divremContracts(); try divremDead(); try floatOperations(); try floatDead(); try syntheticOrigins(); try switchContracts(); try switchEmpty(); try narrowTypeShapes(); try narrowConstantContract(); try manyUses(); return true;
 }
 function main() {
     let done be run() else error budget.LimitError { output(error.category+":"+error.message); process.setExitCode(1); return; }
