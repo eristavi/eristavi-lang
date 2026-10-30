@@ -271,6 +271,45 @@ function divremDead() fails budget.LimitError,verify.InvalidIR,ProbeError {
     try rejected(harness,2,2,"divrem-dead-payload"); try close(harness);
 }
 
+
+function floatOperations() fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let harness be try create([meta.f64(),meta.f64(),meta.pred()],
+        [meta.f64(),meta.f64(),meta.f64(),meta.f64(),meta.f64(),meta.pred()]);
+    let routine be harness.routine; let entry be try build.block(routine,[meta.f64(),meta.f64(),meta.pred()]);
+    let a be try build.parameter(routine,entry,0); let b be try build.parameter(routine,entry,1);
+    let wrong be try build.parameter(routine,entry,2);
+    let sum be try build.addFloat(routine,entry,a,b,harness.location);
+    let sub be try build.subtractFloat(routine,entry,a,b,harness.location);
+    let mul be try build.multiplyFloat(routine,entry,a,b,harness.location);
+    let div be try build.divideFloat(routine,entry,a,b,harness.location);
+    let neg be try build.negateFloat(routine,entry,a,harness.location);
+    let cmp be try build.compareFloat(routine,entry,a,b,6,harness.location);
+    try build.returnValues(routine,entry,[sum,sub,mul,div,neg,cmp],harness.location);
+    try build.complete(routine); try accepted(harness,1,"float-ops");
+    let edit be try budget.constructionPhase(harness.owner);
+    try change(routine.instructions,edit,7,1); try rejected(harness,2,1,"float-payload"); try change(routine.instructions,edit,7,0);
+    try change(routine.instructions,edit,57,7); try rejected(harness,2,1,"float-cmp-mode"); try change(routine.instructions,edit,57,6);
+    try change(routine.operands,edit,1,wrong.index); try rejected(harness,2,1,"float-operand-type"); try change(routine.operands,edit,1,b.index);
+    try change(routine.instructions,edit,3,1); try rejected(harness,2,0,"float-arity"); try change(routine.instructions,edit,3,2);
+    // Three entry parameters precede the instruction output in the value table.
+    try change(routine.values,edit,12,1); try rejected(harness,2,1,"float-result-type"); try change(routine.values,edit,12,3);
+    try accepted(harness,1,"float-restored"); try close(harness);
+}
+function floatDead() fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let harness be try create([],[meta.f64()]); let routine be harness.routine;
+    let entry be try build.block(routine,[]); let dead be try build.block(routine,[]);
+    let original be try build.floatBits(routine,entry,0,harness.location);
+    try build.returnValues(routine,entry,[original],harness.location);
+    let zero be try build.floatBits(routine,dead,0,harness.location);
+    let unused be try build.negateFloat(routine,dead,zero,harness.location);
+    let instruction be routine.instructions.length/10;
+    try build.returnValues(routine,dead,[unused],harness.location); try build.complete(routine);
+    try accepted(harness,1,"float-dead-valid");
+    let edit be try budget.constructionPhase(harness.owner);
+    try change(routine.instructions,edit,(instruction-1)*10+7,1);
+    try rejected(harness,2,2,"float-dead-payload"); try close(harness);
+}
+
 function manyUses() fails budget.LimitError,verify.InvalidIR,ProbeError {
     let harness be try create([meta.pred()],[]); let routine be harness.routine;
     let entry be try build.block(routine,[meta.pred()]); let body be try build.block(routine,[]);
@@ -282,7 +321,7 @@ function manyUses() fails budget.LimitError,verify.InvalidIR,ProbeError {
 }
 function run() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError {
     try mutations(); try orphanRecords(); try diamond(); try loop(); try dead(); try repeatedTarget(); try limits(); try cancellation();
-    try scalarShapes(); try predicateOperations(); try predicateDead(); try integerOperations(); try integerDead(); try divremContracts(); try divremDead(); try manyUses(); return true;
+    try scalarShapes(); try predicateOperations(); try predicateDead(); try integerOperations(); try integerDead(); try divremContracts(); try divremDead(); try floatOperations(); try floatDead(); try manyUses(); return true;
 }
 function main() {
     let done be run() else error budget.LimitError { output(error.category+":"+error.message); process.setExitCode(1); return; }
