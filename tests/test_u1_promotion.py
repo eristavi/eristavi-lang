@@ -104,6 +104,29 @@ def evaluate(ir, parameters, fuel=50000):
                 relations = (a == b, a != b, a < b, a <= b, a > b, a >= b,
                              ua < ub, ua <= ub, ua > ub, ua >= ub)
                 outputs = [relations[payload - 1]]
+
+            elif op in (24, 25, 26, 27):
+                # Execute with exact integer arithmetic, never Float or host i64 division.
+                # A fault returns no result/checked failure; it terminates at this LocId.
+                a, b = operands
+                signed = op in (24, 25)
+                ua, ub = a & ((1 << 64) - 1), b & ((1 << 64) - 1)
+                if b == 0:
+                    trace.append((2, location, False))
+                    return ('trap', (2, location)), tuple(trace)
+                if signed and a == MIN and b == -1:
+                    trace.append((1, location, False))
+                    return ('trap', (1, location)), tuple(trace)
+                if signed:
+                    quotient = abs(a) // abs(b)
+                    if (a < 0) != (b < 0):
+                        quotient = -quotient
+                    remainder = a - quotient * b
+                    outputs = [quotient if op == 24 else remainder]
+                else:
+                    quotient, remainder = divmod(ua, ub)
+                    raw = quotient if op == 26 else remainder
+                    outputs = [((raw + (1 << 63)) % (1 << 64)) - (1 << 63)]
             elif op == 5:
                 trace.append((payload, location, bool(operands[0])))
                 if not operands[0]: return ('trap', (payload, location)), tuple(trace)
@@ -203,6 +226,58 @@ def cases_for(name, before):
                         exact_multiply < MIN or exact_multiply > MAX,
                         unsigned_selected + ub > bits,
                     ))
+
+    elif name in ('div-signed', 'rem-signed', 'div-unsigned', 'rem-unsigned',
+                  'div-merge', 'div-fault-order'):
+        # Independent expected values: divmod() of magnitudes, never Float.
+        boundaries = (MIN, MIN + 1, -(1 << 48), -9, -7, -3, -1,
+                      0, 1, 2, 3, 7, 9, (1 << 48), MAX - 1, MAX)
+        mask = (1 << 64) - 1
+
+        def signed_word(v):
+            v &= mask
+            return v - (1 << 64) if v >= (1 << 63) else v
+
+        def expect_operation(a, b, signed, quotient):
+            if b == 0:
+                return ('trap', (2, 2))
+            if signed and a == MIN and b == -1:
+                return ('trap', (1, 2))
+            if not signed:
+                q, r = divmod(a & mask, b & mask)
+                return ('return', (signed_word(q if quotient else r),))
+            q_magnitude, r_magnitude = divmod(abs(a), abs(b))
+            q = -q_magnitude if (a < 0) != (b < 0) else q_magnitude
+            r = -r_magnitude if a < 0 else r_magnitude
+            return ('return', (q if quotient else r,))
+
+        for a, b in itertools.product(boundaries, repeat=2):
+            if name in ('div-signed', 'div-unsigned', 'rem-signed', 'rem-unsigned'):
+                signed = name.endswith('signed') and not name.endswith('unsigned')
+                quotient = name.startswith('div')
+                yield (a, b), expect_operation(a, b, signed, quotient)
+            elif name == 'div-merge':
+                for flag in (False, True):
+                    selected = b if flag else a
+                    first = expect_operation(selected, b, True, True)
+                    if first[0] == 'trap':
+                        yield (a, b, flag), first
+                    else:
+                        second = expect_operation(selected, b, False, False)
+                        yield (a, b, flag), ('return', (first[1][0], second[1][0]))
+            else:  # Guard precedes unused signed remainder and unsigned divide.
+                for allowed in (False, True):
+                    if not allowed:
+                        expected = ('trap', (4, 1))
+                    else:
+                        earlier = expect_operation(a, b, True, False)
+                        if earlier[0] == 'trap':
+                            expected = earlier
+                        else:
+                            expected = expect_operation(a, b, False, True)
+                            if expected[0] == 'trap':
+                                expected = ('trap', (2, 1))
+                    yield (a, b, allowed), expected
     else: raise AssertionError(f'unknown fixture {name}')
 
 
@@ -214,7 +289,7 @@ class U1PromotionTests(unittest.TestCase):
         (cls.root / 'compiler').symlink_to(ROOT / 'src/compiler', target_is_directory=True)
         cls.calls = [f'{family}({width}{",false" if family == "diamond" else ""})'
                      for family in ('diamond', 'loop', 'sequential') for width in (8, 32, 128)]
-        cls.calls += ['diamond(2,true)', 'swap()', 'reset()', 'irreducible()', 'dead(false)', 'faults(false)', 'faults(true)', 'floatCell()', 'passthrough()', 'predicateTruth()', 'predicateMerge()', 'integerArithmetic()', 'integerMerge()',
+        cls.calls += ['diamond(2,true)', 'swap()', 'reset()', 'irreducible()', 'dead(false)', 'faults(false)', 'faults(true)', 'floatCell()', 'passthrough()', 'predicateTruth()', 'predicateMerge()', 'integerArithmetic()', 'integerMerge()', 'divideSigned()', 'remainderSigned()', 'divideUnsigned()', 'remainderUnsigned()', 'divisionMerge()', 'divisionFaultOrder()',
                       'invalidCell(0)', 'invalidCell(1)', 'invalidCell(2)', 'dead(true)', 'failedWork()', 'canonicalReject()', 'failedOutput()', 'cancelled()']
         cls.source = cls.root / 'promotion.eri'; cls.source.write_text(probe_source(cls.calls))
         cls.binary = cls.root / 'promotion-c'
@@ -244,7 +319,7 @@ class U1PromotionTests(unittest.TestCase):
         result = subprocess.run([str(self.binary)], capture_output=True, text=True, timeout=120)
         self.assertEqual((result.returncode, result.stderr), (0, ''), result.stdout[-300:])
         snapshots, labels = self.check_snapshots(result.stdout)
-        self.assertEqual(len(snapshots), 22)
+        self.assertEqual(len(snapshots), 28)
         self.assertEqual(labels, ['invalid-init:ok']*3 + ['malformed-dead:ok', 'promotion-limit:ok', 'canonical-reject:ok', 'partial-output:ok', 'cancelled:ok'])
         again = subprocess.run([str(self.binary)], capture_output=True, text=True, timeout=120)
         self.assertEqual((again.returncode, again.stdout, again.stderr), (0, result.stdout, ''))
