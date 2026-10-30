@@ -15,7 +15,8 @@
 // These are strict binary64 core operations, not ambient-host Float promises;
 // actual native execution requires an independently qualified FP environment.
 // Opcode numbers remain private and are not a public serialization contract.
-public function known(op Int) returns Bool { return (op >= 1 and op <= 9) or isCell(op) or (op >= 13 and op <= 33); }
+// 36 const.narrow: extra field is owned i8/i16/i32 TypeId; payload exact unsigned bits.
+public function known(op Int) returns Bool { return (op >= 1 and op <= 9) or isCell(op) or (op >= 13 and op <= 33) or op == 36; }
 // Construction cells are exactly 10/11/12; numeric thresholds would misclassify future opcodes.
 public function isCell(op Int) returns Bool { return op == 10 or op == 11 or op == 12; }
 // Only existing jump/branch edges occupy inline payload/extra slots (maximum two).
@@ -35,7 +36,7 @@ public function operands(op Int) returns Int {
 }
 public function results(op Int) returns Int {
     if op == 3 or (op >= 19 and op <= 23) { return 2; }
-    if op == 1 or op == 2 or op == 4 or op == 9 or op == 11 or (op >= 13 and op <= 18) or (op >= 24 and op <= 33) { return 1; } return 0;
+    if op == 1 or op == 2 or op == 4 or op == 9 or op == 11 or (op >= 13 and op <= 18) or (op >= 24 and op <= 33) or op == 36 { return 1; } return 0;
 }
 public function operandType(op Int,index Int) returns Int { if op >= 28 and op <= 33 { return 3; } if op == 3 or (op >= 15 and op <= 27) { return 2; } return 1; }
 public function resultType(op Int,index Int) returns Int {
