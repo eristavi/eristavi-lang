@@ -374,7 +374,7 @@ function syntheticOrigins() fails budget.LimitError,verify.InvalidIR,ProbeError 
     try build.returnValues(routine,entry,[value],transformed);
     try build.complete(routine); try budget.finishPhase(construct);
     let harness be identity Harness { root=root; shared=shared; data=data; owner=owner;
-        construct=construct; routine=routine; location=original; };
+        construct=construct; routine=routine; location=original; alternate=original; };
     try accepted(harness,1,"synthetic-origin-valid");
     let edit be try budget.constructionPhase(shared); let offset be (transformed.index-1)*7+6;
     let rootOffset be (rootOrigin.index-1)*7+6;

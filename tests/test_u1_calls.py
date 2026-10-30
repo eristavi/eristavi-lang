@@ -32,7 +32,7 @@ function directCalls() fails budget.LimitError,verify.InvalidIR,ProbeError {
         try build.parameter(routine,join,1)],location);
     try build.complete(routine); try budget.finishPhase(construct);
     let harness be identity Harness { root=root; shared=shared; data=data; owner=owner;
-        construct=construct; routine=routine; location=location; };
+        construct=construct; routine=routine; location=location; alternate=location; };
     try accepted(harness,2,"call-valid");
     let edit be try budget.constructionPhase(owner);
     try change(routine.instructions,edit,7,999);
