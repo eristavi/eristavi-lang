@@ -8,6 +8,11 @@ from compiler.erist.cli import build_native
 
 ROOT = Path(__file__).resolve().parents[1]
 EXPECTED = ''.join(line + ':ok\n' for line in (
+    "wrong-import-adapter",
+    "stale-import-version",
+    "untrusted-import-effects",
+    "missing-trusted-import",
+    "understated-effect-bound",
     "recursive-scc-effects",
     "trusted-versioned-imports",
     "bounded-mutual-recursion",
@@ -15,6 +20,8 @@ EXPECTED = ''.join(line + ':ok\n' for line in (
     "zeroresult-import-trace",
     "first-effect-and-fault-location",
     "bounded-divergence",
+    "stale-import-after-freeze",
+    "stale-body-revision",
     "recovered-budgets",
 ))
 
