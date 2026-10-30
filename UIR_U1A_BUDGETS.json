@@ -1,0 +1,34 @@
+{
+  "cancellation": {
+    "maximum_bulk_bytes_between_checks": 65536,
+    "maximum_visits_between_checks": 1024
+  },
+  "count_ceilings": {
+    "blocks": 65536,
+    "cells": 65536,
+    "edges": 262144,
+    "inserted_merge_parameters": 1048576,
+    "instructions": 1048576,
+    "total_edge_arguments": 4194304,
+    "values": 1048576
+  },
+  "memory": {
+    "function_allocation_traffic_bytes": 268435456,
+    "function_peak_capacity_bytes": 67108864,
+    "qualification_function_allocation_traffic_bytes": 67108864,
+    "qualification_function_peak_capacity_bytes": 8388608,
+    "request_allocation_traffic_bytes": 2147483648,
+    "request_peak_capacity_bytes": 536870912,
+    "rss_is_not_capacity": true,
+    "shared_metadata_peak_capacity_bytes": 134217728
+  },
+  "profile": "uir-u1a-development-1",
+  "work": {
+    "construction_visit_limit_per_function": 16777216,
+    "dominator_visit_multiplier": 128,
+    "promotion_visit_limit_per_function": 33554432,
+    "request_visit_limit": 268435456,
+    "structural_scan_multiplier": 32,
+    "verification_visit_limit_per_call": 16777216
+  }
+}

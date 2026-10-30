@@ -1,0 +1,86 @@
+// Bootstrap storage adapter: dense append-only indices, radix-16 directory,
+// 16-word pages, fixed maximum depth 6. No List field/copy-on-write dependency.
+// These are safe ordinary Eristavi objects, not packed machine buffers.
+// Charges are conservative adapter capacities; allocator/GC overhead is separate.
+import compiler.u1_budget as budget;
+public type Page { w0 Int; w1 Int; w2 Int; w3 Int; w4 Int; w5 Int; w6 Int; w7 Int; w8 Int; w9 Int; w10 Int; w11 Int; w12 Int; w13 Int; w14 Int; w15 Int; charge maybe identity budget.Allocation; }
+public type Node { c0 maybe identity Node; c1 maybe identity Node; c2 maybe identity Node; c3 maybe identity Node; c4 maybe identity Node; c5 maybe identity Node; c6 maybe identity Node; c7 maybe identity Node; c8 maybe identity Node; c9 maybe identity Node; c10 maybe identity Node; c11 maybe identity Node; c12 maybe identity Node; c13 maybe identity Node; c14 maybe identity Node; c15 maybe identity Node; page maybe identity Page; charge maybe identity budget.Allocation; }
+public type Words { owner identity budget.Owner; root maybe identity Node; length Int; limit Int; closed Bool; frozen Bool; control identity budget.Allocation; }
+function context(words identity Words,phase identity budget.Phase,write Bool) fails budget.LimitError {
+    try budget.poll(words.owner); try budget.poll(phase.owner);
+    if words.closed { try budget.reject("closed U1a word store"); }
+    if write { if words.frozen or words.owner != phase.owner { try budget.reject("immutable or foreign U1a word store"); } }
+    else { if words.owner != phase.owner { if words.owner.kind != 1 or words.owner.parent != phase.owner.parent { try budget.reject("foreign U1a word store"); } } }
+}
+public function create(owner identity budget.Owner,limit Int) returns identity Words fails budget.LimitError {
+    if limit < 0 or limit > 33554432 { try budget.reject("invalid U1a word limit"); }
+    let pending be try budget.reserve(owner,512);
+    let words be identity Words { owner=owner; root=none; length=0; limit=limit; closed=false; frozen=false; control=try budget.commit(pending); };
+    return words;
+}
+function newNode(owner identity budget.Owner,phase identity budget.Phase) returns identity Node fails budget.LimitError {
+    try budget.work(phase,18); let pending be try budget.reserve(owner,800);
+    let node be identity Node { c0=none; c1=none; c2=none; c3=none; c4=none; c5=none; c6=none; c7=none; c8=none; c9=none; c10=none; c11=none; c12=none; c13=none; c14=none; c15=none; page=none; charge=none; };
+    node.charge=try budget.commit(pending); return node;
+}
+function newPage(owner identity budget.Owner,phase identity budget.Phase) returns identity Page fails budget.LimitError {
+    try budget.work(phase,17); let pending be try budget.reserve(owner,768);
+    let page be identity Page { w0=0; w1=0; w2=0; w3=0; w4=0; w5=0; w6=0; w7=0; w8=0; w9=0; w10=0; w11=0; w12=0; w13=0; w14=0; w15=0; charge=none; };
+    page.charge=try budget.commit(pending); return page;
+}
+function needNode(node maybe identity Node) returns identity Node fails budget.LimitError {
+    if node != none { return node; }
+    fail budget.LimitError { message="missing U1a radix node"; category="invalid-state"; requested=0; remaining=0; };
+}
+function needPage(page maybe identity Page) returns identity Page fails budget.LimitError {
+    if page != none { return page; }
+    fail budget.LimitError { message="missing U1a word page"; category="invalid-state"; requested=0; remaining=0; };
+}
+function readPage(page identity Page,offset Int) returns Int { if offset < 8 { if offset < 4 { if offset < 2 { if offset < 1 { return page.w0; } else { return page.w1; } } else { if offset < 3 { return page.w2; } else { return page.w3; } } } else { if offset < 6 { if offset < 5 { return page.w4; } else { return page.w5; } } else { if offset < 7 { return page.w6; } else { return page.w7; } } } } else { if offset < 12 { if offset < 10 { if offset < 9 { return page.w8; } else { return page.w9; } } else { if offset < 11 { return page.w10; } else { return page.w11; } } } else { if offset < 14 { if offset < 13 { return page.w12; } else { return page.w13; } } else { if offset < 15 { return page.w14; } else { return page.w15; } } } } }
+function writePage(page identity Page,offset Int,value Int) { if offset < 8 { if offset < 4 { if offset < 2 { if offset < 1 { page.w0=value; return; } else { page.w1=value; return; } } else { if offset < 3 { page.w2=value; return; } else { page.w3=value; return; } } } else { if offset < 6 { if offset < 5 { page.w4=value; return; } else { page.w5=value; return; } } else { if offset < 7 { page.w6=value; return; } else { page.w7=value; return; } } } } else { if offset < 12 { if offset < 10 { if offset < 9 { page.w8=value; return; } else { page.w9=value; return; } } else { if offset < 11 { page.w10=value; return; } else { page.w11=value; return; } } } else { if offset < 14 { if offset < 13 { page.w12=value; return; } else { page.w13=value; return; } } else { if offset < 15 { page.w14=value; return; } else { page.w15=value; return; } } } } }
+function readChild(node identity Node,offset Int) returns maybe identity Node { if offset < 8 { if offset < 4 { if offset < 2 { if offset < 1 { return node.c0; } else { return node.c1; } } else { if offset < 3 { return node.c2; } else { return node.c3; } } } else { if offset < 6 { if offset < 5 { return node.c4; } else { return node.c5; } } else { if offset < 7 { return node.c6; } else { return node.c7; } } } } else { if offset < 12 { if offset < 10 { if offset < 9 { return node.c8; } else { return node.c9; } } else { if offset < 11 { return node.c10; } else { return node.c11; } } } else { if offset < 14 { if offset < 13 { return node.c12; } else { return node.c13; } } else { if offset < 15 { return node.c14; } else { return node.c15; } } } } }
+function writeChild(node identity Node,offset Int,value identity Node) { if offset < 8 { if offset < 4 { if offset < 2 { if offset < 1 { node.c0=value; return; } else { node.c1=value; return; } } else { if offset < 3 { node.c2=value; return; } else { node.c3=value; return; } } } else { if offset < 6 { if offset < 5 { node.c4=value; return; } else { node.c5=value; return; } } else { if offset < 7 { node.c6=value; return; } else { node.c7=value; return; } } } } else { if offset < 12 { if offset < 10 { if offset < 9 { node.c8=value; return; } else { node.c9=value; return; } } else { if offset < 11 { node.c10=value; return; } else { node.c11=value; return; } } } else { if offset < 14 { if offset < 13 { node.c12=value; return; } else { node.c13=value; return; } } else { if offset < 15 { node.c14=value; return; } else { node.c15=value; return; } } } } }
+
+function pageAt(words identity Words,phase identity budget.Phase,index Int,create Bool) returns identity Page fails budget.LimitError {
+    if create and words.root == none { words.root=try newNode(words.owner,phase); }
+    let node be try needNode(words.root); let divisor be 1048576; let pageIndex be index/16;
+    while divisor >= 1 {
+        try budget.work(phase,1); let offset be pageIndex/divisor%16; let next be readChild(node,offset);
+        if next == none and create { let fresh be try newNode(words.owner,phase); writeChild(node,offset,fresh); next=fresh; }
+        node=try needNode(next); divisor=divisor/16;
+    }
+    if create and node.page == none { node.page=try newPage(words.owner,phase); }
+    return try needPage(node.page);
+}
+public function get(words identity Words,phase identity budget.Phase,index Int) returns Int fails budget.LimitError {
+    try context(words,phase,false); if index < 0 or index >= words.length { try budget.reject("U1a word index out of range"); }
+    try budget.work(phase,1); let page be try pageAt(words,phase,index,false); return readPage(page,index%16);
+}
+public function set(words identity Words,phase identity budget.Phase,index Int,value Int) fails budget.LimitError {
+    try context(words,phase,true); if index < 0 or index >= words.length { try budget.reject("U1a word index out of range"); }
+    try budget.work(phase,1); let page be try pageAt(words,phase,index,false); writePage(page,index%16,value);
+}
+public function push(words identity Words,phase identity budget.Phase,value Int) returns Int fails budget.LimitError {
+    try context(words,phase,true); try budget.work(phase,1);
+    if words.length >= words.limit { try budget.exceed(words.owner,1,0); }
+    let index be words.length; let page be try pageAt(words,phase,index,true);
+    writePage(page,index%16,value); words.length=index+1; return index;
+}
+public function freeze(words identity Words) fails budget.LimitError {
+    try budget.poll(words.owner); if words.closed { try budget.reject("closed U1a word store"); } words.frozen=true;
+}
+function closeNode(node identity Node,depth Int) fails budget.LimitError {
+    // Storage depth is fixed at six; this is not recursion over a program CFG.
+    let offset be 0;
+    if depth > 0 { while offset < 16 { let child be readChild(node,offset); if child != none { try closeNode(child,depth-1); } offset=offset+1; } }
+    let page be node.page; node.page=none;
+    if page != none { let allocation be page.charge; page.charge=none; if allocation != none { try budget.release(allocation); } }
+    let allocation be node.charge; node.charge=none; if allocation != none { try budget.release(allocation); }
+}
+public function close(words identity Words) fails budget.LimitError {
+    if words.closed { try budget.reject("double close of U1a word store"); }
+    words.closed=true; let root be words.root; words.root=none; words.length=0;
+    if root != none { try closeNode(root,6); } try budget.release(words.control);
+    // No further use of backing is possible through this store. Managed garbage
+    // may remain until the runtime collects it; this is not a physical-free API.
+}

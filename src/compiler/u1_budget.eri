@@ -1,0 +1,177 @@
+// Initial U1a accounting protocol. This module does not allocate backing memory.
+// Storage adapters must reserve before allocation and release backing ownership
+// before releasing its charge. No verifier/publication privilege is granted here.
+public error LimitError { message Text; category Text; requested Int; remaining Int; }
+public type Owner {
+    parent maybe identity Owner; kind Int; state Int;
+    limit Int; trafficLimit Int; workLimit Int;
+    live Int; pending Int; peak Int; reservedPeak Int;
+    traffic Int; pendingTraffic Int; work Int;
+}
+public type Reservation { owner identity Owner; bytes Int; state Int; }
+public type Allocation { owner identity Owner; bytes Int; state Int; }
+public type Phase { owner identity Owner; limit Int; used Int; prepaid Int; state Int; }
+
+function invalid() fails LimitError {
+    fail LimitError { message="invalid U1a accounting state"; category="invalid-state"; requested=0; remaining=0; };
+}
+public function reject(message Text) fails LimitError {
+    fail LimitError { message=message; category="invalid-state"; requested=0; remaining=0; };
+}
+function active(owner identity Owner) fails LimitError {
+    let root be owner; let parent be owner.parent; if parent != none { root=parent; }
+    if owner.state == 2 or root.state == 2 {
+        fail LimitError { message="U1a attempt cancelled"; category="cancelled"; requested=0; remaining=0; };
+    }
+    if owner.state != 0 or root.state != 0 { try invalid(); }
+}
+function exhausted(owner identity Owner,amount Int,remaining Int) fails LimitError {
+    owner.state=1;
+    fail LimitError { message="U1a resource limit exceeded"; category="resource-limit"; requested=amount; remaining=remaining; };
+}
+public function exceed(owner identity Owner,amount Int,remaining Int) fails LimitError { try exhausted(owner,amount,remaining); }
+public function request(limit Int,trafficLimit Int,workLimit Int) returns identity Owner fails LimitError {
+    if limit < 0 or trafficLimit < 0 or workLimit < 0 { try invalid(); }
+    return identity Owner { parent=none; kind=0; state=0; limit=limit; trafficLimit=trafficLimit; workLimit=workLimit; live=0; pending=0; peak=0; reservedPeak=0; traffic=0; pendingTraffic=0; work=0; };
+}
+public function developmentRequest() returns identity Owner fails LimitError {
+    return try request(536870912,2147483648,268435456);
+}
+public function metadataOwner(root identity Owner) returns identity Owner fails LimitError {
+    return try child(root,1,134217728,2147483648,268435456);
+}
+public function child(root identity Owner,kind Int,limit Int,trafficLimit Int,workLimit Int) returns identity Owner fails LimitError {
+    try active(root);
+    if root.parent != none or root.kind != 0 or kind < 1 or kind > 2 or limit < 0 or trafficLimit < 0 or workLimit < 0 { try invalid(); }
+    return identity Owner { parent=root; kind=kind; state=0; limit=limit; trafficLimit=trafficLimit; workLimit=workLimit; live=0; pending=0; peak=0; reservedPeak=0; traffic=0; pendingTraffic=0; work=0; };
+}
+public function functionOwner(root identity Owner,qualification Bool) returns identity Owner fails LimitError {
+    if qualification { return try child(root,2,8388608,67108864,268435456); }
+    return try child(root,2,67108864,268435456,268435456);
+}
+function fits(owner identity Owner,amount Int) returns Int {
+    if amount > owner.limit-owner.live-owner.pending { return 1; }
+    if amount > owner.trafficLimit-owner.traffic-owner.pendingTraffic { return 2; }
+    return 0;
+}
+function pendingAdd(owner identity Owner,amount Int) {
+    owner.pending=owner.pending+amount; owner.pendingTraffic=owner.pendingTraffic+amount;
+    let total be owner.live+owner.pending; if total > owner.reservedPeak { owner.reservedPeak=total; }
+}
+function checkFits(owner identity Owner,charged identity Owner,amount Int) fails LimitError {
+    let reason be fits(charged,amount);
+    if reason == 1 { try exhausted(owner,amount,charged.limit-charged.live-charged.pending); }
+    if reason == 2 { try exhausted(owner,amount,charged.trafficLimit-charged.traffic-charged.pendingTraffic); }
+}
+public function reserve(owner identity Owner,amount Int) returns identity Reservation fails LimitError {
+    try active(owner); if amount < 0 { try invalid(); }
+    try checkFits(owner,owner,amount);
+    let parent be owner.parent; if parent != none { try checkFits(owner,parent,amount); }
+    // Mutate only after every owner admits the reservation.
+    pendingAdd(owner,amount); if parent != none { pendingAdd(parent,amount); }
+    return identity Reservation { owner=owner; bytes=amount; state=0; };
+}
+function commitAt(owner identity Owner,amount Int) {
+    owner.pending=owner.pending-amount; owner.pendingTraffic=owner.pendingTraffic-amount;
+    owner.live=owner.live+amount; owner.traffic=owner.traffic+amount;
+    if owner.live > owner.peak { owner.peak=owner.live; }
+}
+public function commit(reservation identity Reservation) returns identity Allocation fails LimitError {
+    let owner be reservation.owner; try active(owner);
+    if reservation.state != 0 { try invalid(); }
+    let parent be owner.parent;
+    if reservation.bytes > owner.pending or reservation.bytes > owner.pendingTraffic { try invalid(); }
+    if parent != none { if reservation.bytes > parent.pending or reservation.bytes > parent.pendingTraffic { try invalid(); } }
+    commitAt(owner,reservation.bytes); if parent != none { commitAt(parent,reservation.bytes); }
+    reservation.state=1;
+    return identity Allocation { owner=owner; bytes=reservation.bytes; state=0; };
+}
+function cancelAt(owner identity Owner,amount Int) { owner.pending=owner.pending-amount; owner.pendingTraffic=owner.pendingTraffic-amount; }
+public function cancelReservation(reservation identity Reservation) fails LimitError {
+    if reservation.state != 0 or reservation.owner.state == 3 { try invalid(); }
+    let owner be reservation.owner; let parent be owner.parent;
+    if reservation.bytes > owner.pending or reservation.bytes > owner.pendingTraffic { try invalid(); }
+    if parent != none { if reservation.bytes > parent.pending or reservation.bytes > parent.pendingTraffic { try invalid(); } }
+    cancelAt(owner,reservation.bytes); if parent != none { cancelAt(parent,reservation.bytes); }
+    reservation.state=2;
+}
+public function release(allocation identity Allocation) fails LimitError {
+    if allocation.state != 0 or allocation.owner.state == 3 { try invalid(); }
+    let owner be allocation.owner; let parent be owner.parent;
+    if allocation.bytes > owner.live { try invalid(); }
+    if parent != none { if allocation.bytes > parent.live { try invalid(); } }
+    owner.live=owner.live-allocation.bytes; if parent != none { parent.live=parent.live-allocation.bytes; }
+    allocation.state=1;
+}
+public function transfer(allocation identity Allocation,destination identity Owner) fails LimitError {
+    if allocation.state != 0 { try invalid(); }
+    let source be allocation.owner; try active(source); try active(destination);
+    if source == destination { return; }
+    let first be source.parent; let second be destination.parent;
+    // Initial protocol supports sibling owners only, not arbitrary owner trees.
+    if first == none or second == none or first != second or source.kind != destination.kind { try invalid(); }
+    if allocation.bytes > source.live { try invalid(); }
+    if allocation.bytes > destination.limit-destination.live-destination.pending {
+        try exhausted(destination,allocation.bytes,destination.limit-destination.live-destination.pending);
+    }
+    source.live=source.live-allocation.bytes; destination.live=destination.live+allocation.bytes;
+    if destination.live > destination.peak { destination.peak=destination.live; }
+    let total be destination.live+destination.pending; if total > destination.reservedPeak { destination.reservedPeak=total; }
+    allocation.owner=destination;
+    // The common request, allocation traffic, and reservation history do not change.
+}
+public function split(allocation identity Allocation,amount Int) returns identity Allocation fails LimitError {
+    try active(allocation.owner);
+    if allocation.state != 0 or amount < 0 or amount > allocation.bytes { try invalid(); }
+    allocation.bytes=allocation.bytes-amount;
+    return identity Allocation { owner=allocation.owner; bytes=amount; state=0; };
+}
+public function phase(owner identity Owner,limit Int) returns identity Phase fails LimitError {
+    try active(owner); if limit < 0 { try invalid(); }
+    return identity Phase { owner=owner; limit=limit; used=0; prepaid=0; state=0; };
+}
+public function constructionPhase(owner identity Owner) returns identity Phase fails LimitError { return try phase(owner,16777216); }
+public function verificationPhase(owner identity Owner) returns identity Phase fails LimitError { return try phase(owner,16777216); }
+public function promotionPhase(owner identity Owner) returns identity Phase fails LimitError { return try phase(owner,33554432); }
+public function finishPhase(phase identity Phase) fails LimitError {
+    if phase.state != 0 { try invalid(); } phase.state=1;
+}
+public function prepay(phase identity Phase,amount Int) fails LimitError {
+    let owner be phase.owner; try active(owner);
+    if phase.state != 0 or amount < 0 or amount > 1024-phase.prepaid { try invalid(); }
+    if amount > phase.limit-phase.used-phase.prepaid { try exhausted(owner,amount,phase.limit-phase.used-phase.prepaid); }
+    if amount > owner.workLimit-owner.work { try exhausted(owner,amount,owner.workLimit-owner.work); }
+    let parent be owner.parent;
+    if parent != none { if amount > parent.workLimit-parent.work { try exhausted(owner,amount,parent.workLimit-parent.work); } }
+    phase.prepaid=phase.prepaid+amount; owner.work=owner.work+amount;
+    if parent != none { parent.work=parent.work+amount; }
+}
+public function consume(phase identity Phase,amount Int) fails LimitError {
+    try active(phase.owner);
+    if phase.state != 0 or amount < 0 or amount > 1024 or amount > phase.prepaid { try invalid(); }
+    phase.prepaid=phase.prepaid-amount; phase.used=phase.used+amount;
+}
+public function work(phase identity Phase,amount Int) fails LimitError {
+    if amount < 0 or amount > 1024 { try invalid(); }
+    if phase.prepaid < amount { try prepay(phase,amount-phase.prepaid); }
+    try consume(phase,amount);
+}
+public function cancel(owner identity Owner) { if owner.state != 3 { owner.state=2; } }
+public function poll(owner identity Owner) fails LimitError { try active(owner); }
+public function close(owner identity Owner) fails LimitError {
+    if owner.state == 3 or owner.live != 0 or owner.pending != 0 or owner.pendingTraffic != 0 { try invalid(); }
+    owner.state=3;
+}
+function abandonAt(parent identity Owner,owner identity Owner) fails LimitError {
+    if owner.live > parent.live or owner.pending > parent.pending or owner.pendingTraffic > parent.pendingTraffic { try invalid(); }
+    parent.live=parent.live-owner.live; parent.pending=parent.pending-owner.pending;
+    parent.pendingTraffic=parent.pendingTraffic-owner.pendingTraffic;
+}
+public function abandon(owner identity Owner) fails LimitError {
+    // Caller must first discard all backing owned by this failed child attempt.
+    // Unlike release(), this also retires uncommitted construction reservations.
+    if owner.state == 3 or owner.parent == none { try invalid(); }
+    let parent be owner.parent;
+    if parent != none { try abandonAt(parent,owner); }
+    owner.live=0; owner.pending=0; owner.pendingTraffic=0; owner.state=3;
+}
