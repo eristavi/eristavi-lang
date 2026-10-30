@@ -343,6 +343,17 @@ function switchContracts() fails budget.LimitError,verify.InvalidIR,ProbeError {
     try accepted(harness,2,"switch-restored"); try close(harness);
 }
 
+
+function switchEmpty() fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let harness be try create([meta.i64()],[meta.i64()]); let routine be harness.routine;
+    let entry be try build.block(routine,[meta.i64()]); let join be try build.block(routine,[meta.i64()]);
+    let selector be try build.parameter(routine,entry,0);
+    let defaultEdge be try build.edge(routine,join,[selector]);
+    try build.switchInteger(routine,entry,selector,[],[],defaultEdge,harness.location);
+    try build.returnValues(routine,join,[try build.parameter(routine,join,0)],harness.location);
+    try build.complete(routine); try accepted(harness,2,"switch-empty"); try close(harness);
+}
+
 function manyUses() fails budget.LimitError,verify.InvalidIR,ProbeError {
     let harness be try create([meta.pred()],[]); let routine be harness.routine;
     let entry be try build.block(routine,[meta.pred()]); let body be try build.block(routine,[]);
@@ -354,7 +365,7 @@ function manyUses() fails budget.LimitError,verify.InvalidIR,ProbeError {
 }
 function run() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError {
     try mutations(); try orphanRecords(); try diamond(); try loop(); try dead(); try repeatedTarget(); try limits(); try cancellation();
-    try scalarShapes(); try predicateOperations(); try predicateDead(); try integerOperations(); try integerDead(); try divremContracts(); try divremDead(); try floatOperations(); try floatDead(); try switchContracts(); try manyUses(); return true;
+    try scalarShapes(); try predicateOperations(); try predicateDead(); try integerOperations(); try integerDead(); try divremContracts(); try divremDead(); try floatOperations(); try floatDead(); try switchContracts(); try switchEmpty(); try manyUses(); return true;
 }
 function main() {
     let done be run() else error budget.LimitError { output(error.category+":"+error.message); process.setExitCode(1); return; }
