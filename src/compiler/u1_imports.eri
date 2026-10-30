@@ -73,7 +73,7 @@ function contract(policy identity Policy,target meta.FunctionId,adapter Int)
     if not okay { try budget.reject("untrusted or stale U1a import contract"); }
 }
 public function select(policy identity Policy,target meta.FunctionId,adapter Int)
-    fails budget.LimitError {
+    returns Int fails budget.LimitError {
     try active(policy);
     if policy.frozen { try budget.reject("U1a import selection is frozen"); }
     try contract(policy,target,adapter);
@@ -86,8 +86,9 @@ public function select(policy identity Policy,target meta.FunctionId,adapter Int
     let selected be identity Selection { target=target; adapter=adapter; revision=1;
         charge=try budget.commit(pending); next=policy.selected; };
     policy.selected=selected;
+    return adapter;
 }
-public function freeze(policy identity Policy) fails budget.LimitError {
+public function freeze(policy identity Policy) returns Int fails budget.LimitError {
     try active(policy);
     if policy.frozen { try budget.reject("duplicate import selection freeze"); }
     let data be policy.program.metadata;
@@ -104,6 +105,7 @@ public function freeze(policy identity Policy) fails budget.LimitError {
         index=index+1;
     }
     policy.frozen=true;
+    return data.declarations.length/6;
 }
 public function adapter(policy identity Policy,target meta.FunctionId)
     returns Int fails budget.LimitError {
