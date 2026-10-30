@@ -1,0 +1,164 @@
+import std.process;
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+import compiler.u1_meta as meta;
+import compiler.u1_builder as build;
+import compiler.u1_verify as verify;
+error ProbeError { message Text; }
+type Harness { root identity budget.Owner; shared identity budget.Owner; data identity meta.Metadata;
+    owner identity budget.Owner; construct identity budget.Phase; routine identity build.Function; location meta.LocId; }
+function check(condition Bool,message Text) fails ProbeError { if not condition { fail ProbeError { message=message; }; } }
+function create(parameters,results) returns identity Harness fails budget.LimitError {
+    let root be try budget.developmentRequest(); let shared be try budget.metadataOwner(root); let phase be try budget.constructionPhase(shared);
+    let data be try meta.create(shared,phase); let signature be try meta.signature(data,phase,parameters,results);
+    let collision be try meta.signature(data,phase,[meta.pred(),meta.pred()],[]);
+    collision=try meta.signature(data,phase,[meta.pred(),meta.i64(),meta.f64()],[]);
+    let source be try meta.source(data,phase,"verifier-α","0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",32);
+    let location be try meta.location(data,phase,source,0,8,3,1,4); try meta.freeze(data); try budget.finishPhase(phase);
+    let owner be try budget.functionOwner(root,false); let construct be try budget.constructionPhase(owner);
+    return identity Harness { root=root; shared=shared; data=data; owner=owner; construct=construct;
+        routine=try build.create(data,signature,owner,construct); location=location; };
+}
+function close(harness identity Harness) fails budget.LimitError,ProbeError {
+    try build.close(harness.routine); try meta.close(harness.data);
+    try check(harness.root.live == 0 and harness.root.pending == 0,"workspace or input charge leak");
+    try budget.close(harness.owner); try budget.close(harness.shared); try budget.close(harness.root);
+}
+function change(table identity words.Words,phase identity budget.Phase,index Int,value Int) fails budget.LimitError {
+    table.frozen=false; try words.set(table,phase,index,value); table.frozen=true;
+}
+function accepted(harness identity Harness,reachable Int,label Text) fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let live be harness.owner.live; let revision be harness.routine.revision;
+    let phase be try budget.verificationPhase(harness.owner); let result be try verify.verify(harness.routine,phase);
+    try check(result.reachableBlocks == reachable and result.revision == revision and result.structuralVisits > 0 and result.dominanceVisits > 0,"verification report");
+    try check(harness.owner.live == live and harness.owner.pending == 0 and harness.routine.revision == revision and phase.state == 1,"read-only verification and scratch release"); output(label+":ok");
+}
+function rejected(harness identity Harness,stage Int,block Int,label Text) fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let live be harness.owner.live; let phase be try budget.verificationPhase(harness.owner);
+    let unexpected be verify.verify(harness.routine,phase) else error verify.InvalidIR {
+        try check(error.category == "invalid-ir" and error.stage == stage and error.block == block,"deterministic invalid IR category/stage/block: "+label);
+        try check(harness.owner.live == live and harness.owner.pending == 0 and phase.state == 1,"rejected workspace cleanup"); output(label+":ok"); return;
+    } else error budget.LimitError { fail error; };
+    fail ProbeError { message="accepted invalid IR: "+label; };
+}
+function straight() returns identity Harness fails budget.LimitError {
+    let harness be try create([meta.i64(),meta.pred()],[meta.i64()]); let routine be harness.routine;
+    let entry be try build.block(routine,[meta.i64(),meta.pred()]); let first be try build.parameter(routine,entry,0);
+    let one be try build.integer(routine,entry,1,harness.location);
+    let sum be try build.addOverflow(routine,entry,first,one,harness.location);
+    let later be try build.integer(routine,entry,2,harness.location);
+    try build.guard(routine,entry,try build.parameter(routine,entry,1),1,harness.location);
+    try build.returnValues(routine,entry,[sum.value],harness.location); try build.complete(routine); try budget.finishPhase(harness.construct); return harness;
+}
+function mutations() fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let harness be try straight(); let routine be harness.routine; let edit be try budget.constructionPhase(harness.owner);
+    try accepted(harness,1,"straight");
+    // Alter backing without changing revision: verification must derive facts again.
+    try change(routine.operands,edit,0,4); try rejected(harness,4,1,"own-result");
+    try change(routine.operands,edit,0,6); try rejected(harness,4,1,"use-before-definition");
+    try change(routine.operands,edit,0,1); try accepted(harness,1,"reverify-after-restoration");
+    try change(routine.values,edit,12,1); try rejected(harness,2,1,"result-type"); try change(routine.values,edit,12,2);
+    try change(routine.values,edit,14,1); try rejected(harness,2,1,"definition-owner"); try change(routine.values,edit,14,2);
+    try change(routine.instructions,edit,10,99); try rejected(harness,2,1,"unknown-operation"); try change(routine.instructions,edit,10,3);
+    try change(routine.instructions,edit,9,1); try rejected(harness,2,1,"cyclic-order"); try change(routine.instructions,edit,9,2);
+    try change(routine.instructions,edit,35,1); try rejected(harness,2,1,"fake-void-result"); try change(routine.instructions,edit,35,0);
+    try change(routine.instructions,edit,6,0); try rejected(harness,3,1,"required-location"); try change(routine.instructions,edit,6,1);
+    try change(routine.instructions,edit,37,5); try rejected(harness,2,1,"trap-code"); try change(routine.instructions,edit,37,1);
+    try change(routine.instructions,edit,12,9223372036854775807); try rejected(harness,2,0,"overflowing-range"); try change(routine.instructions,edit,12,0);
+    try change(routine.blocks,edit,4,9223372036854775807); try rejected(harness,2,1,"overflowing-instruction-id"); try change(routine.blocks,edit,4,5);
+    let length be routine.values.length; routine.values.length=9223372036854775807;
+    try rejected(harness,0,0,"overflowing-count"); routine.values.length=length;
+    let foreign be try budget.functionOwner(harness.root,false); routine.values.owner=foreign;
+    try rejected(harness,0,0,"foreign-table"); routine.values.owner=harness.owner; try budget.close(foreign);
+    let oldRoot be routine.values.root; routine.values.root=none; try rejected(harness,2,1,"missing-page"); routine.values.root=oldRoot;
+    let metadataEdit be try budget.constructionPhase(harness.shared);
+    try change(harness.data.locations,metadataEdit,3,33); try rejected(harness,3,0,"source-anchor"); try change(harness.data.locations,metadataEdit,3,3);
+    try change(harness.data.locations,metadataEdit,6,1); try rejected(harness,3,0,"unsupported-origin"); try change(harness.data.locations,metadataEdit,6,0);
+    try change(harness.data.bytes,metadataEdit,12,71); try rejected(harness,1,0,"source-digest"); try change(harness.data.bytes,metadataEdit,12,49);
+    try change(harness.data.signatures,metadataEdit,1,1); try rejected(harness,1,0,"signature-chain"); try change(harness.data.signatures,metadataEdit,1,0);
+    try accepted(harness,1,"metadata-restored"); try close(harness);
+}
+function diamond() fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let harness be try create([meta.pred(),meta.i64()],[meta.i64()]); let routine be harness.routine;
+    let entry be try build.block(routine,[meta.pred(),meta.i64()]); let left be try build.block(routine,[]); let right be try build.block(routine,[]); let join be try build.block(routine,[]);
+    let test be try build.parameter(routine,entry,0); let initial be try build.parameter(routine,entry,1);
+    try build.branch(routine,entry,test,left,[],right,[],harness.location);
+    let partial be try build.integer(routine,left,9,harness.location); try build.jump(routine,left,join,[],harness.location);
+    try build.jump(routine,right,join,[],harness.location); try build.returnValues(routine,join,[partial],harness.location); try build.complete(routine);
+    try rejected(harness,4,4,"diamond-nondominance");
+    let edit be try budget.constructionPhase(harness.owner); try change(routine.operands,edit,1,initial.index); try accepted(harness,4,"diamond-dominance");
+    try change(routine.edges,edit,0,1); try rejected(harness,2,1,"entry-predecessor"); try change(routine.edges,edit,0,left.index);
+    // Edge 1's owner is also referenced as the second branch edge.
+    try change(routine.instructions,edit,8,1); try rejected(harness,2,1,"duplicate-edge-owner"); try close(harness);
+}
+function loop() fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let harness be try create([meta.i64(),meta.i64(),meta.pred()],[meta.i64()]); let routine be harness.routine;
+    let entry be try build.block(routine,[meta.i64(),meta.i64(),meta.pred()]); let header be try build.block(routine,[meta.i64(),meta.i64()]); let done be try build.block(routine,[meta.i64()]);
+    let a be try build.parameter(routine,entry,0); let b be try build.parameter(routine,entry,1); let test be try build.parameter(routine,entry,2);
+    let x be try build.parameter(routine,header,0); let y be try build.parameter(routine,header,1);
+    try build.jump(routine,entry,header,[a,b],harness.location); try build.branch(routine,header,test,header,[y,x],done,[x],harness.location);
+    try build.returnValues(routine,done,[try build.parameter(routine,done,0)],harness.location); try build.complete(routine);
+    try accepted(harness,3,"loop-swap"); let edit be try budget.constructionPhase(harness.owner);
+    try change(routine.arguments,edit,0,x.index); try rejected(harness,4,1,"header-value-in-predecessor"); try change(routine.arguments,edit,0,a.index);
+    try change(routine.arguments,edit,0,test.index); try rejected(harness,2,1,"edge-type"); try change(routine.arguments,edit,0,a.index);
+    try change(routine.edges,edit,2,1); try rejected(harness,2,0,"edge-range"); try close(harness);
+}
+function dead() fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let harness be try create([meta.i64()],[meta.i64()]); let routine be harness.routine;
+    let entry be try build.block(routine,[meta.i64()]); let first be try build.block(routine,[meta.i64()]); let second be try build.block(routine,[]);
+    try build.returnValues(routine,entry,[try build.parameter(routine,entry,0)],harness.location);
+    try build.returnValues(routine,first,[try build.parameter(routine,first,0)],harness.location);
+    try build.returnValues(routine,second,[try build.parameter(routine,first,0)],harness.location); try build.complete(routine);
+    try accepted(harness,1,"typed-unreachable"); let edit be try budget.constructionPhase(harness.owner);
+    try change(routine.instructions,edit,20,99); try rejected(harness,2,3,"malformed-unreachable"); try close(harness);
+}
+function repeatedTarget() fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let harness be try create([meta.i64(),meta.i64(),meta.pred()],[meta.i64()]); let routine be harness.routine;
+    let entry be try build.block(routine,[meta.i64(),meta.i64(),meta.pred()]); let target be try build.block(routine,[meta.i64()]);
+    let a be try build.parameter(routine,entry,0); let b be try build.parameter(routine,entry,1); let test be try build.parameter(routine,entry,2);
+    try build.branch(routine,entry,test,target,[a],target,[b],harness.location); try build.returnValues(routine,target,[try build.parameter(routine,target,0)],harness.location); try build.complete(routine);
+    try accepted(harness,2,"repeated-target-arguments"); try check((try build.edgeArgument(routine,1,0)).index != (try build.edgeArgument(routine,2,0)).index,"edge distinctions preserved"); try close(harness);
+}
+function limits() fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let harness be try straight(); let live be harness.owner.live; let phase be try budget.phase(harness.owner,100);
+    let unexpected be verify.verify(harness.routine,phase) else error budget.LimitError {
+        try check(error.category == "resource-limit" and harness.owner.live == live and harness.owner.pending == 0 and phase.state == 1 and harness.routine.state == 1,"failed verification releases partial scratch");
+        try close(harness); output("work-exhaustion:ok"); return;
+    } else error verify.InvalidIR { fail error; }; fail ProbeError { message="verification should exhaust its phase"; };
+}
+function cancellation() fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let harness be try straight(); let live be harness.owner.live; let phase be try budget.verificationPhase(harness.owner); budget.cancel(harness.owner);
+    let unexpected be verify.verify(harness.routine,phase) else error budget.LimitError {
+        try check(error.category == "cancelled" and harness.owner.live == live,"cancelled verification does not publish or allocate");
+        try close(harness); output("cancellation:ok"); return;
+    } else error verify.InvalidIR { fail error; }; fail ProbeError { message="verification should be cancelled"; };
+}
+function scalarShapes() fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let harness be try create([],[]); let entry be try build.block(harness.routine,[]);
+    try build.returnValues(harness.routine,entry,[],harness.location); try build.complete(harness.routine);
+    try accepted(harness,1,"zero-result-function"); try close(harness);
+    harness=try create([],[meta.f64(),meta.f64()]); entry=try build.block(harness.routine,[]);
+    let negativeZero be try build.floatBits(harness.routine,entry,-9223372036854775807-1,harness.location);
+    let nan be try build.floatBits(harness.routine,entry,9221120237041090560,harness.location);
+    try build.returnValues(harness.routine,entry,[negativeZero,nan],harness.location); try build.complete(harness.routine);
+    try accepted(harness,1,"float-bits-multiple-results"); try close(harness);
+}
+function manyUses() fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let harness be try create([meta.pred()],[]); let routine be harness.routine;
+    let entry be try build.block(routine,[meta.pred()]); let body be try build.block(routine,[]);
+    let test be try build.parameter(routine,entry,0); try build.jump(routine,entry,body,[],harness.location);
+    let index be 0; while index < 128 { try build.guard(routine,body,test,1,harness.location); index=index+1; }
+    try build.returnValues(routine,body,[],harness.location); try build.complete(routine);
+    // O(1) use queries are scanning work, not new dominator-construction visits.
+    try accepted(harness,2,"many-dominated-uses"); try close(harness);
+}
+function run() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError {
+    try mutations(); try diamond(); try loop(); try dead(); try repeatedTarget(); try limits(); try cancellation();
+    try scalarShapes(); try manyUses(); return true;
+}
+function main() {
+    let done be run() else error budget.LimitError { output(error.category+":"+error.message); process.setExitCode(1); return; }
+    else error verify.InvalidIR { output("unexpected invalid IR"); output(error.message); output(error.stage); output(error.block); output(error.instruction); process.setExitCode(1); return; }
+    else error ProbeError { output(error.message); process.setExitCode(1); return; };
+}
+main();

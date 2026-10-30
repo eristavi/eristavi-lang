@@ -115,8 +115,10 @@ of this slice. Expensive qualification stays at the later integration gate.
 
 ## Next boundary
 
-Implement the independent structural/type/location verifier, then dominance-based
-SSA verification and mandatory cell promotion. Complete operation semantics and
+The subsequent isolated verifier slice is recorded in UIR_U1A_VERIFIER.md. It
+adds structural/type/span and reachable SSA checking for this operation subset;
+its report grants no publication privilege. Mandatory cell promotion remains
+next. Complete operation semantics and
 strict Float cases, checked record decoding, source-map/origin-chain validation,
 and matched candidate fixtures before qualifying U1a. The construction marker is
 not a substitute for those checks. Retain the existing compiler until U2/U3
