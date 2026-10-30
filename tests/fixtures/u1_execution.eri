@@ -29,7 +29,7 @@ function deniedFreeze(policy identity imports.Policy) returns Bool fails ProbeEr
     fail ProbeError { message="accepted incomplete import context"; };
 }
 function deniedEffect(program identity link.Program,policy identity imports.Policy)
-    returns Bool fails ProbeError,verify.InvalidIR {
+    returns Bool fails budget.LimitError,ProbeError,verify.InvalidIR {
     let snapshot be effects.inspect(program,policy) else error budget.LimitError {
         try check(error.category == "invalid-state","understated effect category");
         output("understated-effect-bound:ok"); return true;
