@@ -516,3 +516,33 @@ Next architecture slices: strict IEEE binary64 with controlled floating environm
 ### PR #67 initial CI correction
 
 The first implementation head `a29ad46` failed the new `divrem-arity` verifier protocol on ARM64/macOS. Diagnosis from a focused CI stdout-tail assertion identified **a test expectation error**: the verifier's global canonical operand-pool scan rejects the deliberately shortened operand count in V2 **block 0**, before per-block scanning. The initial test had incorrectly expected block 1. The new revision retains the same malformed mutation and rejection but asserts V2/block 0; the independent verifier and arithmetic semantics were not modified. The diagnostic assertion in `test_u1_verifier.py` was also improved to report actual probe failures. Reverify on the exact corrected head and do not merge based on the initial failing run.
+
+
+## 16. Verified PR #67 merge and qualification checkpoint — 2026-10-30
+
+**Supersedes the historical draft/failure statuses in section 15.** GitHub PR [#67](https://github.com/eristavi/eristavi-lang/pull/67) is merged. The source compiler remains the existing production pipeline; this change adds operations to the isolated U1a redesign only.
+
+| Evidence | Verified status |
+| --- | --- |
+| Merge commit on `main` | `4277e1426040c03a74c936aca1943deb9380d680` |
+| Final tested PR head | `e8c4d39bd30d23b5bb89e3307cafb9285cd722d0` |
+| Tested and merged Git tree | `80db07e7eaaa0fea55a4f928bbb032b2bae6e506` — identical |
+| Four-platform normal CI | Successful: Linux x86-64 GCC/Clang, Linux ARM64 Clang, macOS Clang |
+| Full qualification | [GitHub Actions 41098748098](https://github.com/eristavi/eristavi-lang/actions/runs/41098748098): **success** on exact tested head |
+| Full qualification jobs | Three bootstrap repeatability/offline jobs and owned integration **successful** |
+| Separate experimental full owned compiler self-build | **Skipped intentionally; not qualified** |
+
+The initial verifier-protocol test failure on earlier PR revisions was a mistaken expectation about block attribution; the independent verifier correctly reported V2/block 0 for orphaned operands. The corrected final test remains strict. Do not regard the earlier failed heads as release evidence.
+
+**Implementation now on main:** signed/unsigned i64 quotient and remainder, zero-divisor and signed MIN/-1 terminal faults, original LocId preservation, independent integer oracle, exact SSA promotion and malformed/dead-block verification. See `UIR_U1A_I64_DIVREM.md`.
+
+### Four-phase work authorized for the current continuation
+
+1. **PR #67 is merged and documented here.**
+2. **Finish isolated U1a:** strict binary64 arithmetic and comparisons, direct calls/signatures/import effect contracts, sparse switches with shared successor traversal, required location/provenance and verification revisions; preserve first-fault order, budget accounting, cancellation and cell-free SSA publication. Favor small independently verified changes over an unreviewed all-at-once rewrite.
+3. **U1b and U2:** remaining fixed integer widths and immutable aggregates first, then managed values, checked-failure continuations, resource ownership/cleanup, rooted runtime adapters. No speculative ABI or new source syntax.
+4. **U3 integration:** AST plus frozen semantic facts construct the approved language-neutral UIR directly; retain Stage-0 and the current native compiler as differential oracles. Promote one native target only after matched output, diagnostics, runtime traps, memory/cleanup and representative module/generic cases pass. Do not retire legacy intermediate representations prematurely.
+
+The implementation order, non-goals and verifiable acceptance gates are expanded in `docs/architecture/ERISTAVI_U1_TO_U3_EXECUTION_PLAN.md`. This plan is an engineering staging document, not authorization to declare unfinished stages complete.
+
+**Current remaining U1a**: strict Float, direct calls/import effects, sparse multiway switch/edge tables, full provenance and revision discipline. **U1b, U2, U3 remain separate major implementation milestones.** No later stages are claimed finished here. Every compiler code PR still requires four-platform CI and completed-batch qualification before merge under `CI_QUALIFICATION.md`. The separate 900-second owned compiler self-build remains a manual, unqualified experiment.
