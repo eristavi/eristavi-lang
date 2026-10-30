@@ -577,3 +577,12 @@ Implemented, isolated U1a: private binary64 add/sub/mul/div/neg and six comparis
 - Three shared-line conflicts resolved explicitly: known opcodes 34/35, dynamic call operand count versus switch selector count, and foundation opcode probe range. Shared builder/verifier changes otherwise retained from both branches, with their focused suites.
 - Candidate documentation in `UIR_U1A_CALL_SWITCH_INTEGRATION.md`. **Status at creation: unqualified integration; do not merge before CI+completed-batch qualification on exact final revision.**
 - These U1a features are still isolated UIR. Full function-call execution, imported effect trust and SCC summaries remain pending. Do not claim U1a complete; U1b/U2/U3 remain separate.
+
+
+## 19. Stacked U1b narrow scalar integration candidate (2026-10-30)
+
+- Branch `compiler/u1a-u1b-integrated-narrow` stacks original PR #81 i8/i16/i32 TypeIds and PR #82 exact-width constant op 36 onto U1a call+switch integration PR #83. It preserves original PR #82 ancestry (including PR #81).
+- Reconciled type metadata, builder constant checks with dynamic call result reservations, independent verification, opcode registry 34/35/36, shared SSA/differential and malformed-IR suites; combined test matrix expects 35 promoter fixtures.
+- Full conflicts/limits recorded in `UIR_U1B_COMBINED_INTEGRATION.md`.
+- **At creation this is an unqualified integration candidate.** The original green CI on #81/#82 does not qualify code combined with U1a PR #83; run fresh four-platform CI and completed-batch qualification on exact final merged tree after U1a base is stabilized.
+- Remaining U1b: width-specific arithmetic and immutable aggregates. U2 managed values/failures/resources and U3 frontend→UIR/native integration have not been implemented by this PR. Do not retire old pipeline or run historical owned full self-build.

@@ -40,6 +40,9 @@ PROTOCOL = ''.join(name + ':ok\n' for name in (
     'switch-valid', 'switch-duplicate-case', 'switch-invalid-case-edge',
     'switch-invalid-default', 'switch-invalid-header', 'switch-reused-edge',
     'switch-unexpected-extra', 'switch-selector-type', 'switch-restored', 'switch-empty',
+    'narrow-core-signatures', 'narrow-type-mismatch', 'narrow-type-restored',
+    'narrow-constant-valid', 'narrow-constant-overflow', 'narrow-constant-width',
+    'narrow-constant-result-type', 'narrow-constant-restored',
     'many-dominated-uses'))
 
 

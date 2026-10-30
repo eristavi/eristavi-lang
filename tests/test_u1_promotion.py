@@ -206,6 +206,9 @@ def evaluate(ir, parameters, fuel=50000):
             operands = [values[v] for v in ir['operands'][start:start+count]]
             outputs = []
             if op in (1, 9): outputs = [payload]
+            elif op == 36:
+                width = {4: 8, 5: 16, 6: 32}[extra]
+                outputs = [payload - (1 << width) if payload & (1 << (width-1)) else payload]
             elif op == 2: outputs = [bool(payload)]
             elif op == 3:
                 mathematical = operands[0] + operands[1]
@@ -453,6 +456,11 @@ def cases_for(name, before):
         for select, a, b, default in itertools.product((0, 1, MAX), (1, -1), (3,), (5,)):
             expected = a if select == 0 else b if select == MAX else default
             yield (select, a, b, default), ('return', (expected,))
+    elif name == 'narrow-constants':
+        yield (), ('return', (-1, -1, -1))
+    elif name == 'narrow-cell':
+        for a, b, flag in itertools.product((-128, -1, 0, 1, 127), (-128, 0, 127), (False, True)):
+            yield (a, b, flag), ('return', (b if flag else a,))
     elif name == 'float-nonfma':
         # A*b rounds to 1 before adding -1; contraction would give -2^-54.
         triples = ((0x3ff0000002000000, 0x3feffffffc000000, 0xbff0000000000000),
@@ -486,7 +494,7 @@ class U1PromotionTests(unittest.TestCase):
         (cls.root / 'compiler').symlink_to(ROOT / 'src/compiler', target_is_directory=True)
         cls.calls = [f'{family}({width}{",false" if family == "diamond" else ""})'
                      for family in ('diamond', 'loop', 'sequential') for width in (8, 32, 128)]
-        cls.calls += ['diamond(2,true)', 'swap()', 'reset()', 'irreducible()', 'dead(false)', 'faults(false)', 'faults(true)', 'floatCell()', 'passthrough()', 'predicateTruth()', 'predicateMerge()', 'integerArithmetic()', 'integerMerge()', 'divideSigned()', 'remainderSigned()', 'divideUnsigned()', 'remainderUnsigned()', 'divisionMerge()', 'divisionFaultOrder()', 'floatArithmetic()', 'floatMerge()', 'floatNonContraction()', 'switchFlow()', 'switchDistinctEdges()',
+        cls.calls += ['diamond(2,true)', 'swap()', 'reset()', 'irreducible()', 'dead(false)', 'faults(false)', 'faults(true)', 'floatCell()', 'passthrough()', 'predicateTruth()', 'predicateMerge()', 'integerArithmetic()', 'integerMerge()', 'divideSigned()', 'remainderSigned()', 'divideUnsigned()', 'remainderUnsigned()', 'divisionMerge()', 'divisionFaultOrder()', 'floatArithmetic()', 'floatMerge()', 'floatNonContraction()', 'narrowCell()', 'narrowConstants()', 'switchFlow()', 'switchDistinctEdges()',
                       'invalidCell(0)', 'invalidCell(1)', 'invalidCell(2)', 'dead(true)', 'failedWork()', 'canonicalReject()', 'failedOutput()', 'cancelled()']
         cls.source = cls.root / 'promotion.eri'; cls.source.write_text(probe_source(cls.calls))
         cls.binary = cls.root / 'promotion-c'
@@ -516,7 +524,7 @@ class U1PromotionTests(unittest.TestCase):
         result = subprocess.run([str(self.binary)], capture_output=True, text=True, timeout=120)
         self.assertEqual((result.returncode, result.stderr), (0, ''), result.stdout[-300:])
         snapshots, labels = self.check_snapshots(result.stdout)
-        self.assertEqual(len(snapshots), 33)
+        self.assertEqual(len(snapshots), 35)
         self.assertEqual(labels, ['invalid-init:ok']*3 + ['malformed-dead:ok', 'promotion-limit:ok', 'canonical-reject:ok', 'partial-output:ok', 'cancelled:ok'])
         again = subprocess.run([str(self.binary)], capture_output=True, text=True, timeout=120)
         self.assertEqual((again.returncode, again.stdout, again.stderr), (0, result.stdout, ''))
