@@ -126,9 +126,8 @@ public function resolve(program identity Program,target meta.FunctionId)
         }
         cursor=cursor.next;
     }
-    try budget.reject("U1a function has no bound local definition");
-    // Unreachable; 'reject' fails but the return shape remains explicit.
-    return program.head.body;
+    fail budget.LimitError { message="U1a function has no bound local definition";
+        category="invalid-state"; requested=0; remaining=0; };
 }
 public function close(program identity Program) fails budget.LimitError {
     if program.closed { try budget.reject("double close of U1a module"); }
