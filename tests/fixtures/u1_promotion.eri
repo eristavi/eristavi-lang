@@ -451,4 +451,25 @@ function floatNonContraction() fails budget.LimitError,verify.InvalidIR,ProbeErr
     try build.complete(routine); try promoted(harness,"float-nonfma",0,0);
 }
 
+
+function narrowCell() fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let harness be try create([meta.i8(),meta.i8(),meta.pred()],[meta.i8()],true);
+    let routine be harness.routine;
+    let entry be try build.block(routine,[meta.i8(),meta.i8(),meta.pred()]);
+    let left be try build.block(routine,[]); let right be try build.block(routine,[]);
+    let join be try build.block(routine,[]);
+    let a be try build.parameter(routine,entry,0);
+    let b be try build.parameter(routine,entry,1);
+    let flag be try build.parameter(routine,entry,2);
+    let local be try build.cell(routine,meta.i8());
+    try build.initialize(routine,entry,local,a,harness.location);
+    try build.branch(routine,entry,flag,left,[],right,[],harness.location);
+    try build.jump(routine,left,join,[],harness.location);
+    try build.writeCell(routine,right,local,b,harness.alternate);
+    try build.jump(routine,right,join,[],harness.location);
+    let result be try build.readCell(routine,join,local,harness.location);
+    try build.returnValues(routine,join,[result],harness.location);
+    try build.complete(routine); try promoted(harness,"narrow-cell",1,2);
+}
+
 // The Python harness appends run()/main() with its selected cases.
