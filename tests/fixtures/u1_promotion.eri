@@ -584,4 +584,37 @@ function narrowArithmeticMerge() fails budget.LimitError,verify.InvalidIR,ProbeE
     try build.complete(routine); try promoted(harness,"narrow-ops-merge",1,2);
 }
 
+
+function narrowDivRem(width meta.TypeId,op Int,signedness Int,name Text)
+    fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let harness be try create([width,width],[width],true); let routine be harness.routine;
+    let entry be try build.block(routine,[width,width]);
+    let a be try build.parameter(routine,entry,0); let b be try build.parameter(routine,entry,1);
+    let value be build.ValueId { owner=routine.key; index=0; };
+    if op == 41 { value=try build.narrowDivide(routine,entry,a,b,signedness,width,harness.alternate); }
+    else { value=try build.narrowRemainder(routine,entry,a,b,signedness,width,harness.alternate); }
+    try build.returnValues(routine,entry,[value],harness.location);
+    try build.complete(routine); try promoted(harness,name,0,0);
+}
+function narrowDivRemMerge() fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let width be meta.i8();
+    let harness be try create([width,width,meta.pred()],[width,width],true);
+    let routine be harness.routine; let entry be try build.block(routine,[width,width,meta.pred()]);
+    let left be try build.block(routine,[]); let right be try build.block(routine,[]);
+    let join be try build.block(routine,[]);
+    let a be try build.parameter(routine,entry,0); let b be try build.parameter(routine,entry,1);
+    let flag be try build.parameter(routine,entry,2);
+    let cell be try build.cell(routine,width);
+    try build.initialize(routine,entry,cell,a,harness.location);
+    try build.branch(routine,entry,flag,left,[],right,[],harness.location);
+    try build.writeCell(routine,left,cell,b,harness.location);
+    try build.jump(routine,left,join,[],harness.location);
+    try build.jump(routine,right,join,[],harness.location);
+    let selected be try build.readCell(routine,join,cell,harness.location);
+    let first be try build.narrowDivide(routine,join,selected,b,1,width,harness.alternate);
+    let second be try build.narrowRemainder(routine,join,selected,b,2,width,harness.location);
+    try build.returnValues(routine,join,[first,second],harness.location);
+    try build.complete(routine); try promoted(harness,"narrow-div-merge",1,2);
+}
+
 // The Python harness appends run()/main() with its selected cases.

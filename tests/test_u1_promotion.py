@@ -316,6 +316,30 @@ def evaluate(ir, parameters, fuel=50000):
                             not -(1 << (width-1)) <= exact < (1 << (width-1))
                         )
                         outputs.append(overflow)
+
+            elif op in (41, 42):
+                width = {4: 8, 5: 16, 6: 32}[extra]
+                mask = (1 << width) - 1
+                minimum = -(1 << (width-1))
+                a, b = operands
+                signed = payload == 1
+                if b == 0:
+                    trace.append((2, location, False))
+                    return ('trap', (2, location)), tuple(trace)
+                if signed and a == minimum and b == -1:
+                    trace.append((1, location, False))
+                    return ('trap', (1, location)), tuple(trace)
+                if signed:
+                    quotient = abs(a) // abs(b)
+                    if (a < 0) != (b < 0):
+                        quotient = -quotient
+                    remainder = a - quotient*b
+                    raw = quotient if op == 41 else remainder
+                else:
+                    quotient, remainder = divmod(a & mask, b & mask)
+                    raw = quotient if op == 41 else remainder
+                raw &= mask
+                outputs = [raw if raw < (1 << (width-1)) else raw - (1 << width)]
             elif op == 5:
                 trace.append((payload, location, bool(operands[0])))
                 if not operands[0]: return ('trap', (payload, location)), tuple(trace)
@@ -544,6 +568,47 @@ def cases_for(name, before):
                 outputs.extend((a == b, a != b, a < b, a <= b, a > b, a >= b,
                                 ua < ub, ua <= ub, ua > ub, ua >= ub))
                 yield (a, b), ('return', tuple(outputs))
+
+    elif name.startswith('narrow-div-') or name.startswith('narrow-rem-') or name == 'narrow-div-merge':
+        # Exact mathematical oracle, distinct from the interpreter's
+        # signed quotient / a - quotient*b implementation.
+        width = 8 if name.endswith('8') or name == 'narrow-div-merge' else (
+            16 if name.endswith('16') else 32)
+        minimum, maximum = -(1 << (width-1)), (1 << (width-1))-1
+        mask = (1 << width)-1
+
+        def signed_word(x):
+            r = x & mask
+            return r-(1 << width) if r >= (1 << (width-1)) else r
+
+        def expect_pair(a, b, signed, quotient, loc=2):
+            if b == 0:
+                return ('trap', (2, loc))
+            if signed and a == minimum and b == -1:
+                return ('trap', (1, loc))
+            if signed:
+                qabs, rabs = divmod(abs(a), abs(b))
+                q = -qabs if (a < 0) != (b < 0) else qabs
+                r = -rabs if a < 0 else rabs
+            else:
+                q, r = divmod(a & mask, b & mask)
+            return ('return', (signed_word(q if quotient else r),))
+
+        values = (minimum, minimum+1, -9, -1, 0, 1, 7, maximum-1, maximum)
+        for a, b in itertools.product(values, repeat=2):
+            if name == 'narrow-div-merge':
+                for flag in (False, True):
+                    selected = b if flag else a
+                    first = expect_pair(selected, b, True, True)
+                    if first[0] == 'trap':
+                        yield (a, b, flag), first
+                    else:
+                        second = expect_pair(selected, b, False, False, loc=1)
+                        yield (a, b, flag), ('return', (first[1][0], second[1][0]))
+            else:
+                mode = name.split('-')[2]
+                signed = name.split('-')[3] == 'signed'
+                yield (a, b), expect_pair(a, b, signed, mode == 'div')
     else: raise AssertionError(f'unknown fixture {name}')
 
 
@@ -558,7 +623,20 @@ class U1PromotionTests(unittest.TestCase):
         cls.calls += ['diamond(2,true)', 'swap()', 'reset()', 'irreducible()', 'dead(false)', 'faults(false)', 'faults(true)', 'floatCell()', 'passthrough()', 'predicateTruth()', 'predicateMerge()', 'integerArithmetic()', 'integerMerge()', 'divideSigned()', 'remainderSigned()', 'divideUnsigned()', 'remainderUnsigned()', 'divisionMerge()', 'divisionFaultOrder()', 'floatArithmetic()', 'floatMerge()', 'floatNonContraction()', 'narrowCell()', 'narrowConstants()', 'narrowArithmetic(meta.i8(),"narrow-i8")',
                      'narrowArithmetic(meta.i16(),"narrow-i16")',
                      'narrowArithmetic(meta.i32(),"narrow-i32")',
-                     'narrowArithmeticMerge()', 'switchFlow()', 'switchDistinctEdges()',
+                     'narrowArithmeticMerge()',
+                     'narrowDivRem(meta.i8(),41,1,"narrow-div-signed-8")',
+                     'narrowDivRem(meta.i8(),42,1,"narrow-rem-signed-8")',
+                     'narrowDivRem(meta.i8(),41,2,"narrow-div-unsigned-8")',
+                     'narrowDivRem(meta.i8(),42,2,"narrow-rem-unsigned-8")',
+                     'narrowDivRem(meta.i16(),41,1,"narrow-div-signed-16")',
+                     'narrowDivRem(meta.i16(),42,1,"narrow-rem-signed-16")',
+                     'narrowDivRem(meta.i16(),41,2,"narrow-div-unsigned-16")',
+                     'narrowDivRem(meta.i16(),42,2,"narrow-rem-unsigned-16")',
+                     'narrowDivRem(meta.i32(),41,1,"narrow-div-signed-32")',
+                     'narrowDivRem(meta.i32(),42,1,"narrow-rem-signed-32")',
+                     'narrowDivRem(meta.i32(),41,2,"narrow-div-unsigned-32")',
+                     'narrowDivRem(meta.i32(),42,2,"narrow-rem-unsigned-32")',
+                     'narrowDivRemMerge()', 'switchFlow()', 'switchDistinctEdges()',
                       'invalidCell(0)', 'invalidCell(1)', 'invalidCell(2)', 'dead(true)', 'failedWork()', 'canonicalReject()', 'failedOutput()', 'cancelled()']
         cls.source = cls.root / 'promotion.eri'; cls.source.write_text(probe_source(cls.calls))
         cls.binary = cls.root / 'promotion-c'
@@ -588,7 +666,7 @@ class U1PromotionTests(unittest.TestCase):
         result = subprocess.run([str(self.binary)], capture_output=True, text=True, timeout=120)
         self.assertEqual((result.returncode, result.stderr), (0, ''), result.stdout[-300:])
         snapshots, labels = self.check_snapshots(result.stdout)
-        self.assertEqual(len(snapshots), 39)
+        self.assertEqual(len(snapshots), 52)
         self.assertEqual(labels, ['invalid-init:ok']*3 + ['malformed-dead:ok', 'promotion-limit:ok', 'canonical-reject:ok', 'partial-output:ok', 'cancelled:ok'])
         again = subprocess.run([str(self.binary)], capture_output=True, text=True, timeout=120)
         self.assertEqual((again.returncode, again.stdout, again.stderr), (0, result.stdout, ''))
