@@ -355,3 +355,24 @@ immediately resume that combined microbenchmark investigation.
 
 No further implementation should be inferred from this handover's existence.
 Resume the user's next instruction and the agreed remaining U1a work.
+
+## 10. Post-handover update — U1a classification safety slice (2026-10-30)
+
+Branch: `compiler/u1a-opcode-classification-harden`, based on documentation branch `docs/uir-handover-2026-10-30` at `09f260beceea33fd28a2972b369b210fdcd57259`. This work is proposed independently of the existing PR #61 and is not merged into main. PR #61 should be merged/reconciled before retargeting this follow-up branch to main. Preserve any newer user-uploaded documents and never overwrite the original handover branch.
+
+### Completed in the proposed branch
+
+1. Reverified the main merge checkpoint and found the current closed set of 9 canonical and 3 private-cell operations.
+2. Audited numeric opcode thresholds and hard-coded jump/branch successor walkers in `u1_builder`, `u1_verify`, and `u1_promote`.
+3. Added explicit operation-category helpers to `u1_ops`: `isCell`, `inlineEdges`, and a non-range `terminal`.
+4. Made all three compiler components consume the shared classifications, including promoter edge copying and terminal emission. No new opcode, wire format, runtime ABI or production integration.
+5. Added a compiled U1 opcode-category regression, including unknown future IDs, and a guard against reintroducing numeric cell thresholds.
+6. Recorded an extension audit and prerequisite gates in `UIR_U1A_OPCODE_AUDIT.md`.
+
+Status: **proposed implementation / draft review**. The full U1a contract/architecture documents described in section 7 were still not present in the checked GitHub main tree when this isolated hardening slice was prepared. No complete U1a operations/calls/switch/strict-Float slice is claimed. No full owned-runtime self-build or 900-second run was started.
+
+### Validation and next handover
+
+Source-pattern replacement and changed-path scope were checked before commit. Compiled runtime tests and hosted CI must be independently verified against this branch's final commit; none are claimed solely from this record. Run `python3 -m unittest discover -s tests -p 'test_u1*.py' -v` for focused validation. Per `CI_QUALIFICATION.md`, compiler changes require final-revision four-platform CI and completed-batch qualification before merge; do not start expensive qualification for every helper.
+
+Next: reconcile any newly uploaded external U1 contract/design files against `HANDOVER.md`; explicitly approve a complete opcode/type/effect and switch-edge schema before extending beyond op 12, then implement independently tested scalar/call/switch/strict-Float slices. Keep the old production compiler until U3 gates are met.
