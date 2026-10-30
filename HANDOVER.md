@@ -17,7 +17,8 @@
 > publication/provenance gates; then immutable U1b aggregates, U2 managed
 > failures/resources, and U3 shadow frontend/native integration. PR #85 is now a merged, four-platform-tested Stage-0/native parity baseline;
 > it does NOT implement new-UIR frontend lowering or a new native compiler. Keep each slice small, independently verified, and require
-> final four-platform CI plus completed-batch qualification for compiler changes;\n> routine source edits use focused smoke checks and documentation edits use a patch check.
+> final four-platform CI plus completed-batch qualification for compiler changes;
+> routine source edits use focused smoke checks and documentation edits use a patch check.
 > Never auto-run the separate experimental 900-second owned self-build.
 
 ## Current verified status — read before historical sections
