@@ -130,6 +130,14 @@ public function location(meta identity Metadata,phase identity budget.Phase,sour
     ignored=try words.push(meta.locations,phase,0); return value;
 }
 
+// Explicit synthetic roots support hand-built UIR without claiming a real
+// source expression. Callers provide an owned logical SourceId and digest.
+public function syntheticRoot(meta identity Metadata,phase identity budget.Phase,
+    source SourceId,start Int,end Int,anchor Int,line Int,column Int) returns LocId fails budget.LimitError {
+    let value be try location(meta,phase,source,start,end,anchor,line,column);
+    try words.set(meta.locations,phase,(value.index-1)*7+6,1048577);
+    return value;
+}
 /* A private, bounded encoding in the 7th location word:
  * 0 => original source LocId; otherwise reason*1048577 + earlier LocId.
  * Reasons: 1 frontend lowering, 2 scalar promotion, 3 exact folding,

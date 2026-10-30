@@ -280,6 +280,7 @@ function syntheticOrigins() fails budget.LimitError,verify.InvalidIR,ProbeError 
     let source be try meta.source(data,phase,"synthetic-locations",
         "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",64);
     let original be try meta.location(data,phase,source,2,8,3,1,4);
+    let rootOrigin be try meta.syntheticRoot(data,phase,source,0,0,0,1,1);
     let derived be try meta.synthetic(data,phase,original,1);
     let transformed be try meta.synthetic(data,phase,derived,2);
     try meta.freeze(data); try budget.finishPhase(phase);
@@ -293,6 +294,10 @@ function syntheticOrigins() fails budget.LimitError,verify.InvalidIR,ProbeError 
         construct=construct; routine=routine; location=original; };
     try accepted(harness,1,"synthetic-origin-valid");
     let edit be try budget.constructionPhase(shared); let offset be (transformed.index-1)*7+6;
+    let rootOffset be (rootOrigin.index-1)*7+6;
+    try change(data.locations,edit,rootOffset,2*1048577);
+    try rejected(harness,3,0,"synthetic-root-reason");
+    try change(data.locations,edit,rootOffset,1048577);
     let retained be try words.get(data.locations,edit,offset);
     // A self-referential chain is invalid even if all source span fields remain valid.
     try change(data.locations,edit,offset,2*1048577+transformed.index);

@@ -164,7 +164,8 @@ function locations(context identity Context) fails budget.LimitError,InvalidIR {
         if origin != 0 {
             let reason be origin/1048577; let parent be origin%1048577;
             try require(context,reason >= 1 and reason <= 4,"invalid synthetic origin reason");
-            try require(context,parent >= 1 and parent <= index,"cyclic or forward synthetic origin");
+            if parent == 0 { try require(context,reason == 1,"unsupported root synthetic reason"); }
+            else { try require(context,parent <= index,"cyclic or forward synthetic origin"); }
         }
         index=index+1;
     }
