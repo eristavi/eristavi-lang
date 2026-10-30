@@ -59,7 +59,7 @@ function bounds(context identity Context) fails budget.LimitError,InvalidIR {
     context.scanLimit=32*(records+1);
     try require(context,routine.signature.owner == data.key and routine.signature.index >= 1 and routine.signature.index <= data.signatures.length/6,"invalid function signature owner or index");
 }
-function typeIndex(context identity Context,index Int) fails InvalidIR { try require(context,index >= 1 and index <= 3,"unsupported scalar type"); }
+function typeIndex(context identity Context,index Int) fails InvalidIR { try require(context,index >= 1 and index <= 6,"unsupported U1 core type"); }
 function sameSequence(context identity Context,table identity words.Words,first Int,second Int,count Int) returns Bool fails budget.LimitError {
     // Canonical collision comparisons have their own work, outside the linear scan.
     let index be 0;
