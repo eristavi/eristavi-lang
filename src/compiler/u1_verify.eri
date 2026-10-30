@@ -1,0 +1,338 @@
+// Independent validation of the foundation profile. No builder verification flag.
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+import compiler.u1_meta as meta;
+import compiler.u1_builder as build;
+import compiler.u1_ops as ops;
+import compiler.u1_dominance as dom;
+public error InvalidIR { message Text; category Text; stage Int; block Int; instruction Int; location Int; }
+public type Report { reachableBlocks Int; structuralVisits Int; dominanceVisits Int; work Int; revision Int; }
+type Context {
+    routine identity build.Function; phase identity budget.Phase; graph identity dom.Graph;
+    stage Int; block Int; instruction Int; location Int; visits Int; scanLimit Int;
+    valueSeen Int; instructionSeen Int; edgeSeen Int; positions Int; buckets Int;
+}
+function invalid(context identity Context,message Text) fails InvalidIR {
+    fail InvalidIR { message=message; category="invalid-ir"; stage=context.stage;
+        block=context.block; instruction=context.instruction; location=context.location; };
+}
+function require(context identity Context,condition Bool,message Text) fails InvalidIR {
+    if not condition { try invalid(context,message); }
+}
+function read(context identity Context,table identity words.Words,index Int) returns Int fails budget.LimitError,InvalidIR {
+    if context.visits >= context.scanLimit { try budget.exceed(context.phase.owner,1,0); }
+    context.visits=context.visits+1;
+    try require(context,index >= 0 and index < table.length,"record range outside table");
+    return try words.get(table,context.phase,index);
+}
+function scratch(context identity Context,first Int,index Int) returns Int fails budget.LimitError {
+    return try words.get(context.graph.data,context.phase,first+index);
+}
+function mark(context identity Context,first Int,index Int,value Int) fails budget.LimitError {
+    try words.set(context.graph.data,context.phase,first+index,value);
+}
+function range(context identity Context,first Int,count Int,length Int) fails InvalidIR {
+    try require(context,first >= 0 and count >= 0,"negative range");
+    try require(context,first <= length and count <= length-first,"record range outside table");
+}
+function store(context identity Context,table identity words.Words,owner identity budget.Owner,width Int,ceiling Int) fails InvalidIR {
+    try require(context,table.owner == owner and not table.closed and table.frozen,"foreign, closed, or mutable table");
+    try require(context,table.limit >= 0 and table.limit <= 33554432 and table.length >= 0 and table.length <= table.limit,"invalid table capacity");
+    try require(context,table.length <= ceiling and table.length%width == 0,"invalid table shape");
+}
+function bounds(context identity Context) fails budget.LimitError,InvalidIR {
+    let routine be context.routine; let data be routine.metadata;
+    try require(context,routine.state == 1 and routine.revision >= 0,"complete construction required");
+    try require(context,data.frozen and not data.closed,"immutable metadata required");
+    try require(context,routine.owner.kind == 2 and data.owner.kind == 1 and routine.owner.parent == data.owner.parent,"foreign metadata ownership");
+    try store(context,routine.blocks,routine.owner,5,327680); try store(context,routine.values,routine.owner,4,4194304);
+    try store(context,routine.instructions,routine.owner,10,10485760); try store(context,routine.operands,routine.owner,1,16777216);
+    try store(context,routine.edges,routine.owner,3,786432); try store(context,routine.arguments,routine.owner,1,4194304);
+    try store(context,data.signatures,data.owner,6,6291456); try store(context,data.types,data.owner,1,8388608);
+    try store(context,data.buckets,data.owner,1,64); try store(context,data.sources,data.owner,4,524288);
+    try store(context,data.bytes,data.owner,1,8388608); try store(context,data.locations,data.owner,7,7340032);
+    try require(context,routine.blocks.length > 0 and data.buckets.length == 64,"missing entry or signature buckets");
+    // Individual bounds above make this sum/product safe even for malformed input.
+    let records be routine.blocks.length+routine.values.length+routine.instructions.length+routine.operands.length+routine.edges.length+routine.arguments.length;
+    records=records+data.signatures.length+data.types.length+data.buckets.length+data.sources.length+data.bytes.length+data.locations.length;
+    context.scanLimit=32*(records+1);
+    try require(context,routine.signature.owner == data.key and routine.signature.index >= 1 and routine.signature.index <= data.signatures.length/6,"invalid function signature owner or index");
+}
+function typeIndex(context identity Context,index Int) fails InvalidIR { try require(context,index >= 1 and index <= 3,"unsupported scalar type"); }
+function sameSequence(context identity Context,table identity words.Words,first Int,second Int,count Int) returns Bool fails budget.LimitError {
+    // Canonical collision comparisons have their own work, outside the linear scan.
+    let index be 0;
+    while index < count {
+        if try words.get(table,context.phase,first+index) != try words.get(table,context.phase,second+index) { return false; }
+        index=index+1;
+    }
+    return true;
+}
+function signatures(context identity Context) fails budget.LimitError,InvalidIR {
+    context.stage=1; let data be context.routine.metadata; let cursor be 0; let index be 1;
+    context.buckets=try dom.zeros(context.graph,64);
+    while index <= data.signatures.length/6 {
+        let offset be (index-1)*6; let hash be try read(context,data.signatures,offset);
+        let previous be try read(context,data.signatures,offset+1);
+        let first be try read(context,data.signatures,offset+2); let parameters be try read(context,data.signatures,offset+3);
+        let second be try read(context,data.signatures,offset+4); let results be try read(context,data.signatures,offset+5);
+        try range(context,first,parameters,data.types.length); try range(context,second,results,data.types.length);
+        try require(context,first == cursor and second == first+parameters,"noncanonical signature ranges");
+        let actual be 17; let item be 0;
+        while item < parameters { let value be try read(context,data.types,first+item); try typeIndex(context,value); actual=(actual*131+value)%2147483629; item=item+1; }
+        actual=(actual*131+parameters)%2147483629; item=0;
+        while item < results { let value be try read(context,data.types,second+item); try typeIndex(context,value); actual=(actual*131+value)%2147483629; item=item+1; }
+        actual=(actual*131+results)%2147483629;
+        try require(context,hash == actual,"invalid signature hash"); let bucket be hash%64;
+        try require(context,previous == try scratch(context,context.buckets,bucket),"invalid signature collision chain");
+        let collision be previous;
+        while collision != 0 {
+            // The earlier validated records link strictly backward; no cyclic walk.
+            let other be (collision-1)*6;
+            if try words.get(data.signatures,context.phase,other) == hash and try words.get(data.signatures,context.phase,other+3) == parameters and try words.get(data.signatures,context.phase,other+5) == results {
+                let start be try words.get(data.signatures,context.phase,other+2);
+                try require(context,not (try sameSequence(context,data.types,first,start,parameters+results)),"duplicate canonical signature");
+            }
+            collision=try words.get(data.signatures,context.phase,other+1);
+        }
+        try mark(context,context.buckets,bucket,index); cursor=second+results; index=index+1;
+    }
+    try require(context,cursor == data.types.length,"unclaimed signature type entries"); index=0;
+    while index < 64 { try require(context,try read(context,data.buckets,index) == try scratch(context,context.buckets,index),"invalid signature bucket"); index=index+1; }
+}
+function utf8(context identity Context,first Int,count Int) fails budget.LimitError,InvalidIR {
+    let table be context.routine.metadata.bytes; let index be 0;
+    while index < count {
+        let value be try read(context,table,first+index); let trailing be 0; let low be 128; let high be 191;
+        if value <= 127 { try require(context,value >= 0,"invalid source name byte"); }
+        else {
+            if value >= 194 and value <= 223 { trailing=1; }
+            else {
+                if value >= 224 and value <= 239 { trailing=2; if value == 224 { low=160; } if value == 237 { high=159; } }
+                else {
+                    if value >= 240 and value <= 244 { trailing=3; if value == 240 { low=144; } if value == 244 { high=143; } }
+                    else { try invalid(context,"invalid UTF-8 source identity"); }
+                }
+            }
+            try require(context,trailing < count-index,"truncated UTF-8 source identity"); let part be 1;
+            while part <= trailing {
+                let byte be try read(context,table,first+index+part);
+                try require(context,byte >= low and byte <= high,"invalid UTF-8 source identity"); low=128; high=191; part=part+1;
+            }
+        }
+        index=index+trailing+1;
+    }
+}
+function sources(context identity Context) fails budget.LimitError,InvalidIR {
+    let data be context.routine.metadata; let index be 0; let cursor be 0;
+    while index < data.sources.length/4 {
+        let offset be index*4; let first be try read(context,data.sources,offset); let count be try read(context,data.sources,offset+1);
+        let digest be try read(context,data.sources,offset+2); let length be try read(context,data.sources,offset+3);
+        try range(context,first,count,data.bytes.length); try range(context,digest,64,data.bytes.length);
+        try require(context,count > 0 and first == cursor and digest == first+count and length >= 0,"invalid source identity ranges");
+        try utf8(context,first,count); let item be 0;
+        while item < 64 {
+            let byte be try read(context,data.bytes,digest+item);
+            try require(context,(byte >= 48 and byte <= 57) or (byte >= 97 and byte <= 102),"invalid source SHA-256 digest"); item=item+1;
+        }
+        let prior be 0;
+        while prior < index {
+            let oldCount be try words.get(data.sources,context.phase,prior*4+1);
+            if oldCount == count { let oldFirst be try words.get(data.sources,context.phase,prior*4);
+                try require(context,not (try sameSequence(context,data.bytes,first,oldFirst,count)),"duplicate source identity"); }
+            prior=prior+1;
+        }
+        cursor=digest+64; index=index+1;
+    }
+    try require(context,cursor == data.bytes.length,"unclaimed source bytes");
+}
+function locations(context identity Context) fails budget.LimitError,InvalidIR {
+    context.stage=3; context.block=0; context.instruction=0; context.location=0;
+    let data be context.routine.metadata; let index be 0;
+    while index < data.locations.length/7 {
+        let offset be index*7; let source be try read(context,data.locations,offset);
+        try require(context,source >= 1 and source <= data.sources.length/4,"invalid location source");
+        let length be try read(context,data.sources,(source-1)*4+3);
+        let start be try read(context,data.locations,offset+1); let end be try read(context,data.locations,offset+2);
+        let anchor be try read(context,data.locations,offset+3);
+        try require(context,start >= 0 and end >= start and end <= length and anchor >= start and anchor <= end,"invalid source span or anchor");
+        try require(context,try read(context,data.locations,offset+4) >= 1 and try read(context,data.locations,offset+5) >= 1,"invalid source line or column");
+        try require(context,try read(context,data.locations,offset+6) == 0,"origin chains unsupported in foundation profile"); index=index+1;
+    }
+    context.block=1;
+    while context.block <= context.routine.blocks.length/5 {
+        let offset be (context.block-1)*5; let instruction be try read(context,context.routine.blocks,offset+2);
+        let terminator be try read(context,context.routine.blocks,offset+4);
+        while instruction != 0 {
+            context.instruction=instruction; context.location=0; let location be try read(context,context.routine.instructions,(instruction-1)*10+6);
+            try require(context,location >= 1 and location <= data.locations.length/7,"missing or invalid instruction location");
+            context.location=location;
+            if instruction == terminator { instruction=0; }
+            else { instruction=try read(context,context.routine.instructions,(instruction-1)*10+9); if instruction == 0 { instruction=terminator; } }
+        }
+        // An empty block's terminator has no ordinary-list head.
+        if try read(context,context.routine.blocks,offset+2) == 0 {
+            context.instruction=terminator; let location be try read(context,context.routine.instructions,(terminator-1)*10+6);
+            try require(context,location >= 1 and location <= data.locations.length/7,"missing or invalid terminator location"); context.location=location;
+        }
+        context.location=0; context.block=context.block+1;
+    }
+}
+function claimValue(context identity Context,value Int,valueTypeIndex Int,kind Int,definition Int,ordinal Int) fails budget.LimitError,InvalidIR {
+    let table be context.routine.values;
+    try require(context,value >= 1 and value <= table.length/4,"invalid value definition");
+    try require(context,try scratch(context,context.valueSeen,value) == 0,"duplicate value definition");
+    let offset be (value-1)*4;
+    try require(context,try read(context,table,offset) == valueTypeIndex and try read(context,table,offset+1) == kind and try read(context,table,offset+2) == definition and try read(context,table,offset+3) == ordinal,"inconsistent value definition");
+    try mark(context,context.valueSeen,value,1);
+}
+function valueType(context identity Context,value Int) returns Int fails budget.LimitError,InvalidIR {
+    try require(context,value >= 1 and value <= context.routine.values.length/4,"invalid value use");
+    let valueTypeIndex be try read(context,context.routine.values,(value-1)*4); try typeIndex(context,valueTypeIndex); return valueTypeIndex;
+}
+function edge(context identity Context,index Int) fails budget.LimitError,InvalidIR {
+    let routine be context.routine;
+    try require(context,index >= 1 and index <= routine.edges.length/3,"invalid CFG edge");
+    try require(context,try scratch(context,context.edgeSeen,index) == 0,"edge record has multiple owners"); try mark(context,context.edgeSeen,index,1);
+    let offset be (index-1)*3; let target be try read(context,routine.edges,offset);
+    try require(context,target >= 2 and target <= routine.blocks.length/5,"invalid or entry-targeting edge");
+    let first be try read(context,routine.edges,offset+1); let count be try read(context,routine.edges,offset+2);
+    try range(context,first,count,routine.arguments.length);
+    let parameter be try read(context,routine.blocks,(target-1)*5); let expected be try read(context,routine.blocks,(target-1)*5+1);
+    try require(context,count == expected,"edge arity mismatch"); let item be 0;
+    while item < count {
+        let valueTypeIndex be try valueType(context,try read(context,routine.arguments,first+item));
+        try require(context,valueTypeIndex == try valueType(context,parameter+item),"edge type mismatch"); item=item+1;
+    }
+    try dom.addEdge(context.graph,index,context.block,target);
+}
+function instruction(context identity Context,index Int,terminal Bool,position Int) fails budget.LimitError,InvalidIR {
+    let routine be context.routine; context.instruction=index;
+    try require(context,index >= 1 and index <= routine.instructions.length/10,"invalid instruction ID");
+    let offset be (index-1)*10;
+    try require(context,try scratch(context,context.instructionSeen,index) == 0,"duplicate or cyclic instruction list");
+    try mark(context,context.instructionSeen,index,1); try mark(context,context.positions,index,position);
+    let op be try read(context,routine.instructions,offset); try require(context,ops.known(op),"unsupported foundation operation");
+    try require(context,ops.terminal(op) == terminal,"invalid terminator placement");
+    try require(context,try read(context,routine.instructions,offset+1) == context.block,"instruction block owner mismatch");
+    let first be try read(context,routine.instructions,offset+2); let count be try read(context,routine.instructions,offset+3);
+    try range(context,first,count,routine.operands.length);
+    let expected be ops.operands(op); if op == 8 { expected=try read(context,routine.metadata.signatures,(routine.signature.index-1)*6+5); }
+    try require(context,count == expected,"instruction operand arity mismatch"); let item be 0;
+    while item < count {
+        let actual be try valueType(context,try read(context,routine.operands,first+item)); let valueTypeIndex be ops.operandType(op,item);
+        if op == 8 { let resultStart be try read(context,routine.metadata.signatures,(routine.signature.index-1)*6+4); valueTypeIndex=try read(context,routine.metadata.types,resultStart+item); }
+        try require(context,actual == valueTypeIndex,"instruction operand type mismatch"); item=item+1;
+    }
+    first=try read(context,routine.instructions,offset+4); count=try read(context,routine.instructions,offset+5);
+    try require(context,count == ops.results(op),"instruction result arity mismatch");
+    if count == 0 { try require(context,first == 0,"zero-result instruction has a fake value"); }
+    else { try require(context,first >= 1 and first <= routine.values.length/4 and count <= routine.values.length/4-first+1,"invalid result range"); }
+    item=0;
+    while item < count { try claimValue(context,first+item,ops.resultType(op,item),1,index,item); item=item+1; }
+    let payload be try read(context,routine.instructions,offset+7); let extra be try read(context,routine.instructions,offset+8);
+    if op == 2 { try require(context,payload == 0 or payload == 1,"invalid predicate bits"); }
+    if op == 5 { try require(context,payload >= 1 and payload <= 4,"invalid trap code"); }
+    if op == 3 or op == 4 or op == 8 { try require(context,payload == 0,"unsupported operation payload"); }
+    if op != 7 { try require(context,extra == 0,"unsupported operation attribute"); }
+    if terminal { try require(context,try read(context,routine.instructions,offset+9) == 0,"terminator has a successor instruction"); }
+    if op == 6 or op == 7 { try edge(context,payload); if op == 7 { try edge(context,extra); } }
+}
+function structure(context identity Context) fails budget.LimitError,InvalidIR {
+    context.stage=2; let routine be context.routine;
+    context.valueSeen=try dom.zeros(context.graph,routine.values.length/4+1);
+    context.instructionSeen=try dom.zeros(context.graph,routine.instructions.length/10+1);
+    context.edgeSeen=try dom.zeros(context.graph,routine.edges.length/3+1);
+    context.positions=try dom.zeros(context.graph,routine.instructions.length/10+1);
+    let cursor be 0; let item be 0;
+    while item < routine.instructions.length/10 {
+        let first be try read(context,routine.instructions,item*10+2); let count be try read(context,routine.instructions,item*10+3);
+        try range(context,first,count,routine.operands.length); try require(context,first == cursor,"noncanonical operand pool"); cursor=first+count; item=item+1;
+    }
+    try require(context,cursor == routine.operands.length,"unclaimed operands"); cursor=0; item=0;
+    while item < routine.edges.length/3 {
+        let first be try read(context,routine.edges,item*3+1); let count be try read(context,routine.edges,item*3+2);
+        try range(context,first,count,routine.arguments.length); try require(context,first == cursor,"noncanonical edge-argument pool"); cursor=first+count; item=item+1;
+    }
+    try require(context,cursor == routine.arguments.length,"unclaimed edge arguments"); context.block=1;
+    while context.block <= routine.blocks.length/5 {
+        context.instruction=0; let offset be (context.block-1)*5;
+        let first be try read(context,routine.blocks,offset); let count be try read(context,routine.blocks,offset+1);
+        if count == 0 { try require(context,first == 0,"empty parameter range has a value"); }
+        else { try require(context,count > 0 and first >= 1 and first <= routine.values.length/4 and count <= routine.values.length/4-first+1,"invalid parameter range"); }
+        if context.block == 1 { try require(context,count == try read(context,routine.metadata.signatures,(routine.signature.index-1)*6+3),"entry signature arity mismatch"); }
+        item=0;
+        while item < count {
+            let valueTypeIndex be try valueType(context,first+item);
+            if context.block == 1 {
+                let start be try read(context,routine.metadata.signatures,(routine.signature.index-1)*6+2);
+                try require(context,valueTypeIndex == try read(context,routine.metadata.types,start+item),"entry signature type mismatch");
+            }
+            try claimValue(context,first+item,valueTypeIndex,0,context.block,item); item=item+1;
+        }
+        let current be try read(context,routine.blocks,offset+2); let last be try read(context,routine.blocks,offset+3); let position be 1; let previous be 0;
+        while current != 0 {
+            try instruction(context,current,false,position); previous=current;
+            current=try read(context,routine.instructions,(current-1)*10+9); position=position+1;
+        }
+        try require(context,last == previous,"block instruction tail mismatch");
+        try instruction(context,try read(context,routine.blocks,offset+4),true,position); context.block=context.block+1;
+    }
+    context.block=0; context.instruction=0; item=1;
+    while item <= routine.values.length/4 { try require(context,try scratch(context,context.valueSeen,item) == 1,"orphan value definition"); item=item+1; }
+    item=1; while item <= routine.instructions.length/10 { try require(context,try scratch(context,context.instructionSeen,item) == 1,"orphan instruction"); item=item+1; }
+    item=1; while item <= routine.edges.length/3 { try require(context,try scratch(context,context.edgeSeen,item) == 1,"orphan CFG edge"); item=item+1; }
+}
+function use(context identity Context,value Int,position Int) fails budget.LimitError,InvalidIR {
+    let routine be context.routine; let offset be (value-1)*4;
+    let kind be try read(context,routine.values,offset+1); let definition be try read(context,routine.values,offset+2);
+    let block be definition; let before be 0;
+    if kind == 1 { block=try read(context,routine.instructions,(definition-1)*10+1); before=try scratch(context,context.positions,definition); }
+    if block == context.block { try require(context,before < position,"use before definition or own-result use"); }
+    else { try require(context,try dom.dominates(context.graph,block,context.block),"non-dominating value definition"); }
+}
+function ssaInstruction(context identity Context,index Int) fails budget.LimitError,InvalidIR {
+    let routine be context.routine; context.instruction=index; let offset be (index-1)*10;
+    context.location=try read(context,routine.instructions,offset+6);
+    let position be try scratch(context,context.positions,index); let first be try read(context,routine.instructions,offset+2);
+    let count be try read(context,routine.instructions,offset+3); let item be 0;
+    while item < count { try use(context,try read(context,routine.operands,first+item),position); item=item+1; }
+    let op be try read(context,routine.instructions,offset); let number be 0; if op == 6 { number=1; } if op == 7 { number=2; }
+    item=0;
+    while item < number {
+        let edge be try read(context,routine.instructions,offset+7+item); first=try read(context,routine.edges,(edge-1)*3+1); count=try read(context,routine.edges,(edge-1)*3+2);
+        let argument be 0; while argument < count { try use(context,try read(context,routine.arguments,first+argument),position); argument=argument+1; } item=item+1;
+    }
+}
+function reachableSSA(context identity Context) fails budget.LimitError,InvalidIR {
+    context.stage=4; context.block=0; context.instruction=0; context.location=0; try dom.compute(context.graph); context.block=1;
+    while context.block <= context.routine.blocks.length/5 {
+        if try dom.get(context.graph,context.block,2) != 0 {
+            let offset be (context.block-1)*5; let current be try read(context,context.routine.blocks,offset+2);
+            while current != 0 { try ssaInstruction(context,current); current=try read(context,context.routine.instructions,(current-1)*10+9); }
+            try ssaInstruction(context,try read(context,context.routine.blocks,offset+4));
+        }
+        context.location=0; context.block=context.block+1;
+    }
+}
+function inspect(context identity Context) returns Report fails budget.LimitError,InvalidIR {
+    try bounds(context); try dom.prepare(context.graph,context.routine.blocks.length/5,context.routine.edges.length/3);
+    try signatures(context); try sources(context); try structure(context);
+    try locations(context); try reachableSSA(context);
+    return Report { reachableBlocks=context.graph.reachable; structuralVisits=context.visits;
+        dominanceVisits=context.graph.visits; work=context.phase.used; revision=context.routine.revision; };
+}
+public function verify(routine identity build.Function,phase identity budget.Phase) returns Report fails budget.LimitError,InvalidIR {
+    try budget.poll(routine.owner);
+    if phase.owner != routine.owner or phase.used != 0 or phase.prepaid != 0 or phase.state != 0 { try budget.reject("verification requires a fresh function phase"); }
+    let graph be try dom.create(routine.owner,phase);
+    let context be identity Context { routine=routine; phase=phase; graph=graph; stage=0; block=0; instruction=0; location=0;
+        visits=0; scanLimit=0; valueSeen=0; instructionSeen=0; edgeSeen=0; positions=0; buckets=0; };
+    let report be inspect(context) else error InvalidIR { try dom.close(graph); try budget.finishPhase(phase); fail error; }
+    else error budget.LimitError {
+        try dom.close(graph); try budget.finishPhase(phase);
+        if error.category == "invalid-state" { try invalid(context,"malformed table backing or context"); } fail error;
+    };
+    try dom.close(graph); try budget.finishPhase(phase); return report;
+    // Report has no executable/verified capability. Every call derives facts anew.
+}

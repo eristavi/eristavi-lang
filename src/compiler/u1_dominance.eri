@@ -1,0 +1,152 @@
+// Simple Lengauer-Tarjan: iterative DFS, link, and iterative path compression.
+// Internal graph workspace. A result here is analysis, never execution authority.
+// Block row: successor head, predecessor head, DFS number, DFS parent, semi,
+// ancestor, label, idom, bucket head, bucket next, tree child, tree sibling,
+// interval start/end, reserved, traversal cursor, reserved, DFS-number vertex.
+// Edge row: source, target, next successor edge, next predecessor edge.
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+public type Graph {
+    data identity words.Words; phase identity budget.Phase;
+    blocks Int; edges Int; edgeBase Int; stackBase Int; reachable Int; reachableEdges Int;
+    visits Int; visitLimit Int; prepared Bool; state Int;
+}
+public function create(owner identity budget.Owner,phase identity budget.Phase) returns identity Graph fails budget.LimitError {
+    if phase.owner != owner { try budget.reject("foreign dominance phase"); }
+    return identity Graph { data=try words.create(owner,33554432); phase=phase; blocks=0; edges=0;
+        edgeBase=0; stackBase=0; reachable=0; reachableEdges=0; visits=0; visitLimit=0; prepared=false; state=0; };
+}
+public function zeros(graph identity Graph,count Int) returns Int fails budget.LimitError {
+    if count < 0 or count > graph.data.limit-graph.data.length { try budget.exceed(graph.phase.owner,count,graph.data.limit-graph.data.length); }
+    let first be graph.data.length; let index be 0;
+    while index < count { let ignored be try words.push(graph.data,graph.phase,0); index=index+1; }
+    return first;
+}
+public function prepare(graph identity Graph,blocks Int,edges Int) fails budget.LimitError {
+    if graph.prepared or graph.data.length != 0 or blocks < 1 or blocks > 65536 or edges < 0 or edges > 262144 { try budget.reject("invalid dominance graph shape"); }
+    graph.blocks=blocks; graph.edges=edges;
+    // All arrays use a zero sentinel. Block rows have 18 fields; edge rows four.
+    let ignored be try zeros(graph,(blocks+1)*18); graph.edgeBase=try zeros(graph,(edges+1)*4);
+    graph.stackBase=try zeros(graph,blocks+1);
+    let logarithm be 1; let power be 2;
+    while power < blocks { power=power*2; logarithm=logarithm+1; }
+    graph.visitLimit=128*(blocks+edges+1)*logarithm; graph.prepared=true;
+}
+function visit(graph identity Graph) fails budget.LimitError {
+    // Adjacency construction and O(1) use queries have separate global work.
+    if graph.state == 1 {
+        if graph.visits >= graph.visitLimit { try budget.exceed(graph.phase.owner,1,0); }
+        graph.visits=graph.visits+1;
+    }
+}
+public function get(graph identity Graph,block Int,field Int) returns Int fails budget.LimitError {
+    try visit(graph); return try words.get(graph.data,graph.phase,block*18+field);
+}
+public function set(graph identity Graph,block Int,field Int,value Int) fails budget.LimitError {
+    try visit(graph); try words.set(graph.data,graph.phase,block*18+field,value);
+}
+function edgeGet(graph identity Graph,edge Int,field Int) returns Int fails budget.LimitError {
+    try visit(graph); return try words.get(graph.data,graph.phase,graph.edgeBase+edge*4+field);
+}
+public function addEdge(graph identity Graph,edge Int,source Int,target Int) fails budget.LimitError {
+    if not graph.prepared or graph.state != 0 or edge < 1 or edge > graph.edges or source < 1 or source > graph.blocks or target < 1 or target > graph.blocks { try budget.reject("invalid dominance adjacency"); }
+    let offset be graph.edgeBase+edge*4;
+    try words.set(graph.data,graph.phase,offset,source); try words.set(graph.data,graph.phase,offset+1,target);
+    try words.set(graph.data,graph.phase,offset+2,try get(graph,source,0));
+    try words.set(graph.data,graph.phase,offset+3,try get(graph,target,1));
+    try set(graph,source,0,edge); try set(graph,target,1,edge);
+}
+function stackSet(graph identity Graph,index Int,value Int) fails budget.LimitError {
+    try visit(graph); try words.set(graph.data,graph.phase,graph.stackBase+index,value);
+}
+function stackGet(graph identity Graph,index Int) returns Int fails budget.LimitError {
+    try visit(graph); return try words.get(graph.data,graph.phase,graph.stackBase+index);
+}
+function discover(graph identity Graph,block Int,parent Int) fails budget.LimitError {
+    graph.reachable=graph.reachable+1; let number be graph.reachable;
+    try set(graph,block,2,number); try set(graph,block,3,parent);
+    try set(graph,block,4,number); try set(graph,block,6,block);
+    try set(graph,number,17,block); try set(graph,block,15,try get(graph,block,0));
+}
+function dfs(graph identity Graph) fails budget.LimitError {
+    try discover(graph,1,0); let depth be 1; try stackSet(graph,depth,1);
+    while depth > 0 {
+        let block be try stackGet(graph,depth); let edge be try get(graph,block,15);
+        if edge == 0 { depth=depth-1; }
+        else {
+            graph.reachableEdges=graph.reachableEdges+1;
+            try set(graph,block,15,try edgeGet(graph,edge,2)); let target be try edgeGet(graph,edge,1);
+            if try get(graph,target,2) == 0 {
+                try discover(graph,target,block); depth=depth+1; try stackSet(graph,depth,target);
+            }
+        }
+    }
+}
+function evaluate(graph identity Graph,value Int) returns Int fails budget.LimitError {
+    if try get(graph,value,5) == 0 { return try get(graph,value,6); }
+    let cursor be value; let depth be 0; let ancestor be try get(graph,cursor,5);
+    while try get(graph,ancestor,5) != 0 {
+        depth=depth+1; try stackSet(graph,depth,cursor); cursor=ancestor; ancestor=try get(graph,cursor,5);
+    }
+    while depth > 0 {
+        cursor=try stackGet(graph,depth); depth=depth-1; ancestor=try get(graph,cursor,5);
+        let upper be try get(graph,ancestor,6); let own be try get(graph,cursor,6);
+        if try get(graph,upper,4) < try get(graph,own,4) { try set(graph,cursor,6,upper); }
+        try set(graph,cursor,5,try get(graph,ancestor,5));
+    }
+    return try get(graph,value,6);
+}
+public function compute(graph identity Graph) fails budget.LimitError {
+    if not graph.prepared or graph.state != 0 { try budget.reject("dominance graph already analyzed"); }
+    graph.state=1; try dfs(graph);
+    let logarithm be 1; let power be 2;
+    while power < graph.reachable { power=power*2; logarithm=logarithm+1; }
+    graph.visitLimit=128*(graph.reachable+graph.reachableEdges+1)*logarithm;
+    if graph.visits > graph.visitLimit { try budget.exceed(graph.phase.owner,graph.visits,graph.visitLimit); }
+    let number be graph.reachable;
+    while number > 1 {
+        let block be try get(graph,number,17); let edge be try get(graph,block,1);
+        while edge != 0 {
+            let predecessor be try edgeGet(graph,edge,0);
+            if try get(graph,predecessor,2) != 0 {
+                let label be try evaluate(graph,predecessor); let semi be try get(graph,label,4);
+                if semi < try get(graph,block,4) { try set(graph,block,4,semi); }
+            }
+            edge=try edgeGet(graph,edge,3);
+        }
+        let semiBlock be try get(graph,try get(graph,block,4),17);
+        try set(graph,block,9,try get(graph,semiBlock,8)); try set(graph,semiBlock,8,block);
+        let parent be try get(graph,block,3); try set(graph,block,5,parent);
+        let cursor be try get(graph,parent,8); try set(graph,parent,8,0);
+        while cursor != 0 {
+            let label be try evaluate(graph,cursor); let candidate be parent;
+            if try get(graph,label,4) < try get(graph,cursor,4) { candidate=label; }
+            try set(graph,cursor,7,candidate); cursor=try get(graph,cursor,9);
+        }
+        number=number-1;
+    }
+    number=2;
+    while number <= graph.reachable {
+        let block be try get(graph,number,17); let parent be try get(graph,block,7);
+        if parent != try get(graph,try get(graph,block,4),17) { parent=try get(graph,parent,7); try set(graph,block,7,parent); }
+        try set(graph,block,11,try get(graph,parent,10)); try set(graph,parent,10,block); number=number+1;
+    }
+    // Iterative dominator-tree intervals give constant-time dominance queries.
+    let clock be 1; let depth be 1; try stackSet(graph,depth,1); try set(graph,1,12,clock);
+    try set(graph,1,15,try get(graph,1,10));
+    while depth > 0 {
+        let block be try stackGet(graph,depth); let child be try get(graph,block,15);
+        if child == 0 { clock=clock+1; try set(graph,block,13,clock); depth=depth-1; }
+        else {
+            try set(graph,block,15,try get(graph,child,11)); clock=clock+1; try set(graph,child,12,clock);
+            try set(graph,child,15,try get(graph,child,10)); depth=depth+1; try stackSet(graph,depth,child);
+        }
+    }
+    graph.state=2;
+}
+public function dominates(graph identity Graph,first Int,second Int) returns Bool fails budget.LimitError {
+    if graph.state != 2 or first < 1 or first > graph.blocks or second < 1 or second > graph.blocks { try budget.reject("invalid dominance query"); }
+    let start be try get(graph,first,12); let other be try get(graph,second,12);
+    return start != 0 and other != 0 and start <= other and try get(graph,second,13) <= try get(graph,first,13);
+}
+public function close(graph identity Graph) fails budget.LimitError { try words.close(graph.data); }
