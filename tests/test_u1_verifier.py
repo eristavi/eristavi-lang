@@ -30,6 +30,9 @@ PROTOCOL = ''.join(name + ':ok\n' for name in (
     'divrem-ops', 'divrem-payload', 'divrem-extra', 'divrem-operand-type',
     'divrem-arity', 'divrem-result-type', 'divrem-required-location',
     'divrem-restored', 'divrem-dead-valid', 'divrem-dead-payload',
+    'float-ops', 'float-payload', 'float-cmp-mode', 'float-operand-type',
+    'float-arity', 'float-result-type', 'float-restored', 'float-dead-valid',
+    'float-dead-payload',
     'many-dominated-uses'))
 
 

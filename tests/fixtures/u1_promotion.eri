@@ -439,4 +439,16 @@ function floatMerge() fails budget.LimitError,verify.InvalidIR,ProbeError {
     try build.complete(routine); try promoted(harness,"float-merge",1,2);
 }
 
+
+function floatNonContraction() fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let harness be try create([meta.f64(),meta.f64(),meta.f64()],[meta.f64()],true); let routine be harness.routine;
+    let entry be try build.block(routine,[meta.f64(),meta.f64(),meta.f64()]);
+    let a be try build.parameter(routine,entry,0); let b be try build.parameter(routine,entry,1);
+    let c be try build.parameter(routine,entry,2);
+    let rounded be try build.multiplyFloat(routine,entry,a,b,harness.location);
+    let sum be try build.addFloat(routine,entry,rounded,c,harness.location);
+    try build.returnValues(routine,entry,[sum],harness.location);
+    try build.complete(routine); try promoted(harness,"float-nonfma",0,0);
+}
+
 // The Python harness appends run()/main() with its selected cases.
