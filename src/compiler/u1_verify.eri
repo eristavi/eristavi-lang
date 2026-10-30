@@ -294,6 +294,7 @@ function instruction(context identity Context,index Int,terminal Bool,position I
             let start be try read(context,routine.metadata.signatures,(callSignature-1)*6+2);
             valueTypeIndex=try read(context,routine.metadata.types,start+item);
         }
+        if op >= 37 and op <= 40 { valueTypeIndex=try read(context,routine.instructions,offset+8); }
         try require(context,actual == valueTypeIndex,"instruction operand type mismatch"); item=item+1;
     }
     first=try read(context,routine.instructions,offset+4); count=try read(context,routine.instructions,offset+5);
@@ -309,7 +310,7 @@ function instruction(context identity Context,index Int,terminal Bool,position I
             let start be try read(context,routine.metadata.signatures,(callSignature-1)*6+4);
             resultType=try read(context,routine.metadata.types,start+item);
         }
-        if op == 36 { resultType=try read(context,routine.instructions,offset+8); }
+        if op == 36 or ((op == 37 or op == 38 or op == 39) and item == 0) { resultType=try read(context,routine.instructions,offset+8); }
         try claimValue(context,first+item,resultType,1,index,item); item=item+1;
     }
     let payload be try read(context,routine.instructions,offset+7); let extra be try read(context,routine.instructions,offset+8);
@@ -334,7 +335,12 @@ function instruction(context identity Context,index Int,terminal Bool,position I
         if width == 6 { maximum=4294967295; }
         try require(context,payload >= 0 and payload <= maximum,"narrow constant exceeds bit width");
     }
-    if op != 7 and op != 36 { try require(context,extra == 0,"unsupported operation attribute"); }
+    if op >= 37 and op <= 40 {
+        try require(context,extra >= 4 and extra <= 6,"invalid narrow arithmetic TypeId");
+        if op == 40 { try require(context,payload >= 1 and payload <= 10,"invalid narrow comparison relation"); }
+        else { try require(context,payload >= 1 and payload <= 3,"invalid narrow arithmetic mode"); }
+    }
+    if op != 7 and op != 36 and (op < 37 or op > 40) { try require(context,extra == 0,"unsupported operation attribute"); }
     if terminal { try require(context,try read(context,routine.instructions,offset+9) == 0,"terminator has a successor instruction"); }
     let successors be try succ.count(routine,context.phase,index); let itemEdge be 0;
     while itemEdge < successors {
