@@ -203,15 +203,15 @@ function walk(program identity link.Program,policy identity imports.Policy,
             let offset be (current-1)*10;
             let op be try field(frame,routine.instructions,offset);
             let first be try field(frame,routine.instructions,offset+2);
-            let count be try field(frame,routine.instructions,offset+3);
+            let operandCount be try field(frame,routine.instructions,offset+3);
             let resultStart be try field(frame,routine.instructions,offset+4);
             let resultCount be try field(frame,routine.instructions,offset+5);
             let loc be try field(frame,routine.instructions,offset+6);
             let payload be try field(frame,routine.instructions,offset+7);
             if not step(state,loc) { return outcome(2,0,loc,none,0); }
             let a be 0; let b be 0;
-            if count > 0 { a=try get(frame,try field(frame,routine.operands,first)); }
-            if count > 1 { b=try get(frame,try field(frame,routine.operands,first+1)); }
+            if operandCount > 0 { a=try get(frame,try field(frame,routine.operands,first)); }
+            if operandCount > 1 { b=try get(frame,try field(frame,routine.operands,first+1)); }
             if op == 1 or op == 2 {
                 try put(frame,resultStart,payload);
             }
@@ -248,21 +248,21 @@ function walk(program identity link.Program,policy identity imports.Policy,
             }
             if op == 34 {
                 let target be meta.FunctionId { owner=program.metadata.key; index=payload; };
-                let callArgs be try arguments(frame,routine.operands,first,count);
+                let callArgs be try arguments(frame,routine.operands,first,operandCount);
                 let kind be try field(frame,program.metadata.declarations,(payload-1)*6+3);
                 let returned be outcome(3,34,loc,none,0);
                 if kind == 1 {
-                    returned=try invoke(program,policy,target,callArgs,count,state,depth+1,loc);
+                    returned=try invoke(program,policy,target,callArgs,operandCount,state,depth+1,loc);
                 } else {
-                    returned=try selected(program,policy,target,callArgs,count,state);
+                    returned=try selected(program,policy,target,callArgs,operandCount,state);
                 }
                 if returned.kind != 0 { return returned; }
                 if returned.count != resultCount { try budget.reject("U1a call returned wrong arity"); }
                 try assign(frame,resultStart,returned.first,returned.count);
             }
             if op == 8 {
-                let results be try arguments(frame,routine.operands,first,count);
-                return outcome(0,0,0,results,count);
+                let results be try arguments(frame,routine.operands,first,operandCount);
+                return outcome(0,0,0,results,operandCount);
             }
             if op == 6 or op == 7 {
                 let edge be payload;
