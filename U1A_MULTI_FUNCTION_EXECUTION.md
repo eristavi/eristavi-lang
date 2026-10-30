@@ -38,7 +38,7 @@ sections 2, 4, 6–9, 13 and [issue #71](https://github.com/eristavi/eristavi-la
   optimizer-supplied effect claims or native callbacks are never trusted.
 
 The executable scalar subset currently covers pred/i64 literals, pred.not,
-pred.and/pred.or, wrapping i64 add/sub/mul, signed i64 compare, signed i64
+pred.and/pred.or, wrapping i64 add/sub/mul, signed/unsigned i64 comparisons, signed i64
 division/remainder with first-fault codes, guards, jump/branch/sparse-switch,
 direct calls and returns. Unsupported instructions have a distinct explicit
 outcome (kind 3), **never** guessed host semantics. In particular, strict
