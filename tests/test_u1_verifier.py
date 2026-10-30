@@ -27,6 +27,9 @@ PROTOCOL = ''.join(name + ':ok\n' for name in (
     'predicate-restored', 'predicate-dead-ok', 'predicate-dead-payload',
     'integer-ops', 'integer-wrap-payload', 'integer-cmp-relation', 'integer-type',
     'integer-result-type', 'integer-restored', 'integer-dead-ok', 'integer-dead-payload',
+    'divrem-ops', 'divrem-payload', 'divrem-extra', 'divrem-operand-type',
+    'divrem-arity', 'divrem-result-type', 'divrem-required-location',
+    'divrem-restored', 'divrem-dead-valid', 'divrem-dead-payload',
     'many-dominated-uses'))
 
 

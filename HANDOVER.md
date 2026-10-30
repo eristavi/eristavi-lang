@@ -498,3 +498,18 @@ The first attempted revision `8df153aa` failed a real `i64-merge` SSA shape test
 6. Preserve frozen Eristavi syntax/semantics, historical and production compatibility, transactional cell-free U1, capacity/work accounting, and the U2/U3 integration gates.
 
 This post-merge handover update is **documentation only**. It makes no claims of new test execution or benchmark results beyond the cited GitHub runs, and changes no compiler input or code.
+
+
+## 15. Proposed isolated i64 division/remainder continuation — 2026-10-30
+
+Branch `compiler/u1a-i64-divrem` is based on `main` commit `c500c2d8f32cc487738c459f659377db340f41f3`, following completed documentation PR #66. **This is an implementation candidate, not yet qualified or merged.**
+
+- Add private op 24 `i64.div.signed`, 25 `i64.rem.signed`, 26 `i64.div.unsigned`, 27 `i64.rem.unsigned`; all have exactly two i64 SSA operands, one i64 result, zero payload/attributes and an instruction LocId. Private cell IDs remain **only 10/11/12**; existing 1–23 stay unchanged.
+- `ops.mayTrap` distinguishes guard/div-rem potentially terminal faults from CFG terminators. A successful division/rem remains a normal sequential instruction. Zero divisor traps with code 2 (`integer_zero_divisor`), and signed minimum/-1 traps for **both signed division and signed remainder** with code 1 (`integer_overflow`), producing no value on the faulting execution.
+- Exact signed division truncates toward zero; signed remainder follows `a=q*b+r` and the dividend's sign. Unsigned operations reinterpret the same two i64 inputs as unsigned 64-bit words.
+- New independent Python reference evaluator and mathematical expectation oracle cover 16×16 boundary values, signed and unsigned quotient and remainder, diamond SSA cell promotion (one block parameter/two edge arguments), and first-fault/location order with a guard before an **unused** signed remainder and a later unsigned division. Tests must match before/after promotion with exact trap category, LocId and trace.
+- Independent verifier rejects malformed payload/extra, wrong operand/result type/arity, missing instruction LocId, and malformed unreachable operations. Existing resource limits, cancellation, fault-injection and producer-identity checks remain in force.
+- The new `UIR_U1A_I64_DIVREM.md` is the implementation contract summary. No production frontend/backend/runtime integration or new language semantics is implied; source-known invalid expressions remain a frontend semantic concern. No full owned-compiler self-build was initiated.
+- **Before merge:** focused tests and all four ordinary CI platforms must pass on final head, followed by the explicit completed-batch full qualification under `CI_QUALIFICATION.md`. Record exact source tree/commit and CI evidence in the next handover. Never use earlier green revisions if code changes.
+
+Next architecture slices: strict IEEE binary64 with controlled floating environment, direct call and import effects, sparse switch case/edge contracts, then source origins and U2/U3 integration. Do not touch unrelated PRs.
