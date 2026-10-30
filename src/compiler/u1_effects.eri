@@ -153,6 +153,11 @@ function propagate(summary identity Summary) fails budget.LimitError {
         index=index+1;
     }
 }
+function prepare(summary identity Summary) returns Bool fails budget.LimitError {
+    try initialize(summary);
+    try propagate(summary);
+    return true;
+}
 public function inspect(program identity link.Program,policy identity imports.Policy)
     returns identity Summary fails budget.LimitError,verify.InvalidIR {
     if not program.sealed or program.closed or policy.program != program or
@@ -178,8 +183,9 @@ public function inspect(program identity link.Program,policy identity imports.Po
         queued=try words.create(owner,65536); heads=try words.create(owner,65536);
         links=try words.create(owner,4194304); queue=try words.create(owner,4194304);
         closed=false; edges=0; visits=0; };
-    try initialize(summary);
-    try propagate(summary);
+    let complete be prepare(summary) else error budget.LimitError {
+        try close(summary); fail error;
+    };
     return summary;
 }
 public function mask(summary identity Summary,target meta.FunctionId)
