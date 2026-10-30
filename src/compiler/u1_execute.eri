@@ -306,8 +306,7 @@ public function run(program identity link.Program,policy identity imports.Policy
     if fuel < 1 or fuel > 1048576 or depthLimit < 1 or depthLimit > 1024 {
         try budget.reject("invalid bounded U1a evaluation limits");
     }
-    // Fresh independent verification/effect closure on this exact invocation.
-    let checked be try effects.inspect(program,policy);
+    // Cheap entry validation must not allocate a derived-effect snapshot.
     let data be program.metadata;
     if target.owner != data.key { try budget.reject("foreign U1a entry FunctionId"); }
     let signaturePhase be try budget.verificationPhase(data.owner);
@@ -327,6 +326,8 @@ public function run(program identity link.Program,policy identity imports.Policy
         tail=next; index=index+1;
     }
     try budget.finishPhase(signaturePhase);
+    // Fresh, independently reverified effect closure; release on every exit.
+    let checked be try effects.inspect(program,policy);
     let machine be identity Machine { fuel=fuel; steps=0; depthLimit=depthLimit; trace=""; };
     let result be invoke(program,policy,target,head,count,machine,1,0)
         else error budget.LimitError { try effects.close(checked); fail error; };
