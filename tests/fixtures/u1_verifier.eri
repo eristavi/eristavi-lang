@@ -298,6 +298,12 @@ function syntheticOrigins() fails budget.LimitError,verify.InvalidIR,ProbeError 
     try change(data.locations,edit,rootOffset,2*1048577);
     try rejected(harness,3,0,"synthetic-root-reason");
     try change(data.locations,edit,rootOffset,1048577);
+    // The derived location must retain the exact original source identity/span,
+    // not borrow a valid but different diagnostic anchor from the same file.
+    let changedOffset be (derived.index-1)*7+3;
+    try change(data.locations,edit,changedOffset,2);
+    try rejected(harness,3,0,"synthetic-origin-anchor");
+    try change(data.locations,edit,changedOffset,3);
     let retained be try words.get(data.locations,edit,offset);
     // A self-referential chain is invalid even if all source span fields remain valid.
     try change(data.locations,edit,offset,2*1048577+transformed.index);
