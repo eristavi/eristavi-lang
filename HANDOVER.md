@@ -459,3 +459,42 @@ The first i64 commit `8df153aa314a431f2e85155101a1e9748aff7e44` failed the ARM64
 The corrective commit replaces the threshold with `ops.isCell(...)` and strengthens `tests/test_u1_foundation.py` to reject both `op >= 10` and direct instruction-opcode threshold checks. The original independent i64 tests and the one-parameter/two-edge diamond assertion remain mandatory. See `UIR_U1A_OPCODE_AUDIT.md` and `UIR_U1A_I64_ARITHMETIC.md`.
 
 **Re-run CI on the exact corrected revision.** Do not merge or claim completion based on the failed first run; preserve production compiler unchanged. Full owned-compiler self-build remains a separate experiment.
+
+
+## 14. Verified U1a i64 arithmetic merge checkpoint — 2026-10-30
+
+**This section supersedes the historical pending and failed statuses in section 13**; do not repeat the initial defect or treat the first failing revision as final.
+
+### Git and qualification evidence
+
+| Item | Verified result |
+| --- | --- |
+| Merged compiler PR | [#65](https://github.com/eristavi/eristavi-lang/pull/65), **merged** |
+| Code-bearing main merge commit | `2139a59c16f4cca4bf413f37d42343dbea27c99d` |
+| Final validated PR head | `cf27e21e5a4b9af5809c86ee6be92807de25b5ca` |
+| Final validated / merged code tree | `0ed9d786b3132aeec6d8d8747f1d317dd9ca76bd` (identical on merge and qualified head) |
+| Four-platform normal CI | [Run 41074920601](https://github.com/eristavi/eristavi-lang/actions/runs/41074920601), **success**: Linux GCC, Linux Clang, ARM64 Clang and macOS Clang |
+| Completed-batch full qualification | [Run 41076097753](https://github.com/eristavi/eristavi-lang/actions/runs/41076097753), **success**, exactly on `cf27e21` |
+| Full qualification jobs | Three repeatable bootstrap/offline Linux builds + owned integration: **passed** |
+| Separate full owned-compiler self-build | **Skipped intentionally**; remains unqualified |
+
+The first attempted revision `8df153aa` failed a real `i64-merge` SSA shape test due to the missed `op >= 10` classification in `u1_promote.eri:prepare`. The corrected final revision uses `ops.isCell`, retains the original strict merge test, and adds a regression guard against direct opcode threshold comparisons. Only the corrected final revision is qualified.
+
+### Implemented and limits
+
+- Typed isolated U1a i64 ops 15–23: wrapping add/sub/mul, ten comparison relations, signed sub/mul overflow, and unsigned add/sub/mul overflow, in addition to preserved signed add overflow op 3.
+- Exact 64-bit wrapped results and explicit signed/unsigned overflow predicates, including when the mathematical result overflows.
+- Independent builder/verifier payload and type contracts, malformed unreachable-IR tests, and Python boundary/differential execution of two new promotion fixtures.
+- `UIR_U1A_I64_ARITHMETIC.md` and `UIR_U1A_OPCODE_AUDIT.md` contain details and the fixed classification defect.
+- The **production Eristavi frontend/native compiler remains unchanged**. These operations are in the isolated U1a IR, not yet integrated into native application compilation. The code is not an entire U1a implementation.
+
+### Next safe implementation steps
+
+1. Inspect current main and this checkpoint before starting a new branch; keep historical branch statuses in earlier sections as historical context.
+2. Next isolated U1a slice: implement typed signed/unsigned `i64.div` and `i64.rem` with terminal faults for zero divisors and signed MIN/-1 on **both** operations, truncation toward zero, signed remainder sign, independent exact evaluator and fault-location preservation. Do not rely on target-language undefined division behavior.
+3. Add malformed-IR, unreachable-block, SSA-promotion, fault-order, location, cancellation and budget-recovery tests. Keep each scope separate from source-level diagnostics: source-known invalid expressions remain a frontend semantic responsibility.
+4. After integer division/remainder, continue strict f64 under a controlled execution environment; separately define direct call/import effects and sparse multiway switch storage/verification.
+5. Follow `CI_QUALIFICATION.md` on each completed compiler batch; reserve the full owned-compiler self-build for a separately authorized profile. Do not auto-merge unrelated open PRs (#57/#31/#18/#13).
+6. Preserve frozen Eristavi syntax/semantics, historical and production compatibility, transactional cell-free U1, capacity/work accounting, and the U2/U3 integration gates.
+
+This post-merge handover update is **documentation only**. It makes no claims of new test execution or benchmark results beyond the cited GitHub runs, and changes no compiler input or code.
