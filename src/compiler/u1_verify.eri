@@ -243,7 +243,7 @@ function instruction(context identity Context,index Int,terminal Bool,position I
     let payload be try read(context,routine.instructions,offset+7); let extra be try read(context,routine.instructions,offset+8);
     if op == 2 { try require(context,payload == 0 or payload == 1,"invalid predicate bits"); }
     if op == 5 { try require(context,payload >= 1 and payload <= 4,"invalid trap code"); }
-    if op == 3 or op == 4 or op == 8 or op == 13 or op == 14 or (op >= 15 and op <= 17) or (op >= 19 and op <= 23) {
+    if op == 3 or op == 4 or op == 8 or op == 13 or op == 14 or (op >= 15 and op <= 17) or (op >= 19 and op <= 27) {
         try require(context,payload == 0,"unsupported operation payload");
     }
     if op == 18 { try require(context,payload >= 1 and payload <= 10,"invalid i64 comparison relation"); }
