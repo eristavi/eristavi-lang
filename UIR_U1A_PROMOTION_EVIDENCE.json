@@ -1,0 +1,224 @@
+{
+  "scope": "Internal scalar-cell promotion fixture evidence; not U0 whole-pipeline or physical-memory qualification",
+  "base_commit": "c2989f169f6c470f95c11cec2ec5368bd333a485",
+  "date": "2026-10-30",
+  "bootstrap_compiler": "cc (Ubuntu 13.3.0-6ubuntu2~24.04) 13.3.0",
+  "cflags": "-O2",
+  "platform": "Linux-6.18.57-x86_64-with-glibc2.39",
+  "source_sha256": {
+    "src/compiler/u1_builder.eri": "2e9e2a5a5696328bb186c6d624855d451bf4174333415c953d2cc2afe06f7fe7",
+    "src/compiler/u1_ops.eri": "3346b2a178ea60e7ed04178b08353b00f987f198a8d3168dea2b74f4a214e64b",
+    "src/compiler/u1_verify.eri": "85ffa874e80dcbd64d7027f6d212e1ebf03122e3fcec7b5faa07441b411a3a47",
+    "src/compiler/u1_dominance.eri": "80a91fd5a9e330249f7546ea9dcd3fdbda8a126a1d6bc104e843137c5029efd9",
+    "src/compiler/u1_promote.eri": "ce7a1cd698665c94e054c9ef76d96bb37165f49423d35c6b0032db96f6278744",
+    "tests/fixtures/u1_promotion.eri": "f133f5de1df0f3b2d81a03032df5980538fb2d10d7a84cf5821af3934688d1c7",
+    "tests/test_u1_promotion.py": "74935fc315eb238807987cdc125807ab73c49897b7f7e21fe62c046cf9910858"
+  },
+  "snapshots": 18,
+  "independent_execution_cases": 88,
+  "guard_trace_and_location_preserved": true,
+  "post_verifications_per_fixture": 8,
+  "negative_labels": [
+    "invalid-init:ok",
+    "invalid-init:ok",
+    "invalid-init:ok",
+    "malformed-dead:ok",
+    "promotion-limit:ok",
+    "canonical-reject:ok",
+    "partial-output:ok",
+    "cancelled:ok"
+  ],
+  "measurements": [
+    {
+      "fixture": "diamond",
+      "input_cells": 8,
+      "inserted_parameters": 8,
+      "inserted_arguments": 16,
+      "removed_blocks": 0,
+      "modeled_peak_capacity_bytes": 457856,
+      "modeled_successful_allocation_traffic_bytes": 844064,
+      "promotion_charged_work": 61911
+    },
+    {
+      "fixture": "diamond",
+      "input_cells": 32,
+      "inserted_parameters": 32,
+      "inserted_arguments": 64,
+      "removed_blocks": 0,
+      "modeled_peak_capacity_bytes": 1501216,
+      "modeled_successful_allocation_traffic_bytes": 2348704,
+      "promotion_charged_work": 223148
+    },
+    {
+      "fixture": "diamond",
+      "input_cells": 128,
+      "inserted_parameters": 128,
+      "inserted_arguments": 256,
+      "removed_blocks": 0,
+      "modeled_peak_capacity_bytes": 5684256,
+      "modeled_successful_allocation_traffic_bytes": 8379264,
+      "promotion_charged_work": 868346
+    },
+    {
+      "fixture": "loop",
+      "input_cells": 9,
+      "inserted_parameters": 9,
+      "inserted_arguments": 18,
+      "removed_blocks": 0,
+      "modeled_peak_capacity_bytes": 401472,
+      "modeled_successful_allocation_traffic_bytes": 761792,
+      "promotion_charged_work": 54725
+    },
+    {
+      "fixture": "loop",
+      "input_cells": 33,
+      "inserted_parameters": 33,
+      "inserted_arguments": 66,
+      "removed_blocks": 0,
+      "modeled_peak_capacity_bytes": 1142016,
+      "modeled_successful_allocation_traffic_bytes": 1834240,
+      "promotion_charged_work": 176220
+    },
+    {
+      "fixture": "loop",
+      "input_cells": 129,
+      "inserted_parameters": 129,
+      "inserted_arguments": 258,
+      "removed_blocks": 0,
+      "modeled_peak_capacity_bytes": 4109056,
+      "modeled_successful_allocation_traffic_bytes": 6145184,
+      "promotion_charged_work": 662202
+    },
+    {
+      "fixture": "sequential",
+      "input_cells": 8,
+      "inserted_parameters": 8,
+      "inserted_arguments": 16,
+      "removed_blocks": 0,
+      "modeled_peak_capacity_bytes": 597632,
+      "modeled_successful_allocation_traffic_bytes": 1459104,
+      "promotion_charged_work": 105530
+    },
+    {
+      "fixture": "sequential",
+      "input_cells": 32,
+      "inserted_parameters": 32,
+      "inserted_arguments": 64,
+      "removed_blocks": 0,
+      "modeled_peak_capacity_bytes": 2119552,
+      "modeled_successful_allocation_traffic_bytes": 5061472,
+      "promotion_charged_work": 499850
+    },
+    {
+      "fixture": "sequential",
+      "input_cells": 128,
+      "inserted_parameters": 128,
+      "inserted_arguments": 256,
+      "removed_blocks": 0,
+      "modeled_peak_capacity_bytes": 8206560,
+      "modeled_successful_allocation_traffic_bytes": 19524768,
+      "promotion_charged_work": 3367442
+    },
+    {
+      "fixture": "redundant",
+      "input_cells": 2,
+      "inserted_parameters": 0,
+      "inserted_arguments": 0,
+      "removed_blocks": 0,
+      "modeled_peak_capacity_bytes": 142592,
+      "modeled_successful_allocation_traffic_bytes": 387456,
+      "promotion_charged_work": 14588
+    },
+    {
+      "fixture": "swap",
+      "input_cells": 2,
+      "inserted_parameters": 2,
+      "inserted_arguments": 4,
+      "removed_blocks": 0,
+      "modeled_peak_capacity_bytes": 138080,
+      "modeled_successful_allocation_traffic_bytes": 379808,
+      "promotion_charged_work": 13793
+    },
+    {
+      "fixture": "reset",
+      "input_cells": 1,
+      "inserted_parameters": 0,
+      "inserted_arguments": 0,
+      "removed_blocks": 0,
+      "modeled_peak_capacity_bytes": 133376,
+      "modeled_successful_allocation_traffic_bytes": 368032,
+      "promotion_charged_work": 10744
+    },
+    {
+      "fixture": "irreducible",
+      "input_cells": 1,
+      "inserted_parameters": 3,
+      "inserted_arguments": 6,
+      "removed_blocks": 0,
+      "modeled_peak_capacity_bytes": 166816,
+      "modeled_successful_allocation_traffic_bytes": 429888,
+      "promotion_charged_work": 18490
+    },
+    {
+      "fixture": "dead",
+      "input_cells": 1,
+      "inserted_parameters": 0,
+      "inserted_arguments": 0,
+      "removed_blocks": 1,
+      "modeled_peak_capacity_bytes": 87520,
+      "modeled_successful_allocation_traffic_bytes": 245248,
+      "promotion_charged_work": 2790
+    },
+    {
+      "fixture": "faults",
+      "input_cells": 1,
+      "inserted_parameters": 1,
+      "inserted_arguments": 2,
+      "removed_blocks": 0,
+      "modeled_peak_capacity_bytes": 161504,
+      "modeled_successful_allocation_traffic_bytes": 417344,
+      "promotion_charged_work": 15130
+    },
+    {
+      "fixture": "unused",
+      "input_cells": 1,
+      "inserted_parameters": 0,
+      "inserted_arguments": 0,
+      "removed_blocks": 0,
+      "modeled_peak_capacity_bytes": 141024,
+      "modeled_successful_allocation_traffic_bytes": 372448,
+      "promotion_charged_work": 12257
+    },
+    {
+      "fixture": "float-cell",
+      "input_cells": 1,
+      "inserted_parameters": 1,
+      "inserted_arguments": 2,
+      "removed_blocks": 0,
+      "modeled_peak_capacity_bytes": 120736,
+      "modeled_successful_allocation_traffic_bytes": 352256,
+      "promotion_charged_work": 9778
+    },
+    {
+      "fixture": "passthrough",
+      "input_cells": 0,
+      "inserted_parameters": 0,
+      "inserted_arguments": 0,
+      "removed_blocks": 0,
+      "modeled_peak_capacity_bytes": 111232,
+      "modeled_successful_allocation_traffic_bytes": 345888,
+      "promotion_charged_work": 9768
+    }
+  ],
+  "limits": {
+    "peak_capacity_bytes": 8388608,
+    "successful_allocation_traffic_bytes": 67108864,
+    "promotion_work": 33554432
+  },
+  "limitations": [
+    "Capacity charges model the current safe page adapter; complete physical allocation/GC accounting is unproven.",
+    "These direct IR fixtures do not constitute matched legacy/candidate end-to-end benchmarks.",
+    "Larger owned-runtime stress remains unqualified; no acceptance limit was increased.",
+    "Native smoke checks use smaller fixtures and one additional verification, not all large fixtures."
+  ]
+}

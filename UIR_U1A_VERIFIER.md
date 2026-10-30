@@ -108,7 +108,8 @@ registry entries and validation tests. Source-map/content consistency, synthetic
 origins and origin chains are not implemented. Nonzero reserved origin fields
 are rejected, rather than interpreted as a supported extension.
 
-Cells and mandatory promotion are the next slice. Publication stamps, mutation
+The subsequent UIR_U1A_PROMOTION.md slice implements initialized scalar cells,
+mandatory promotion and canonical cell rejection. Publication stamps, mutation
 API/invalidation, effect/import validation, native lowering and integration
 remain staged work. Safe radix storage is not packed native storage; full
 physical allocation accounting and the 8 MiB qualification gate are still

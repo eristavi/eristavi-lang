@@ -4,6 +4,8 @@
 // ancestor, label, idom, bucket head, bucket next, tree child, tree sibling,
 // interval start/end, reserved, traversal cursor, reserved, DFS-number vertex.
 // Edge row: source, target, next successor edge, next predecessor edge.
+// Eleven physical words per block: DFS/LT temporaries are reused only after
+// their last use for tree children, intervals and subsequent promotion traversal.
 import compiler.u1_budget as budget;
 import compiler.u1_words as words;
 public type Graph {
@@ -25,8 +27,8 @@ public function zeros(graph identity Graph,count Int) returns Int fails budget.L
 public function prepare(graph identity Graph,blocks Int,edges Int) fails budget.LimitError {
     if graph.prepared or graph.data.length != 0 or blocks < 1 or blocks > 65536 or edges < 0 or edges > 262144 { try budget.reject("invalid dominance graph shape"); }
     graph.blocks=blocks; graph.edges=edges;
-    // All arrays use a zero sentinel. Block rows have 18 fields; edge rows four.
-    let ignored be try zeros(graph,(blocks+1)*18); graph.edgeBase=try zeros(graph,(edges+1)*4);
+    // All arrays use a zero sentinel. Logical fields have disjoint phase lives.
+    let ignored be try zeros(graph,(blocks+1)*11); graph.edgeBase=try zeros(graph,(edges+1)*4);
     graph.stackBase=try zeros(graph,blocks+1);
     let logarithm be 1; let power be 2;
     while power < blocks { power=power*2; logarithm=logarithm+1; }
@@ -39,11 +41,17 @@ function visit(graph identity Graph) fails budget.LimitError {
         graph.visits=graph.visits+1;
     }
 }
+function slot(field Int) returns Int {
+    if field == 10 { return 3; } if field == 11 { return 5; }
+    if field == 12 { return 6; } if field == 13 { return 8; }
+    if field == 14 { return 4; } if field == 15 or field == 16 { return 9; }
+    if field == 17 { return 10; } return field;
+}
 public function get(graph identity Graph,block Int,field Int) returns Int fails budget.LimitError {
-    try visit(graph); return try words.get(graph.data,graph.phase,block*18+field);
+    try visit(graph); return try words.get(graph.data,graph.phase,block*11+slot(field));
 }
 public function set(graph identity Graph,block Int,field Int,value Int) fails budget.LimitError {
-    try visit(graph); try words.set(graph.data,graph.phase,block*18+field,value);
+    try visit(graph); try words.set(graph.data,graph.phase,block*11+slot(field),value);
 }
 function edgeGet(graph identity Graph,edge Int,field Int) returns Int fails budget.LimitError {
     try visit(graph); return try words.get(graph.data,graph.phase,graph.edgeBase+edge*4+field);
@@ -125,6 +133,8 @@ public function compute(graph identity Graph) fails budget.LimitError {
         }
         number=number-1;
     }
+    // LT no longer uses DFS parents. Initialize that storage as tree-child heads.
+    number=1; while number <= graph.blocks { try set(graph,number,10,0); number=number+1; }
     number=2;
     while number <= graph.reachable {
         let block be try get(graph,number,17); let parent be try get(graph,block,7);
