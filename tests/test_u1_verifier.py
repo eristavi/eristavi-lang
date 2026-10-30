@@ -33,7 +33,10 @@ PROTOCOL = ''.join(name + ':ok\n' for name in (
     'float-ops', 'float-payload', 'float-cmp-mode', 'float-operand-type',
     'float-arity', 'float-result-type', 'float-restored', 'float-dead-valid',
     'float-dead-payload',
-    'many-dominated-uses'))
+    'synthetic-origin-valid', 'synthetic-root-reason',
+    'synthetic-origin-anchor', 'synthetic-origin-cycle',
+    'synthetic-origin-reason', 'synthetic-origin-negative',
+    'synthetic-origin-restored', 'many-dominated-uses'))
 
 
 def dominator_oracle(blocks, edges):
