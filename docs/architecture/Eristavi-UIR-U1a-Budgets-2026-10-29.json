@@ -1,0 +1,371 @@
+{
+  "baseline": {
+    "commit": "8af0ffe3350c737550c3ab0e6c3fa89f60f6f091",
+    "evidence_library_file_id": "libfile_0e76f5ba02948191aeb8219bbcdb5d26",
+    "report_library_file_id": "libfile_b3bae627ea0c8191bd2e500fdeed22e8"
+  },
+  "cancellation": {
+    "check_at": [
+      "stage entry/exit",
+      "before allocation/growth",
+      "before publishing a verified result"
+    ],
+    "maximum_bulk_bytes_between_checks": 65536,
+    "maximum_visits_between_checks": 1024,
+    "meaning": "bounded compiler work between polls; no promise of fixed wall-time latency in a blocking allocator or host syscall"
+  },
+  "count_ceiling_scope": "all stored function slots/entries, including terminators and un-compacted dead slots; limits are independent ceilings and need not all fit simultaneously in the byte/work limits",
+  "counter_api": [
+    {
+      "arguments": [
+        "owner",
+        "backingCapacityBytes",
+        "reason"
+      ],
+      "effect": "admit prospective live capacity and traffic against all ancestor budgets before allocation; include old/new overlap; track pending reservations separately",
+      "name": "reserveCapacity"
+    },
+    {
+      "arguments": [
+        "reservation",
+        "allocationHandle"
+      ],
+      "effect": "convert pending reservation into live capacity and successful allocation traffic",
+      "name": "commitReservation"
+    },
+    {
+      "arguments": [
+        "reservation"
+      ],
+      "effect": "undo failed pending reservation; no successful allocation traffic is added and work already consumed is not undone",
+      "name": "cancelReservation"
+    },
+    {
+      "arguments": [
+        "allocationHandle"
+      ],
+      "effect": "drop live ownership only after the backing storage is released or exclusively transferred; traffic never decreases",
+      "name": "releaseCapacity"
+    },
+    {
+      "arguments": [
+        "allocationHandle",
+        "destinationOwner"
+      ],
+      "effect": "admit destination branch before atomic ownership transfer; common-ancestor capacity is unchanged and transfer adds no fresh allocation traffic",
+      "name": "transferCapacity"
+    },
+    {
+      "arguments": [
+        "phase",
+        "category",
+        "count"
+      ],
+      "effect": "admit a bounded work batch before execution; no per-visit allocation or virtual dispatch",
+      "name": "chargeWork"
+    },
+    {
+      "arguments": [
+        "attempt"
+      ],
+      "effect": "stop unfinished attempt; no partial/stale-ready publication",
+      "name": "pollCancellation"
+    },
+    {
+      "arguments": [
+        "owner"
+      ],
+      "effect": "capture committed live/peak, pending/reserved peak, successful traffic, visit usage, unused prepaid credits and exhausted-limit identity",
+      "name": "snapshotCounters"
+    }
+  ],
+  "failure": {
+    "budget_exhaustion": "structured compiler resource-limit outcome, not a source type error or generated-program trap",
+    "counters": "checked wide arithmetic; compare products against quota with division before multiplication when required",
+    "fallback": "no silent mutable-register fallback and no bypass of verification",
+    "invalid_input": "structural/type failures remain invalid-IR outcomes; exceeded valid admission limits are resource-limit outcomes",
+    "overrides": "explicit internal request-profile values, recorded before execution; no new source syntax or CLI flag is selected",
+    "publication": "failed/cancelled attempt produces no ready UIR, verifier stamp, or committed artifact",
+    "retry": "function attempts are fresh; request-level consumed work/traffic survive retries; no automatic retry with enlarged quotas or cached ready result from failure"
+  },
+  "fixtures": [
+    {
+      "arithmetic": "checked signed i64",
+      "candidate_recipe": "N initialized mutable locals; branch on input flag; add 1 or 2; return sum; observe both flag choices",
+      "expected_stdout": "36\n44\n",
+      "family": "diamond",
+      "function_parameters_and_call_arguments_excluded_from_merge_counts": true,
+      "inserted_merge_arguments": 16,
+      "inserted_merge_parameters": 8,
+      "name": "diamond_8",
+      "remaining_cells": 0,
+      "size": 8,
+      "source_sha256": "9cd024e8b536caf321703d2957229bc5a69cb842a40239447010f55e0a09fa08"
+    },
+    {
+      "arithmetic": "checked signed i64",
+      "candidate_recipe": "N initialized mutable locals; branch on input flag; add 1 or 2; return sum; observe both flag choices",
+      "expected_stdout": "528\n560\n",
+      "family": "diamond",
+      "function_parameters_and_call_arguments_excluded_from_merge_counts": true,
+      "inserted_merge_arguments": 64,
+      "inserted_merge_parameters": 32,
+      "name": "diamond_32",
+      "remaining_cells": 0,
+      "size": 32,
+      "source_sha256": "ec04688ad904736aafecd9f3d8800e2cf77e232960b808d24c3f0465f6c7e997"
+    },
+    {
+      "arithmetic": "checked signed i64",
+      "candidate_recipe": "N initialized mutable locals; branch on input flag; add 1 or 2; return sum; observe both flag choices",
+      "expected_stdout": "8256\n8384\n",
+      "family": "diamond",
+      "function_parameters_and_call_arguments_excluded_from_merge_counts": true,
+      "inserted_merge_arguments": 256,
+      "inserted_merge_parameters": 128,
+      "name": "diamond_128",
+      "remaining_cells": 0,
+      "size": 128,
+      "source_sha256": "a56740f44d4213141b8df558e011c57349d45a84372ca180c5f16c877278ef21"
+    },
+    {
+      "arithmetic": "checked signed i64",
+      "candidate_recipe": "N initialized mutable locals plus index; eight iterations; add index to each local; increment index; return sum",
+      "expected_stdout": "252\n",
+      "family": "loop",
+      "function_parameters_and_call_arguments_excluded_from_merge_counts": true,
+      "inserted_merge_arguments": 18,
+      "inserted_merge_parameters": 9,
+      "name": "loop_8",
+      "remaining_cells": 0,
+      "size": 8,
+      "source_sha256": "bde404b9fbc37ab540275b49ef77a784e6835194131389ea9421cc08f23a1d4b"
+    },
+    {
+      "arithmetic": "checked signed i64",
+      "candidate_recipe": "N initialized mutable locals plus index; eight iterations; add index to each local; increment index; return sum",
+      "expected_stdout": "1392\n",
+      "family": "loop",
+      "function_parameters_and_call_arguments_excluded_from_merge_counts": true,
+      "inserted_merge_arguments": 66,
+      "inserted_merge_parameters": 33,
+      "name": "loop_32",
+      "remaining_cells": 0,
+      "size": 32,
+      "source_sha256": "9a9acced935da0042383bd5c6aaf91ee52e0fe703895c6171d354d2ba0d3f7d4"
+    },
+    {
+      "arithmetic": "checked signed i64",
+      "candidate_recipe": "N initialized mutable locals plus index; eight iterations; add index to each local; increment index; return sum",
+      "expected_stdout": "11712\n",
+      "family": "loop",
+      "function_parameters_and_call_arguments_excluded_from_merge_counts": true,
+      "inserted_merge_arguments": 258,
+      "inserted_merge_parameters": 129,
+      "name": "loop_128",
+      "remaining_cells": 0,
+      "size": 128,
+      "source_sha256": "f789a58819e2c4c54bb1c2e15e7884753ea789b6f30863fdd3b956e40f14817d"
+    },
+    {
+      "arithmetic": "checked signed i64",
+      "candidate_recipe": "one initialized mutable accumulator; N calls to step(x)=checked(x+1); observe accumulator",
+      "expected_stdout": "8\n",
+      "family": "calls",
+      "function_parameters_and_call_arguments_excluded_from_merge_counts": true,
+      "inserted_merge_arguments": 0,
+      "inserted_merge_parameters": 0,
+      "name": "calls_8",
+      "remaining_cells": 0,
+      "size": 8,
+      "source_sha256": "de770772f4a9297de8e81d4f21802d0687e4dc6159aca287b3a8ba7074650ef3"
+    },
+    {
+      "arithmetic": "checked signed i64",
+      "candidate_recipe": "one initialized mutable accumulator; N calls to step(x)=checked(x+1); observe accumulator",
+      "expected_stdout": "32\n",
+      "family": "calls",
+      "function_parameters_and_call_arguments_excluded_from_merge_counts": true,
+      "inserted_merge_arguments": 0,
+      "inserted_merge_parameters": 0,
+      "name": "calls_32",
+      "remaining_cells": 0,
+      "size": 32,
+      "source_sha256": "4b5591bf57da4319e34301a9060aff8aa9a0a0aaceb4038b6b8051266be46b3a"
+    },
+    {
+      "arithmetic": "checked signed i64",
+      "candidate_recipe": "one initialized mutable accumulator; N calls to step(x)=checked(x+1); observe accumulator",
+      "expected_stdout": "128\n",
+      "family": "calls",
+      "function_parameters_and_call_arguments_excluded_from_merge_counts": true,
+      "inserted_merge_arguments": 0,
+      "inserted_merge_parameters": 0,
+      "name": "calls_128",
+      "remaining_cells": 0,
+      "size": 128,
+      "source_sha256": "e468b06e00fe1b3a55b1a0f17a3b90f9636773af06947a08a021b4ee5b62c422"
+    },
+    {
+      "arithmetic": "checked signed i64",
+      "candidate_recipe": "one initialized mutable local; N sequential diamonds controlled by the same input flag; add 1 or 2; observe both flag choices",
+      "expected_stdout": "8\n16\n",
+      "family": "cfg",
+      "function_parameters_and_call_arguments_excluded_from_merge_counts": true,
+      "inserted_merge_arguments": 16,
+      "inserted_merge_parameters": 8,
+      "name": "cfg_8",
+      "remaining_cells": 0,
+      "size": 8,
+      "source_sha256": "1d5f65ed5795f6a144a64271e2ec1b00b15d6585204bbde06a76ad8041e93d9b"
+    },
+    {
+      "arithmetic": "checked signed i64",
+      "candidate_recipe": "one initialized mutable local; N sequential diamonds controlled by the same input flag; add 1 or 2; observe both flag choices",
+      "expected_stdout": "32\n64\n",
+      "family": "cfg",
+      "function_parameters_and_call_arguments_excluded_from_merge_counts": true,
+      "inserted_merge_arguments": 64,
+      "inserted_merge_parameters": 32,
+      "name": "cfg_32",
+      "remaining_cells": 0,
+      "size": 32,
+      "source_sha256": "8665e20ba65a2e31b2b4c4c2a5d54ccf86c0adfd08042ea0fd75324a7c683113"
+    },
+    {
+      "arithmetic": "checked signed i64",
+      "candidate_recipe": "one initialized mutable local; N sequential diamonds controlled by the same input flag; add 1 or 2; observe both flag choices",
+      "expected_stdout": "128\n256\n",
+      "family": "cfg",
+      "function_parameters_and_call_arguments_excluded_from_merge_counts": true,
+      "inserted_merge_arguments": 256,
+      "inserted_merge_parameters": 128,
+      "name": "cfg_128",
+      "remaining_cells": 0,
+      "size": 128,
+      "source_sha256": "38dd519ff9e926f460ba9310fefe2eb9ff286a58382411c935a617b3c89faa3a"
+    }
+  ],
+  "input_count_ceiling_per_function": {
+    "blocks": 65536,
+    "cells": 65536,
+    "edges": 262144,
+    "inserted_merge_parameters": 1048576,
+    "instructions": 1048576,
+    "total_edge_arguments": 4194304,
+    "values": 1048576
+  },
+  "matched_stress_plans": [
+    {
+      "adapters_implemented": false,
+      "branch": "input flag; true updates every x[i] by checked +1; false by checked +2",
+      "expected_results": [
+        8256,
+        8384
+      ],
+      "following_chain_blocks": 16,
+      "historical_native_probe_is_not_a_timing_pair": true,
+      "initial_values": "x[i]=i for every i in [0,width)",
+      "inserted_merge_arguments": 256,
+      "inserted_merge_parameters": 128,
+      "name": "initialized_diamond_chain_128",
+      "observation": "return checked sum of all locals; evaluate both flag choices",
+      "verifier_calls": 8,
+      "width": 128
+    },
+    {
+      "adapters_implemented": false,
+      "branch": "input flag; true updates every x[i] by checked +1; false by checked +2",
+      "expected_results": [
+        131328,
+        131840
+      ],
+      "following_chain_blocks": 16,
+      "historical_native_probe_is_not_a_timing_pair": true,
+      "initial_values": "x[i]=i for every i in [0,width)",
+      "inserted_merge_arguments": 1024,
+      "inserted_merge_parameters": 512,
+      "name": "initialized_diamond_chain_512",
+      "observation": "return checked sum of all locals; evaluate both flag choices",
+      "verifier_calls": 8,
+      "width": 512
+    },
+    {
+      "adapters_implemented": false,
+      "branch": "input flag; true updates every x[i] by checked +1; false by checked +2",
+      "expected_results": [
+        2001000,
+        2003000
+      ],
+      "following_chain_blocks": 16,
+      "historical_native_probe_is_not_a_timing_pair": true,
+      "initial_values": "x[i]=i for every i in [0,width)",
+      "inserted_merge_arguments": 4000,
+      "inserted_merge_parameters": 2000,
+      "name": "initialized_diamond_chain_2000",
+      "observation": "return checked sum of all locals; evaluate both flag choices",
+      "verifier_calls": 8,
+      "width": 2000
+    }
+  ],
+  "memory": {
+    "excluded_but_reported": [
+      "source snapshots and AST/semantic state owned by earlier stages",
+      "generated machine-code/backend storage",
+      "allocator reserved/free-pool bytes not owned by UIR",
+      "runtime GC retention and process/interpreter overhead"
+    ],
+    "fresh_allocation_traffic": "sum of successfully acquired backing capacity; reserve prospective traffic before allocation and commit it only on success; growth charges the full new allocation; reuse is not a fresh allocation; traffic never decreases",
+    "function_allocation_traffic_bytes": 268435456,
+    "function_peak_capacity_bytes": 67108864,
+    "ownership_assignment": "function records/pools/scratch must be charged to their function owner; shared metadata is genuinely shared type/signature/constant/location data; moving function storage to shared ownership cannot evade its qualification gate",
+    "qualification_function_allocation_traffic_bytes": 67108864,
+    "qualification_function_peak_capacity_bytes": 8388608,
+    "qualification_scope": "one function lifecycle: construction, promotion, and eight complete verifier calls; account all coexisting buffers and reuse scratch explicitly",
+    "request_allocation_traffic_bytes": 2147483648,
+    "request_peak_capacity_bytes": 536870912,
+    "rss_is_not_capacity": true,
+    "shared_metadata_peak_capacity_bytes": 134217728,
+    "unit": "bytes of owned backing capacity, including owned metadata and overlapping old/new allocations; allocator/runtime overhead reported separately unless charged by backing allocator"
+  },
+  "profile": "uir-u1a-development-1",
+  "qualification": {
+    "candidate_ir_passes_implemented": false,
+    "canonical_count_checkpoint": "after promotion and trivial-parameter cleanup; before optional constant/CFG transformations",
+    "canonical_remaining_cells": 0,
+    "comparative_timing": "informational for U1a; no 5-percent or other historical-median speed gate; same-host paired matched work and unchanged settings required for any comparison",
+    "cpu_watchdog_seconds_per_worker": 60,
+    "fixture_sizes": [
+      8,
+      32,
+      128
+    ],
+    "float_and_malformed_ir_correctness": "required before U1a acceptance; not established by U0 integer fixture timings",
+    "matched_adapters_implemented": false,
+    "ordinary_verification_scope": "construction validation and canonical verification remain mandatory; eight verifier calls are the explicit stress workload, not an added production pipeline requirement",
+    "pairing": "five fresh-process baseline/candidate pairs per matched profile; reverse order between pairs; serialize benchmark jobs",
+    "wall_watchdog_seconds_per_worker": 120,
+    "watchdogs_are_not_performance_claims": true
+  },
+  "schema": "eristavi-uir-budget-policy-1",
+  "scope": "UIR compiler-owned state only; no change to the current production compiler, source semantics, or public CLI.",
+  "status": "Selected initial engineering policy on 2026-10-29 under instruction to finalize U1a budgets; not candidate-validated or a measured optimum.",
+  "work": {
+    "all_limits_apply": "A phase must satisfy its global visit limit, its applicable component formula limits, byte limits, and count ceilings; satisfying one does not waive another.",
+    "construction_visit_limit_per_function": 16777216,
+    "dominator_formula": "128*(B+E+1)*max(1,ceil(log2(max(2,B))))",
+    "dominator_visit_multiplier": 128,
+    "inserted_merge_arguments_formula": "C*E",
+    "inserted_merge_parameters_formula": "C*B",
+    "promotion_frontier_entry_visits_formula": "C*D; D is the once-built CFG dominance-frontier entry count",
+    "promotion_live_predecessor_visits_formula": "C*E",
+    "promotion_unique_live_states_formula": "C*B",
+    "promotion_unique_placement_states_formula": "C*B",
+    "promotion_visit_limit_per_function": 33554432,
+    "request_visit_limit": 268435456,
+    "structural_formula": "32*(R+1), where R includes every encoded record, attribute, operand, result, edge argument, case and origin link checked in that verification scope",
+    "structural_scan_multiplier": 32,
+    "unit": "one entry visit/comparison/hash probe; bulk data charge ceil(bytes/64); exact consumption and prepaid unused credits reported separately",
+    "verification_visit_limit_per_call": 16777216
+  }
+}
