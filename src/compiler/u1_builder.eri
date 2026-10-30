@@ -7,6 +7,7 @@ public type BlockId { owner identity meta.Key; index Int; }
 public type ValueId { owner identity meta.Key; index Int; }
 public type InstId { owner identity meta.Key; index Int; }
 public type CellId { owner identity meta.Key; index Int; }
+public type EdgeId { owner identity meta.Key; index Int; }
 public type Pair { value ValueId; overflow ValueId; }
 public type Function {
     key identity meta.Key; metadata identity meta.Metadata; signature meta.SignatureId;
@@ -15,6 +16,8 @@ public type Function {
     blocks identity words.Words; values identity words.Words; instructions identity words.Words;
     operands identity words.Words; edges identity words.Words; arguments identity words.Words;
     cells identity words.Words; // type, unique initializer InstId; no runtime identity.
+    switches identity words.Words; // first case record, case count, default edge.
+    cases identity words.Words; // signed i64 bit pattern, edge ID; unsigned-sorted.
 }
 function mutable(routine identity Function) fails budget.LimitError {
     try budget.poll(routine.owner);
@@ -42,7 +45,8 @@ public function create(metadata identity meta.Metadata,signature meta.SignatureI
         blocks=try words.create(owner,327680); values=try words.create(owner,4194304);
         instructions=try words.create(owner,10485760); operands=try words.create(owner,16777216);
         edges=try words.create(owner,786432); arguments=try words.create(owner,4194304);
-        cells=try words.create(owner,131072); };
+        cells=try words.create(owner,131072); switches=try words.create(owner,196608);
+        cases=try words.create(owner,524288); };
     routine.control=try budget.commit(pending); return routine;
 }
 public function valueType(routine identity Function,value ValueId) returns meta.TypeId fails budget.LimitError {
@@ -243,6 +247,55 @@ public function branch(routine identity Function,block BlockId,test ValueId,firs
     let firstEdge be try appendEdge(routine,first,firstArguments); let secondEdge be try appendEdge(routine,second,secondArguments);
     let ignored be try append(routine,block,7,[test],location,firstEdge,secondEdge);
 }
+
+function switchLess(a Int,b Int) returns Bool {
+    // Unsigned order without overflowing Int or using host Float.
+    if a < 0 and b >= 0 { return false; }
+    if a >= 0 and b < 0 { return true; }
+    return a < b;
+}
+function validateEdge(routine identity Function,edge EdgeId) fails budget.LimitError {
+    if edge.owner != routine.key or edge.index < 1 or edge.index > routine.edges.length/3 {
+        try budget.reject("foreign or invalid switch EdgeId");
+    }
+}
+// Caller-created edges are claimed exactly once by the independent verifier;
+// an orphan or reused edge is invalid IR, never an implicit fallthrough.
+public function edge(routine identity Function,target BlockId,arguments) returns EdgeId fails budget.LimitError {
+    try mutable(routine); try checkEdge(routine,target,arguments);
+    let index be try appendEdge(routine,target,arguments);
+    routine.revision=routine.revision+1;
+    return EdgeId { owner=routine.key; index=index; };
+}
+public function switchInteger(routine identity Function,block BlockId,selector ValueId,
+    caseValues,caseEdges,defaultEdge EdgeId,location meta.LocId) fails budget.LimitError {
+    let checked be try openBlock(routine,block); try meta.validLocation(routine.metadata,location);
+    if (try valueType(routine,selector)).index != 2 { try budget.reject("U1a i64 switch requires i64 selector"); }
+    if caseValues.count != caseEdges.count or caseValues.count > 65535 or
+        caseValues.count > 262144-routine.cases.length/2 or routine.switches.length/3 >= 65536 {
+        try budget.reject("U1a switch case count exceeds capacity");
+    }
+    try validateEdge(routine,defaultEdge);
+    let index be 0;
+    while index < caseValues.count {
+        try validateEdge(routine,caseEdges[index]);
+        if index > 0 and not switchLess(caseValues[index-1],caseValues[index]) {
+            try budget.reject("duplicate or noncanonical unsigned U1a switch case");
+        }
+        index=index+1;
+    }
+    let start be routine.cases.length/2; index=0;
+    while index < caseValues.count {
+        let ignored be try words.push(routine.cases,routine.phase,caseValues[index]);
+        ignored=try words.push(routine.cases,routine.phase,caseEdges[index].index); index=index+1;
+    }
+    let switchIndex be routine.switches.length/3+1;
+    let ignored be try words.push(routine.switches,routine.phase,start);
+    ignored=try words.push(routine.switches,routine.phase,caseValues.count);
+    ignored=try words.push(routine.switches,routine.phase,defaultEdge.index);
+    ignored=try append(routine,block,35,[selector],location,switchIndex,0);
+}
+
 public function returnValues(routine identity Function,block BlockId,values,location meta.LocId) fails budget.LimitError {
     let checked be try openBlock(routine,block); let count be try meta.resultCount(routine.metadata,routine.phase,routine.signature);
     if values.count != count { try budget.reject("U1a return arity mismatch"); }
@@ -299,7 +352,7 @@ public function complete(routine identity Function) fails budget.LimitError {
     index=0; while index < routine.blocks.length/5 { if try words.get(routine.blocks,routine.phase,index*5+4) == 0 { try budget.reject("unterminated U1a block"); } index=index+1; }
     try words.freeze(routine.blocks); try words.freeze(routine.values); try words.freeze(routine.instructions);
     try words.freeze(routine.operands); try words.freeze(routine.edges); try words.freeze(routine.arguments);
-    try words.freeze(routine.cells);
+    try words.freeze(routine.cells); try words.freeze(routine.switches); try words.freeze(routine.cases);
     routine.state=1;
     // No 'verified' bit, source compilation route, or executable publication.
 }
@@ -307,6 +360,6 @@ public function close(routine identity Function) fails budget.LimitError {
     if routine.state == 2 { try budget.reject("double close of U1a function"); } routine.state=2;
     try words.close(routine.blocks); try words.close(routine.values); try words.close(routine.instructions);
     try words.close(routine.operands); try words.close(routine.edges); try words.close(routine.arguments);
-    try words.close(routine.cells);
+    try words.close(routine.cells); try words.close(routine.switches); try words.close(routine.cases);
     let control be routine.control; routine.control=none; if control != none { try budget.release(control); }
 }
