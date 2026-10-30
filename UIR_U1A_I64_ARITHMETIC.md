@@ -29,3 +29,6 @@ Two new C-bootstrap-compiled U1a probe functions are independently evaluated bef
 This is a candidate *isolated IR construction/verification* slice, not a production native-code lowering path. It makes no performance claim and changes no source language, production frontend, C/owned runtime, instruction layout, ownership budgets, machine ABI or backend. The existing signed `i.add.overflow` operation remains ID 3. **Trapping division/remainder**, their own source fault provenance and runtime reporting adapters, strict binary64, calls and switches remain separate reviewed implementation gates. No shortcut via the host's undefined signed-overflow behavior is permitted.
 
 CI and completed-batch qualification must be reported only from the exact committed revision; the initial patch's static checks are not a claim that compiled tests passed.
+## CI-discovered integration regression
+
+The initial candidate test run exposed a lingering numeric-cell category comparison in U1a SSA promotion. The corrected slice replaces `instruction(state,cursor,0) >= 10` with `ops.isCell(...)` and adds a guard for that missed pattern. The `i64-merge` fixture and shape requirements remain unchanged. CI and completed-batch qualification must be evaluated on the corrected head.

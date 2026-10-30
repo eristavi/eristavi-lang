@@ -69,6 +69,9 @@ while opcode <= 25 {
                          'src/compiler/u1_promote.eri'):
             source_text = (ROOT / relative).read_text()
             self.assertNotRegex(source_text, r'\bop\s*(?:>=\s*10|<\s*10)\b')
+            # Do not let a direct instruction opcode read become a numeric cell category.
+            self.assertNotRegex(source_text,
+                                r'\binstruction\s*\([^\n]*,\s*0\)\s*(?:>=\s*10\b|<\s*10\b)')
 
     def test_nominal_ids_do_not_accept_a_block_as_a_value(self):
         source = self.root / 'bad.eri'

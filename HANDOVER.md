@@ -452,3 +452,10 @@ Changes proposed:
 Status at first commit: **implementation candidate, CI and qualification pending**. Do not claim compiled tests pass until an exact final revision is checked. No merging or production pipeline replacement is authorized solely by this checkpoint. Run focused U1 suites and normal four-platform CI, then completed-batch full bootstrap/owned integration qualification per policy before any merge. The full owned compiler self-build remains a separate explicit experiment.
 
 Next: independently specify and implement trapping signed/unsigned `i64.div` and `i64.rem` with zero and MIN/-1 fault outcomes and stable diagnostic origins. Follow with the strict binary64 profile, direct call/effect contract, sparse switch side tables and full source-provenance work. Keep U1a isolated until U2/U3 compatibility gates.
+### CI failure and corrective change on PR #65
+
+The first i64 commit `8df153aa314a431f2e85155101a1e9748aff7e44` failed the ARM64 test suite because `i64-merge` did not meet the expected SSA promotion shape. Audit revealed a numeric opcode threshold left in `u1_promote.eri:prepare`: `instruction(state,cursor,0) >= 10`. It treated newly introduced canonical operations as private cells.
+
+The corrective commit replaces the threshold with `ops.isCell(...)` and strengthens `tests/test_u1_foundation.py` to reject both `op >= 10` and direct instruction-opcode threshold checks. The original independent i64 tests and the one-parameter/two-edge diamond assertion remain mandatory. See `UIR_U1A_OPCODE_AUDIT.md` and `UIR_U1A_I64_ARITHMETIC.md`.
+
+**Re-run CI on the exact corrected revision.** Do not merge or claim completion based on the failed first run; preserve production compiler unchanged. Full owned-compiler self-build remains a separate experiment.
