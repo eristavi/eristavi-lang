@@ -288,6 +288,34 @@ def evaluate(ir, parameters, fuel=50000):
                                 number = a / b
                         # The U1a core does not expose NaN payloads or flags.
                         outputs = [_word(_QNAN) if math.isnan(number) else _host_bits(number)]
+
+            elif op in (37, 38, 39, 40):
+                # Width is an explicit, checked TypeId, not host Int width.
+                width = {4: 8, 5: 16, 6: 32}[extra]
+                mask = (1 << width) - 1
+                a, b = operands
+                ua, ub = a & mask, b & mask
+                if op == 40:
+                    relations = (a == b, a != b, a < b, a <= b, a > b, a >= b,
+                                 ua < ub, ua <= ub, ua > ub, ua >= ub)
+                    outputs = [relations[payload-1]]
+                else:
+                    unsigned = op == 39
+                    x, y = (ua, ub) if unsigned else (a, b)
+                    if payload == 1:
+                        exact = x + y
+                    elif payload == 2:
+                        exact = x - y
+                    else:
+                        exact = x * y
+                    raw = exact & mask
+                    signed_value = raw if raw < (1 << (width-1)) else raw - (1 << width)
+                    outputs = [signed_value]
+                    if op in (38, 39):
+                        overflow = (not 0 <= exact <= mask) if unsigned else (
+                            not -(1 << (width-1)) <= exact < (1 << (width-1))
+                        )
+                        outputs.append(overflow)
             elif op == 5:
                 trace.append((payload, location, bool(operands[0])))
                 if not operands[0]: return ('trap', (payload, location)), tuple(trace)
@@ -483,6 +511,39 @@ def cases_for(name, before):
                         _word(chosen ^ _SIGN),
                         _oracle_float_cmp(chosen, b, 3),
                     ))
+
+    elif name in ('narrow-i8', 'narrow-i16', 'narrow-i32', 'narrow-ops-merge'):
+        width = {'narrow-i8': 8, 'narrow-i16': 16, 'narrow-i32': 32,
+                 'narrow-ops-merge': 8}[name]
+        mask = (1 << width) - 1
+        lowest, highest = -(1 << (width-1)), (1 << (width-1))-1
+
+        def exact_signed(v):
+            return (v + (1 << (width-1))) % (1 << width) - (1 << (width-1))
+
+        for a, b in itertools.product((lowest, lowest+1, -1, 0, 1, highest-1, highest), repeat=2):
+            ua, ub = a & mask, b & mask
+            if name == 'narrow-ops-merge':
+                for flag in (False, True):
+                    selected = b if flag else a
+                    us = selected & mask
+                    yield (a, b, flag), ('return', (
+                        exact_signed(selected + b),
+                        us < ub,
+                        not lowest <= selected * b <= highest,
+                        us + ub > mask,
+                    ))
+            else:
+                signed_exact = (a+b, a-b, a*b)
+                unsigned_exact = (ua+ub, ua-ub, ua*ub)
+                outputs = [exact_signed(v) for v in signed_exact]
+                for v in signed_exact:
+                    outputs.extend((exact_signed(v), not lowest <= v <= highest))
+                for v in unsigned_exact:
+                    outputs.extend((exact_signed(v), not 0 <= v <= mask))
+                outputs.extend((a == b, a != b, a < b, a <= b, a > b, a >= b,
+                                ua < ub, ua <= ub, ua > ub, ua >= ub))
+                yield (a, b), ('return', tuple(outputs))
     else: raise AssertionError(f'unknown fixture {name}')
 
 
@@ -494,7 +555,10 @@ class U1PromotionTests(unittest.TestCase):
         (cls.root / 'compiler').symlink_to(ROOT / 'src/compiler', target_is_directory=True)
         cls.calls = [f'{family}({width}{",false" if family == "diamond" else ""})'
                      for family in ('diamond', 'loop', 'sequential') for width in (8, 32, 128)]
-        cls.calls += ['diamond(2,true)', 'swap()', 'reset()', 'irreducible()', 'dead(false)', 'faults(false)', 'faults(true)', 'floatCell()', 'passthrough()', 'predicateTruth()', 'predicateMerge()', 'integerArithmetic()', 'integerMerge()', 'divideSigned()', 'remainderSigned()', 'divideUnsigned()', 'remainderUnsigned()', 'divisionMerge()', 'divisionFaultOrder()', 'floatArithmetic()', 'floatMerge()', 'floatNonContraction()', 'narrowCell()', 'narrowConstants()', 'switchFlow()', 'switchDistinctEdges()',
+        cls.calls += ['diamond(2,true)', 'swap()', 'reset()', 'irreducible()', 'dead(false)', 'faults(false)', 'faults(true)', 'floatCell()', 'passthrough()', 'predicateTruth()', 'predicateMerge()', 'integerArithmetic()', 'integerMerge()', 'divideSigned()', 'remainderSigned()', 'divideUnsigned()', 'remainderUnsigned()', 'divisionMerge()', 'divisionFaultOrder()', 'floatArithmetic()', 'floatMerge()', 'floatNonContraction()', 'narrowCell()', 'narrowConstants()', 'narrowArithmetic(meta.i8(),"narrow-i8")',
+                     'narrowArithmetic(meta.i16(),"narrow-i16")',
+                     'narrowArithmetic(meta.i32(),"narrow-i32")',
+                     'narrowArithmeticMerge()', 'switchFlow()', 'switchDistinctEdges()',
                       'invalidCell(0)', 'invalidCell(1)', 'invalidCell(2)', 'dead(true)', 'failedWork()', 'canonicalReject()', 'failedOutput()', 'cancelled()']
         cls.source = cls.root / 'promotion.eri'; cls.source.write_text(probe_source(cls.calls))
         cls.binary = cls.root / 'promotion-c'
@@ -524,7 +588,7 @@ class U1PromotionTests(unittest.TestCase):
         result = subprocess.run([str(self.binary)], capture_output=True, text=True, timeout=120)
         self.assertEqual((result.returncode, result.stderr), (0, ''), result.stdout[-300:])
         snapshots, labels = self.check_snapshots(result.stdout)
-        self.assertEqual(len(snapshots), 35)
+        self.assertEqual(len(snapshots), 39)
         self.assertEqual(labels, ['invalid-init:ok']*3 + ['malformed-dead:ok', 'promotion-limit:ok', 'canonical-reject:ok', 'partial-output:ok', 'cancelled:ok'])
         again = subprocess.run([str(self.binary)], capture_output=True, text=True, timeout=120)
         self.assertEqual((again.returncode, again.stdout, again.stderr), (0, result.stdout, ''))
