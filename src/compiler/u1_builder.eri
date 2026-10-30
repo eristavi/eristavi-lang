@@ -103,6 +103,8 @@ function append(routine identity Function,block BlockId,op Int,arguments,locatio
     }
     if op == 2 and payload != 0 and payload != 1 { try budget.reject("invalid U1a predicate constant"); }
     if op == 5 and (payload < 1 or payload > 4) { try budget.reject("invalid U1a trap code"); }
+    if op == 18 and (payload < 1 or payload > 10) { try budget.reject("invalid U1a i64 comparison relation"); }
+    if op >= 15 and op <= 23 and op != 18 and payload != 0 { try budget.reject("invalid U1a i64 arithmetic payload"); }
     if routine.instructions.length/10 >= 1048576 or ops.results(op) > 1048576-routine.values.length/4 { try budget.exceed(routine.owner,1,0); }
     let first be routine.operands.length; index=0;
     while index < arguments.count { let value be arguments[index]; let ignored be try words.push(routine.operands,routine.phase,value.index); index=index+1; }
@@ -145,6 +147,40 @@ public function floatBits(routine identity Function,block BlockId,bits Int,locat
 }
 public function addOverflow(routine identity Function,block BlockId,first ValueId,second ValueId,location meta.LocId) returns Pair fails budget.LimitError {
     let instruction be try append(routine,block,3,[first,second],location,0,0);
+    return Pair { value=try result(routine,instruction,0); overflow=try result(routine,instruction,1); };
+}
+// Exact i64 bit-vector operations: wraparound does not imply checked source arithmetic.
+public function wrapAdd(routine identity Function,block BlockId,first ValueId,second ValueId,location meta.LocId) returns ValueId fails budget.LimitError {
+    return try result(routine,try append(routine,block,15,[first,second],location,0,0),0);
+}
+public function wrapSubtract(routine identity Function,block BlockId,first ValueId,second ValueId,location meta.LocId) returns ValueId fails budget.LimitError {
+    return try result(routine,try append(routine,block,16,[first,second],location,0,0),0);
+}
+public function wrapMultiply(routine identity Function,block BlockId,first ValueId,second ValueId,location meta.LocId) returns ValueId fails budget.LimitError {
+    return try result(routine,try append(routine,block,17,[first,second],location,0,0),0);
+}
+// Relations 1..10 encode eq, ne, signed lt/le/gt/ge, unsigned lt/le/gt/ge.
+public function compareInteger(routine identity Function,block BlockId,first ValueId,second ValueId,relation Int,location meta.LocId) returns ValueId fails budget.LimitError {
+    return try result(routine,try append(routine,block,18,[first,second],location,relation,0),0);
+}
+public function subtractOverflow(routine identity Function,block BlockId,first ValueId,second ValueId,location meta.LocId) returns Pair fails budget.LimitError {
+    let instruction be try append(routine,block,19,[first,second],location,0,0);
+    return Pair { value=try result(routine,instruction,0); overflow=try result(routine,instruction,1); };
+}
+public function multiplyOverflow(routine identity Function,block BlockId,first ValueId,second ValueId,location meta.LocId) returns Pair fails budget.LimitError {
+    let instruction be try append(routine,block,20,[first,second],location,0,0);
+    return Pair { value=try result(routine,instruction,0); overflow=try result(routine,instruction,1); };
+}
+public function unsignedAddOverflow(routine identity Function,block BlockId,first ValueId,second ValueId,location meta.LocId) returns Pair fails budget.LimitError {
+    let instruction be try append(routine,block,21,[first,second],location,0,0);
+    return Pair { value=try result(routine,instruction,0); overflow=try result(routine,instruction,1); };
+}
+public function unsignedSubtractOverflow(routine identity Function,block BlockId,first ValueId,second ValueId,location meta.LocId) returns Pair fails budget.LimitError {
+    let instruction be try append(routine,block,22,[first,second],location,0,0);
+    return Pair { value=try result(routine,instruction,0); overflow=try result(routine,instruction,1); };
+}
+public function unsignedMultiplyOverflow(routine identity Function,block BlockId,first ValueId,second ValueId,location meta.LocId) returns Pair fails budget.LimitError {
+    let instruction be try append(routine,block,23,[first,second],location,0,0);
     return Pair { value=try result(routine,instruction,0); overflow=try result(routine,instruction,1); };
 }
 public function negatePredicate(routine identity Function,block BlockId,value ValueId,location meta.LocId) returns ValueId fails budget.LimitError {

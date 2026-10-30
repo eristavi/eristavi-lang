@@ -437,3 +437,18 @@ GitHub reports that both code-bearing merge-commit trees were exactly equal to t
 7. Use focused tests for each reviewed slice, batch full qualification per `CI_QUALIFICATION.md`, and record final head/tree identities and observed evidence before merges.
 
 This section is a documentation-only checkpoint. It is not a new operation contract, benchmark, optimizer or replacement compiler.
+
+
+## 13. Next isolated U1a integer operation slice — 2026-10-30
+
+Branch `compiler/u1a-i64-arithmetic` is based on the merged main checkpoint `549ff783d23263caa53769f8ae273d350cf2b2b3`. Follow the approved full `docs/architecture/Eristavi-UIR-U1-Contract-2026-10-29.md`, the locked `INTEGER_REMAINDER.md`, this handover, and `CI_QUALIFICATION.md`. Previous PRs #61–64 are merged and not blockers.
+
+Changes proposed:
+- Add exact i64 wrapping add/sub/mul, signed subtraction/multiplication overflow pairs, unsigned add/subtract/multiply overflow pairs, and ten signed/unsigned integer comparison relations. Keep legacy signed addition-with-overflow ID 3 unchanged. IDs 15–23 are **private implementation IDs**.
+- Update typed U1 builder/closed opcode registry and independent verifier, including rejection of invalid operation attributes/modes and malformed unreachable instructions.
+- Extend the independent Python scalar evaluator with unsigned bit-vector handling and compare modes. Add a before/after SSA promotion matrix over 11 x 11 signed boundary pairs and a cell-mediated diamond merge with both branch outcomes.
+- Extend the opcode-known probe and write `UIR_U1A_I64_ARITHMETIC.md`.
+
+Status at first commit: **implementation candidate, CI and qualification pending**. Do not claim compiled tests pass until an exact final revision is checked. No merging or production pipeline replacement is authorized solely by this checkpoint. Run focused U1 suites and normal four-platform CI, then completed-batch full bootstrap/owned integration qualification per policy before any merge. The full owned compiler self-build remains a separate explicit experiment.
+
+Next: independently specify and implement trapping signed/unsigned `i64.div` and `i64.rem` with zero and MIN/-1 fault outcomes and stable diagnostic origins. Follow with the strict binary64 profile, direct call/effect contract, sparse switch side tables and full source-provenance work. Keep U1a isolated until U2/U3 compatibility gates.
