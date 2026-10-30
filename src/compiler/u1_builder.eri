@@ -248,12 +248,7 @@ public function branch(routine identity Function,block BlockId,test ValueId,firs
     let ignored be try append(routine,block,7,[test],location,firstEdge,secondEdge);
 }
 
-function switchLess(a Int,b Int) returns Bool {
-    // Unsigned order without overflowing Int or using host Float.
-    if a < 0 and b >= 0 { return false; }
-    if a >= 0 and b < 0 { return true; }
-    return a < b;
-}
+function switchLess(a Int,b Int) returns Bool { return ops.unsignedLess(a,b); }
 function validateEdge(routine identity Function,edge EdgeId) fails budget.LimitError {
     if edge.owner != routine.key or edge.index < 1 or edge.index > routine.edges.length/3 {
         try budget.reject("foreign or invalid switch EdgeId");
