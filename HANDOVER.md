@@ -586,3 +586,12 @@ Implemented, isolated U1a: private binary64 add/sub/mul/div/neg and six comparis
 - Full conflicts/limits recorded in `UIR_U1B_COMBINED_INTEGRATION.md`.
 - **At creation this is an unqualified integration candidate.** The original green CI on #81/#82 does not qualify code combined with U1a PR #83; run fresh four-platform CI and completed-batch qualification on exact final merged tree after U1a base is stabilized.
 - Remaining U1b: width-specific arithmetic and immutable aggregates. U2 managed values/failures/resources and U3 frontend→UIR/native integration have not been implemented by this PR. Do not retire old pipeline or run historical owned full self-build.
+
+
+## 20. Proposed U1b narrow wrap/overflow/comparison slice (2026-10-30)
+
+- Branch `compiler/u1b-narrow-arithmetic` stacked on U1a/U1b integration PR #84; operation IDs 37–40 cover exact i8/i16/i32 wrapping add/sub/mul, signed/unsigned overflow pairs and ten comparisons via explicit width/mode attributes.
+- Independent verification rejects mixed widths, invalid operand/result types/modes and malformed dead instructions. `tests/test_u1_promotion.py` adds three width-specific direct oracle fixtures and an i8 cell diamond, totaling **39** promotion snapshots; all original U1a/switch/call tests remain required.
+- Details and residual gates: `UIR_U1B_NARROW_ARITHMETIC.md`.
+- **Status at commit creation: draft implementation, CI/qualification not yet validated**. Requalify after PR #83 and PR #84 have been merged and the final tree reconciled; do not merge or retire the production compiler before the complete gates.
+- Still open: narrow div/rem, immutable aggregate U1b, U1a multi-function execution/imported effects, strict native Float, complete origins, U2 managed/failure/resource profile, U3 direct frontend→UIR/native adapter.
