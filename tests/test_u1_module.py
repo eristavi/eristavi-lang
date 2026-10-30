@@ -14,6 +14,7 @@ EXPECTED = ''.join(label + ":ok\n" for label in (
     "forward-and-mutual-calls",
     "duplicate-definition",
     "incomplete-module",
+    "malformed-unreachable-call",
     "all-definitions-verified",
     "import-unresolved",
     "no-binding-after-seal",
