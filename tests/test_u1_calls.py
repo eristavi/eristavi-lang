@@ -42,8 +42,9 @@ function directCalls() fails budget.LimitError,verify.InvalidIR,ProbeError {
     try change(routine.values,edit,8,3);
     try rejected(harness,2,1,"call-result"); try change(routine.values,edit,8,2);
     let metadataEdit be try budget.constructionPhase(shared);
-    try change(data.declarations,metadataEdit,5,0);
-    try rejected(harness,1,0,"call-import-version"); try change(data.declarations,metadataEdit,5,1);
+    // The imported declaration is record 2, so its version is at 6+5=11.
+    try change(data.declarations,metadataEdit,11,0);
+    try rejected(harness,1,0,"call-import-version"); try change(data.declarations,metadataEdit,11,1);
     try accepted(harness,2,"call-restored"); try close(harness);
 }
 function run() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError {
