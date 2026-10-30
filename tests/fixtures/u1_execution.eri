@@ -2,6 +2,7 @@
 import std.process;
 import compiler.u1_budget as budget;
 import compiler.u1_meta as meta;
+import compiler.u1_words as words;
 import compiler.u1_builder as build;
 import compiler.u1_module as link;
 import compiler.u1_imports as imports;
@@ -12,6 +13,37 @@ import compiler.u1_verify as verify;
 error ProbeError { message Text; }
 function check(condition Bool,message Text) fails ProbeError {
     if not condition { fail ProbeError { message=message; }; }
+}
+function deniedSelect(policy identity imports.Policy,target meta.FunctionId,
+    adapter Int,label Text) returns Bool fails ProbeError {
+    let chosen be imports.select(policy,target,adapter) else error budget.LimitError {
+        try check(error.category == "invalid-state","wrong import rejection category");
+        output(label+":ok"); return true;
+    };
+    fail ProbeError { message="accepted untrusted import: "+label; };
+}
+function deniedFreeze(policy identity imports.Policy) returns Bool fails ProbeError {
+    let count be imports.freeze(policy) else error budget.LimitError {
+        output("missing-trusted-import:ok"); return true;
+    };
+    fail ProbeError { message="accepted incomplete import context"; };
+}
+function deniedEffect(program identity link.Program,policy identity imports.Policy)
+    returns Bool fails ProbeError,verify.InvalidIR {
+    let snapshot be effects.inspect(program,policy) else error budget.LimitError {
+        try check(error.category == "invalid-state","understated effect category");
+        output("understated-effect-bound:ok"); return true;
+    } else error verify.InvalidIR { fail error; };
+    try effects.close(snapshot);
+    fail ProbeError { message="accepted understated function effects"; };
+}
+function deniedRun(program identity link.Program,policy identity imports.Policy,
+    target meta.FunctionId,label Text) returns Bool fails ProbeError,verify.InvalidIR {
+    let result be exec.run(program,policy,target,[4],400,64) else error budget.LimitError {
+        try check(error.category == "invalid-state","invalid machine rejection category");
+        output(label+":ok"); return true;
+    } else error verify.InvalidIR { fail error; };
+    fail ProbeError { message="executed stale or untrusted function: "+label; };
 }
 function run() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError {
     let root be try budget.developmentRequest();
@@ -111,7 +143,25 @@ function run() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError 
     try check(try link.seal(registry) == 5,"missing callable local definitions");
 
     let policy be try imports.create(registry);
+    let bad be try deniedSelect(policy,traceId,2,"wrong-import-adapter");
+    // Test contract versions and effect masks, not arbitrary optimizer hints.
+    let edit be try budget.constructionPhase(shared);
+    data.declarations.frozen=false;
+    try words.set(data.declarations,edit,(traceId.index-1)*6+5,2);
+    data.declarations.frozen=true;
+    bad=try deniedSelect(policy,traceId,1,"stale-import-version");
+    data.declarations.frozen=false;
+    try words.set(data.declarations,edit,(traceId.index-1)*6+5,1);
+    try words.set(data.declarations,edit,(traceId.index-1)*6+4,0);
+    data.declarations.frozen=true;
+    bad=try deniedSelect(policy,traceId,1,"untrusted-import-effects");
+    data.declarations.frozen=false;
+    try words.set(data.declarations,edit,(traceId.index-1)*6+4,4);
+    data.declarations.frozen=true;
+    try budget.finishPhase(edit);
+
     let selected be try imports.select(policy,traceId,1);
+    bad=try deniedFreeze(policy);
     selected=try imports.select(policy,identityId,2);
     let locked be try imports.freeze(policy);
     let summary be try effects.inspect(registry,policy);
@@ -121,6 +171,15 @@ function run() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError 
     try check(try effects.mask(summary,safeId) == 4,"trusted external effect");
     try check(try effects.mask(summary,defectId) == 20,"first external and terminal fault");
     try effects.close(summary);
+    let under be try budget.constructionPhase(shared);
+    data.declarations.frozen=false;
+    try words.set(data.declarations,under,(evenId.index-1)*6+4,0);
+    data.declarations.frozen=true;
+    bad=try deniedEffect(registry,policy);
+    data.declarations.frozen=false;
+    try words.set(data.declarations,under,(evenId.index-1)*6+4,32);
+    data.declarations.frozen=true;
+    try budget.finishPhase(under);
     output("recursive-scc-effects:ok");
     output("trusted-versioned-imports:ok");
 
@@ -152,6 +211,18 @@ function run() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError 
     result=try exec.run(registry,policy,evenId,[-1],30,12);
     try check(result.kind == 2,"unbounded recursion escaped fuel or depth cap");
     output("bounded-divergence:ok");
+    let staleEdit be try budget.constructionPhase(shared);
+    data.declarations.frozen=false;
+    try words.set(data.declarations,staleEdit,(traceId.index-1)*6+5,2);
+    data.declarations.frozen=true;
+    bad=try deniedRun(registry,policy,safeId,"stale-import-after-freeze");
+    data.declarations.frozen=false;
+    try words.set(data.declarations,staleEdit,(traceId.index-1)*6+5,1);
+    data.declarations.frozen=true;
+    try budget.finishPhase(staleEdit);
+    even.revision=even.revision+1;
+    bad=try deniedRun(registry,policy,evenId,"stale-body-revision");
+    even.revision=even.revision-1;
 
     try imports.close(policy); try link.close(registry);
     try build.close(odd); try build.close(even); try build.close(twin);
