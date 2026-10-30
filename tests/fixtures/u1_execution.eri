@@ -1,0 +1,174 @@
+// Hand-built U1a callgraph, independent from the production frontend.
+import std.process;
+import compiler.u1_budget as budget;
+import compiler.u1_meta as meta;
+import compiler.u1_builder as build;
+import compiler.u1_module as link;
+import compiler.u1_imports as imports;
+import compiler.u1_effects as effects;
+import compiler.u1_execute as exec;
+import compiler.u1_verify as verify;
+
+error ProbeError { message Text; }
+function check(condition Bool,message Text) fails ProbeError {
+    if not condition { fail ProbeError { message=message; }; }
+}
+function run() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let root be try budget.developmentRequest();
+    let shared be try budget.metadataOwner(root);
+    let phase be try budget.constructionPhase(shared);
+    let data be try meta.create(shared,phase);
+    let predicate be try meta.signature(data,phase,[meta.i64()],[meta.pred()]);
+    let pair be try meta.signature(data,phase,[meta.i64()],[meta.i64(),meta.pred()]);
+    let nothing be try meta.signature(data,phase,[meta.i64()],[]);
+    let identitySig be try meta.signature(data,phase,[meta.i64()],[meta.i64()]);
+    let evenId be try meta.declaration(data,phase,predicate,"recursive.even",1,32,0);
+    let oddId be try meta.declaration(data,phase,predicate,"recursive.odd",1,32,0);
+    let pairId be try meta.declaration(data,phase,pair,"result.pair",1,32,0);
+    let traceId be try meta.declaration(data,phase,nothing,"u1.test.trace",2,4,1);
+    let identityId be try meta.declaration(data,phase,identitySig,"u1.test.identity",2,0,1);
+    let safeId be try meta.declaration(data,phase,nothing,"test.safe",1,4,0);
+    let defectId be try meta.declaration(data,phase,nothing,"test.defect",1,20,0);
+    let source be try meta.source(data,phase,"u1-execution",
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",64);
+    let loc be try meta.location(data,phase,source,0,8,1,1,2);
+    let faultLoc be try meta.location(data,phase,source,9,17,9,2,3);
+    try meta.freeze(data); try budget.finishPhase(phase);
+
+    let ownerOdd be try budget.functionOwner(root,false);
+    let phaseOdd be try budget.constructionPhase(ownerOdd);
+    let odd be try build.create(data,predicate,ownerOdd,phaseOdd);
+    let oddEntry be try build.block(odd,[meta.i64()]);
+    let oddZero be try build.block(odd,[]);
+    let oddContinue be try build.block(odd,[]);
+    let oddN be try build.parameter(odd,oddEntry,0);
+    let zero be try build.integer(odd,oddEntry,0,loc);
+    let isZero be try build.compareInteger(odd,oddEntry,oddN,zero,1,loc);
+    try build.branch(odd,oddEntry,isZero,oddZero,[],oddContinue,[],loc);
+    let no be try build.predicate(odd,oddZero,false,loc);
+    try build.returnValues(odd,oddZero,[no],loc);
+    let one be try build.integer(odd,oddContinue,1,loc);
+    let prev be try build.wrapSubtract(odd,oddContinue,oddN,one,loc);
+    let nextEven be try build.call(odd,oddContinue,evenId,[prev],loc);
+    try build.returnValues(odd,oddContinue,[try build.result(odd,nextEven,0)],loc);
+    try build.complete(odd); try budget.finishPhase(phaseOdd);
+
+    let ownerEven be try budget.functionOwner(root,false);
+    let phaseEven be try budget.constructionPhase(ownerEven);
+    let even be try build.create(data,predicate,ownerEven,phaseEven);
+    let evenEntry be try build.block(even,[meta.i64()]);
+    let evenZero be try build.block(even,[]);
+    let evenContinue be try build.block(even,[]);
+    let evenN be try build.parameter(even,evenEntry,0);
+    let eZero be try build.integer(even,evenEntry,0,loc);
+    let eIsZero be try build.compareInteger(even,evenEntry,evenN,eZero,1,loc);
+    try build.branch(even,evenEntry,eIsZero,evenZero,[],evenContinue,[],loc);
+    let yes be try build.predicate(even,evenZero,true,loc);
+    try build.returnValues(even,evenZero,[yes],loc);
+    let eOne be try build.integer(even,evenContinue,1,loc);
+    let ePrev be try build.wrapSubtract(even,evenContinue,evenN,eOne,loc);
+    let nextOdd be try build.call(even,evenContinue,oddId,[ePrev],loc);
+    try build.returnValues(even,evenContinue,[try build.result(even,nextOdd,0)],loc);
+    try build.complete(even); try budget.finishPhase(phaseEven);
+
+    let ownerPair be try budget.functionOwner(root,false);
+    let phasePair be try budget.constructionPhase(ownerPair);
+    let twin be try build.create(data,pair,ownerPair,phasePair);
+    let twinEntry be try build.block(twin,[meta.i64()]);
+    let twinN be try build.parameter(twin,twinEntry,0);
+    let same be try build.call(twin,twinEntry,identityId,[twinN],loc);
+    let isEven be try build.call(twin,twinEntry,evenId,[twinN],loc);
+    try build.returnValues(twin,twinEntry,[try build.result(twin,same,0),
+        try build.result(twin,isEven,0)],loc);
+    try build.complete(twin); try budget.finishPhase(phasePair);
+
+    let ownerSafe be try budget.functionOwner(root,false);
+    let phaseSafe be try budget.constructionPhase(ownerSafe);
+    let safe be try build.create(data,nothing,ownerSafe,phaseSafe);
+    let safeEntry be try build.block(safe,[meta.i64()]);
+    let safeN be try build.parameter(safe,safeEntry,0);
+    let traced be try build.call(safe,safeEntry,traceId,[safeN],loc);
+    try build.returnValues(safe,safeEntry,[],loc);
+    try build.complete(safe); try budget.finishPhase(phaseSafe);
+
+    let ownerDefect be try budget.functionOwner(root,false);
+    let phaseDefect be try budget.constructionPhase(ownerDefect);
+    let defect be try build.create(data,nothing,ownerDefect,phaseDefect);
+    let defectEntry be try build.block(defect,[meta.i64()]);
+    let defectN be try build.parameter(defect,defectEntry,0);
+    let emitted be try build.call(defect,defectEntry,traceId,[defectN],loc);
+    let blocked be try build.predicate(defect,defectEntry,false,faultLoc);
+    try build.guard(defect,defectEntry,blocked,3,faultLoc);
+    try build.returnValues(defect,defectEntry,[],faultLoc);
+    try build.complete(defect); try budget.finishPhase(phaseDefect);
+
+    let registry be try link.create(data);
+    let bound be try link.bind(registry,oddId,odd);
+    bound=try link.bind(registry,evenId,even);
+    bound=try link.bind(registry,pairId,twin);
+    bound=try link.bind(registry,safeId,safe);
+    bound=try link.bind(registry,defectId,defect);
+    try check(try link.seal(registry) == 5,"missing callable local definitions");
+
+    let policy be try imports.create(registry);
+    let selected be try imports.select(policy,traceId,1);
+    selected=try imports.select(policy,identityId,2);
+    let locked be try imports.freeze(policy);
+    let summary be try effects.inspect(registry,policy);
+    try check(try effects.mask(summary,evenId) == 32,"even recursive divergence");
+    try check(try effects.mask(summary,oddId) == 32,"odd recursive divergence");
+    try check(try effects.mask(summary,pairId) == 32,"transitive recursive effect");
+    try check(try effects.mask(summary,safeId) == 4,"trusted external effect");
+    try check(try effects.mask(summary,defectId) == 20,"first external and terminal fault");
+    try effects.close(summary);
+    output("recursive-scc-effects:ok");
+    output("trusted-versioned-imports:ok");
+
+    let result be try exec.run(registry,policy,evenId,[8],400,64);
+    try check(result.kind == 0 and result.count == 1 and try exec.value(result,0) == 1,
+        "even(8) must return true");
+    result=try exec.run(registry,policy,oddId,[8],400,64);
+    try check(result.kind == 0 and try exec.value(result,0) == 0,
+        "odd(8) must return false");
+    result=try exec.run(registry,policy,evenId,[9],400,64);
+    try check(result.kind == 0 and try exec.value(result,0) == 0,
+        "even(9) must return false");
+    output("bounded-mutual-recursion:ok");
+
+    result=try exec.run(registry,policy,pairId,[6],400,64);
+    try check(result.kind == 0 and result.count == 2 and
+        try exec.value(result,0) == 6 and try exec.value(result,1) == 1,
+        "multivalue identity and recursive result");
+    output("multiresult-calls:ok");
+    result=try exec.run(registry,policy,safeId,[9],400,64);
+    try check(result.kind == 0 and result.count == 0 and result.trace == "trace:9;",
+        "zero-result trusted imported external effect");
+    output("zeroresult-import-trace:ok");
+
+    result=try exec.run(registry,policy,defectId,[7],400,64);
+    try check(result.kind == 1 and result.code == 3 and result.location == faultLoc.index and
+        result.trace == "trace:7;","first effect then exact originating trap");
+    output("first-effect-and-fault-location:ok");
+    result=try exec.run(registry,policy,evenId,[-1],30,12);
+    try check(result.kind == 2,"unbounded recursion escaped fuel or depth cap");
+    output("bounded-divergence:ok");
+
+    try imports.close(policy); try link.close(registry);
+    try build.close(odd); try build.close(even); try build.close(twin);
+    try build.close(safe); try build.close(defect); try meta.close(data);
+    try check(root.live == 0 and root.pending == 0,"U1a machine charges leaked");
+    try budget.close(ownerOdd); try budget.close(ownerEven); try budget.close(ownerPair);
+    try budget.close(ownerSafe); try budget.close(ownerDefect);
+    try budget.close(shared); try budget.close(root);
+    output("recovered-budgets:ok");
+    return true;
+}
+function main() {
+    let success be run()
+    else error budget.LimitError {
+        output(error.category+":"+error.message); process.setExitCode(1); return;
+    } else error verify.InvalidIR {
+        output(error.category+":"+error.message); process.setExitCode(1); return;
+    } else error ProbeError { output(error.message); process.setExitCode(1); return; };
+}
+main();
