@@ -66,9 +66,11 @@ function assign(frame identity Frame,start Int,values maybe identity Slot,count 
     fails budget.LimitError {
     let cursor be values; let item be 0;
     while item < count {
-        if cursor == none { try budget.reject("missing U1a argument value"); }
-        try put(frame,start+item,cursor.bits);
-        cursor=cursor.next; item=item+1;
+        if cursor != none {
+            try put(frame,start+item,cursor.bits);
+            cursor=cursor.next;
+        } else { try budget.reject("missing U1a argument value"); }
+        item=item+1;
     }
     if cursor != none { try budget.reject("excess U1a argument value"); }
 }
@@ -142,16 +144,17 @@ function selected(program identity link.Program,policy identity imports.Policy,
     target meta.FunctionId,values maybe identity Slot,count Int,state identity Machine)
     returns identity Outcome fails budget.LimitError {
     let adapter be try imports.adapter(policy,target);
-    if count != 1 or values == none or values.next != none {
-        try budget.reject("trusted import argument shape mismatch");
-    }
-    if adapter == 1 {
-        state.trace=state.trace+"trace:"+format.integer(values.bits)+";";
-        return outcome(0,0,0,none,0);
-    }
-    if adapter == 2 {
-        return outcome(0,0,0,identity Slot { bits=values.bits; next=none; },1);
-    }
+    if count != 1 { try budget.reject("trusted import argument shape mismatch"); }
+    if values != none {
+        if values.next != none { try budget.reject("trusted import argument shape mismatch"); }
+        if adapter == 1 {
+            state.trace=state.trace+"trace:"+format.integer(values.bits)+";";
+            return outcome(0,0,0,none,0);
+        }
+        if adapter == 2 {
+            return outcome(0,0,0,identity Slot { bits=values.bits; next=none; },1);
+        }
+    } else { try budget.reject("trusted import has no argument"); }
     try budget.reject("unsupported trusted U1a import adapter");
     return outcome(3,adapter,0,none,0);
 }
