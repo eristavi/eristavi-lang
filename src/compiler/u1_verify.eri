@@ -64,7 +64,7 @@ function bounds(context identity Context) fails budget.LimitError,InvalidIR {
     context.scanLimit=32*(records+1);
     try require(context,routine.signature.owner == data.key and routine.signature.index >= 1 and routine.signature.index <= data.signatures.length/6,"invalid function signature owner or index");
 }
-function typeIndex(context identity Context,index Int) fails InvalidIR { try require(context,index >= 1 and index <= 3,"unsupported scalar type"); }
+function typeIndex(context identity Context,index Int) fails InvalidIR { try require(context,index >= 1 and index <= 6,"unsupported U1 core type"); }
 function sameSequence(context identity Context,table identity words.Words,first Int,second Int,count Int) returns Bool fails budget.LimitError {
     // Canonical collision comparisons have their own work, outside the linear scan.
     let index be 0;
@@ -309,6 +309,7 @@ function instruction(context identity Context,index Int,terminal Bool,position I
             let start be try read(context,routine.metadata.signatures,(callSignature-1)*6+4);
             resultType=try read(context,routine.metadata.types,start+item);
         }
+        if op == 36 { resultType=try read(context,routine.instructions,offset+8); }
         try claimValue(context,first+item,resultType,1,index,item); item=item+1;
     }
     let payload be try read(context,routine.instructions,offset+7); let extra be try read(context,routine.instructions,offset+8);
@@ -325,7 +326,15 @@ function instruction(context identity Context,index Int,terminal Bool,position I
     }
     if op >= 28 and op <= 32 { try require(context,payload == 0,"invalid binary64 operation payload"); }
     if op == 33 { try require(context,payload >= 1 and payload <= 6,"invalid binary64 comparison relation"); }
-    if op != 7 { try require(context,extra == 0,"unsupported operation attribute"); }
+    if op == 36 {
+        let width be extra;
+        try require(context,width >= 4 and width <= 6,"invalid narrow constant TypeId");
+        let maximum be 255;
+        if width == 5 { maximum=65535; }
+        if width == 6 { maximum=4294967295; }
+        try require(context,payload >= 0 and payload <= maximum,"narrow constant exceeds bit width");
+    }
+    if op != 7 and op != 36 { try require(context,extra == 0,"unsupported operation attribute"); }
     if terminal { try require(context,try read(context,routine.instructions,offset+9) == 0,"terminator has a successor instruction"); }
     let successors be try succ.count(routine,context.phase,index); let itemEdge be 0;
     while itemEdge < successors {
