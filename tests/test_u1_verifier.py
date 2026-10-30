@@ -149,7 +149,10 @@ class U1VerifierTests(unittest.TestCase):
     def assert_execution(self, binary, expected):
         result = subprocess.run([str(binary)], capture_output=True, text=True, timeout=120,
                                 env={'PATH': '/unavailable', 'LANG': 'C'})
-        self.assertEqual((result.returncode, result.stdout, result.stderr), (0, expected, ''))
+        self.assertEqual(result.returncode, 0,
+                         f"verifier probe exited {result.returncode}; stdout tail={result.stdout[-450:]!r}; stderr={result.stderr[-450:]!r}")
+        self.assertEqual(result.stdout, expected)
+        self.assertEqual(result.stderr, '')
 
     def test_malformed_ir_and_budget_protocol(self):
         self.assert_execution(self.root / 'protocol-c', PROTOCOL)
