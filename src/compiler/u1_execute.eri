@@ -9,6 +9,7 @@ import compiler.u1_builder as build;
 import compiler.u1_module as link;
 import compiler.u1_imports as imports;
 import compiler.u1_effects as effects;
+import compiler.u1_verify as verify;
 import compiler.u1_ops as ops;
 import compiler.format as format;
 
@@ -284,7 +285,7 @@ function walk(program identity link.Program,policy identity imports.Policy,
 }
 public function run(program identity link.Program,policy identity imports.Policy,
     target meta.FunctionId,inputs,fuel Int,depthLimit Int)
-    returns identity Outcome fails budget.LimitError,compiler.u1_verify.InvalidIR {
+    returns identity Outcome fails budget.LimitError,verify.InvalidIR {
     if fuel < 1 or fuel > 1048576 or depthLimit < 1 or depthLimit > 1024 {
         try budget.reject("invalid bounded U1a evaluation limits");
     }
