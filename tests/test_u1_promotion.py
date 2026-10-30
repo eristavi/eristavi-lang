@@ -1,6 +1,9 @@
 """Scalar-cell SSA promotion: independent execution, shape and failure checks."""
 from pathlib import Path
 import itertools
+import math
+import struct
+from fractions import Fraction
 import platform
 import shutil
 import subprocess
@@ -14,6 +17,134 @@ from compiler.erist.project import compile_module
 ROOT = Path(__file__).resolve().parents[1]
 TABLES = ('blocks', 'values', 'instructions', 'operands', 'edges', 'arguments', 'cells')
 MIN, MAX = -(1 << 63), (1 << 63) - 1
+
+
+
+# Separate exact-rational expected-value oracle. The executable reference below
+# uses Python host binary64; this oracle does NOT execute a host FP operation.
+_U64 = (1 << 64) - 1
+_SIGN = 1 << 63
+_QNAN = 0x7ff8000000000000
+_FLOAT_SAMPLES = (
+    0, _SIGN, 1, _SIGN | 1, (1 << 52) - 1, 1 << 52,
+    0x3ff0000000000000, 0xbff0000000000000,
+    0x3ff0000000000001, 0x3fefffffffffffff,
+    0x7fefffffffffffff, 0xffefffffffffffff,
+    0x7ff0000000000000, 0xfff0000000000000, _QNAN,
+)
+
+
+def _word(bits):
+    bits &= _U64
+    return bits - (1 << 64) if bits >= _SIGN else bits
+
+
+def _host_float(bits):
+    return struct.unpack('>d', struct.pack('>Q', bits & _U64))[0]
+
+
+def _host_bits(number):
+    return _word(struct.unpack('>Q', struct.pack('>d', number))[0])
+
+
+def _exact_float(bits):
+    bits &= _U64
+    sign = bool(bits & _SIGN)
+    exponent = (bits >> 52) & 2047
+    fraction = bits & ((1 << 52) - 1)
+    if exponent == 2047:
+        return ('nan' if fraction else 'inf', sign, None)
+    mantissa = fraction if exponent == 0 else (1 << 52) | fraction
+    shift = -1074 if exponent == 0 else exponent - 1075
+    value = Fraction(mantissa << shift, 1) if shift >= 0 else Fraction(mantissa, 1 << -shift)
+    return 'num', sign, -value if sign else value
+
+
+def _round_binary64(value, negative_zero=False):
+    """Exact round-to-nearest-ties-even rational -> IEEE754 binary64 bits."""
+    if not value:
+        return _SIGN if negative_zero else 0
+    negative = value < 0
+    numerator, denominator = abs(value.numerator), value.denominator
+    exponent = numerator.bit_length() - denominator.bit_length()
+    if ((numerator < (denominator << exponent)) if exponent >= 0
+            else ((numerator << -exponent) < denominator)):
+        exponent -= 1
+    if exponent > 1023:
+        return (_SIGN if negative else 0) | (0x7ff << 52)
+    scale = 52 - exponent if exponent >= -1022 else 1074
+    scaled_num = numerator << scale if scale >= 0 else numerator
+    scaled_den = denominator if scale >= 0 else denominator << -scale
+    mantissa, remainder = divmod(scaled_num, scaled_den)
+    if 2 * remainder > scaled_den or (2 * remainder == scaled_den and mantissa & 1):
+        mantissa += 1
+    if exponent >= -1022:
+        if mantissa >= (1 << 53):
+            mantissa >>= 1
+            exponent += 1
+        if exponent > 1023:
+            return (_SIGN if negative else 0) | (0x7ff << 52)
+        body = ((exponent + 1023) << 52) | (mantissa - (1 << 52))
+    else:
+        body = mantissa
+    return ((_SIGN if negative else 0) | body) & _U64
+
+
+def _oracle_float_binary(a_bits, b_bits, op):
+    """Independent bit-level semantics including exceptional cases and signed 0."""
+    a_kind, a_negative, a = _exact_float(a_bits)
+    b_kind, b_negative, b = _exact_float(b_bits)
+    if a_kind == 'nan' or b_kind == 'nan':
+        return _word(_QNAN)
+    if op == 29:
+        b_negative = not b_negative
+        if b_kind == 'num':
+            b = -b
+    negative = a_negative != b_negative
+    if op in (28, 29):
+        if a_kind == 'inf' and b_kind == 'inf':
+            return _word(_QNAN if a_negative != b_negative
+                         else ((_SIGN if a_negative else 0) | (0x7ff << 52)))
+        if a_kind == 'inf':
+            return _word((_SIGN if a_negative else 0) | (0x7ff << 52))
+        if b_kind == 'inf':
+            return _word((_SIGN if b_negative else 0) | (0x7ff << 52))
+        return _word(_round_binary64(a + b, negative_zero=a_negative and b_negative))
+    if op == 30:
+        if ((a_kind == 'inf' and b_kind == 'num' and not b)
+                or (b_kind == 'inf' and a_kind == 'num' and not a)):
+            return _word(_QNAN)
+        if a_kind == 'inf' or b_kind == 'inf':
+            return _word((_SIGN if negative else 0) | (0x7ff << 52))
+        return _word(_round_binary64(a * b, negative_zero=negative))
+    if op == 31:
+        if a_kind == 'inf' and b_kind == 'inf':
+            return _word(_QNAN)
+        if a_kind == 'inf':
+            return _word((_SIGN if negative else 0) | (0x7ff << 52))
+        if b_kind == 'inf':
+            return _word(_SIGN if negative else 0)
+        if not b:
+            return _word(_QNAN if not a else ((_SIGN if negative else 0) | (0x7ff << 52)))
+        return _word(_round_binary64(a / b, negative_zero=negative))
+    raise AssertionError(f'unsupported exact operation {op}')
+
+
+def _oracle_float_cmp(a_bits, b_bits, relation):
+    a_kind, a_neg, a = _exact_float(a_bits)
+    b_kind, b_neg, b = _exact_float(b_bits)
+    if a_kind == 'nan' or b_kind == 'nan':
+        return relation == 2
+    if a_kind == 'inf' and b_kind == 'inf':
+        equal, less = a_neg == b_neg, a_neg and not b_neg
+    elif a_kind == 'inf':
+        equal, less = False, a_neg
+    elif b_kind == 'inf':
+        equal, less = False, not b_neg
+    else:
+        equal, less = a == b, a < b
+    return (equal, not equal, less, equal or less,
+            not equal and not less, not less)[relation-1]
 
 
 def probe_source(calls, repetitions=8):
@@ -127,6 +258,33 @@ def evaluate(ir, parameters, fuel=50000):
                     quotient, remainder = divmod(ua, ub)
                     raw = quotient if op == 26 else remainder
                     outputs = [((raw + (1 << 63)) % (1 << 64)) - (1 << 63)]
+
+            elif op in (28, 29, 30, 31, 32, 33):
+                # Python host binary64 is the reference *execution* path, not the
+                # independent exact-rational expectation oracle below.
+                a = _host_float(operands[0])
+                if op == 32:
+                    outputs = [_word((operands[0] & _U64) ^ _SIGN)]
+                else:
+                    b = _host_float(operands[1])
+                    if op == 33:
+                        relations = (a == b, a != b, a < b, a <= b, a > b, a >= b)
+                        outputs = [relations[payload - 1]]
+                    else:
+                        if op == 28: number = a + b
+                        elif op == 29: number = a - b
+                        elif op == 30: number = a * b
+                        else:
+                            if b == 0.0:
+                                if a == 0.0 or math.isnan(a):
+                                    number = math.nan
+                                else:
+                                    polarity = math.copysign(1.0, a) * math.copysign(1.0, b)
+                                    number = math.copysign(math.inf, polarity)
+                            else:
+                                number = a / b
+                        # The U1a core does not expose NaN payloads or flags.
+                        outputs = [_word(_QNAN) if math.isnan(number) else _host_bits(number)]
             elif op == 5:
                 trace.append((payload, location, bool(operands[0])))
                 if not operands[0]: return ('trap', (payload, location)), tuple(trace)
@@ -278,6 +436,22 @@ def cases_for(name, before):
                             if expected[0] == 'trap':
                                 expected = ('trap', (2, 1))
                     yield (a, b, allowed), expected
+
+    elif name in ('float-arithmetic', 'float-merge'):
+        for a, b in itertools.product(_FLOAT_SAMPLES, repeat=2):
+            if name == 'float-arithmetic':
+                values = [_oracle_float_binary(a, b, op) for op in (28, 29, 30, 31)]
+                values.append(_word(a ^ _SIGN))
+                values.extend(_oracle_float_cmp(a, b, relation) for relation in range(1, 7))
+                yield (_word(a), _word(b)), ('return', tuple(values))
+            else:
+                for flag in (False, True):
+                    chosen = b if flag else a
+                    yield (_word(a), _word(b), flag), ('return', (
+                        _oracle_float_binary(chosen, b, 28),
+                        _word(chosen ^ _SIGN),
+                        _oracle_float_cmp(chosen, b, 3),
+                    ))
     else: raise AssertionError(f'unknown fixture {name}')
 
 
@@ -289,7 +463,7 @@ class U1PromotionTests(unittest.TestCase):
         (cls.root / 'compiler').symlink_to(ROOT / 'src/compiler', target_is_directory=True)
         cls.calls = [f'{family}({width}{",false" if family == "diamond" else ""})'
                      for family in ('diamond', 'loop', 'sequential') for width in (8, 32, 128)]
-        cls.calls += ['diamond(2,true)', 'swap()', 'reset()', 'irreducible()', 'dead(false)', 'faults(false)', 'faults(true)', 'floatCell()', 'passthrough()', 'predicateTruth()', 'predicateMerge()', 'integerArithmetic()', 'integerMerge()', 'divideSigned()', 'remainderSigned()', 'divideUnsigned()', 'remainderUnsigned()', 'divisionMerge()', 'divisionFaultOrder()',
+        cls.calls += ['diamond(2,true)', 'swap()', 'reset()', 'irreducible()', 'dead(false)', 'faults(false)', 'faults(true)', 'floatCell()', 'passthrough()', 'predicateTruth()', 'predicateMerge()', 'integerArithmetic()', 'integerMerge()', 'divideSigned()', 'remainderSigned()', 'divideUnsigned()', 'remainderUnsigned()', 'divisionMerge()', 'divisionFaultOrder()', 'floatArithmetic()', 'floatMerge()',
                       'invalidCell(0)', 'invalidCell(1)', 'invalidCell(2)', 'dead(true)', 'failedWork()', 'canonicalReject()', 'failedOutput()', 'cancelled()']
         cls.source = cls.root / 'promotion.eri'; cls.source.write_text(probe_source(cls.calls))
         cls.binary = cls.root / 'promotion-c'
@@ -319,7 +493,7 @@ class U1PromotionTests(unittest.TestCase):
         result = subprocess.run([str(self.binary)], capture_output=True, text=True, timeout=120)
         self.assertEqual((result.returncode, result.stderr), (0, ''), result.stdout[-300:])
         snapshots, labels = self.check_snapshots(result.stdout)
-        self.assertEqual(len(snapshots), 28)
+        self.assertEqual(len(snapshots), 30)
         self.assertEqual(labels, ['invalid-init:ok']*3 + ['malformed-dead:ok', 'promotion-limit:ok', 'canonical-reject:ok', 'partial-output:ok', 'cancelled:ok'])
         again = subprocess.run([str(self.binary)], capture_output=True, text=True, timeout=120)
         self.assertEqual((again.returncode, again.stdout, again.stderr), (0, result.stdout, ''))

@@ -401,4 +401,42 @@ function divisionFaultOrder() fails budget.LimitError,verify.InvalidIR,ProbeErro
     try build.complete(routine); try promoted(harness,"div-fault-order",0,0);
 }
 
+
+function floatArithmetic() fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let types be [meta.f64(),meta.f64(),meta.f64(),meta.f64(),meta.f64(),
+        meta.pred(),meta.pred(),meta.pred(),meta.pred(),meta.pred(),meta.pred()];
+    let harness be try create([meta.f64(),meta.f64()],types,true); let routine be harness.routine;
+    let entry be try build.block(routine,[meta.f64(),meta.f64()]);
+    let a be try build.parameter(routine,entry,0); let b be try build.parameter(routine,entry,1);
+    let sum be try build.addFloat(routine,entry,a,b,harness.location);
+    let sub be try build.subtractFloat(routine,entry,a,b,harness.location);
+    let mul be try build.multiplyFloat(routine,entry,a,b,harness.location);
+    let div be try build.divideFloat(routine,entry,a,b,harness.location);
+    let neg be try build.negateFloat(routine,entry,a,harness.location);
+    let eq be try build.compareFloat(routine,entry,a,b,1,harness.location);
+    let ne be try build.compareFloat(routine,entry,a,b,2,harness.location);
+    let lt be try build.compareFloat(routine,entry,a,b,3,harness.location);
+    let le be try build.compareFloat(routine,entry,a,b,4,harness.location);
+    let gt be try build.compareFloat(routine,entry,a,b,5,harness.location);
+    let ge be try build.compareFloat(routine,entry,a,b,6,harness.location);
+    try build.returnValues(routine,entry,[sum,sub,mul,div,neg,eq,ne,lt,le,gt,ge],harness.location);
+    try build.complete(routine); try promoted(harness,"float-arithmetic",0,0);
+}
+function floatMerge() fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let harness be try create([meta.f64(),meta.f64(),meta.pred()],[meta.f64(),meta.f64(),meta.pred()],true);
+    let routine be harness.routine; let entry be try build.block(routine,[meta.f64(),meta.f64(),meta.pred()]);
+    let left be try build.block(routine,[]); let right be try build.block(routine,[]); let join be try build.block(routine,[]);
+    let a be try build.parameter(routine,entry,0); let b be try build.parameter(routine,entry,1);
+    let local be try build.cell(routine,meta.f64()); try build.initialize(routine,entry,local,a,harness.location);
+    try build.branch(routine,entry,try build.parameter(routine,entry,2),left,[],right,[],harness.location);
+    try build.writeCell(routine,left,local,b,harness.location);
+    try build.jump(routine,left,join,[],harness.location); try build.jump(routine,right,join,[],harness.location);
+    let selected be try build.readCell(routine,join,local,harness.location);
+    let sum be try build.addFloat(routine,join,selected,b,harness.location);
+    let neg be try build.negateFloat(routine,join,selected,harness.location);
+    let less be try build.compareFloat(routine,join,selected,b,3,harness.alternate);
+    try build.returnValues(routine,join,[sum,neg,less],harness.location);
+    try build.complete(routine); try promoted(harness,"float-merge",1,2);
+}
+
 // The Python harness appends run()/main() with its selected cases.
