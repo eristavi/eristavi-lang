@@ -52,10 +52,12 @@ function bounds(context identity Context) fails budget.LimitError,InvalidIR {
     try store(context,data.signatures,data.owner,6,6291456); try store(context,data.types,data.owner,1,8388608);
     try store(context,data.buckets,data.owner,1,64); try store(context,data.sources,data.owner,4,524288);
     try store(context,data.bytes,data.owner,1,8388608); try store(context,data.locations,data.owner,7,7340032);
+    try store(context,data.declarations,data.owner,6,393216); try store(context,data.symbolBytes,data.owner,1,16777216);
     try require(context,routine.blocks.length > 0 and data.buckets.length == 64,"missing entry or signature buckets");
     // Individual bounds above make this sum/product safe even for malformed input.
     let records be routine.blocks.length+routine.values.length+routine.instructions.length+routine.operands.length+routine.edges.length+routine.arguments.length;
     records=records+routine.cells.length+data.signatures.length+data.types.length+data.buckets.length+data.sources.length+data.bytes.length+data.locations.length;
+    records=records+data.declarations.length+data.symbolBytes.length;
     context.scanLimit=32*(records+1);
     try require(context,routine.signature.owner == data.key and routine.signature.index >= 1 and routine.signature.index <= data.signatures.length/6,"invalid function signature owner or index");
 }
@@ -101,8 +103,7 @@ function signatures(context identity Context) fails budget.LimitError,InvalidIR 
     try require(context,cursor == data.types.length,"unclaimed signature type entries"); index=0;
     while index < 64 { try require(context,try read(context,data.buckets,index) == try scratch(context,context.buckets,index),"invalid signature bucket"); index=index+1; }
 }
-function utf8(context identity Context,first Int,count Int) fails budget.LimitError,InvalidIR {
-    let table be context.routine.metadata.bytes; let index be 0;
+function utf8(context identity Context,table identity words.Words,first Int,count Int) fails budget.LimitError,InvalidIR { let index be 0;
     while index < count {
         let value be try read(context,table,first+index); let trailing be 0; let low be 128; let high be 191;
         if value <= 127 { try require(context,value >= 0,"invalid source name byte"); }
@@ -131,7 +132,7 @@ function sources(context identity Context) fails budget.LimitError,InvalidIR {
         let digest be try read(context,data.sources,offset+2); let length be try read(context,data.sources,offset+3);
         try range(context,first,count,data.bytes.length); try range(context,digest,64,data.bytes.length);
         try require(context,count > 0 and first == cursor and digest == first+count and length >= 0,"invalid source identity ranges");
-        try utf8(context,first,count); let item be 0;
+        try utf8(context,data.bytes,first,count); let item be 0;
         while item < 64 {
             let byte be try read(context,data.bytes,digest+item);
             try require(context,(byte >= 48 and byte <= 57) or (byte >= 97 and byte <= 102),"invalid source SHA-256 digest"); item=item+1;
@@ -147,6 +148,38 @@ function sources(context identity Context) fails budget.LimitError,InvalidIR {
     }
     try require(context,cursor == data.bytes.length,"unclaimed source bytes");
 }
+
+function declarations(context identity Context) fails budget.LimitError,InvalidIR {
+    context.stage=1; context.block=0; context.instruction=0;
+    let data be context.routine.metadata; let index be 0; let cursor be 0;
+    while index < data.declarations.length/6 {
+        let offset be index*6; let signature be try read(context,data.declarations,offset);
+        let first be try read(context,data.declarations,offset+1);
+        let count be try read(context,data.declarations,offset+2);
+        let kind be try read(context,data.declarations,offset+3);
+        let effects be try read(context,data.declarations,offset+4);
+        let version be try read(context,data.declarations,offset+5);
+        try require(context,signature >= 1 and signature <= data.signatures.length/6,"invalid function declaration signature");
+        try range(context,first,count,data.symbolBytes.length);
+        try require(context,count >= 1 and count <= 1024 and first == cursor,"noncanonical function symbol pool");
+        try require(context,kind == 1 or kind == 2,"invalid function declaration kind");
+        try require(context,effects >= 0 and effects <= 63,"invalid function effect flags");
+        try require(context,(kind == 1 and version == 0) or (kind == 2 and version >= 1),"invalid function contract version");
+        try utf8(context,data.symbolBytes,first,count);
+        let earlier be 0;
+        while earlier < index {
+            let oldOffset be earlier*6; let oldCount be try read(context,data.declarations,oldOffset+2);
+            if count == oldCount {
+                let oldFirst be try read(context,data.declarations,oldOffset+1);
+                try require(context,not (try sameSequence(context,data.symbolBytes,first,oldFirst,count)),"duplicate function symbol");
+            }
+            earlier=earlier+1;
+        }
+        cursor=first+count; index=index+1;
+    }
+    try require(context,cursor == data.symbolBytes.length,"orphan function symbol bytes");
+}
+
 function locations(context identity Context) fails budget.LimitError,InvalidIR {
     context.stage=3; context.block=0; context.instruction=0; context.location=0;
     let data be context.routine.metadata; let index be 0;
@@ -223,21 +256,38 @@ function instruction(context identity Context,index Int,terminal Bool,position I
     try require(context,try read(context,routine.instructions,offset+1) == context.block,"instruction block owner mismatch");
     let first be try read(context,routine.instructions,offset+2); let count be try read(context,routine.instructions,offset+3);
     try range(context,first,count,routine.operands.length);
-    let expected be ops.operands(op); if op == 8 { expected=try read(context,routine.metadata.signatures,(routine.signature.index-1)*6+5); }
+    let expected be ops.operands(op); let callSignature be 0;
+    if op == 34 {
+        let target be try read(context,routine.instructions,offset+7);
+        try require(context,target >= 1 and target <= routine.metadata.declarations.length/6,"invalid call FunctionId");
+        callSignature=try read(context,routine.metadata.declarations,(target-1)*6);
+        expected=try read(context,routine.metadata.signatures,(callSignature-1)*6+3);
+    }
+    if op == 8 { expected=try read(context,routine.metadata.signatures,(routine.signature.index-1)*6+5); }
     try require(context,count == expected,"instruction operand arity mismatch"); let item be 0;
     while item < count {
         let actual be try valueType(context,try read(context,routine.operands,first+item)); let valueTypeIndex be ops.operandType(op,item);
         if ops.isCell(op) { valueTypeIndex=cellType; }
         if op == 8 { let resultStart be try read(context,routine.metadata.signatures,(routine.signature.index-1)*6+4); valueTypeIndex=try read(context,routine.metadata.types,resultStart+item); }
+        if op == 34 {
+            let start be try read(context,routine.metadata.signatures,(callSignature-1)*6+2);
+            valueTypeIndex=try read(context,routine.metadata.types,start+item);
+        }
         try require(context,actual == valueTypeIndex,"instruction operand type mismatch"); item=item+1;
     }
     first=try read(context,routine.instructions,offset+4); count=try read(context,routine.instructions,offset+5);
-    try require(context,count == ops.results(op),"instruction result arity mismatch");
+    let expectedResults be ops.results(op);
+    if op == 34 { expectedResults=try read(context,routine.metadata.signatures,(callSignature-1)*6+5); }
+    try require(context,count == expectedResults,"instruction result arity mismatch");
     if count == 0 { try require(context,first == 0,"zero-result instruction has a fake value"); }
     else { try require(context,first >= 1 and first <= routine.values.length/4 and count <= routine.values.length/4-first+1,"invalid result range"); }
     item=0;
     while item < count {
         let resultType be ops.resultType(op,item); if op == 11 { resultType=cellType; }
+        if op == 34 {
+            let start be try read(context,routine.metadata.signatures,(callSignature-1)*6+4);
+            resultType=try read(context,routine.metadata.types,start+item);
+        }
         try claimValue(context,first+item,resultType,1,index,item); item=item+1;
     }
     let payload be try read(context,routine.instructions,offset+7); let extra be try read(context,routine.instructions,offset+8);
@@ -359,7 +409,7 @@ function reachableSSA(context identity Context) fails budget.LimitError,InvalidI
 }
 function inspect(context identity Context) returns Report fails budget.LimitError,InvalidIR {
     try bounds(context); try dom.prepare(context.graph,context.routine.blocks.length/5,context.routine.edges.length/3);
-    try signatures(context); try sources(context); try structure(context);
+    try signatures(context); try sources(context); try declarations(context); try structure(context);
     try locations(context); try reachableSSA(context);
     if not context.construction { context.stage=5; context.block=0; context.instruction=0; context.location=0;
         try require(context,context.routine.cells.length == 0,"unpromoted cells in canonical U1"); }
