@@ -19,6 +19,8 @@ EXPECTED = ''.join(line + ':ok\n' for line in (
     "multiresult-calls",
     "zeroresult-import-trace",
     "first-effect-and-fault-location",
+    "nested-first-fault",
+    "unsupported-strict-f64",
     "bounded-divergence",
     "stale-import-after-freeze",
     "stale-body-revision",
