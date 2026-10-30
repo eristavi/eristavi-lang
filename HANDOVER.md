@@ -395,3 +395,45 @@ Branch `compiler/u1a-predicate-ops` is stacked on draft PR #62 `compiler/u1a-opc
 Status at commit creation: *proposed, awaiting focused CI*. Do not report compilation, native tests, or full qualification as passed until the exact new commit has verified results. No compiler-wide or 900-second owned self-build was started. No production frontend/driver or runtime ABI modification.
 
 Next task: validate latest CI results and fix any regressions; reconcile the now-published complete U1 contract and plan the remaining scalar integer ops (including signed MIN/-1 on div/rem), calls/effects, multiway switch side tables and strict Float boundary. Keep each slice independently verifiable; do not merge stacked draft PRs or widen specifications without reviewed evidence. Once parent PRs merge, retarget this branch to main and requalify final code revision according to `CI_QUALIFICATION.md`.
+
+## 12. Verified merge checkpoint — U1a opcode and predicate batches (2026-10-30)
+
+**This section supersedes the pending-PR statuses in sections 10–11.** They are preserved as the original pre-merge handover history, not as current instructions.
+
+### Repository state and exact evidence
+
+| Item | Verified result |
+| --- | --- |
+| Current code-bearing main merge | `b5e15fd39e4166d5aba8a66ba44b8265f3d80d23` |
+| Current code-bearing main tree | `e3bc4e22181684c054a28be24746d42e496d8f0d` |
+| PR #61 — architecture, historical evidence, initial handover | Merged `e55cb7edd90a6f52017554aded7a05c309c5b4a4` |
+| PR #62 — explicit operation classes and inline CFG edge audit | Merged `d3ed1ad37881d8887d9c6919d401ef28e43745e2` |
+| PR #63 — eager `pred.and` / `pred.or` and SSA differential tests | Merged `b5e15fd39e4166d5aba8a66ba44b8265f3d80d23` |
+| PR #63 final tested head | `9d4faa9b15560f660b6aedef72e588a721393d53` |
+| PR #63 final tested tree | `e3bc4e22181684c054a28be24746d42e496d8f0d` |
+| Normal CI | Four/four passed on both PR #62 and PR #63; PR #61 also four/four |
+| Completed-batch full qualification | [Run 41059473867](https://github.com/eristavi/eristavi-lang/actions/runs/41059473867): **success** on the exact PR #63 tested head |
+| Qualification jobs | Three bootstrap repeatable/offline Linux builds and owned integration **passed**; separate full owned-compiler self-build was **skipped by design** |
+
+GitHub reports that both code-bearing merge-commit trees were exactly equal to their corresponding tested head trees, and final `main` tree is identical to the PR #63 fully qualified tree. Thus no untested implementation was introduced by these merge commits. The documentation-only checkpoint appended here does **not** change compiler/runtime inputs; any newer main commit should still be inspected before new code work.
+
+### What is now on main
+
+- The isolated U1a scalar builder/verifier/SSA promoter from PRs #58–60 remains in place.
+- `u1_ops` now classifies private cells explicitly as **only operations 10, 11 and 12**, and describes the existing inline jump/branch successors through a shared helper.
+- Canonical op 13 `pred.and` and op 14 `pred.or` provide **eager**, pure `pred,pred -> pred` semantics. These do **not** change Eristavi source-level short-circuit evaluation.
+- Independent verification rejects invalid types, arity, payloads and malformed unreachable instructions. Reference evaluation and before/after SSA-promotion fixtures include all Boolean truth-table cases and a merge with a temporary scalar cell.
+- `UIR_U1A_OPCODE_AUDIT.md` and `UIR_U1A_PREDICATES.md` document the exact scope.
+- The agreed architecture and full contract are in `docs/architecture/`, particularly `Eristavi-UIR-U1-Contract-2026-10-29.md`.
+
+### Continuing from here
+
+1. Read the current `main` commit, this handover, `DESIGN_PHILOSOPHY.md`, the agreed U1 contract and `CI_QUALIFICATION.md` before modifying code.
+2. **Do not merge legacy PR #57** or unrelated PRs merely as part of this compiler redesign; their scopes remain separate.
+3. Next implementation slices are U1a remaining pred/i64 operations, especially explicit signed/unsigned wrapping/overflow/comparison and division/remainder traps for **both zero divisor and signed MIN/-1**; then strict binary64 and its environment/bit guarantees. Define call/effect and multiway switch case/edge contracts explicitly before implementing them.
+4. Preserve effect/fault and diagnostic origins, independent typed and dead-block verification, transactional cell promotion, capacity/work quotas and a cell-free canonical result.
+5. Preserve the **existing production frontend/native compiler** until U2/U3 conformance gates. U1a cannot currently compile the full language through the redesigned native pipeline.
+6. Full owned-runtime compiler B-to-C/C-to-D self-hosting remains unqualified. Never report the intentionally skipped owned self-build as a pass; do not automatically repeat the historical 900-second attempt.
+7. Use focused tests for each reviewed slice, batch full qualification per `CI_QUALIFICATION.md`, and record final head/tree identities and observed evidence before merges.
+
+This section is a documentation-only checkpoint. It is not a new operation contract, benchmark, optimizer or replacement compiler.
