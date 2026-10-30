@@ -104,7 +104,7 @@ function append(routine identity Function,block BlockId,op Int,arguments,locatio
     if op == 2 and payload != 0 and payload != 1 { try budget.reject("invalid U1a predicate constant"); }
     if op == 5 and (payload < 1 or payload > 4) { try budget.reject("invalid U1a trap code"); }
     if op == 18 and (payload < 1 or payload > 10) { try budget.reject("invalid U1a i64 comparison relation"); }
-    if op >= 15 and op <= 23 and op != 18 and payload != 0 { try budget.reject("invalid U1a i64 arithmetic payload"); }
+    if op >= 15 and op <= 27 and op != 18 and payload != 0 { try budget.reject("invalid U1a i64 arithmetic payload"); }
     if routine.instructions.length/10 >= 1048576 or ops.results(op) > 1048576-routine.values.length/4 { try budget.exceed(routine.owner,1,0); }
     let first be routine.operands.length; index=0;
     while index < arguments.count { let value be arguments[index]; let ignored be try words.push(routine.operands,routine.phase,value.index); index=index+1; }
@@ -182,6 +182,20 @@ public function unsignedSubtractOverflow(routine identity Function,block BlockId
 public function unsignedMultiplyOverflow(routine identity Function,block BlockId,first ValueId,second ValueId,location meta.LocId) returns Pair fails budget.LimitError {
     let instruction be try append(routine,block,23,[first,second],location,0,0);
     return Pair { value=try result(routine,instruction,0); overflow=try result(routine,instruction,1); };
+}
+// Division/remainder preserve the operation's fault location. Successful
+// execution continues normally, but zero divisor and signed MIN/-1 trap.
+public function divideSigned(routine identity Function,block BlockId,first ValueId,second ValueId,location meta.LocId) returns ValueId fails budget.LimitError {
+    return try result(routine,try append(routine,block,24,[first,second],location,0,0),0);
+}
+public function remainderSigned(routine identity Function,block BlockId,first ValueId,second ValueId,location meta.LocId) returns ValueId fails budget.LimitError {
+    return try result(routine,try append(routine,block,25,[first,second],location,0,0),0);
+}
+public function divideUnsigned(routine identity Function,block BlockId,first ValueId,second ValueId,location meta.LocId) returns ValueId fails budget.LimitError {
+    return try result(routine,try append(routine,block,26,[first,second],location,0,0),0);
+}
+public function remainderUnsigned(routine identity Function,block BlockId,first ValueId,second ValueId,location meta.LocId) returns ValueId fails budget.LimitError {
+    return try result(routine,try append(routine,block,27,[first,second],location,0,0),0);
 }
 public function negatePredicate(routine identity Function,block BlockId,value ValueId,location meta.LocId) returns ValueId fails budget.LimitError {
     return try result(routine,try append(routine,block,4,[value],location,0,0),0);
