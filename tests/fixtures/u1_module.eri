@@ -67,7 +67,10 @@ function run() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError 
     let argA be try build.parameter(bodyA,blockA,0);
     let callB be try build.call(bodyA,blockA,second,[argA],loc);
     let truth be try build.predicate(bodyA,blockA,true,loc);
-    try build.returnValues(bodyA,blockA,[try build.result(bodyA,callB,0),truth],loc);
+    let finalA be try build.block(bodyA,[meta.i64(),meta.pred()]);
+    try build.jump(bodyA,blockA,finalA,[try build.result(bodyA,callB,0),truth],loc);
+    try build.returnValues(bodyA,finalA,[try build.parameter(bodyA,finalA,0),
+        try build.parameter(bodyA,finalA,1)],loc);
     try build.complete(bodyA); try budget.finishPhase(phaseA);
 
     let ownerC be try budget.functionOwner(root,false);
