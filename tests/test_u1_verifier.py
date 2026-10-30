@@ -35,7 +35,7 @@ PROTOCOL = ''.join(name + ':ok\n' for name in (
     'float-dead-payload',
     'switch-valid', 'switch-duplicate-case', 'switch-invalid-case-edge',
     'switch-invalid-default', 'switch-invalid-header', 'switch-reused-edge',
-    'switch-unexpected-extra', 'switch-selector-type', 'switch-restored',
+    'switch-unexpected-extra', 'switch-selector-type', 'switch-restored', 'switch-empty',
     'many-dominated-uses'))
 
 
