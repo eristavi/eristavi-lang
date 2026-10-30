@@ -8,6 +8,7 @@ import tempfile
 import unittest
 
 from compiler.erist.cli import build_native
+from u1_native_tools import shared_u1_compilers
 from compiler.erist.diagnostics import SemanticError
 from compiler.erist.project import compile_module
 
@@ -128,9 +129,8 @@ main();
         for tool in ('as', 'ld', 'cc', 'readelf', 'nm'):
             if not shutil.which(tool):
                 self.skipTest(f'{tool} unavailable')
-        frontend, generator = self.root / 'frontend', self.root / 'runtime-generator'
-        self.assertEqual(build_native(ROOT / 'src/frontend.eri', frontend, ROOT / 'src'), 0)
-        self.assertEqual(build_native(ROOT / 'src/owned_runtime.eri', generator, ROOT / 'src'), 0)
+        # Reuse immutable test compiler binaries across U1 suites in this process.
+        frontend, generator = shared_u1_compilers()
         emitted = subprocess.run([str(frontend), 'emit-asm', str(self.source), '--source-root', str(self.root),
                                   '--target', 'x86_64-linux'], capture_output=True, text=True, timeout=120)
         self.assertEqual((emitted.returncode, emitted.stderr), (0, ''))
