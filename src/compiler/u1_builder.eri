@@ -150,6 +150,13 @@ public function addOverflow(routine identity Function,block BlockId,first ValueI
 public function negatePredicate(routine identity Function,block BlockId,value ValueId,location meta.LocId) returns ValueId fails budget.LimitError {
     return try result(routine,try append(routine,block,4,[value],location,0,0),0);
 }
+// Both operands are already evaluated SSA predicates; these are eager UIR operations.
+public function andPredicate(routine identity Function,block BlockId,first ValueId,second ValueId,location meta.LocId) returns ValueId fails budget.LimitError {
+    return try result(routine,try append(routine,block,13,[first,second],location,0,0),0);
+}
+public function orPredicate(routine identity Function,block BlockId,first ValueId,second ValueId,location meta.LocId) returns ValueId fails budget.LimitError {
+    return try result(routine,try append(routine,block,14,[first,second],location,0,0),0);
+}
 public function guard(routine identity Function,block BlockId,value ValueId,trap Int,location meta.LocId) fails budget.LimitError {
     let ignored be try append(routine,block,5,[value],location,trap,0);
 }

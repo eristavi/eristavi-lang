@@ -162,6 +162,43 @@ function scalarShapes() fails budget.LimitError,verify.InvalidIR,ProbeError {
     try build.returnValues(harness.routine,entry,[negativeZero,nan],harness.location); try build.complete(harness.routine);
     try accepted(harness,1,"float-bits-multiple-results"); try close(harness);
 }
+
+// Positive and malformed predicates are checked independently of builder acceptance.
+function predicateOperations() fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let harness be try create([meta.pred(),meta.pred(),meta.i64()],[meta.pred()]); let routine be harness.routine;
+    let entry be try build.block(routine,[meta.pred(),meta.pred(),meta.i64()]);
+    let first be try build.parameter(routine,entry,0); let second be try build.parameter(routine,entry,1);
+    let invalidType be try build.parameter(routine,entry,2);
+    let both be try build.andPredicate(routine,entry,first,second,harness.location);
+    let result be try build.orPredicate(routine,entry,both,second,harness.location);
+    try build.returnValues(routine,entry,[result],harness.location); try build.complete(routine);
+    try accepted(harness,1,"predicate-ops");
+    let edit be try budget.constructionPhase(harness.owner);
+    try change(routine.instructions,edit,7,1); try rejected(harness,2,1,"predicate-payload");
+    try change(routine.instructions,edit,7,0);
+    try change(routine.instructions,edit,0,4); try rejected(harness,2,1,"predicate-arity");
+    try change(routine.instructions,edit,0,13);
+    try change(routine.operands,edit,1,invalidType.index); try rejected(harness,2,1,"predicate-type");
+    try change(routine.operands,edit,1,second.index);
+    try accepted(harness,1,"predicate-restored"); try close(harness);
+}
+function predicateDead() fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let harness be try create([],[meta.pred()]); let routine be harness.routine;
+    let entry be try build.block(routine,[]); let dead be try build.block(routine,[]);
+    let yes be try build.predicate(routine,entry,true,harness.location);
+    try build.returnValues(routine,entry,[yes],harness.location);
+    let a be try build.predicate(routine,dead,true,harness.location);
+    let b be try build.predicate(routine,dead,false,harness.location);
+    let unused be try build.andPredicate(routine,dead,a,b,harness.location);
+    try build.returnValues(routine,dead,[unused],harness.location); try build.complete(routine);
+    try accepted(harness,1,"predicate-dead-ok");
+    let edit be try budget.constructionPhase(harness.owner);
+    // Instruction five is the dead-block and operation; payload is its eighth word.
+    try change(routine.instructions,edit,47,1);
+    try rejected(harness,2,2,"predicate-dead-payload");
+    try close(harness);
+}
+
 function manyUses() fails budget.LimitError,verify.InvalidIR,ProbeError {
     let harness be try create([meta.pred()],[]); let routine be harness.routine;
     let entry be try build.block(routine,[meta.pred()]); let body be try build.block(routine,[]);
@@ -173,7 +210,7 @@ function manyUses() fails budget.LimitError,verify.InvalidIR,ProbeError {
 }
 function run() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError {
     try mutations(); try orphanRecords(); try diamond(); try loop(); try dead(); try repeatedTarget(); try limits(); try cancellation();
-    try scalarShapes(); try manyUses(); return true;
+    try scalarShapes(); try predicateOperations(); try predicateDead(); try manyUses(); return true;
 }
 function main() {
     let done be run() else error budget.LimitError { output(error.category+":"+error.message); process.setExitCode(1); return; }
