@@ -15,7 +15,7 @@ function create(parameters,results) returns identity Harness fails budget.LimitE
     collision=try meta.signature(data,phase,[meta.pred(),meta.i64(),meta.f64()],[]);
     let source be try meta.source(data,phase,"verifier-α","0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",32);
     let location be try meta.location(data,phase,source,0,8,3,1,4);
-    let alternate be try meta.location(data,phase,source,9,17,4,1,4); try meta.freeze(data); try budget.finishPhase(phase);
+    let alternate be try meta.location(data,phase,source,9,17,9,1,4); try meta.freeze(data); try budget.finishPhase(phase);
     let owner be try budget.functionOwner(root,false); let construct be try budget.constructionPhase(owner);
     return identity Harness { root=root; shared=shared; data=data; owner=owner; construct=construct;
         routine=try build.create(data,signature,owner,construct); location=location; alternate=alternate; };
