@@ -6,7 +6,7 @@ import compiler.u1_builder as build;
 import compiler.u1_verify as verify;
 error ProbeError { message Text; }
 type Harness { root identity budget.Owner; shared identity budget.Owner; data identity meta.Metadata;
-    owner identity budget.Owner; construct identity budget.Phase; routine identity build.Function; location meta.LocId; }
+    owner identity budget.Owner; construct identity budget.Phase; routine identity build.Function; location meta.LocId; alternate meta.LocId; }
 function check(condition Bool,message Text) fails ProbeError { if not condition { fail ProbeError { message=message; }; } }
 function create(parameters,results) returns identity Harness fails budget.LimitError {
     let root be try budget.developmentRequest(); let shared be try budget.metadataOwner(root); let phase be try budget.constructionPhase(shared);
@@ -14,10 +14,11 @@ function create(parameters,results) returns identity Harness fails budget.LimitE
     let collision be try meta.signature(data,phase,[meta.pred(),meta.pred()],[]);
     collision=try meta.signature(data,phase,[meta.pred(),meta.i64(),meta.f64()],[]);
     let source be try meta.source(data,phase,"verifier-α","0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",32);
-    let location be try meta.location(data,phase,source,0,8,3,1,4); try meta.freeze(data); try budget.finishPhase(phase);
+    let location be try meta.location(data,phase,source,0,8,3,1,4);
+    let alternate be try meta.location(data,phase,source,9,17,9,1,4); try meta.freeze(data); try budget.finishPhase(phase);
     let owner be try budget.functionOwner(root,false); let construct be try budget.constructionPhase(owner);
     return identity Harness { root=root; shared=shared; data=data; owner=owner; construct=construct;
-        routine=try build.create(data,signature,owner,construct); location=location; };
+        routine=try build.create(data,signature,owner,construct); location=location; alternate=alternate; };
 }
 function close(harness identity Harness) fails budget.LimitError,ProbeError {
     try build.close(harness.routine); try meta.close(harness.data);
@@ -373,7 +374,7 @@ function syntheticOrigins() fails budget.LimitError,verify.InvalidIR,ProbeError 
     try build.returnValues(routine,entry,[value],transformed);
     try build.complete(routine); try budget.finishPhase(construct);
     let harness be identity Harness { root=root; shared=shared; data=data; owner=owner;
-        construct=construct; routine=routine; location=original; };
+        construct=construct; routine=routine; location=original; alternate=original; };
     try accepted(harness,1,"synthetic-origin-valid");
     let edit be try budget.constructionPhase(shared); let offset be (transformed.index-1)*7+6;
     let rootOffset be (rootOrigin.index-1)*7+6;
@@ -483,6 +484,51 @@ function narrowArithmeticDead() fails budget.LimitError,verify.InvalidIR,ProbeEr
     try rejected(harness,2,2,"narrow-arith-dead-mode"); try close(harness);
 }
 
+
+function narrowDivRemContracts() fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let width be meta.i8();
+    let harness be try create([width,width,meta.pred()],[width,width]); let routine be harness.routine;
+    let entry be try build.block(routine,[width,width,meta.pred()]);
+    let a be try build.parameter(routine,entry,0); let b be try build.parameter(routine,entry,1);
+    let wrong be try build.parameter(routine,entry,2);
+    let quotient be try build.narrowDivide(routine,entry,a,b,1,width,harness.alternate);
+    let remainder be try build.narrowRemainder(routine,entry,a,b,2,width,harness.location);
+    try build.returnValues(routine,entry,[quotient,remainder],harness.location);
+    try build.complete(routine); try accepted(harness,1,"narrow-divrem-valid");
+    let edit be try budget.constructionPhase(harness.owner);
+    try change(routine.instructions,edit,7,3);
+    try rejected(harness,2,1,"narrow-divrem-mode");
+    try change(routine.instructions,edit,7,1);
+    try change(routine.instructions,edit,8,3);
+    try rejected(harness,2,1,"narrow-divrem-width");
+    try change(routine.instructions,edit,8,width.index);
+    try change(routine.operands,edit,1,wrong.index);
+    try rejected(harness,2,1,"narrow-divrem-operand");
+    try change(routine.operands,edit,1,b.index);
+    try change(routine.values,edit,12,2);
+    try rejected(harness,2,1,"narrow-divrem-result");
+    try change(routine.values,edit,12,width.index);
+    try change(routine.instructions,edit,6,0);
+    try rejected(harness,3,1,"narrow-divrem-location");
+    try change(routine.instructions,edit,6,harness.alternate.index);
+    try accepted(harness,1,"narrow-divrem-restored"); try close(harness);
+}
+function narrowDivRemDead() fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let harness be try create([],[meta.i8()]); let routine be harness.routine;
+    let entry be try build.block(routine,[]); let dead be try build.block(routine,[]);
+    let zero be try build.narrowBits(routine,entry,0,meta.i8(),harness.location);
+    try build.returnValues(routine,entry,[zero],harness.location);
+    let a be try build.narrowBits(routine,dead,128,meta.i8(),harness.location);
+    let b be try build.narrowBits(routine,dead,255,meta.i8(),harness.location);
+    let unused be try build.narrowRemainder(routine,dead,a,b,1,meta.i8(),harness.alternate);
+    let instruction be routine.instructions.length/10;
+    try build.returnValues(routine,dead,[unused],harness.location);
+    try build.complete(routine); try accepted(harness,1,"narrow-divrem-dead-valid");
+    let edit be try budget.constructionPhase(harness.owner);
+    try change(routine.instructions,edit,(instruction-1)*10+7,3);
+    try rejected(harness,2,2,"narrow-divrem-dead-mode"); try close(harness);
+}
+
 function manyUses() fails budget.LimitError,verify.InvalidIR,ProbeError {
     let harness be try create([meta.pred()],[]); let routine be harness.routine;
     let entry be try build.block(routine,[meta.pred()]); let body be try build.block(routine,[]);
@@ -494,7 +540,7 @@ function manyUses() fails budget.LimitError,verify.InvalidIR,ProbeError {
 }
 function run() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError {
     try mutations(); try orphanRecords(); try diamond(); try loop(); try dead(); try repeatedTarget(); try limits(); try cancellation();
-    try scalarShapes(); try predicateOperations(); try predicateDead(); try integerOperations(); try integerDead(); try divremContracts(); try divremDead(); try floatOperations(); try floatDead(); try syntheticOrigins(); try switchContracts(); try switchEmpty(); try narrowTypeShapes(); try narrowConstantContract(); try narrowArithmeticContract(); try narrowArithmeticDead(); try manyUses(); return true;
+    try scalarShapes(); try predicateOperations(); try predicateDead(); try integerOperations(); try integerDead(); try divremContracts(); try divremDead(); try floatOperations(); try floatDead(); try syntheticOrigins(); try switchContracts(); try switchEmpty(); try narrowTypeShapes(); try narrowConstantContract(); try narrowArithmeticContract(); try narrowArithmeticDead(); try narrowDivRemContracts(); try narrowDivRemDead(); try manyUses(); return true;
 }
 function main() {
     let done be run() else error budget.LimitError { output(error.category+":"+error.message); process.setExitCode(1); return; }

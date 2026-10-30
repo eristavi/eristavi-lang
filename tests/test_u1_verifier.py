@@ -46,6 +46,9 @@ PROTOCOL = ''.join(name + ':ok\n' for name in (
     'narrow-arith-valid', 'narrow-arith-mode', 'narrow-arith-width',
     'narrow-arith-cmp', 'narrow-arith-operand', 'narrow-arith-result',
     'narrow-arith-restored', 'narrow-arith-dead-valid', 'narrow-arith-dead-mode',
+    'narrow-divrem-valid', 'narrow-divrem-mode', 'narrow-divrem-width',
+    'narrow-divrem-operand', 'narrow-divrem-result', 'narrow-divrem-location',
+    'narrow-divrem-restored', 'narrow-divrem-dead-valid', 'narrow-divrem-dead-mode',
     'many-dominated-uses'))
 
 
