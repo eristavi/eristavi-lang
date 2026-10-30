@@ -1,0 +1,352 @@
+# Eristavi compiler — handover
+
+Checkpoint: 30 October 2026, Asia/Nicosia. This replaces the 28 October
+measurement-first checkpoint. Resume the compiler redesign described here;
+historical PR #46–#50 measurements are background, not the next task.
+
+## Start a new chat with this
+
+> Continue Eristavi from this handover. Verify GitHub main, the merge records and
+> current instructions first. Preserve the language and approved architecture.
+> The new typed UIR foundation, independent verifier and scalar-cell SSA promotion
+> are implemented; the existing production compiler still uses its old pipeline.
+> Next, inventory the agreed U1a contract against the implementation and prepare
+> the remaining scalar/call/switch/strict-Float slice. Audit numeric operation
+> classification and CFG successor walkers before adding operations. Keep tests
+> focused; batch expensive qualification. Do not rerun the old 900-second owned
+> self-build or claim the entire redesigned compiler is complete.
+
+## 1. Verified repository checkpoint
+
+Repository: https://github.com/eristavi/eristavi-lang
+
+| Item | Revision / status |
+| --- | --- |
+| Main after this handover's merges | cd421d859e3372796e59ddf236944efc1b6aaddb |
+| Main tree | c6a554e04c12d26c93650956709c5d57f1812ddf |
+| PR #58 foundation | Merged: 6fb8b7bcd49418f398810ef9166acc888a35c4f5 |
+| PR #59 verifier + bootstrap recovery fix | Merged: 8a2af1c95c0878a65aebbabb464ad1bf6c66db5e |
+| PR #59 tested head | c2989f169f6c470f95c11cec2ec5368bd333a485 |
+| PR #60 scalar-cell promotion | Merged: cd421d859e3372796e59ddf236944efc1b6aaddb |
+| PR #60 tested head | 22b36c1de42a6bb1b6d54d03a9c69b7c49062082 |
+| PR #60 tested tree | c6a554e04c12d26c93650956709c5d57f1812ddf |
+| PR #57 | Separate legacy work; do not merge it as part of this redesign |
+
+PR links: [#58](https://github.com/eristavi/eristavi-lang/pull/58),
+[#59](https://github.com/eristavi/eristavi-lang/pull/59),
+[#60](https://github.com/eristavi/eristavi-lang/pull/60),
+[#57](https://github.com/eristavi/eristavi-lang/pull/57).
+
+This session explicitly authorized merging #59 and #60. It did not authorize
+unrelated PR merges. Verify future heads/checks and preserve user changes.
+
+## 2. Working preferences and non-negotiable direction
+
+- User: Revaz Eristavi. Preserve DESIGN_PHILOSOPHY.md and source semantics.
+- Goal: a fast, reliable, readable language with its own offline native toolchain.
+  C/Python are current bootstrap tools, not intended permanent dependencies.
+- Keep `.eri` for source and compiler implementation; command `erist`.
+  `.erist` is reserved for a distinct future purpose; `.erlx` was not selected.
+- Major lowering/tool architecture decisions are made with the user before
+  rebuilding each layer. Give a complete technical recommendation with reasons;
+  avoid endless tiny design questions or unnecessary requests for permission.
+- Work autonomously on authorized implementation, reversible fixes and draft PRs.
+  Do not infer blanket permission for unrelated publication/merges.
+- Use focused correctness checks with each slice. Batch expensive qualification
+  at the completed integration boundary. Do not repeat unchanged 900-second runs.
+- Report measured scope honestly. A small native probe, modeled byte counter or
+  green CI does not prove whole-build speed, physical-memory qualification or
+  full owned-runtime self-hosting. Do not multiply unrelated speedups.
+- Give concise progress updates during long work. Do not spawn sub-agents unless
+  the user or applicable instructions explicitly authorize delegation.
+- Rust/Bazel references were research precedents, not dependencies or evidence
+  that their complete designs fit Eristavi.
+
+## 3. Architecture already agreed
+
+The source language stays. Approved AST plus frozen semantic facts will eventually
+construct one language-neutral typed UIR directly. There is no extra mandatory
+source-close executable Typed IR in the new pipeline. The old Typed IR is removed
+only after compatibility/integration gates pass.
+
+The core has independent owned metadata, immutable SSA values, block parameters,
+explicit operations/effects and independent verification. Temporary initialized
+scalar cells are private construction only; canonical U1 contains no cells.
+Mandatory promotion is part of U1, including the default pipeline.
+
+U1a: pred/i64/strict f64, CFG/calls/switches/guards/locations, verification and
+promotion. U1b: remaining integer widths and immutable aggregates. U2: managed
+values, failures, resources and cleanup. U3: frontend/native integration. U4:
+legalization, machine contracts/backends and artifact migration in reviewed slices.
+
+Preserve checked signed Int64, strict binary64, explicit checked failures,
+ordinary value versus identity semantics, and deterministic scoped resources.
+Standalone terminal runtime defects terminate without cleanup; normal returns
+and checked failures still require cleanup exactly once. Terminal traps promise
+neither file flushing/durability nor persistent-lock release.
+
+RevaSM is a peer machine target alongside x86-64, ARM64 and RISC-V. It is not a
+layer through which other architectures must pass. Its explicit live-in/block
+parameter threading conversion is an eventual measured U4 subtask. Keep the
+machine OS-independent; platform/runtime/ABI boundaries carry portability work.
+
+The existing 32-byte Eristavi value ABI stays at existing boundaries. Other
+frontends using the universal core need not adopt it, Eristavi GC/Text/List,
+failures or resources. New provenance/address architecture, moving GC and new
+generic-template profiles remain separate reserved designs. Preserve existing
+private-memory/generic compatibility paths until reviewed replacements exist.
+
+UIR schema/profile/extension/verifier/runtime/ABI versions must enter relevant
+future cache keys, separately from compiler identity. No public serialized UIR
+format or new artifact extension is frozen. The module FS001 symlink-policy
+change remains a separate unapproved decision.
+
+## 4. Current implementation — what exists
+
+The new modules are isolated. The production frontend/driver continues to use
+the old compiler pipeline. Do not describe the lexer/parser/semantic architecture
+documents as completed replacement implementations.
+
+| Repository file | Role |
+| --- | --- |
+| src/compiler/u1_budget.eri | Scoped capacity/traffic/work reservations, cancellation, cleanup and counters |
+| src/compiler/u1_words.eri | Safe radix-16 indexed storage, 16-word pages, fixed directory depth |
+| src/compiler/u1_meta.eri | Owned pred/i64/f64 types, canonical signatures, source identities/spans |
+| src/compiler/u1_ops.eri | Closed initial operation registry |
+| src/compiler/u1_builder.eri | Nominal owner-scoped IDs, typed construction and private cells |
+| src/compiler/u1_dominance.eri | Iterative simple Lengauer–Tarjan plus tree intervals |
+| src/compiler/u1_verify.eri | Independent construction/canonical checks and reachable SSA |
+| src/compiler/u1_promote.eri | Transactional pruned scalar-cell promotion |
+| compiler/erist/c_backend.py | C-bootstrap checked-handler recovery-read fix |
+
+Nine canonical operations currently exist: i64/pred constants, signed i64
+add-overflow pair, pred.not, guard, jump, branch, return and f64 raw-bit constant.
+Private construction operations 10/11/12 are cell.init/read/write. Primitive type
+IDs are pred=1, i64=2, f64=3. Zero is absence, never a valid SSA operand/result.
+There is no fake Void value. Logical bounded ID APIs are not a claim of packed
+physical 32-bit storage: current ordinary Eristavi fields are Int-based.
+
+`verify.construction` checks all records, including dead blocks, reachable SSA
+availability and initializer dominance/order. `verify.verify` additionally
+rejects any surviving cells. Invalid IR is distinct from budget exhaustion and
+cancellation. Reports are observations, not executable publication capabilities;
+unchanged revision numbers do not bypass revalidation.
+
+Promotion indexes accesses, computes pruned live-in states/frontiers, places
+parameters deterministically, renames with explicit stacks/undo, captures
+simultaneous edge arguments, removes singleton trivial parameters, compacts its
+rebuild plan and creates a separate cell-free function. It preserves input
+records on success/failure. Late failure discards private output and retains
+consumed request work/traffic. General redundant-phi SCC elimination is not
+claimed. All supported scalar cells are eligible; no silent mutable fallback.
+
+The verifier reuses instruction positions and edge-source slots as claim markers;
+value coverage follows checked ranges/back-references. Dominator temporaries
+share eleven physical words per block only across disjoint phases. Preserve the
+phase-lifetime map in UIR_U1A_PROMOTION.md when modifying it.
+
+## 5. Concrete next-step hazards — read before extending operations
+
+The current registry is deliberately closed at operation 12. Some builder,
+verifier and promoter paths classify cells by `op >= 10` / `op < 10`; some
+successor walkers recognize only jump=6 and branch=7. Those tests are correct
+for the current closed subset but MUST be generalized before adding op 13+.
+Otherwise new arithmetic could be interpreted as a cell or silently removed.
+
+Start with:
+
+```sh
+rg -n 'op >= 10|op < 10|op == 6|op == 7' src/compiler/u1_*.eri
+```
+
+Agree explicit operation classifications and a shared successor/schema contract
+before implementing further operations/calls/switches. Preserve cell-free
+publication and extend construction verification, promotion copying, reference
+execution and malformed-IR tests together. Do not just add registry numbers.
+
+Next work, in order:
+
+1. Read the current U1 contract and inventory what is implemented versus required.
+2. Prepare the remaining U1a representation/registry slice for joint review:
+   scalar operations, function declarations/direct calls/effects/import contracts,
+   zero/multiple results and multiway switch edge/case schema.
+3. Implement agreed slices with independent semantic oracles and rejection tests.
+   Include signed MIN/-1 traps for BOTH div and rem, sparse switches without
+   allocation by largest case value, and strict Float environment/bit behavior.
+4. Complete source-map consistency/synthetic origins/origin chains and proper
+   revision/publication capabilities; current span checks are not that whole gate.
+5. Measure complete physical allocation/GC behavior and matched larger stress.
+   Integrate frontend/native lowering only after conformance and reviewed gates.
+
+Do not replace the working compiler with the small scalar subset. Managed
+values/failure continuations/resource ownership/cleanup algorithms still need
+their U2 implementation/review and complexity budgets.
+
+## 6. Validation and limits
+
+Normal PR CI has four configurations: Linux x86-64 GCC/Clang, Linux ARM64 Clang
+and macOS Clang. Both PR heads passed their normal CI before their merges.
+
+| Evidence | Link / scope |
+| --- | --- |
+| PR #59 corrected CI | https://github.com/eristavi/eristavi-lang/actions/runs/41016431065 |
+| PR #60 CI | https://github.com/eristavi/eristavi-lang/actions/runs/41017375980 |
+| Completed-batch qualification | https://github.com/eristavi/eristavi-lang/actions/runs/41018345033 — passed |
+| Post-merge main CI | https://github.com/eristavi/eristavi-lang/actions/runs/41019091503 — automatically triggered; see live result |
+
+Local U1 batch: ten tests passed. Promotion: 18 before/after IR pairs, 88 independent
+input cases with mathematical expected results and complete guard/fault/location
+traces, plus eight negative scenarios. Covers diamonds/loops/sequential joins,
+swaps, repeated loop-local initialization, irreducible graphs, dead code,
+redundant parameters, unused destinations with faults, i64 bounds and f64 bits.
+
+The independent dominator oracle checks 91 graphs and 2,816 answers. Bootstrap
+tests also traverse 128/512/2,048-block chains. The verifier protocol now includes
+41 scenarios after orphan/cycle regressions. Tests revalidate corruption without
+revision increments and check Int64-max IDs/counts/ranges before offset arithmetic.
+
+Native smoke compiles and executes the PASS IMPLEMENTATION written in Eristavi,
+through the existing frontend, with bootstrap and owned runtimes. The new IR
+programs' before/after behavior is independently evaluated in Python. There is
+not yet an integrated native backend for the redesigned UIR. Native smoke is not
+evidence that the new UIR already compiles whole Eristavi programs to machine code.
+
+Native promotion smoke uses small joins/loops, swaps and resets, with one extra
+verification. Bootstrap shape fixtures use eight extra verifications. Owned ELF
+checks require static/import-free output, a non-executable stack and execution
+with an unusable PATH.
+
+The C-bootstrap CI failure was real: optimized Linux Clang recovery observed stale
+pre-call identity state after cleanup/rethrow. PR #59 reloads source-variable
+reads in checked handlers via standard C volatile lvalue reads. A minimal test
+covering let/assign/return/expression handlers prints 0 before the fix and required
+cleanup state 42 afterward; GCC and Clang resource tests pass. Normal expression
+lowering and the native ABI are unchanged.
+
+Selected budgets (policy, not measured optimal values):
+
+| Scope | Selected limit |
+| --- | --- |
+| Qualification function peak modeled capacity / successful traffic | 8 MiB / 64 MiB |
+| Development function peak / traffic | 64 MiB / 256 MiB |
+| Shared metadata / request peak | 128 MiB / 512 MiB |
+| Request successful allocation traffic | 2 GiB |
+| Construction / each verification | 16,777,216 charged visits each |
+| Promotion / request total work | 33,554,432 / 268,435,456 |
+| Outstanding work batch / bulk cancellation interval | 1,024 visits / 64 KiB |
+
+Counts and component envelopes are in UIR_U1A_BUDGETS.json and U1 contract §15.
+The direct-IR diamond/loop/sequential fixtures at N=8/32/128 meet exact parameter
+and argument counts. The largest sequential fixture records 8,206,560 peak modeled
+bytes, 19,524,768 traffic bytes and 3,367,442 promotion work units. No gate was
+raised to make it pass. Source hashes/per-case values are committed in
+UIR_U1A_PROMOTION_EVIDENCE.json.
+
+These counters cover conservative page-adapter charges, not every transient
+object, allocator metadata or GC retention. Full physical memory qualification
+and packed storage are not established. The largest owned graph/deep-chain
+combined run previously timed out at 120 seconds; that result remains unqualified.
+All 91 small graphs matched in a diagnostic run; a fresh 128-block owned chain
+passed in about six wall seconds. Do not relabel this as a broad performance pass.
+
+Completed-batch full qualification checks bootstrap compiler repeatability and
+owned integration. It is distinct from the manually selected full owned compiler
+self-build/repeatability profile. Full owned self-hosting remains unproven.
+The final completed-batch qualification passed on tested head 22b36c1de42a6bb1b6d54d03a9c69b7c49062082. All three bootstrap jobs report repeatable=true, completed C/D compilers, a successful offline audit and unchanged source snapshot. Owned integration reports repeatable=false, no C/D compiler self-build and a successful offline audit with unchanged sources. The separate owned-self-build job was intentionally skipped. The merged main tree equals the tested head tree; no implementation changed after qualification.
+
+## 7. Governing documents and decision records
+
+Read current repository instructions/AGENTS.md if present, DESIGN_PHILOSOPHY.md,
+LANGUAGE_SEMANTICS.md, CI_QUALIFICATION.md and relevant runtime/ABI contracts.
+The present checkout had no applicable AGENTS.md when inspected.
+
+Repository slice records: UIR_U1A_FOUNDATION.md, UIR_U1A_VERIFIER.md,
+UIR_U1A_PROMOTION.md, UIR_U1A_BUDGETS.json, UIR_U1A_PROMOTION_EVIDENCE.json.
+
+Design decision records maintained separately from the repository (search by
+exact filename in the user's saved project documents, then read the latest
+contents before acting):
+
+- Eristavi-Lexer-Architecture-2026-10-29.md
+- Eristavi-Parser-Architecture-Proposal-2026-10-29.md
+- Eristavi-Module-Architecture-Proposal-2026-10-29.md
+- Eristavi-Semantic-Architecture-Proposal-2026-10-29.md
+- Eristavi-Typed-Universal-IR-Proposal-2026-10-29.md
+- Eristavi-UIR-U1-Contract-2026-10-29.md
+- Eristavi-UIR-U0-Baseline-2026-10-29.md
+- Eristavi-UIR-U1a-Budgets-2026-10-29.json
+- Eristavi-UIR-U0-Evidence-2026-10-29.zip
+
+Do not silently reconstruct an unseen decision document from a filename or old
+conversation summary. This handover records the key constraints, while the full
+contracts remain authoritative when available.
+
+Qualification artifacts for run 41018345033 (GitHub-reported archive digests;
+retained for 14 days, not an independent local rehash):
+
+| Artifact | ID | SHA-256 |
+| --- | --- | --- |
+| Bootstrap x86-64 GCC | 12961011043 | d0dac640d44c70197dddcdcbbe5e1b074566a9db2091020568cdb189c49653d5 |
+| Bootstrap x86-64 Clang | 12961105702 | 457ce9a4c381f30989986770d0dbf3394bc0a2dccb7dedf074747146396a7552 |
+| Bootstrap ARM64 Clang | 12960334209 | 814d9134bca9e1e126f0c7d8cc789a929d1dd533ec76cd4f07024be891b127e7 |
+| Owned integration | 12960755760 | a7afb051f3b2040e58ab75789b6b78ddda8963e2cf1d9cdd44b43b7a0764f846 |
+
+The U0 archive SHA-256 is
+`63ee91cbec2b3d2f2d835e20396d533ee25a2f31543f899f77483f1d4d3ddeaa`.
+Do not rewrite/relabel its raw measurements when recording later policies.
+It pins inspected baseline PR #57 head 8af0ffe3350c737550c3ab0e6c3fa89f60f6f091.
+It records 60 source-pipeline samples over 12 workloads and 30 corrected paired
+native-verifier/runtime samples. Peak child RSS initially inherited launcher
+memory; a controlled native launcher corrected the authoritative measurements.
+Historical width-2,000 owned median around 16.56 seconds is different work from
+the future initialized/checksum stress recipe. Timing noise precludes a narrow
+5% gate; there is no measured new-UIR whole-build speedup.
+
+## 8. Reproduction and recoverable workspace
+
+Current workspace, optional accelerator only:
+`/workspace/scratch/1848da8b628a/eristavi-u1a`.
+The implementation checkout was verified clean on main at cd421d859e3372796e59ddf236944efc1b6aaddb with the tested tree c6a554e04c12d26c93650956709c5d57f1812ddf. A documentation-only branch docs/uir-handover-2026-10-30 publishes HANDOVER.md after this code checkpoint; it does not alter implementation or qualification inputs.
+
+With ordinary project dependencies installed:
+
+```sh
+python3 -m unittest discover -s tests -p 'test_u1*.py' -v
+python3 -m unittest discover -s tests -p 'test_c_failure_recovery.py' -v
+```
+
+Cached Unicode dependencies, if still present:
+`/workspace/scratch/1848da8b628a/uir-u0/deps`.
+Use `PYTHONPATH` with the checkout and those dependencies only if needed;
+prefer the repository's normal install instructions in a fresh environment.
+
+Temporary logs/probes: `uir-u0`, `uir-u1a-work`, `uir-u1a-verifier-work`,
+`uir-u1a-promotion-work` beneath that workspace root. A private Clang 18 toolchain
+was extracted under `uir-u1a-promotion-work/clang-toolchain`; it needs its
+`usr/lib/x86_64-linux-gnu` on LD_LIBRARY_PATH. It is optional and not a repository
+dependency. Do not rely on temporary tool binaries or directory survival.
+
+Use committed tests/docs and GitHub evidence to recover. Artifacts have 14-day
+retention. Fetch refs and compare trees/hashes; do not assume local branch names
+or old scratch binaries describe current main. Shell fetch works; GitHub connector
+Git Data APIs were used for publication with tested-tree equality and expected-head
+guards. Never expose credentials or signed artifact transfer URLs.
+
+## 9. Historical self-build limit — do not restart it automatically
+
+The last recorded full owned B-to-C attempt was at PR #47 head
+3b3841e5ffe25dbfe1aa87389e820135b61bbcf7 and timed out at 900 seconds, producing no
+compiler C/D. Analysis completed in 224.810s, typed lowering in 340.098s and the
+then-broad universal-lower phase remained active 334.461s at timeout. That broad
+phase included typed validation; it did not prove actual Universal IR construction
+was the cause. Later probes/optimizations and the new architecture do not turn
+that incomplete attempt into a successful owned self-build.
+
+Historical PR #50 qualified bootstrap repeatability/owned integration at main
+9e8e460cd69f7f1b4ebda56eed97504ccf6e54d7, CI run 40700196736, qualification run
+40701157136. Its owned wide-local verifier microbenchmark was 7.124s to 2.872s,
+not a full-build speedup. The current redesign supersedes the old instruction to
+immediately resume that combined microbenchmark investigation.
+
+No further implementation should be inferred from this handover's existence.
+Resume the user's next instruction and the agreed remaining U1a work.
