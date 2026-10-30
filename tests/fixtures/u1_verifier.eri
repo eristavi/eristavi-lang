@@ -310,6 +310,50 @@ function floatDead() fails budget.LimitError,verify.InvalidIR,ProbeError {
     try rejected(harness,2,2,"float-dead-payload"); try close(harness);
 }
 
+
+function switchContracts() fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let harness be try create([meta.i64(),meta.pred()],[meta.i64()]);
+    let routine be harness.routine; let entry be try build.block(routine,[meta.i64(),meta.pred()]);
+    let join be try build.block(routine,[meta.i64()]);
+    let selector be try build.parameter(routine,entry,0);
+    let wrong be try build.parameter(routine,entry,1);
+    let first be try build.edge(routine,join,[selector]);
+    let second be try build.edge(routine,join,[selector]);
+    let third be try build.edge(routine,join,[selector]);
+    let fallback be try build.edge(routine,join,[selector]);
+    try build.switchInteger(routine,entry,selector,[0,9223372036854775807,-9223372036854775807-1],
+        [first,second,third],fallback,harness.location);
+    try build.returnValues(routine,join,[try build.parameter(routine,join,0)],harness.location);
+    try build.complete(routine); try accepted(harness,2,"switch-valid");
+    let edit be try budget.constructionPhase(harness.owner);
+    try change(routine.cases,edit,2,0);
+    try rejected(harness,2,0,"switch-duplicate-case"); try change(routine.cases,edit,2,9223372036854775807);
+    try change(routine.cases,edit,1,999);
+    try rejected(harness,2,0,"switch-invalid-case-edge"); try change(routine.cases,edit,1,first.index);
+    try change(routine.switches,edit,2,0);
+    try rejected(harness,2,0,"switch-invalid-default"); try change(routine.switches,edit,2,fallback.index);
+    try change(routine.instructions,edit,7,999);
+    try rejected(harness,2,1,"switch-invalid-header"); try change(routine.instructions,edit,7,1);
+    try change(routine.cases,edit,3,first.index);
+    try rejected(harness,2,1,"switch-reused-edge"); try change(routine.cases,edit,3,second.index);
+    try change(routine.instructions,edit,8,1);
+    try rejected(harness,2,1,"switch-unexpected-extra"); try change(routine.instructions,edit,8,0);
+    try change(routine.operands,edit,0,wrong.index);
+    try rejected(harness,2,1,"switch-selector-type"); try change(routine.operands,edit,0,selector.index);
+    try accepted(harness,2,"switch-restored"); try close(harness);
+}
+
+
+function switchEmpty() fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let harness be try create([meta.i64()],[meta.i64()]); let routine be harness.routine;
+    let entry be try build.block(routine,[meta.i64()]); let join be try build.block(routine,[meta.i64()]);
+    let selector be try build.parameter(routine,entry,0);
+    let defaultEdge be try build.edge(routine,join,[selector]);
+    try build.switchInteger(routine,entry,selector,[],[],defaultEdge,harness.location);
+    try build.returnValues(routine,join,[try build.parameter(routine,join,0)],harness.location);
+    try build.complete(routine); try accepted(harness,2,"switch-empty"); try close(harness);
+}
+
 function syntheticOrigins() fails budget.LimitError,verify.InvalidIR,ProbeError {
     // Construct an owned source origin, then two synthetic provenance records.
     let root be try budget.developmentRequest(); let shared be try budget.metadataOwner(root);
@@ -366,7 +410,7 @@ function manyUses() fails budget.LimitError,verify.InvalidIR,ProbeError {
 }
 function run() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError {
     try mutations(); try orphanRecords(); try diamond(); try loop(); try dead(); try repeatedTarget(); try limits(); try cancellation();
-    try scalarShapes(); try predicateOperations(); try predicateDead(); try integerOperations(); try integerDead(); try divremContracts(); try divremDead(); try floatOperations(); try floatDead(); try syntheticOrigins(); try manyUses(); return true;
+    try scalarShapes(); try predicateOperations(); try predicateDead(); try integerOperations(); try integerDead(); try divremContracts(); try divremDead(); try floatOperations(); try floatDead(); try syntheticOrigins(); try switchContracts(); try switchEmpty(); try manyUses(); return true;
 }
 function main() {
     let done be run() else error budget.LimitError { output(error.category+":"+error.message); process.setExitCode(1); return; }

@@ -15,7 +15,7 @@ from compiler.erist.diagnostics import SemanticError
 from compiler.erist.project import compile_module
 
 ROOT = Path(__file__).resolve().parents[1]
-TABLES = ('blocks', 'values', 'instructions', 'operands', 'edges', 'arguments', 'cells')
+TABLES = ('blocks', 'values', 'instructions', 'operands', 'edges', 'arguments', 'cells', 'switches', 'cases')
 MIN, MAX = -(1 << 63), (1 << 63) - 1
 
 
@@ -288,8 +288,16 @@ def evaluate(ir, parameters, fuel=50000):
             elif op == 5:
                 trace.append((payload, location, bool(operands[0])))
                 if not operands[0]: return ('trap', (payload, location)), tuple(trace)
-            elif op in (6, 7):
-                edge = payload if op == 6 or operands[0] else extra
+            elif op in (6, 7, 35):
+                if op == 35:
+                    first_case, case_count, edge = ir['switches'][(payload-1)*3:payload*3]
+                    for row in range(first_case, first_case + case_count):
+                        value, successor = ir['cases'][row*2:row*2+2]
+                        if value == operands[0]:
+                            edge = successor
+                            break
+                else:
+                    edge = payload if op == 6 or operands[0] else extra
                 block, first_argument, argument_count = ir['edges'][(edge-1)*3:edge*3]
                 # Snapshot every argument before rebinding ANY destination parameter.
                 arguments = tuple(values[v] for v in ir['arguments'][first_argument:first_argument+argument_count])
@@ -437,6 +445,14 @@ def cases_for(name, before):
                                 expected = ('trap', (2, 1))
                     yield (a, b, allowed), expected
 
+    elif name == 'switch-flow':
+        for value in (MIN, MIN+1, -1, 0, 1, MAX-1, MAX):
+            chosen = 10 if value == 0 else 20 if value == MAX else 30 if value == MIN else 40
+            yield (value,), ('return', (chosen,))
+    elif name == 'switch-multi-edge':
+        for select, a, b, default in itertools.product((0, 1, MAX), (1, -1), (3,), (5,)):
+            expected = a if select == 0 else b if select == MAX else default
+            yield (select, a, b, default), ('return', (expected,))
     elif name == 'float-nonfma':
         # A*b rounds to 1 before adding -1; contraction would give -2^-54.
         triples = ((0x3ff0000002000000, 0x3feffffffc000000, 0xbff0000000000000),
@@ -470,7 +486,7 @@ class U1PromotionTests(unittest.TestCase):
         (cls.root / 'compiler').symlink_to(ROOT / 'src/compiler', target_is_directory=True)
         cls.calls = [f'{family}({width}{",false" if family == "diamond" else ""})'
                      for family in ('diamond', 'loop', 'sequential') for width in (8, 32, 128)]
-        cls.calls += ['diamond(2,true)', 'swap()', 'reset()', 'irreducible()', 'dead(false)', 'faults(false)', 'faults(true)', 'floatCell()', 'passthrough()', 'predicateTruth()', 'predicateMerge()', 'integerArithmetic()', 'integerMerge()', 'divideSigned()', 'remainderSigned()', 'divideUnsigned()', 'remainderUnsigned()', 'divisionMerge()', 'divisionFaultOrder()', 'floatArithmetic()', 'floatMerge()', 'floatNonContraction()',
+        cls.calls += ['diamond(2,true)', 'swap()', 'reset()', 'irreducible()', 'dead(false)', 'faults(false)', 'faults(true)', 'floatCell()', 'passthrough()', 'predicateTruth()', 'predicateMerge()', 'integerArithmetic()', 'integerMerge()', 'divideSigned()', 'remainderSigned()', 'divideUnsigned()', 'remainderUnsigned()', 'divisionMerge()', 'divisionFaultOrder()', 'floatArithmetic()', 'floatMerge()', 'floatNonContraction()', 'switchFlow()', 'switchDistinctEdges()',
                       'invalidCell(0)', 'invalidCell(1)', 'invalidCell(2)', 'dead(true)', 'failedWork()', 'canonicalReject()', 'failedOutput()', 'cancelled()']
         cls.source = cls.root / 'promotion.eri'; cls.source.write_text(probe_source(cls.calls))
         cls.binary = cls.root / 'promotion-c'
@@ -500,7 +516,7 @@ class U1PromotionTests(unittest.TestCase):
         result = subprocess.run([str(self.binary)], capture_output=True, text=True, timeout=120)
         self.assertEqual((result.returncode, result.stderr), (0, ''), result.stdout[-300:])
         snapshots, labels = self.check_snapshots(result.stdout)
-        self.assertEqual(len(snapshots), 31)
+        self.assertEqual(len(snapshots), 33)
         self.assertEqual(labels, ['invalid-init:ok']*3 + ['malformed-dead:ok', 'promotion-limit:ok', 'canonical-reject:ok', 'partial-output:ok', 'cancelled:ok'])
         again = subprocess.run([str(self.binary)], capture_output=True, text=True, timeout=120)
         self.assertEqual((again.returncode, again.stdout, again.stderr), (0, result.stdout, ''))
