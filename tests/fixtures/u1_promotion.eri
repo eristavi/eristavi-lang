@@ -256,4 +256,32 @@ function cancelled() fails budget.LimitError,verify.InvalidIR,ProbeError {
         try close(harness); output("cancelled:ok"); return;
     } else error verify.InvalidIR { fail error; }; fail ProbeError { message="cancelled promotion completed"; };
 }
+
+// Pure eager predicate operations preserve truth tables through promotion.
+function predicateTruth() fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let harness be try create([meta.pred(),meta.pred()],[meta.pred(),meta.pred()],true); let routine be harness.routine;
+    let entry be try build.block(routine,[meta.pred(),meta.pred()]);
+    let first be try build.parameter(routine,entry,0); let second be try build.parameter(routine,entry,1);
+    let both be try build.andPredicate(routine,entry,first,second,harness.location);
+    let either be try build.orPredicate(routine,entry,first,second,harness.alternate);
+    try build.returnValues(routine,entry,[both,either],harness.location);
+    try build.complete(routine); try promoted(harness,"pred-truth",0,0);
+}
+// SSA promotion must not silently drop op 13/14 when reconstructing a join.
+function predicateMerge() fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let harness be try create([meta.pred(),meta.pred()],[meta.pred(),meta.pred()],true); let routine be harness.routine;
+    let entry be try build.block(routine,[meta.pred(),meta.pred()]);
+    let left be try build.block(routine,[]); let right be try build.block(routine,[]); let join be try build.block(routine,[]);
+    let a be try build.parameter(routine,entry,0); let b be try build.parameter(routine,entry,1);
+    let local be try build.cell(routine,meta.pred()); try build.initialize(routine,entry,local,a,harness.location);
+    try build.branch(routine,entry,a,left,[],right,[],harness.location);
+    try build.writeCell(routine,left,local,b,harness.location); try build.jump(routine,left,join,[],harness.location);
+    try build.jump(routine,right,join,[],harness.location);
+    let current be try build.readCell(routine,join,local,harness.location);
+    let both be try build.andPredicate(routine,join,current,b,harness.location);
+    let either be try build.orPredicate(routine,join,current,b,harness.alternate);
+    try build.returnValues(routine,join,[both,either],harness.location);
+    try build.complete(routine); try promoted(harness,"pred-merge",1,2);
+}
+
 // The Python harness appends run()/main() with its selected cases.

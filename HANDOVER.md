@@ -376,3 +376,22 @@ Status: **proposed implementation / draft review**. The full U1a contract/archit
 Source-pattern replacement and changed-path scope were checked before commit. Compiled runtime tests and hosted CI must be independently verified against this branch's final commit; none are claimed solely from this record. Run `python3 -m unittest discover -s tests -p 'test_u1*.py' -v` for focused validation. Per `CI_QUALIFICATION.md`, compiler changes require final-revision four-platform CI and completed-batch qualification before merge; do not start expensive qualification for every helper.
 
 Next: reconcile any newly uploaded external U1 contract/design files against `HANDOVER.md`; explicitly approve a complete opcode/type/effect and switch-edge schema before extending beyond op 12, then implement independently tested scalar/call/switch/strict-Float slices. Keep the old production compiler until U3 gates are met.
+
+
+## 11. Continuation — isolated U1a eager predicate slice (2026-10-30)
+
+Branch `compiler/u1a-predicate-ops` is stacked on draft PR #62 `compiler/u1a-opcode-classification-harden`, which itself depends on documentation PR #61. **These are draft review branches, not merged main functionality.** The complete architecture records have been found at `docs/architecture/` on PR #61's documentation branch; most importantly, read `Eristavi-UIR-U1-Contract-2026-10-29.md` before designing additional operations. Its status distinguishes agreed full U1 from the implemented narrow U1a subset.
+
+### Changes proposed in this slice
+
+- Read full U1 contract for operation typing, eager predicate semantics, independent verification, source origins and effect order.
+- Implement pure `pred.and` (op 13) and `pred.or` (op 14), exact pred/pred arity and pred result, with zero payload/attribute.
+- Extend `u1_builder` with typed construction helpers; extend independent verifier's closed operation contracts, including dead blocks.
+- Extend the independent Python U1 reference evaluator and promotion fixtures for all Boolean combinations before/after transactional SSA promotion.
+- Replace outdated canonical-test assumption that all canonical opcodes are below 10; cells remain exactly 10/11/12.
+- Add positive/malformed verifier tests and update opcode-classification probe to reject 15 and 16.
+- Record the scope and next gates in `UIR_U1A_PREDICATES.md` and preserve the earlier classification audit.
+
+Status at commit creation: *proposed, awaiting focused CI*. Do not report compilation, native tests, or full qualification as passed until the exact new commit has verified results. No compiler-wide or 900-second owned self-build was started. No production frontend/driver or runtime ABI modification.
+
+Next task: validate latest CI results and fix any regressions; reconcile the now-published complete U1 contract and plan the remaining scalar integer ops (including signed MIN/-1 on div/rem), calls/effects, multiway switch side tables and strict Float boundary. Keep each slice independently verifiable; do not merge stacked draft PRs or widen specifications without reviewed evidence. Once parent PRs merge, retarget this branch to main and requalify final code revision according to `CI_QUALIFICATION.md`.

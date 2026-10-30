@@ -22,7 +22,9 @@ PROTOCOL = ''.join(name + ':ok\n' for name in (
     'duplicate-edge-owner', 'loop-swap', 'header-value-in-predecessor', 'edge-type',
     'edge-range', 'typed-unreachable', 'malformed-unreachable',
     'repeated-target-arguments', 'work-exhaustion', 'cancellation',
-    'zero-result-function', 'float-bits-multiple-results', 'many-dominated-uses'))
+    'zero-result-function', 'float-bits-multiple-results',
+    'predicate-ops', 'predicate-payload', 'predicate-arity', 'predicate-type',
+    'predicate-restored', 'predicate-dead-ok', 'predicate-dead-payload', 'many-dominated-uses'))
 
 
 def dominator_oracle(blocks, edges):

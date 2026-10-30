@@ -80,6 +80,8 @@ def evaluate(ir, parameters, fuel=50000):
                 mathematical = operands[0] + operands[1]
                 outputs = [((mathematical + (1 << 63)) % (1 << 64)) - (1 << 63), not MIN <= mathematical <= MAX]
             elif op == 4: outputs = [not operands[0]]
+            elif op == 13: outputs = [bool(operands[0]) and bool(operands[1])]
+            elif op == 14: outputs = [bool(operands[0]) or bool(operands[1])]
             elif op == 5:
                 trace.append((payload, location, bool(operands[0])))
                 if not operands[0]: return ('trap', (payload, location)), tuple(trace)
@@ -141,6 +143,11 @@ def cases_for(name, before):
     elif name == 'passthrough':
         for value, flag in itertools.product((MIN, 0, MAX), (False, True)):
             yield (value, flag), ('return', (value,))
+    elif name in ('pred-truth', 'pred-merge'):
+        for left, right in itertools.product((False, True), repeat=2):
+            chosen = right if left else left
+            a = chosen if name == 'pred-merge' else left
+            yield (left, right), ('return', (a and right, a or right))
     else: raise AssertionError(f'unknown fixture {name}')
 
 
@@ -152,7 +159,7 @@ class U1PromotionTests(unittest.TestCase):
         (cls.root / 'compiler').symlink_to(ROOT / 'src/compiler', target_is_directory=True)
         cls.calls = [f'{family}({width}{",false" if family == "diamond" else ""})'
                      for family in ('diamond', 'loop', 'sequential') for width in (8, 32, 128)]
-        cls.calls += ['diamond(2,true)', 'swap()', 'reset()', 'irreducible()', 'dead(false)', 'faults(false)', 'faults(true)', 'floatCell()', 'passthrough()',
+        cls.calls += ['diamond(2,true)', 'swap()', 'reset()', 'irreducible()', 'dead(false)', 'faults(false)', 'faults(true)', 'floatCell()', 'passthrough()', 'predicateTruth()', 'predicateMerge()',
                       'invalidCell(0)', 'invalidCell(1)', 'invalidCell(2)', 'dead(true)', 'failedWork()', 'canonicalReject()', 'failedOutput()', 'cancelled()']
         cls.source = cls.root / 'promotion.eri'; cls.source.write_text(probe_source(cls.calls))
         cls.binary = cls.root / 'promotion-c'
@@ -166,7 +173,7 @@ class U1PromotionTests(unittest.TestCase):
             self.assertLessEqual(counts[4], 64*1024*1024, name)
             self.assertLessEqual(counts[5], 33554432, name)
             self.assertEqual(after['cells'], [], name)
-            self.assertTrue(all(op < 10 for op in after['instructions'][::10]), name)
+            self.assertTrue(all(op not in (10, 11, 12) for op in after['instructions'][::10]), name)
             for parameters, expected in cases_for(name, before):
                 with self.subTest(fixture=name, cells=len(before['cells'])//2, parameters=parameters):
                     original, original_trace = evaluate(before, parameters)
@@ -182,7 +189,7 @@ class U1PromotionTests(unittest.TestCase):
         result = subprocess.run([str(self.binary)], capture_output=True, text=True, timeout=120)
         self.assertEqual((result.returncode, result.stderr), (0, ''), result.stdout[-300:])
         snapshots, labels = self.check_snapshots(result.stdout)
-        self.assertEqual(len(snapshots), 18)
+        self.assertEqual(len(snapshots), 20)
         self.assertEqual(labels, ['invalid-init:ok']*3 + ['malformed-dead:ok', 'promotion-limit:ok', 'canonical-reject:ok', 'partial-output:ok', 'cancelled:ok'])
         again = subprocess.run([str(self.binary)], capture_output=True, text=True, timeout=120)
         self.assertEqual((again.returncode, again.stdout, again.stderr), (0, result.stdout, ''))

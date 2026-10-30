@@ -45,3 +45,7 @@ The targeted source and classification regression is in `tests/test_u1_foundatio
 The full operation/call/switch design is **not** implemented by this patch, nor is the new U1 architecture integrated into the production driver. It is the first safe prerequisite, not a completed U1a milestone.
 
 References: `HANDOVER.md`, `UIR_U1A_FOUNDATION.md`, `UIR_U1A_VERIFIER.md`, `UIR_U1A_PROMOTION.md`, `CI_QUALIFICATION.md`.
+
+## Follow-on isolated predicate extension (next branch, 2026-10-30)
+
+The original closed foundation registry documented above is the pre-extension baseline. The later isolated predicate slice adds op 13 `pred.and` and op 14 `pred.or` without widening the private cell category (still **exactly** 10/11/12) or the inline CFG edge profile. See `UIR_U1A_PREDICATES.md`. This does not authorize switch/call/strict-Float schema changes.
