@@ -38,6 +38,8 @@ PROTOCOL = ''.join(name + ':ok\n' for name in (
     'synthetic-origin-reason', 'synthetic-origin-negative',
     'synthetic-origin-restored',
     'narrow-core-signatures', 'narrow-type-mismatch', 'narrow-type-restored',
+    'narrow-constant-valid', 'narrow-constant-overflow', 'narrow-constant-width',
+    'narrow-constant-result-type', 'narrow-constant-restored',
     'many-dominated-uses'))
 
 
