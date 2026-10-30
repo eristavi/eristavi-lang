@@ -1,0 +1,121 @@
+// Non-production U1a body linkage probe with independent verifier.
+import std.process;
+import compiler.u1_budget as budget;
+import compiler.u1_meta as meta;
+import compiler.u1_builder as build;
+import compiler.u1_verify as verify;
+import compiler.u1_module as link;
+error ProbeError { message Text; }
+function check(value Bool,message Text) fails ProbeError {
+    if not value { fail ProbeError { message=message; }; }
+}
+function deniedBind(registry identity link.Program,target meta.FunctionId,
+    body identity build.Function,label Text) returns Bool fails ProbeError,verify.InvalidIR {
+    let index be link.bind(registry,target,body) else error budget.LimitError {
+        try check(error.category == "invalid-state","invalid bind category: "+label);
+        output(label+":ok"); return true;
+    };
+    fail ProbeError { message="accepted invalid binding: "+label; };
+}
+function deniedSeal(registry identity link.Program) returns Bool fails ProbeError,verify.InvalidIR {
+    let count be link.seal(registry) else error budget.LimitError {
+        try check(error.category == "invalid-state","invalid seal category");
+        output("incomplete-module:ok"); return true;
+    };
+    fail ProbeError { message="sealed module with missing definitions"; };
+}
+function deniedResolve(registry identity link.Program,target meta.FunctionId,label Text) returns Bool fails ProbeError {
+    let body be link.resolve(registry,target) else error budget.LimitError {
+        try check(error.category == "invalid-state","invalid resolution category: "+label);
+        output(label+":ok"); return true;
+    };
+    fail ProbeError { message="resolved unbound or stale definition: "+label; };
+}
+function run() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let root be try budget.developmentRequest();
+    let shared be try budget.metadataOwner(root);
+    let phase be try budget.constructionPhase(shared);
+    let data be try meta.create(shared,phase);
+    let multi be try meta.signature(data,phase,[meta.i64()],[meta.i64(),meta.pred()]);
+    let single be try meta.signature(data,phase,[meta.i64()],[meta.i64()]);
+    let zero be try meta.signature(data,phase,[meta.i64()],[]);
+    let first be try meta.declaration(data,phase,multi,"cycle.first",1,63,0);
+    let second be try meta.declaration(data,phase,single,"cycle.second",1,63,0);
+    let third be try meta.declaration(data,phase,zero,"cycle.zero",1,63,0);
+    let foreign be try meta.declaration(data,phase,zero,"import.log",2,63,1);
+    let source be try meta.source(data,phase,"u1-link",
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",64);
+    let loc be try meta.location(data,phase,source,0,12,1,1,2);
+    try meta.freeze(data); try budget.finishPhase(phase);
+    let registry be try link.create(data);
+
+    // Definitions are built in reverse order; their calls resolve by
+    // declaration FunctionId, never by text, ordinal of construction or fN.
+    let ownerB be try budget.functionOwner(root,false);
+    let phaseB be try budget.constructionPhase(ownerB);
+    let bodyB be try build.create(data,single,ownerB,phaseB);
+    let blockB be try build.block(bodyB,[meta.i64()]);
+    let argB be try build.parameter(bodyB,blockB,0);
+    let callA be try build.call(bodyB,blockB,first,[argB],loc);
+    try build.returnValues(bodyB,blockB,[try build.result(bodyB,callA,0)],loc);
+    try build.complete(bodyB); try budget.finishPhase(phaseB);
+
+    let ownerA be try budget.functionOwner(root,false);
+    let phaseA be try budget.constructionPhase(ownerA);
+    let bodyA be try build.create(data,multi,ownerA,phaseA);
+    let blockA be try build.block(bodyA,[meta.i64()]);
+    let argA be try build.parameter(bodyA,blockA,0);
+    let callB be try build.call(bodyA,blockA,second,[argA],loc);
+    let truth be try build.predicate(bodyA,blockA,true,loc);
+    try build.returnValues(bodyA,blockA,[try build.result(bodyA,callB,0),truth],loc);
+    try build.complete(bodyA); try budget.finishPhase(phaseA);
+
+    let ownerC be try budget.functionOwner(root,false);
+    let phaseC be try budget.constructionPhase(ownerC);
+    let bodyC be try build.create(data,zero,ownerC,phaseC);
+    let blockC be try build.block(bodyC,[meta.i64()]);
+    try build.returnValues(bodyC,blockC,[],loc);
+    try build.complete(bodyC); try budget.finishPhase(phaseC);
+
+    // Independent rejection before any binding; neither attempt mutates it.
+    let bad be try deniedBind(registry,second,bodyA,"signature-mismatch");
+    let forged be meta.FunctionId { owner=identity meta.Key { marker=0; }; index=first.index; };
+    bad=try deniedBind(registry,forged,bodyA,"foreign-function-id");
+    bad=try deniedBind(registry,foreign,bodyC,"import-not-definition");
+
+    let count be try link.bind(registry,second,bodyB);
+    count=try link.bind(registry,first,bodyA);
+    try check(count == 2,"two forward definitions linked");
+    output("forward-and-mutual-calls:ok");
+    bad=try deniedBind(registry,second,bodyB,"duplicate-definition");
+    bad=try deniedSeal(registry);
+
+    count=try link.bind(registry,third,bodyC);
+    try check(count == 3,"zero-result body linked");
+    try check(try link.seal(registry) == 3,"all local definitions sealed");
+    try check(try link.resolve(registry,first) == bodyA,"first bound identity");
+    try check(try link.resolve(registry,second) == bodyB,"second bound identity");
+    try check(try link.resolve(registry,third) == bodyC,"zero-result bound identity");
+    output("all-definitions-verified:ok");
+    bad=try deniedResolve(registry,foreign,"import-unresolved");
+    bad=try deniedBind(registry,first,bodyA,"no-binding-after-seal");
+    bodyA.revision=bodyA.revision+1;
+    bad=try deniedResolve(registry,first,"stale-revision");
+    bodyA.revision=bodyA.revision-1;
+
+    try link.close(registry);
+    try build.close(bodyA); try build.close(bodyB); try build.close(bodyC);
+    try meta.close(data);
+    try check(root.live == 0 and root.pending == 0,"root charges released");
+    try budget.close(ownerA); try budget.close(ownerB); try budget.close(ownerC);
+    try budget.close(shared); try budget.close(root);
+    output("no-budget-leaks:ok");
+    return true;
+}
+function main() {
+    let success be run()
+    else error budget.LimitError { output(error.category+":"+error.message); process.setExitCode(1); return; }
+    else error verify.InvalidIR { output(error.category+":"+error.message); process.setExitCode(1); return; }
+    else error ProbeError { output(error.message); process.setExitCode(1); return; };
+}
+main();
