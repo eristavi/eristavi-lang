@@ -1,0 +1,142 @@
+// Isolated U1a module registry: bind immutable FunctionId declarations to
+// complete, independently verified canonical bodies. Not a publication stamp
+// or a replacement for the production compiler's frontend/native pipeline.
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+import compiler.u1_meta as meta;
+import compiler.u1_builder as build;
+import compiler.u1_verify as verify;
+
+public type Entry {
+    target meta.FunctionId; body identity build.Function; revision Int;
+    charge identity budget.Allocation; next maybe identity Entry;
+}
+public type Program {
+    metadata identity meta.Metadata; head maybe identity Entry;
+    count Int; sealed Bool; closed Bool; charge identity budget.Allocation;
+}
+
+function active(program identity Program) fails budget.LimitError {
+    try budget.poll(program.metadata.owner);
+    if program.closed or program.metadata.closed or not program.metadata.frozen {
+        try budget.reject("U1 module metadata closed or mutable");
+    }
+}
+public function create(metadata identity meta.Metadata) returns identity Program fails budget.LimitError {
+    try budget.poll(metadata.owner);
+    if metadata.closed or not metadata.frozen or metadata.owner.kind != 1 {
+        try budget.reject("U1 module requires immutable declaration metadata");
+    }
+    let pending be try budget.reserve(metadata.owner,128);
+    return identity Program { metadata=metadata; head=none; count=0;
+        sealed=false; closed=false; charge=try budget.commit(pending); };
+}
+
+// Bind by real FunctionId, independent of symbol names or declaration order.
+// The verifier examines all blocks, including unreachable malformed calls.
+public function bind(program identity Program,target meta.FunctionId,
+    body identity build.Function) returns Int fails budget.LimitError,verify.InvalidIR {
+    try active(program);
+    if program.sealed or body.metadata != program.metadata or body.state != 1 or
+       body.cells.length != 0 or body.owner.kind != 2 or
+       body.owner.parent != program.metadata.owner.parent {
+        try budget.reject("invalid U1a defined function body");
+    }
+    let cursor be program.head;
+    while cursor != none {
+        if cursor.target.index == target.index and cursor.target.owner == target.owner {
+            try budget.reject("duplicate U1a definition");
+        }
+        if cursor.body == body { try budget.reject("U1a body bound twice"); }
+        cursor=cursor.next;
+    }
+    let phase be try budget.verificationPhase(body.owner);
+    let signature be try meta.functionSignature(program.metadata,phase,target);
+    let kind be try words.get(program.metadata.declarations,phase,(target.index-1)*6+3);
+    try budget.finishPhase(phase);
+    if kind != 1 { try budget.reject("cannot bind an imported U1a function"); }
+    if signature.owner != body.signature.owner or signature.index != body.signature.index {
+        try budget.reject("defined U1a body signature mismatch");
+    }
+    // Fresh verifier; a builder's state/revision is not acceptance evidence.
+    let checkPhase be try budget.verificationPhase(body.owner);
+    let report be try verify.verify(body,checkPhase);
+    if report.revision != body.revision { try budget.reject("stale U1a body revision"); }
+    let pending be try budget.reserve(program.metadata.owner,128);
+    let entry be identity Entry { target=target; body=body; revision=body.revision;
+        charge=try budget.commit(pending); next=program.head; };
+    program.head=entry; program.count=program.count+1;
+    return program.count;
+}
+
+// A complete definition table, not an authorization to execute untrusted IR.
+// Import contracts and effect summaries are separate U1a gates.
+public function seal(program identity Program) returns Int fails budget.LimitError,verify.InvalidIR {
+    try active(program);
+    if program.sealed { try budget.reject("U1a module already sealed"); }
+    let phase be try budget.verificationPhase(program.metadata.owner);
+    let targetIndex be 1; let declarations be program.metadata.declarations.length/6;
+    let definitions be 0;
+    while targetIndex <= declarations {
+        let kind be try words.get(program.metadata.declarations,phase,(targetIndex-1)*6+3);
+        if kind == 1 {
+            definitions=definitions+1;
+            let found be false; let cursor be program.head;
+            while cursor != none {
+                if cursor.target.index == targetIndex and cursor.target.owner == program.metadata.key {
+                    found=true;
+                }
+                cursor=cursor.next;
+            }
+            if not found {
+                try budget.finishPhase(phase);
+                try budget.reject("missing U1a function definition");
+            }
+        }
+        targetIndex=targetIndex+1;
+    }
+    try budget.finishPhase(phase);
+    if definitions != program.count { try budget.reject("unexpected U1a body binding"); }
+    let cursor be program.head;
+    while cursor != none {
+        if cursor.body.state != 1 or cursor.body.revision != cursor.revision {
+            try budget.reject("stale U1a bound body");
+        }
+        let checkPhase be try budget.verificationPhase(cursor.body.owner);
+        let report be try verify.verify(cursor.body,checkPhase);
+        if report.revision != cursor.revision { try budget.reject("stale U1a verifier input"); }
+        cursor=cursor.next;
+    }
+    program.sealed=true;
+    return definitions;
+}
+public function resolve(program identity Program,target meta.FunctionId)
+    returns identity build.Function fails budget.LimitError {
+    try active(program);
+    if not program.sealed or target.owner != program.metadata.key {
+        try budget.reject("unsealed or foreign U1a module function");
+    }
+    let cursor be program.head;
+    while cursor != none {
+        if cursor.target.index == target.index {
+            if cursor.body.state != 1 or cursor.body.revision != cursor.revision {
+                try budget.reject("stale U1a definition");
+            }
+            return cursor.body;
+        }
+        cursor=cursor.next;
+    }
+    try budget.reject("U1a function has no bound local definition");
+    // Unreachable; 'reject' fails but the return shape remains explicit.
+    return program.head.body;
+}
+public function close(program identity Program) fails budget.LimitError {
+    if program.closed { try budget.reject("double close of U1a module"); }
+    program.closed=true;
+    let cursor be program.head; program.head=none;
+    while cursor != none {
+        let entry be cursor; cursor=entry.next; entry.next=none;
+        try budget.release(entry.charge);
+    }
+    program.count=0; try budget.release(program.charge);
+}
