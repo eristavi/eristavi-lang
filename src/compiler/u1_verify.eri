@@ -256,6 +256,7 @@ function instruction(context identity Context,index Int,terminal Bool,position I
     item=0;
     while item < count {
         let resultType be ops.resultType(op,item); if op == 11 { resultType=cellType; }
+        if op == 36 { resultType=try read(context,routine.instructions,offset+8); }
         try claimValue(context,first+item,resultType,1,index,item); item=item+1;
     }
     let payload be try read(context,routine.instructions,offset+7); let extra be try read(context,routine.instructions,offset+8);
@@ -267,7 +268,15 @@ function instruction(context identity Context,index Int,terminal Bool,position I
     if op == 18 { try require(context,payload >= 1 and payload <= 10,"invalid i64 comparison relation"); }
     if op >= 28 and op <= 32 { try require(context,payload == 0,"invalid binary64 operation payload"); }
     if op == 33 { try require(context,payload >= 1 and payload <= 6,"invalid binary64 comparison relation"); }
-    if op != 7 { try require(context,extra == 0,"unsupported operation attribute"); }
+    if op == 36 {
+        let width be extra;
+        try require(context,width >= 4 and width <= 6,"invalid narrow constant TypeId");
+        let maximum be 255;
+        if width == 5 { maximum=65535; }
+        if width == 6 { maximum=4294967295; }
+        try require(context,payload >= 0 and payload <= maximum,"narrow constant exceeds bit width");
+    }
+    if op != 7 and op != 36 { try require(context,extra == 0,"unsupported operation attribute"); }
     if terminal { try require(context,try read(context,routine.instructions,offset+9) == 0,"terminator has a successor instruction"); }
     let inline be ops.inlineEdges(op);
     if inline > 0 { try edge(context,payload); }
