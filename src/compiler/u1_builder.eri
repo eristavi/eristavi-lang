@@ -94,12 +94,25 @@ function appendEdge(routine identity Function,target BlockId,arguments) returns 
 function append(routine identity Function,block BlockId,op Int,arguments,location meta.LocId,payload Int,extra Int) returns InstId fails budget.LimitError {
     let offset be try openBlock(routine,block); try meta.validLocation(routine.metadata,location);
     if not ops.known(op) { try budget.reject("unsupported U1a operation"); }
-    let count be ops.operands(op);
+    let count be ops.operands(op); let signature be routine.signature;
+    if op == 34 {
+        if extra != 0 { try budget.reject("unexpected U1a call attribute"); }
+        let target be meta.FunctionId { owner=routine.metadata.key; index=payload; };
+        signature=try meta.functionSignature(routine.metadata,routine.phase,target);
+        count=try meta.parameterCount(routine.metadata,routine.phase,signature);
+    }
     if count >= 0 and arguments.count != count { try budget.reject("U1a instruction arity mismatch"); }
     let index be 0;
     while index < arguments.count {
         let valueType be try valueType(routine,arguments[index]);
-        if op != 8 and not ops.isCell(op) { if valueType.index != ops.operandType(op,index) { try budget.reject("U1a operand type mismatch"); } } index=index+1;
+        if op == 34 {
+            if valueType.index != (try meta.parameterType(routine.metadata,routine.phase,signature,index)).index {
+                try budget.reject("U1a call operand type mismatch");
+            }
+        } else if op != 8 and not ops.isCell(op) {
+            if valueType.index != ops.operandType(op,index) { try budget.reject("U1a operand type mismatch"); }
+        }
+        index=index+1;
     }
     if op == 2 and payload != 0 and payload != 1 { try budget.reject("invalid U1a predicate constant"); }
     if op == 5 and (payload < 1 or payload > 4) { try budget.reject("invalid U1a trap code"); }
@@ -107,21 +120,24 @@ function append(routine identity Function,block BlockId,op Int,arguments,locatio
     if op >= 15 and op <= 27 and op != 18 and payload != 0 { try budget.reject("invalid U1a i64 arithmetic payload"); }
     if op >= 28 and op <= 32 and payload != 0 { try budget.reject("invalid U1a binary64 operation payload"); }
     if op == 33 and (payload < 1 or payload > 6) { try budget.reject("invalid U1a binary64 comparison relation"); }
-    if routine.instructions.length/10 >= 1048576 or ops.results(op) > 1048576-routine.values.length/4 { try budget.exceed(routine.owner,1,0); }
+    let produced be ops.results(op);
+    if op == 34 { produced=try meta.resultCount(routine.metadata,routine.phase,signature); }
+    if routine.instructions.length/10 >= 1048576 or produced > 1048576-routine.values.length/4 { try budget.exceed(routine.owner,1,0); }
     let first be routine.operands.length; index=0;
     while index < arguments.count { let value be arguments[index]; let ignored be try words.push(routine.operands,routine.phase,value.index); index=index+1; }
     let result be InstId { owner=routine.key; index=routine.instructions.length/10+1; }; let firstResult be 0;
-    if ops.results(op) > 0 { firstResult=routine.values.length/4+1; }
+    if produced > 0 { firstResult=routine.values.length/4+1; }
     index=0;
-    while index < ops.results(op) {
+    while index < produced {
         let resultType be ops.resultType(op,index);
+        if op == 34 { resultType=(try meta.resultType(routine.metadata,routine.phase,signature,index)).index; }
         if op == 11 { resultType=try words.get(routine.cells,routine.phase,(payload-1)*2); }
         let ignored be try words.push(routine.values,routine.phase,resultType); ignored=try words.push(routine.values,routine.phase,1);
         ignored=try words.push(routine.values,routine.phase,result.index); ignored=try words.push(routine.values,routine.phase,index); index=index+1;
     }
     let ignored be try words.push(routine.instructions,routine.phase,op); ignored=try words.push(routine.instructions,routine.phase,block.index);
     ignored=try words.push(routine.instructions,routine.phase,first); ignored=try words.push(routine.instructions,routine.phase,arguments.count);
-    ignored=try words.push(routine.instructions,routine.phase,firstResult); ignored=try words.push(routine.instructions,routine.phase,ops.results(op));
+    ignored=try words.push(routine.instructions,routine.phase,firstResult); ignored=try words.push(routine.instructions,routine.phase,produced);
     ignored=try words.push(routine.instructions,routine.phase,location.index); ignored=try words.push(routine.instructions,routine.phase,payload);
     ignored=try words.push(routine.instructions,routine.phase,extra); ignored=try words.push(routine.instructions,routine.phase,0);
     if ops.terminal(op) { try words.set(routine.blocks,routine.phase,offset+4,result.index); }
@@ -132,6 +148,12 @@ function append(routine identity Function,block BlockId,op Int,arguments,locatio
         try words.set(routine.blocks,routine.phase,offset+3,result.index);
     }
     routine.revision=routine.revision+1; return result;
+}
+// A call remains observable even when all its result values are unused.
+public function call(routine identity Function,block BlockId,target meta.FunctionId,arguments,
+    location meta.LocId) returns InstId fails budget.LimitError {
+    let signature be try meta.functionSignature(routine.metadata,routine.phase,target);
+    return try append(routine,block,34,arguments,location,target.index,0);
 }
 public function result(routine identity Function,instruction InstId,index Int) returns ValueId fails budget.LimitError {
     let offset be try instOffset(routine,instruction); let count be try words.get(routine.instructions,routine.phase,offset+5);
