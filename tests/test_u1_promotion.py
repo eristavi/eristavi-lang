@@ -15,7 +15,7 @@ from compiler.erist.diagnostics import SemanticError
 from compiler.erist.project import compile_module
 
 ROOT = Path(__file__).resolve().parents[1]
-TABLES = ('blocks', 'values', 'instructions', 'operands', 'edges', 'arguments', 'cells')
+TABLES = ('blocks', 'values', 'instructions', 'operands', 'edges', 'arguments', 'cells', 'switches', 'cases')
 MIN, MAX = -(1 << 63), (1 << 63) - 1
 
 
@@ -206,6 +206,9 @@ def evaluate(ir, parameters, fuel=50000):
             operands = [values[v] for v in ir['operands'][start:start+count]]
             outputs = []
             if op in (1, 9): outputs = [payload]
+            elif op == 36:
+                width = {4: 8, 5: 16, 6: 32}[extra]
+                outputs = [payload - (1 << width) if payload & (1 << (width-1)) else payload]
             elif op == 2: outputs = [bool(payload)]
             elif op == 3:
                 mathematical = operands[0] + operands[1]
@@ -285,11 +288,71 @@ def evaluate(ir, parameters, fuel=50000):
                                 number = a / b
                         # The U1a core does not expose NaN payloads or flags.
                         outputs = [_word(_QNAN) if math.isnan(number) else _host_bits(number)]
+
+            elif op in (37, 38, 39, 40):
+                # Width is an explicit, checked TypeId, not host Int width.
+                width = {4: 8, 5: 16, 6: 32}[extra]
+                mask = (1 << width) - 1
+                a, b = operands
+                ua, ub = a & mask, b & mask
+                if op == 40:
+                    relations = (a == b, a != b, a < b, a <= b, a > b, a >= b,
+                                 ua < ub, ua <= ub, ua > ub, ua >= ub)
+                    outputs = [relations[payload-1]]
+                else:
+                    unsigned = op == 39
+                    x, y = (ua, ub) if unsigned else (a, b)
+                    if payload == 1:
+                        exact = x + y
+                    elif payload == 2:
+                        exact = x - y
+                    else:
+                        exact = x * y
+                    raw = exact & mask
+                    signed_value = raw if raw < (1 << (width-1)) else raw - (1 << width)
+                    outputs = [signed_value]
+                    if op in (38, 39):
+                        overflow = (not 0 <= exact <= mask) if unsigned else (
+                            not -(1 << (width-1)) <= exact < (1 << (width-1))
+                        )
+                        outputs.append(overflow)
+
+            elif op in (41, 42):
+                width = {4: 8, 5: 16, 6: 32}[extra]
+                mask = (1 << width) - 1
+                minimum = -(1 << (width-1))
+                a, b = operands
+                signed = payload == 1
+                if b == 0:
+                    trace.append((2, location, False))
+                    return ('trap', (2, location)), tuple(trace)
+                if signed and a == minimum and b == -1:
+                    trace.append((1, location, False))
+                    return ('trap', (1, location)), tuple(trace)
+                if signed:
+                    quotient = abs(a) // abs(b)
+                    if (a < 0) != (b < 0):
+                        quotient = -quotient
+                    remainder = a - quotient*b
+                    raw = quotient if op == 41 else remainder
+                else:
+                    quotient, remainder = divmod(a & mask, b & mask)
+                    raw = quotient if op == 41 else remainder
+                raw &= mask
+                outputs = [raw if raw < (1 << (width-1)) else raw - (1 << width)]
             elif op == 5:
                 trace.append((payload, location, bool(operands[0])))
                 if not operands[0]: return ('trap', (payload, location)), tuple(trace)
-            elif op in (6, 7):
-                edge = payload if op == 6 or operands[0] else extra
+            elif op in (6, 7, 35):
+                if op == 35:
+                    first_case, case_count, edge = ir['switches'][(payload-1)*3:payload*3]
+                    for row in range(first_case, first_case + case_count):
+                        value, successor = ir['cases'][row*2:row*2+2]
+                        if value == operands[0]:
+                            edge = successor
+                            break
+                else:
+                    edge = payload if op == 6 or operands[0] else extra
                 block, first_argument, argument_count = ir['edges'][(edge-1)*3:edge*3]
                 # Snapshot every argument before rebinding ANY destination parameter.
                 arguments = tuple(values[v] for v in ir['arguments'][first_argument:first_argument+argument_count])
@@ -437,6 +500,19 @@ def cases_for(name, before):
                                 expected = ('trap', (2, 1))
                     yield (a, b, allowed), expected
 
+    elif name == 'switch-flow':
+        for value in (MIN, MIN+1, -1, 0, 1, MAX-1, MAX):
+            chosen = 10 if value == 0 else 20 if value == MAX else 30 if value == MIN else 40
+            yield (value,), ('return', (chosen,))
+    elif name == 'switch-multi-edge':
+        for select, a, b, default in itertools.product((0, 1, MAX), (1, -1), (3,), (5,)):
+            expected = a if select == 0 else b if select == MAX else default
+            yield (select, a, b, default), ('return', (expected,))
+    elif name == 'narrow-constants':
+        yield (), ('return', (-1, -1, -1))
+    elif name == 'narrow-cell':
+        for a, b, flag in itertools.product((-128, -1, 0, 1, 127), (-128, 0, 127), (False, True)):
+            yield (a, b, flag), ('return', (b if flag else a,))
     elif name == 'float-nonfma':
         # A*b rounds to 1 before adding -1; contraction would give -2^-54.
         triples = ((0x3ff0000002000000, 0x3feffffffc000000, 0xbff0000000000000),
@@ -459,6 +535,80 @@ def cases_for(name, before):
                         _word(chosen ^ _SIGN),
                         _oracle_float_cmp(chosen, b, 3),
                     ))
+
+    elif name in ('narrow-i8', 'narrow-i16', 'narrow-i32', 'narrow-ops-merge'):
+        width = {'narrow-i8': 8, 'narrow-i16': 16, 'narrow-i32': 32,
+                 'narrow-ops-merge': 8}[name]
+        mask = (1 << width) - 1
+        lowest, highest = -(1 << (width-1)), (1 << (width-1))-1
+
+        def exact_signed(v):
+            return (v + (1 << (width-1))) % (1 << width) - (1 << (width-1))
+
+        for a, b in itertools.product((lowest, lowest+1, -1, 0, 1, highest-1, highest), repeat=2):
+            ua, ub = a & mask, b & mask
+            if name == 'narrow-ops-merge':
+                for flag in (False, True):
+                    selected = b if flag else a
+                    us = selected & mask
+                    yield (a, b, flag), ('return', (
+                        exact_signed(selected + b),
+                        us < ub,
+                        not lowest <= selected * b <= highest,
+                        us + ub > mask,
+                    ))
+            else:
+                signed_exact = (a+b, a-b, a*b)
+                unsigned_exact = (ua+ub, ua-ub, ua*ub)
+                outputs = [exact_signed(v) for v in signed_exact]
+                for v in signed_exact:
+                    outputs.extend((exact_signed(v), not lowest <= v <= highest))
+                for v in unsigned_exact:
+                    outputs.extend((exact_signed(v), not 0 <= v <= mask))
+                outputs.extend((a == b, a != b, a < b, a <= b, a > b, a >= b,
+                                ua < ub, ua <= ub, ua > ub, ua >= ub))
+                yield (a, b), ('return', tuple(outputs))
+
+    elif name.startswith('narrow-div-') or name.startswith('narrow-rem-') or name == 'narrow-div-merge':
+        # Exact mathematical oracle, distinct from the interpreter's
+        # signed quotient / a - quotient*b implementation.
+        width = 8 if name.endswith('8') or name == 'narrow-div-merge' else (
+            16 if name.endswith('16') else 32)
+        minimum, maximum = -(1 << (width-1)), (1 << (width-1))-1
+        mask = (1 << width)-1
+
+        def signed_word(x):
+            r = x & mask
+            return r-(1 << width) if r >= (1 << (width-1)) else r
+
+        def expect_pair(a, b, signed, quotient, loc=2):
+            if b == 0:
+                return ('trap', (2, loc))
+            if signed and a == minimum and b == -1:
+                return ('trap', (1, loc))
+            if signed:
+                qabs, rabs = divmod(abs(a), abs(b))
+                q = -qabs if (a < 0) != (b < 0) else qabs
+                r = -rabs if a < 0 else rabs
+            else:
+                q, r = divmod(a & mask, b & mask)
+            return ('return', (signed_word(q if quotient else r),))
+
+        values = (minimum, minimum+1, -9, -1, 0, 1, 7, maximum-1, maximum)
+        for a, b in itertools.product(values, repeat=2):
+            if name == 'narrow-div-merge':
+                for flag in (False, True):
+                    selected = b if flag else a
+                    first = expect_pair(selected, b, True, True)
+                    if first[0] == 'trap':
+                        yield (a, b, flag), first
+                    else:
+                        second = expect_pair(selected, b, False, False, loc=1)
+                        yield (a, b, flag), ('return', (first[1][0], second[1][0]))
+            else:
+                _, mode, polarity, size = name.split('-')
+                signed = polarity == 'signed'
+                yield (a, b), expect_pair(a, b, signed, mode == 'div')
     else: raise AssertionError(f'unknown fixture {name}')
 
 
@@ -470,7 +620,23 @@ class U1PromotionTests(unittest.TestCase):
         (cls.root / 'compiler').symlink_to(ROOT / 'src/compiler', target_is_directory=True)
         cls.calls = [f'{family}({width}{",false" if family == "diamond" else ""})'
                      for family in ('diamond', 'loop', 'sequential') for width in (8, 32, 128)]
-        cls.calls += ['diamond(2,true)', 'swap()', 'reset()', 'irreducible()', 'dead(false)', 'faults(false)', 'faults(true)', 'floatCell()', 'passthrough()', 'predicateTruth()', 'predicateMerge()', 'integerArithmetic()', 'integerMerge()', 'divideSigned()', 'remainderSigned()', 'divideUnsigned()', 'remainderUnsigned()', 'divisionMerge()', 'divisionFaultOrder()', 'floatArithmetic()', 'floatMerge()', 'floatNonContraction()',
+        cls.calls += ['diamond(2,true)', 'swap()', 'reset()', 'irreducible()', 'dead(false)', 'faults(false)', 'faults(true)', 'floatCell()', 'passthrough()', 'predicateTruth()', 'predicateMerge()', 'integerArithmetic()', 'integerMerge()', 'divideSigned()', 'remainderSigned()', 'divideUnsigned()', 'remainderUnsigned()', 'divisionMerge()', 'divisionFaultOrder()', 'floatArithmetic()', 'floatMerge()', 'floatNonContraction()', 'narrowCell()', 'narrowConstants()', 'narrowArithmetic(meta.i8(),"narrow-i8")',
+                     'narrowArithmetic(meta.i16(),"narrow-i16")',
+                     'narrowArithmetic(meta.i32(),"narrow-i32")',
+                     'narrowArithmeticMerge()',
+                     'narrowDivRem(meta.i8(),41,1,"narrow-div-signed-8")',
+                     'narrowDivRem(meta.i8(),42,1,"narrow-rem-signed-8")',
+                     'narrowDivRem(meta.i8(),41,2,"narrow-div-unsigned-8")',
+                     'narrowDivRem(meta.i8(),42,2,"narrow-rem-unsigned-8")',
+                     'narrowDivRem(meta.i16(),41,1,"narrow-div-signed-16")',
+                     'narrowDivRem(meta.i16(),42,1,"narrow-rem-signed-16")',
+                     'narrowDivRem(meta.i16(),41,2,"narrow-div-unsigned-16")',
+                     'narrowDivRem(meta.i16(),42,2,"narrow-rem-unsigned-16")',
+                     'narrowDivRem(meta.i32(),41,1,"narrow-div-signed-32")',
+                     'narrowDivRem(meta.i32(),42,1,"narrow-rem-signed-32")',
+                     'narrowDivRem(meta.i32(),41,2,"narrow-div-unsigned-32")',
+                     'narrowDivRem(meta.i32(),42,2,"narrow-rem-unsigned-32")',
+                     'narrowDivRemMerge()', 'switchFlow()', 'switchDistinctEdges()',
                       'invalidCell(0)', 'invalidCell(1)', 'invalidCell(2)', 'dead(true)', 'failedWork()', 'canonicalReject()', 'failedOutput()', 'cancelled()']
         cls.source = cls.root / 'promotion.eri'; cls.source.write_text(probe_source(cls.calls))
         cls.binary = cls.root / 'promotion-c'
@@ -500,7 +666,7 @@ class U1PromotionTests(unittest.TestCase):
         result = subprocess.run([str(self.binary)], capture_output=True, text=True, timeout=120)
         self.assertEqual((result.returncode, result.stderr), (0, ''), result.stdout[-300:])
         snapshots, labels = self.check_snapshots(result.stdout)
-        self.assertEqual(len(snapshots), 31)
+        self.assertEqual(len(snapshots), 52)
         self.assertEqual(labels, ['invalid-init:ok']*3 + ['malformed-dead:ok', 'promotion-limit:ok', 'canonical-reject:ok', 'partial-output:ok', 'cancelled:ok'])
         again = subprocess.run([str(self.binary)], capture_output=True, text=True, timeout=120)
         self.assertEqual((again.returncode, again.stdout, again.stderr), (0, result.stdout, ''))

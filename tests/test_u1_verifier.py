@@ -36,7 +36,20 @@ PROTOCOL = ''.join(name + ':ok\n' for name in (
     'synthetic-origin-valid', 'synthetic-root-reason',
     'synthetic-origin-anchor', 'synthetic-origin-cycle',
     'synthetic-origin-reason', 'synthetic-origin-negative',
-    'synthetic-origin-restored', 'many-dominated-uses'))
+    'synthetic-origin-restored',
+    'switch-valid', 'switch-duplicate-case', 'switch-invalid-case-edge',
+    'switch-invalid-default', 'switch-invalid-header', 'switch-reused-edge',
+    'switch-unexpected-extra', 'switch-selector-type', 'switch-restored', 'switch-empty',
+    'narrow-core-signatures', 'narrow-type-mismatch', 'narrow-type-restored',
+    'narrow-constant-valid', 'narrow-constant-overflow', 'narrow-constant-width',
+    'narrow-constant-result-type', 'narrow-constant-restored',
+    'narrow-arith-valid', 'narrow-arith-mode', 'narrow-arith-width',
+    'narrow-arith-cmp', 'narrow-arith-operand', 'narrow-arith-result',
+    'narrow-arith-restored', 'narrow-arith-dead-valid', 'narrow-arith-dead-mode',
+    'narrow-divrem-valid', 'narrow-divrem-mode', 'narrow-divrem-width',
+    'narrow-divrem-operand', 'narrow-divrem-result', 'narrow-divrem-location',
+    'narrow-divrem-restored', 'narrow-divrem-dead-valid', 'narrow-divrem-dead-mode',
+    'many-dominated-uses'))
 
 
 def dominator_oracle(blocks, edges):

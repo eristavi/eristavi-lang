@@ -1,20 +1,43 @@
-# Eristavi compiler — handover
+# Eristavi compiler — current handover
 
-Checkpoint: 30 October 2026, Asia/Nicosia. This replaces the 28 October
-measurement-first checkpoint. Resume the compiler redesign described here;
-historical PR #46–#50 measurements are background, not the next task.
+**Authoritative recovery checkpoint: 30 October 2026, Asia/Nicosia.** Start here. Older numbered sections are retained as historical evidence; draft statuses in them are *not* current instructions. Section 23 records the latest qualified merges.
 
 ## Start a new chat with this
 
-> Continue Eristavi from this handover. Verify GitHub main, the merge records and
-> current instructions first. Preserve the language and approved architecture.
-> The new typed UIR foundation, independent verifier and scalar-cell SSA promotion
-> are implemented; the existing production compiler still uses its old pipeline.
-> Next, inventory the agreed U1a contract against the implementation and prepare
-> the remaining scalar/call/switch/strict-Float slice. Audit numeric operation
-> classification and CFG successor walkers before adding operations. Keep tests
-> focused; batch expensive qualification. Do not rerun the old 900-second owned
-> self-build or claim the entire redesigned compiler is complete.
+> Continue development of Eristavi Lang from HANDOVER.md section 23 and the
+> current GitHub main, verifying new commits/PRs and CI before changing code.
+> U1a typed Universal IR foundation, direct-call declarations, sparse switches,
+> strict scalar f64 operations and synthetic provenance are implemented as
+> **isolated UIR**; i8/i16/i32 integer types, constants, wrap/overflow/comparisons
+> and division/remainder are now qualified and merged through PR #87.
+> The redesigned UIR is **NOT** yet the production compiler. Preserve frozen
+> Eristavi source semantics, current working toolchain, existing ABI and
+> mandatory transactional cell promotion. Continue with defined multi-function
+> evaluation and verified effects/import contracts, strict native f64 and
+> publication/provenance gates; then immutable U1b aggregates, U2 managed
+> failures/resources, and U3 shadow frontend/native integration. PR #85 is only
+> a Stage-0/native parity baseline and must be integrated/retested against current
+> main before merge. Keep each slice small, independently verified, and require
+> four-platform CI plus completed-batch qualification for compiler changes.
+> Never auto-run the separate experimental 900-second owned self-build.
+
+## Current verified status — read before historical sections
+
+| Scope | Current status |
+| --- | --- |
+| Repository | https://github.com/eristavi/eristavi-lang |
+| Latest qualified merged `main` | `9824be1fa5103c7e7b59215b1879642c159074cc` (PR #87) |
+| Exact qualified / merged implementation tree | `566a71120f474ae47ecc7e84dc2f4c3d745bc21b` |
+| Four-platform PR #87 CI | [41126307289](https://github.com/eristavi/eristavi-lang/actions/runs/41126307289), success |
+| Completed-batch PR #87 qualification | [41127592252](https://github.com/eristavi/eristavi-lang/actions/runs/41127592252), success: three bootstrap/offline Linux jobs and owned integration |
+| Separate full owned compiler self-build | Intentionally skipped; NOT qualified |
+| U1a | Scalar/control representation substantially implemented; full executable calls/effects, native strict f64 environment and provenance/publication revisions still incomplete |
+| U1b | Narrow i8/i16/i32 operations qualified and merged; immutable aggregates and core-wide acceptance still incomplete |
+| U2 | Managed Text/List/identity, checked failures, deterministic cleanup and root maps NOT implemented in redesigned UIR |
+| U3 | No direct AST/semantic-facts → redesigned UIR production path or new verified native target; PR #85 is a draft parity baseline |
+| Production compiler | Still runs existing pipeline and must remain intact until explicit U2/U3 compatibility and native conformance gates |
+
+**Reading rule:** Sections 1–22 show successive checkpoints. Do not execute their superseded "next steps" or treat historical draft statements as current. The current roadmap and verification evidence are in section 23 below.
 
 ## 1. Verified repository checkpoint
 
@@ -569,3 +592,103 @@ Implemented, isolated U1a: private binary64 add/sub/mul/div/neg and six comparis
 - [Issues #73–#75](https://github.com/eristavi/eristavi-lang/issues/73) remain distinct substantial U1b (extra widths + immutable aggregates), U2 (managed values, checked failures, cleanup, roots), and U3 (direct frontend→UIR and one-native-target) implementation gates. Issues #76–#77 retain strict native f64 and complete origin/revision goals.
 
 **Next safe steps:** diagnose and fix each draft from its actual CI logs; finish independent call execution and switch semantics; rebase/merge **only tested** branches one at a time; update this handover after each qualified merge; continue U1b→U2→U3 behind working compiler compatibility gates. Keep the historical 900-second experimental B→C self-build out of automated qualification. Do not report completed redesign or v0.1.0 from isolated UIR tests.
+
+
+## 18. U1a direct calls + switches integration candidate (2026-10-30)
+
+- Branch `compiler/u1a-calls-switch-integration` combines **both** [PR #78](https://github.com/eristavi/eristavi-lang/pull/78) typed owned direct FunctionId declarations and [PR #79](https://github.com/eristavi/eristavi-lang/pull/79) sparse i64 switches, including their original head commits as Git parents.
+- Three shared-line conflicts resolved explicitly: known opcodes 34/35, dynamic call operand count versus switch selector count, and foundation opcode probe range. Shared builder/verifier changes otherwise retained from both branches, with their focused suites.
+- Candidate documentation in `UIR_U1A_CALL_SWITCH_INTEGRATION.md`. **Status at creation: unqualified integration; do not merge before CI+completed-batch qualification on exact final revision.**
+- These U1a features are still isolated UIR. Full function-call execution, imported effect trust and SCC summaries remain pending. Do not claim U1a complete; U1b/U2/U3 remain separate.
+
+
+## 19. Stacked U1b narrow scalar integration candidate (2026-10-30)
+
+- Branch `compiler/u1a-u1b-integrated-narrow` stacks original PR #81 i8/i16/i32 TypeIds and PR #82 exact-width constant op 36 onto U1a call+switch integration PR #83. It preserves original PR #82 ancestry (including PR #81).
+- Reconciled type metadata, builder constant checks with dynamic call result reservations, independent verification, opcode registry 34/35/36, shared SSA/differential and malformed-IR suites; combined test matrix expects 35 promoter fixtures.
+- Full conflicts/limits recorded in `UIR_U1B_COMBINED_INTEGRATION.md`.
+- **At creation this is an unqualified integration candidate.** The original green CI on #81/#82 does not qualify code combined with U1a PR #83; run fresh four-platform CI and completed-batch qualification on exact final merged tree after U1a base is stabilized.
+- Remaining U1b: width-specific arithmetic and immutable aggregates. U2 managed values/failures/resources and U3 frontend→UIR/native integration have not been implemented by this PR. Do not retire old pipeline or run historical owned full self-build.
+
+
+## 20. Proposed U1b narrow wrap/overflow/comparison slice (2026-10-30)
+
+- Branch `compiler/u1b-narrow-arithmetic` stacked on U1a/U1b integration PR #84; operation IDs 37–40 cover exact i8/i16/i32 wrapping add/sub/mul, signed/unsigned overflow pairs and ten comparisons via explicit width/mode attributes.
+- Independent verification rejects mixed widths, invalid operand/result types/modes and malformed dead instructions. `tests/test_u1_promotion.py` adds three width-specific direct oracle fixtures and an i8 cell diamond, totaling **39** promotion snapshots; all original U1a/switch/call tests remain required.
+- Details and residual gates: `UIR_U1B_NARROW_ARITHMETIC.md`.
+- **Status at commit creation: draft implementation, CI/qualification not yet validated**. Requalify after PR #83 and PR #84 have been merged and the final tree reconciled; do not merge or retire the production compiler before the complete gates.
+- Still open: narrow div/rem, immutable aggregate U1b, U1a multi-function execution/imported effects, strict native Float, complete origins, U2 managed/failure/resource profile, U3 direct frontend→UIR/native adapter.
+
+
+## 21. Proposed narrow division/remainder slice (2026-10-30)
+
+- Branch `compiler/u1b-narrow-divrem` is stacked on `compiler/u1b-narrow-arithmetic` (PR #86) after the narrow type/constant stack (PR #84), itself based on call+switch integration (PR #83).
+- Private op41 and op42 implement signed/unsigned i8/i16/i32 division and remainder with exact terminal trap semantics: zero divisor code2 and signed min/-1 code1 for **both div/rem**, original LocId and no produced value on fault.
+- Independent exact arithmetic oracle and SSA promotion use 12 direct width/signedness/op fixtures and one i8-cell diamond with first-fault ordering. The suite expects **52** before/after promotion snapshots. Malformed verifier tests include bad mode, width, operand/result type, location and unreachable records.
+- Full details: `UIR_U1B_NARROW_DIVREM.md`. **At initial commit: draft/unqualified, no merge**. Require four-platform CI and full completed-batch qualification after parent PR merge/rebase, and verify final tested-versus-main Git trees. Do not run 900-second owned experimental compiler self-build by default.
+- Immutable U1b aggregates and all U2/U3 native/frontend tasks remain; this does not change frozen language or current production lowering.
+
+
+## 22. Verified recovery checkpoint after PR #84 merge — 2026-10-30
+
+This section supersedes older *current-state* instructions in sections 18–21; their original proposed-branch statuses are retained as history.
+
+### Main and qualified integration
+
+- GitHub `main` is now merge commit `c9750bb6f792a2432016df98ea21149fbc7ccca5`, merging [PR #84](https://github.com/eristavi/eristavi-lang/pull/84) at exact head `50cb9802f51d7f0da283b43bd6f789018a4eb5bd`.
+- The merged tree is `370dbc972f2b3c0975003ba8fc1f0186ec9020a9`, identical to the qualified PR #84 head tree. Four normal CI jobs passed on [run 41120676739](https://github.com/eristavi/eristavi-lang/actions/runs/41120676739), and completed-batch [qualification 41123080745](https://github.com/eristavi/eristavi-lang/actions/runs/41123080745) passed its three Linux bootstrap/offline jobs and owned integration; separate experimental owned compiler self-build remained skipped.
+- The previous [PR #83](https://github.com/eristavi/eristavi-lang/pull/83) merges both direct-call PR #78 and sparse-switch PR #79 histories, with merged commit `244d392582c2ef3be9b0804545886008744a9827`. Its exact tested head `ef441fe6dc6d0a8d0f05fdf45efdb9290771b240` passed normal CI [41119775019](https://github.com/eristavi/eristavi-lang/actions/runs/41119775019) and full completed-batch qualification [41121497695](https://github.com/eristavi/eristavi-lang/actions/runs/41121497695); tested and merged tree `bfda0d1278a8185b2d48a6e24114f5ed10e743fa` matched.
+- Original PRs #81 and #82 remain historical open drafts but their combined narrow-type/constant contents were integrated in #84. Do not merge their separate old heads again.
+
+### Current unmerged development
+
+- [PR #86](https://github.com/eristavi/eristavi-lang/pull/86): narrow i8/i16/i32 wrap, overflow and comparisons. Four-platform CI [41122060676](https://github.com/eristavi/eristavi-lang/actions/runs/41122060676) succeeded on `602abcea050e0d8f7c55715982bec620ec70c447`; completed-batch qualification of the exact final integrated tree is **not yet established**. Its base is the now-merged PR #84 branch and must be reviewed/retargeted to current `main` before merge.
+- [PR #87](https://github.com/eristavi/eristavi-lang/pull/87): narrow division/remainder stacked on #86. First CI [41122703352](https://github.com/eristavi/eristavi-lang/actions/runs/41122703352) failed on **all four platforms** because `tests/fixtures/u1_verifier.eri` referenced absent `protocol.Harness.alternate`; `test_u1_verifier.U1VerifierTests.setUpClass` could not bootstrap-compile the protocol. A focused correction in commit `bca23a6f09f37e44e95f0e155711c9e479a258d4` added a second valid source location and initialized `alternate` in the fixture. **Do not claim the correction passed CI until the exact corrected head is verified.** Parent #86 must be qualified and merged first; then retarget/reconcile #87 and rerun all four CI jobs plus full completed-batch qualification on final head.
+- [PR #85](https://github.com/eristavi/eristavi-lang/pull/85): isolated Stage-0/native output-parity test baseline, normal CI [41121276888](https://github.com/eristavi/eristavi-lang/actions/runs/41121276888) passed on `820d625e9c45e053ee4718ccabaa169969a41f27`. No new UIR frontend lowering or native backend was created; update against current main and independently review before merge.
+
+### Ordered next steps, preserving frozen language and production compiler
+
+1. Verify corrected #87 CI. If failing, inspect actual job logs; fix only evidenced faults and rerun on new exact commit. Preserve malformed/dead-block, signed MIN/-1 **both division and remainder**, zero-divisor and precise LocId tests.
+2. Reconcile #86 to now-merged main, prove its final tested tree and run full CI and completed-batch qualification before merge. Reconcile #87 afterward, run its own complete gates, and merge only then.
+3. Complete outstanding U1a contracts: multi-function/recursive call execution, imported effect trust and SCC effect summaries; strict native binary64 environment; complete provenance and revision/publication capabilities.
+4. Complete U1b immutable aggregates and U2 managed values, checked failures, deterministic resources/cleanup and rooted runtime contracts. Avoid expanding Eristavi source syntax or changing existing 32-byte ABI prematurely.
+5. Advance U3 through tested frozen Stage-0 parity then direct AST/semantic-facts → new UIR lowering and first native target behind differential checks. Existing production frontend and native/compiler pipeline remain authoritative until explicit compatibility gates pass.
+6. Keep this handover current after **qualified merges**, including head, merged tree, four-platform CI and completed-batch qualification job outcomes; never label a skipped separate 900-second owned compiler self-build as a pass.
+
+The new typed UIR redesign is **not** the production compiler. No full redesigned-compiler self-host or native whole-program performance claim is established by these isolated U1 tests.
+
+
+## 23. Verified narrow-integer qualification/merge and next handover — 2026-10-30
+
+**This section supersedes pending statuses in sections 19–22.** GitHub main was verified after both merged compiler PRs. No production frontend/native backend or frozen-language/ABI change is implied.
+
+### Exact release evidence
+
+| Slice | Exact tested head | Merge on main | Normal four-platform CI | Completed-batch qualification |
+| --- | --- | --- | --- | --- |
+| [#86 narrow arithmetic](https://github.com/eristavi/eristavi-lang/pull/86) | `602abcea050e0d8f7c55715982bec620ec70c447` | `59b1018e78e81d897681587480b31997ab2117e3` | [41122060676](https://github.com/eristavi/eristavi-lang/actions/runs/41122060676), success | [41125916845](https://github.com/eristavi/eristavi-lang/actions/runs/41125916845), success |
+| [#87 narrow div/rem](https://github.com/eristavi/eristavi-lang/pull/87) | `5ebe3213c39e875f486c98737e2a711992a96137` | `9824be1fa5103c7e7b59215b1879642c159074cc` | [41126307289](https://github.com/eristavi/eristavi-lang/actions/runs/41126307289), success | [41127592252](https://github.com/eristavi/eristavi-lang/actions/runs/41127592252), success |
+
+- PR #86 exact qualified/merged code tree: `fa400376148e4e978b192d66797b21c373e8589d`. The merged tree was verified identical to tested head. Its post-merge main CI [41126619831](https://github.com/eristavi/eristavi-lang/actions/runs/41126619831) succeeded.
+- PR #87 exact qualified/merged code tree: `566a71120f474ae47ecc7e84dc2f4c3d745bc21b`. The merged tree was verified identical to tested head. Its four CI jobs succeeded: Linux GCC and Clang, Linux ARM64 Clang, macOS Clang; CI logs report 442 discovered tests and platform-specific skips.
+- For both completed-batch qualifications, all three bootstrap/offline Linux jobs and owned integration succeeded. The separate experimental owned B-to-C/C-to-D compiler self-build was **skipped**; it has no passing qualification evidence.
+
+### PR #87 CI repair history (do not reintroduce)
+
+1. Initial CI [41122703352](https://github.com/eristavi/eristavi-lang/actions/runs/41122703352) failed: `protocol.Harness.alternate` was referenced without declaration.
+2. First fixture repair `bca23a6f09f37e44e95f0e155711c9e479a258d4` added the field/location, but CI [41124449672](https://github.com/eristavi/eristavi-lang/actions/runs/41124449672) exposed two missing constructors: the `syntheticOrigins` Harness and the dynamically appended `calls.Harness` in `tests/test_u1_calls.py`.
+3. Combined constructor repair `c1201bd890812dc2ce3056752af93e5a709baa23` fixed both; CI [41125872854](https://github.com/eristavi/eristavi-lang/actions/runs/41125872854) then reported `invalid U1a source span`: the alternate span 9–17 had anchor 4, outside the required [start,end] range.
+4. Final fixture-only fix `5ebe3213c39e875f486c98737e2a711992a96137` placed anchor at 9. Exact-revision CI and full qualification passed. These were test-fixture construction mistakes, not grounds to weaken the independent verifier, source-origin validation or production compiler.
+
+The combined U1b narrow types/constants stack PR #84 was already qualified and merged at `c9750bb6f792a2432016df98ea21149fbc7ccca5`. PR #81 is marked merged through the integrated history; original stacked draft PR #82 was closed as superseded by #84, not independently remerged. U1a PRs #78 and #79 were previously integrated through qualified PR #83, which is already merged.
+
+### Ordered implementation work remaining
+
+1. **Finish U1a call contract in reviewed increments:** function-owned body binding, forward and mutually recursive call evaluation, zero/multiple results, conservative divergence; then callgraph/SCC effect derivation and verified versioned import trust. Add an independent multi-function interpreter/oracle, malformed dead-IR rejection, SSA differential and first observable effect/fault order. Current op34 covers declaration/call *structure*, not executable multi-function integration.
+2. **Finish U1a strict execution/provenance:** enforce nearest-even strict binary64 at native/foreign boundaries, preserve subnormals/signed zero/NaN unordered behavior; complete revision-bound publication capabilities, original diagnostic anchors, digest checking and source remap. Existing isolated binary64/origin slices do not establish these native/full-publication gates.
+3. **Complete U1b immutable aggregates:** canonical bounded acyclic by-value aggregate type interning, `aggregate.make/get/set`, exact structural verifier across reachable/dead blocks, immutable field-copy semantics and independent aggregate oracle. Measure real allocation/GC behavior alongside modeled budgets; do not invent public source types or implicit conversion.
+4. **Implement U2:** managed Text/List/identity, checked failure continuations, exactly-once normal/checked cleanup and failure ordering, rooted GC safe points and profile-tagged runtime adapters. Preserve current 32-byte Eristavi ABI at its existing boundaries.
+5. **Begin U3 shadow integration:** reconcile and retest [PR #85](https://github.com/eristavi/eristavi-lang/pull/85) Stage-0/native parity baseline on current main. Then build direct AST + frozen semantic facts → **one** new typed UIR in shadow mode, preserving the old compiler and comparing outputs, faults, diagnostics, resources and runtime safety. Promote one native target only after complete conformance.
+6. **Keep release discipline:** four-platform CI and explicit completed-batch qualification on exact final compiler PR heads; compare merged Git trees; do not auto-run the historical 900-second owned self-build. Never claim finished U1b/U2/U3 or measured whole-compiler gains from isolated scalar oracles.
+
+The frozen source-language semantics and current production compiler remain untouched by this handover. No newly executable compiler behavior is introduced by the documentation checkpoint itself.
