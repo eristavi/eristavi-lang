@@ -271,6 +271,41 @@ function divremDead() fails budget.LimitError,verify.InvalidIR,ProbeError {
     try rejected(harness,2,2,"divrem-dead-payload"); try close(harness);
 }
 
+
+function syntheticOrigins() fails budget.LimitError,verify.InvalidIR,ProbeError {
+    // Construct an owned source origin, then two synthetic provenance records.
+    let root be try budget.developmentRequest(); let shared be try budget.metadataOwner(root);
+    let phase be try budget.constructionPhase(shared); let data be try meta.create(shared,phase);
+    let signature be try meta.signature(data,phase,[],[meta.i64()]);
+    let source be try meta.source(data,phase,"synthetic-locations",
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",64);
+    let original be try meta.location(data,phase,source,2,8,3,1,4);
+    let derived be try meta.synthetic(data,phase,original,1);
+    let transformed be try meta.synthetic(data,phase,derived,2);
+    try meta.freeze(data); try budget.finishPhase(phase);
+    let owner be try budget.functionOwner(root,false); let construct be try budget.constructionPhase(owner);
+    let routine be try build.create(data,signature,owner,construct);
+    let entry be try build.block(routine,[]);
+    let value be try build.integer(routine,entry,7,derived);
+    try build.returnValues(routine,entry,[value],transformed);
+    try build.complete(routine); try budget.finishPhase(construct);
+    let harness be identity Harness { root=root; shared=shared; data=data; owner=owner;
+        construct=construct; routine=routine; location=original; };
+    try accepted(harness,1,"synthetic-origin-valid");
+    let edit be try budget.constructionPhase(shared); let offset be (transformed.index-1)*7+6;
+    let retained be try words.get(data.locations,edit,offset);
+    // A self-referential chain is invalid even if all source span fields remain valid.
+    try change(data.locations,edit,offset,2*1048577+transformed.index);
+    try rejected(harness,3,0,"synthetic-origin-cycle");
+    try change(data.locations,edit,offset,9*1048577+derived.index);
+    try rejected(harness,3,0,"synthetic-origin-reason");
+    try change(data.locations,edit,offset,-1);
+    try rejected(harness,3,0,"synthetic-origin-negative");
+    try change(data.locations,edit,offset,retained);
+    try accepted(harness,1,"synthetic-origin-restored");
+    try close(harness);
+}
+
 function manyUses() fails budget.LimitError,verify.InvalidIR,ProbeError {
     let harness be try create([meta.pred()],[]); let routine be harness.routine;
     let entry be try build.block(routine,[meta.pred()]); let body be try build.block(routine,[]);
@@ -282,7 +317,7 @@ function manyUses() fails budget.LimitError,verify.InvalidIR,ProbeError {
 }
 function run() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError {
     try mutations(); try orphanRecords(); try diamond(); try loop(); try dead(); try repeatedTarget(); try limits(); try cancellation();
-    try scalarShapes(); try predicateOperations(); try predicateDead(); try integerOperations(); try integerDead(); try divremContracts(); try divremDead(); try manyUses(); return true;
+    try scalarShapes(); try predicateOperations(); try predicateDead(); try integerOperations(); try integerDead(); try divremContracts(); try divremDead(); try syntheticOrigins(); try manyUses(); return true;
 }
 function main() {
     let done be run() else error budget.LimitError { output(error.category+":"+error.message); process.setExitCode(1); return; }

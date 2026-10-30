@@ -129,6 +129,27 @@ public function location(meta identity Metadata,phase identity budget.Phase,sour
     ignored=try words.push(meta.locations,phase,line); ignored=try words.push(meta.locations,phase,column);
     ignored=try words.push(meta.locations,phase,0); return value;
 }
+
+/* A private, bounded encoding in the 7th location word:
+ * 0 => original source LocId; otherwise reason*1048577 + earlier LocId.
+ * Reasons: 1 frontend lowering, 2 scalar promotion, 3 exact folding,
+ * 4 machine legalization. Strictly backwards references make cycles impossible.
+ * The representation is not a public artifact format or a complete multi-origin DAG.
+ */
+public function synthetic(meta identity Metadata,phase identity budget.Phase,parent LocId,reason Int) returns LocId fails budget.LimitError {
+    try mutable(meta,phase); try validLocation(meta,parent);
+    if reason < 1 or reason > 4 { try budget.reject("unsupported U1a synthetic origin reason"); }
+    if meta.locations.length/7 >= 1048576 { try budget.exceed(meta.owner,1,0); }
+    let offset be (parent.index-1)*7;
+    let value be LocId { owner=meta.key; index=meta.locations.length/7+1; };
+    let index be 0;
+    while index < 6 {
+        let ignored be try words.push(meta.locations,phase,try words.get(meta.locations,phase,offset+index)); index=index+1;
+    }
+    let ignored be try words.push(meta.locations,phase,reason*1048577+parent.index);
+    return value;
+}
+
 public function validLocation(meta identity Metadata,value LocId) fails budget.LimitError {
     if meta.closed or value.owner != meta.key or value.index < 1 or value.index > meta.locations.length/7 { try budget.reject("foreign or invalid U1a LocId"); }
 }
