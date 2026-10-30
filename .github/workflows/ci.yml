@@ -1,16 +1,102 @@
 name: Eristavi CI
 
+# Incremental commits need fast feedback, not four full native test builds.
+# Full matrix is an explicit final-revision gate; qualification remains separate.
 on:
-  push:
-    branches: [main]
   pull_request:
+    types: [opened, reopened, synchronize, ready_for_review, labeled]
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: Select an explicit smoke or final full matrix
+        type: choice
+        options: [smoke, full]
+        default: full
+
+permissions:
+  contents: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
 jobs:
+  scope:
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.scope.outputs.code }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # Pull requests are checked out as a merge commit; HEAD^1 is the base.
+          fetch-depth: 2
+      - name: Check patch and classify changed paths
+        id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" != "pull_request" ]; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff --check HEAD^1 HEAD
+          git diff --name-only -z HEAD^1 HEAD > "$RUNNER_TEMP/changed-paths"
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          paths = [p.decode('utf-8') for p in
+                   (Path(os.environ['RUNNER_TEMP']) / 'changed-paths').read_bytes().split(b'\0') if p]
+          doc_only = bool(paths) and all(p.lower().endswith(('.md', '.mdx', '.rst')) for p in paths)
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as out:
+              out.write('code=' + ('false' if doc_only or not paths else 'true') + '\n')
+          print('Changed paths:', paths, 'documentation-only:', doc_only)
+          PY
+
+  smoke:
+    name: Focused Linux smoke
+    needs: scope
+    if: >-
+      (github.event_name == 'workflow_dispatch' && inputs.profile == 'smoke') ||
+      (github.event_name == 'pull_request' && needs.scope.outputs.code == 'true' &&
+       (github.event.action == 'opened' || github.event.action == 'reopened' ||
+        github.event.action == 'synchronize'))
+    runs-on: ubuntu-latest
+    env:
+      CC: clang
+      CFLAGS: -O2
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install bootstrap toolchain
+        run: python -m pip install -e .
+      - name: Compile Python sources
+        run: python -m compileall -q compiler tests tools
+      - name: Run focused tests
+        run: |
+          set -o pipefail
+          python -u tools/run_ci_tests.py --profile smoke --report "$RUNNER_TEMP/test-results.json" 2>&1 | tee "$RUNNER_TEMP/test-results.log"
+      - name: Preserve smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: smoke-${{ github.run_attempt }}
+          retention-days: 14
+          path: |
+            ${{ runner.temp }}/test-results.json
+            ${{ runner.temp }}/test-results.log
+
   test:
+    name: test (${{ matrix.os }}, ${{ matrix.cc }})
+    needs: scope
+    if: >-
+      (github.event_name == 'workflow_dispatch' && inputs.profile == 'full') ||
+      (github.event_name == 'pull_request' && needs.scope.outputs.code == 'true' &&
+       (github.event.action == 'ready_for_review' ||
+        (github.event.action == 'labeled' &&
+         (github.event.label.name == 'qualification' ||
+          github.event.label.name == 'owned-qualification'))))
     strategy:
       fail-fast: false
       matrix:
@@ -27,6 +113,7 @@ jobs:
     env:
       CC: ${{ matrix.cc }}
       CFLAGS: -O2
+      ERISTAVI_TEST_TIMING: '1'
       ERISTAVI_GRAPHEME_BREAK_TEST: /tmp/GraphemeBreakTest-17.0.0.txt
     steps:
       - uses: actions/checkout@v6
@@ -42,11 +129,11 @@ jobs:
           --output "$ERISTAVI_GRAPHEME_BREAK_TEST"
       - name: Compile Python sources
         run: python -m compileall -q compiler tests tools
-      - name: Run test suite
+      - name: Run complete test suite
         run: |
           set -o pipefail
-          python -u tools/run_ci_tests.py --report "$RUNNER_TEMP/test-results.json" 2>&1 | tee "$RUNNER_TEMP/test-results.log"
-      - name: Preserve test outcomes and diagnostics
+          python -u tools/run_ci_tests.py --profile full --report "$RUNNER_TEMP/test-results.json" 2>&1 | tee "$RUNNER_TEMP/test-results.log"
+      - name: Preserve full test evidence
         if: always()
         uses: actions/upload-artifact@v6
         with:

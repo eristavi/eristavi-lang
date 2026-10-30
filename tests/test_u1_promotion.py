@@ -11,6 +11,7 @@ import tempfile
 import unittest
 
 from compiler.erist.cli import build_native
+from u1_native_tools import shared_u1_compilers
 from compiler.erist.diagnostics import SemanticError
 from compiler.erist.project import compile_module
 
@@ -691,9 +692,8 @@ public function bad(routine identity build.Function,local build.CellId) fails bu
         # focused test has one extra verification; bootstrap shape tests use 8.
         source = self.root / 'promotion-native.eri'
         source.write_text(probe_source(['diamond(2,false)', 'loop(2)', 'swap()', 'reset()'], repetitions=1))
-        frontend, generator = self.root / 'frontend', self.root / 'generator'
-        self.assertEqual(build_native(ROOT / 'src/frontend.eri', frontend, ROOT / 'src'), 0)
-        self.assertEqual(build_native(ROOT / 'src/owned_runtime.eri', generator, ROOT / 'src'), 0)
+        # The input programs and runtime checks stay independent; only tool builds are shared.
+        frontend, generator = shared_u1_compilers()
         emitted = subprocess.run([str(frontend), 'emit-asm', str(source), '--source-root', str(self.root), '--target', 'x86_64-linux'],
                                  capture_output=True, text=True, timeout=120)
         self.assertEqual((emitted.returncode, emitted.stderr), (0, ''))

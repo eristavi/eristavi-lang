@@ -9,6 +9,7 @@ import tempfile
 import unittest
 
 from compiler.erist.cli import build_native
+from u1_native_tools import shared_u1_compilers, timed_native_step
 
 ROOT = Path(__file__).resolve().parents[1]
 PROTOCOL = ''.join(name + ':ok\n' for name in (
@@ -185,15 +186,15 @@ class U1VerifierTests(unittest.TestCase):
         for tool in ('as', 'ld', 'cc', 'readelf', 'nm'):
             if not shutil.which(tool):
                 self.skipTest(f'{tool} unavailable')
-        frontend, generator = self.root / 'frontend', self.root / 'runtime-generator'
-        self.assertEqual(build_native(ROOT / 'src/frontend.eri', frontend, ROOT / 'src'), 0)
-        self.assertEqual(build_native(ROOT / 'src/owned_runtime.eri', generator, ROOT / 'src'), 0)
-        runtime = subprocess.run([str(generator)], capture_output=True, text=True, timeout=60)
+        frontend, generator = timed_native_step('verifier: shared frontend/runtime tools', shared_u1_compilers)
+        runtime = timed_native_step('verifier: emit owned runtime assembly', subprocess.run,
+                                    [str(generator)], capture_output=True, text=True, timeout=60)
         self.assertEqual((runtime.returncode, runtime.stderr), (0, ''))
         runtime_source = self.root / 'runtime.s'; runtime_source.write_text(runtime.stdout)
         runtime_obj = self.root / 'runtime.o'
-        subprocess.run(['as', '--64', str(runtime_source), '-o', str(runtime_obj)],
-                       check=True, capture_output=True, timeout=30)
+        timed_native_step('verifier: assemble owned runtime', subprocess.run,
+                          ['as', '--64', str(runtime_source), '-o', str(runtime_obj)],
+                          check=True, capture_output=True, timeout=30)
         # Full deep chains remain in the C-bootstrap oracle test. The combined
         # owned run hit 120 seconds; retain that as pending performance evidence,
         # not a reason to enlarge a gate. Both native runtimes check all 91 small
@@ -201,25 +202,32 @@ class U1VerifierTests(unittest.TestCase):
         graph_source, graph_expected = graph_probe(chain_sizes=(128,))
         native_graph = self.root / 'native-graphs.eri'; native_graph.write_text(graph_source)
         for name, source, expected in (('protocol', self.protocol, PROTOCOL), ('graphs', native_graph, graph_expected)):
-            emitted = subprocess.run([str(frontend), 'emit-asm', str(source), '--source-root', str(self.root),
-                                      '--target', 'x86_64-linux'], capture_output=True, text=True, timeout=120)
+            emitted = timed_native_step('verifier: emit-asm ' + name, subprocess.run,
+                                        [str(frontend), 'emit-asm', str(source), '--source-root',
+                                         str(self.root), '--target', 'x86_64-linux'],
+                                        capture_output=True, text=True, timeout=120)
             self.assertEqual((emitted.returncode, emitted.stderr), (0, ''))
             assembly, obj = self.root / (name + '.s'), self.root / (name + '.o')
             assembly.write_text(emitted.stdout)
-            subprocess.run(['as', '--64', str(assembly), '-o', str(obj)], check=True, capture_output=True, timeout=30)
+            timed_native_step('verifier: assemble ' + name, subprocess.run,
+                              ['as', '--64', str(assembly), '-o', str(obj)],
+                              check=True, capture_output=True, timeout=30)
             owned, bootstrap = self.root / (name + '-owned'), self.root / (name + '-bootstrap')
-            subprocess.run(['ld', '-nostdlib', '-static', '-e', '_start', str(obj), str(runtime_obj), '-o', str(owned)],
-                           check=True, capture_output=True, timeout=30)
-            subprocess.run(['cc', '-std=c11', '-O2', '-DERIST_NATIVE_RUNTIME', '-DERIST_HEAP_GC_INTERVAL=65536',
-                            str(assembly), str(ROOT / 'runtime/native_gc_runtime.c'), '-lm', '-o', str(bootstrap)],
-                           check=True, capture_output=True, timeout=60)
+            timed_native_step('verifier: link owned ' + name, subprocess.run,
+                              ['ld', '-nostdlib', '-static', '-e', '_start', str(obj), str(runtime_obj), '-o', str(owned)],
+                              check=True, capture_output=True, timeout=30)
+            timed_native_step('verifier: compile native C runtime ' + name, subprocess.run,
+                              ['cc', '-std=c11', '-O2', '-DERIST_NATIVE_RUNTIME', '-DERIST_HEAP_GC_INTERVAL=65536',
+                               str(assembly), str(ROOT / 'runtime/native_gc_runtime.c'), '-lm', '-o', str(bootstrap)],
+                              check=True, capture_output=True, timeout=60)
             headers = subprocess.check_output(['readelf', '-lW', str(owned)], text=True)
             self.assertNotIn('INTERP', headers); self.assertNotIn('DYNAMIC', headers)
             self.assertNotIn('RWE', next(line for line in headers.splitlines() if 'GNU_STACK' in line))
             self.assertEqual(subprocess.check_output(['nm', '-u', str(owned)], text=True).strip(), '')
             for binary in (bootstrap, owned):
                 with self.subTest(program=name, runtime=binary.name):
-                    self.assert_execution(binary, expected)
+                    timed_native_step('verifier: execute ' + name + ' ' + binary.name,
+                                      self.assert_execution, binary, expected)
 
 
 if __name__ == '__main__':
