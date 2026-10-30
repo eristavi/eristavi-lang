@@ -21,6 +21,7 @@ SMOKE_TESTS=(
     'test_u1_foundation.U1FoundationTests.test_accounting_metadata_and_builder_on_c_bootstrap',
     'test_u1_calls.U1CallContracts.test_direct_call_declarations_and_verifier',
     'test_u1_module.U1ModuleBindingTests.test_declarations_bind_exact_verified_bodies',
+    'test_u1_execution.U1CallExecutionTests.test_recursive_frames_effects_and_versioned_imports',
     'test_u1_verifier.U1VerifierTests.test_malformed_ir_and_budget_protocol',
     'test_u1_promotion.U1PromotionTests.test_differential_execution_shapes_and_failure_cleanup',
     'test_u3_stage0_parity_baseline.U3Stage0ParityBaseline.test_frozen_successful_programs_match_existing_native_compilers',
