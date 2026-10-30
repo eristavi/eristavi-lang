@@ -604,3 +604,32 @@ Implemented, isolated U1a: private binary64 add/sub/mul/div/neg and six comparis
 - Independent exact arithmetic oracle and SSA promotion use 12 direct width/signedness/op fixtures and one i8-cell diamond with first-fault ordering. The suite expects **52** before/after promotion snapshots. Malformed verifier tests include bad mode, width, operand/result type, location and unreachable records.
 - Full details: `UIR_U1B_NARROW_DIVREM.md`. **At initial commit: draft/unqualified, no merge**. Require four-platform CI and full completed-batch qualification after parent PR merge/rebase, and verify final tested-versus-main Git trees. Do not run 900-second owned experimental compiler self-build by default.
 - Immutable U1b aggregates and all U2/U3 native/frontend tasks remain; this does not change frozen language or current production lowering.
+
+
+## 22. Verified recovery checkpoint after PR #84 merge — 2026-10-30
+
+This section supersedes older *current-state* instructions in sections 18–21; their original proposed-branch statuses are retained as history.
+
+### Main and qualified integration
+
+- GitHub `main` is now merge commit `c9750bb6f792a2432016df98ea21149fbc7ccca5`, merging [PR #84](https://github.com/eristavi/eristavi-lang/pull/84) at exact head `50cb9802f51d7f0da283b43bd6f789018a4eb5bd`.
+- The merged tree is `370dbc972f2b3c0975003ba8fc1f0186ec9020a9`, identical to the qualified PR #84 head tree. Four normal CI jobs passed on [run 41120676739](https://github.com/eristavi/eristavi-lang/actions/runs/41120676739), and completed-batch [qualification 41123080745](https://github.com/eristavi/eristavi-lang/actions/runs/41123080745) passed its three Linux bootstrap/offline jobs and owned integration; separate experimental owned compiler self-build remained skipped.
+- The previous [PR #83](https://github.com/eristavi/eristavi-lang/pull/83) merges both direct-call PR #78 and sparse-switch PR #79 histories, with merged commit `244d392582c2ef3be9b0804545886008744a9827`. Its exact tested head `ef441fe6dc6d0a8d0f05fdf45efdb9290771b240` passed normal CI [41119775019](https://github.com/eristavi/eristavi-lang/actions/runs/41119775019) and full completed-batch qualification [41121497695](https://github.com/eristavi/eristavi-lang/actions/runs/41121497695); tested and merged tree `bfda0d1278a8185b2d48a6e24114f5ed10e743fa` matched.
+- Original PRs #81 and #82 remain historical open drafts but their combined narrow-type/constant contents were integrated in #84. Do not merge their separate old heads again.
+
+### Current unmerged development
+
+- [PR #86](https://github.com/eristavi/eristavi-lang/pull/86): narrow i8/i16/i32 wrap, overflow and comparisons. Four-platform CI [41122060676](https://github.com/eristavi/eristavi-lang/actions/runs/41122060676) succeeded on `602abcea050e0d8f7c55715982bec620ec70c447`; completed-batch qualification of the exact final integrated tree is **not yet established**. Its base is the now-merged PR #84 branch and must be reviewed/retargeted to current `main` before merge.
+- [PR #87](https://github.com/eristavi/eristavi-lang/pull/87): narrow division/remainder stacked on #86. First CI [41122703352](https://github.com/eristavi/eristavi-lang/actions/runs/41122703352) failed on **all four platforms** because `tests/fixtures/u1_verifier.eri` referenced absent `protocol.Harness.alternate`; `test_u1_verifier.U1VerifierTests.setUpClass` could not bootstrap-compile the protocol. A focused correction in commit `bca23a6f09f37e44e95f0e155711c9e479a258d4` added a second valid source location and initialized `alternate` in the fixture. **Do not claim the correction passed CI until the exact corrected head is verified.** Parent #86 must be qualified and merged first; then retarget/reconcile #87 and rerun all four CI jobs plus full completed-batch qualification on final head.
+- [PR #85](https://github.com/eristavi/eristavi-lang/pull/85): isolated Stage-0/native output-parity test baseline, normal CI [41121276888](https://github.com/eristavi/eristavi-lang/actions/runs/41121276888) passed on `820d625e9c45e053ee4718ccabaa169969a41f27`. No new UIR frontend lowering or native backend was created; update against current main and independently review before merge.
+
+### Ordered next steps, preserving frozen language and production compiler
+
+1. Verify corrected #87 CI. If failing, inspect actual job logs; fix only evidenced faults and rerun on new exact commit. Preserve malformed/dead-block, signed MIN/-1 **both division and remainder**, zero-divisor and precise LocId tests.
+2. Reconcile #86 to now-merged main, prove its final tested tree and run full CI and completed-batch qualification before merge. Reconcile #87 afterward, run its own complete gates, and merge only then.
+3. Complete outstanding U1a contracts: multi-function/recursive call execution, imported effect trust and SCC effect summaries; strict native binary64 environment; complete provenance and revision/publication capabilities.
+4. Complete U1b immutable aggregates and U2 managed values, checked failures, deterministic resources/cleanup and rooted runtime contracts. Avoid expanding Eristavi source syntax or changing existing 32-byte ABI prematurely.
+5. Advance U3 through tested frozen Stage-0 parity then direct AST/semantic-facts → new UIR lowering and first native target behind differential checks. Existing production frontend and native/compiler pipeline remain authoritative until explicit compatibility gates pass.
+6. Keep this handover current after **qualified merges**, including head, merged tree, four-platform CI and completed-batch qualification job outcomes; never label a skipped separate 900-second owned compiler self-build as a pass.
+
+The new typed UIR redesign is **not** the production compiler. No full redesigned-compiler self-host or native whole-program performance claim is established by these isolated U1 tests.
