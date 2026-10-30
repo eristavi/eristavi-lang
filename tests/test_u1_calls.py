@@ -22,15 +22,18 @@ function directCalls() fails budget.LimitError,verify.InvalidIR,ProbeError {
     let owner be try budget.functionOwner(root,false); let construct be try budget.constructionPhase(owner);
     let routine be try build.create(data,sig,owner,construct);
     let entry be try build.block(routine,[meta.i64(),meta.pred()]);
+    let join be try build.block(routine,[meta.i64(),meta.pred()]);
     let a be try build.parameter(routine,entry,0); let flag be try build.parameter(routine,entry,1);
     let first be try build.call(routine,entry,target,[a,flag],location);
     let second be try build.call(routine,entry,external,[a],location);
-    try build.returnValues(routine,entry,[try build.result(routine,first,0),
+    try build.jump(routine,entry,join,[try build.result(routine,first,0),
         try build.result(routine,first,1)],location);
+    try build.returnValues(routine,join,[try build.parameter(routine,join,0),
+        try build.parameter(routine,join,1)],location);
     try build.complete(routine); try budget.finishPhase(construct);
     let harness be identity Harness { root=root; shared=shared; data=data; owner=owner;
         construct=construct; routine=routine; location=location; };
-    try accepted(harness,1,"call-valid");
+    try accepted(harness,2,"call-valid");
     let edit be try budget.constructionPhase(owner);
     try change(routine.instructions,edit,7,999);
     try rejected(harness,2,1,"call-foreign-id"); try change(routine.instructions,edit,7,target.index);
@@ -41,7 +44,7 @@ function directCalls() fails budget.LimitError,verify.InvalidIR,ProbeError {
     let metadataEdit be try budget.constructionPhase(shared);
     try change(data.declarations,metadataEdit,5,0);
     try rejected(harness,1,0,"call-import-version"); try change(data.declarations,metadataEdit,5,1);
-    try accepted(harness,1,"call-restored"); try close(harness);
+    try accepted(harness,2,"call-restored"); try close(harness);
 }
 function run() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError {
     try directCalls(); return true;
