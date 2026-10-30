@@ -61,6 +61,7 @@ function mutations() fails budget.LimitError,verify.InvalidIR,ProbeError {
     try change(routine.values,edit,14,1); try rejected(harness,2,1,"definition-owner"); try change(routine.values,edit,14,2);
     try change(routine.instructions,edit,10,99); try rejected(harness,2,1,"unknown-operation"); try change(routine.instructions,edit,10,3);
     try change(routine.instructions,edit,9,1); try rejected(harness,2,1,"cyclic-order"); try change(routine.instructions,edit,9,2);
+    try change(routine.instructions,edit,19,2); try rejected(harness,2,1,"cyclic-later-position"); try change(routine.instructions,edit,19,3);
     try change(routine.instructions,edit,35,1); try rejected(harness,2,1,"fake-void-result"); try change(routine.instructions,edit,35,0);
     try change(routine.instructions,edit,6,0); try rejected(harness,3,1,"required-location"); try change(routine.instructions,edit,6,1);
     try change(routine.instructions,edit,37,5); try rejected(harness,2,1,"trap-code"); try change(routine.instructions,edit,37,1);
@@ -77,6 +78,24 @@ function mutations() fails budget.LimitError,verify.InvalidIR,ProbeError {
     try change(harness.data.bytes,metadataEdit,12,71); try rejected(harness,1,0,"source-digest"); try change(harness.data.bytes,metadataEdit,12,49);
     try change(harness.data.signatures,metadataEdit,1,1); try rejected(harness,1,0,"signature-chain"); try change(harness.data.signatures,metadataEdit,1,0);
     try accepted(harness,1,"metadata-restored"); try close(harness);
+}
+function orphanRecords() fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let harness be try straight(); let routine be harness.routine; let edit be try budget.constructionPhase(harness.owner);
+    let length be routine.values.length; routine.values.frozen=false;
+    let ignored be try words.push(routine.values,edit,2); ignored=try words.push(routine.values,edit,1);
+    ignored=try words.push(routine.values,edit,2); ignored=try words.push(routine.values,edit,0); routine.values.frozen=true;
+    try rejected(harness,2,0,"orphan-value"); routine.values.length=length;
+    length=routine.instructions.length; routine.instructions.frozen=false;
+    ignored=try words.push(routine.instructions,edit,1); ignored=try words.push(routine.instructions,edit,1);
+    ignored=try words.push(routine.instructions,edit,routine.operands.length); ignored=try words.push(routine.instructions,edit,0);
+    ignored=try words.push(routine.instructions,edit,-9223372036854775807-1); ignored=try words.push(routine.instructions,edit,0);
+    ignored=try words.push(routine.instructions,edit,1); ignored=try words.push(routine.instructions,edit,0);
+    ignored=try words.push(routine.instructions,edit,0); ignored=try words.push(routine.instructions,edit,0); routine.instructions.frozen=true;
+    try rejected(harness,2,0,"orphan-instruction-before-backlink"); routine.instructions.length=length;
+    length=routine.edges.length; routine.edges.frozen=false;
+    ignored=try words.push(routine.edges,edit,1); ignored=try words.push(routine.edges,edit,0); ignored=try words.push(routine.edges,edit,0); routine.edges.frozen=true;
+    try rejected(harness,2,0,"orphan-edge"); routine.edges.length=length;
+    try close(harness);
 }
 function diamond() fails budget.LimitError,verify.InvalidIR,ProbeError {
     let harness be try create([meta.pred(),meta.i64()],[meta.i64()]); let routine be harness.routine;
@@ -153,7 +172,7 @@ function manyUses() fails budget.LimitError,verify.InvalidIR,ProbeError {
     try accepted(harness,2,"many-dominated-uses"); try close(harness);
 }
 function run() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError {
-    try mutations(); try diamond(); try loop(); try dead(); try repeatedTarget(); try limits(); try cancellation();
+    try mutations(); try orphanRecords(); try diamond(); try loop(); try dead(); try repeatedTarget(); try limits(); try cancellation();
     try scalarShapes(); try manyUses(); return true;
 }
 function main() {

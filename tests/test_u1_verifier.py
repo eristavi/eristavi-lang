@@ -13,10 +13,11 @@ from compiler.erist.cli import build_native
 ROOT = Path(__file__).resolve().parents[1]
 PROTOCOL = ''.join(name + ':ok\n' for name in (
     'straight', 'own-result', 'use-before-definition', 'reverify-after-restoration',
-    'result-type', 'definition-owner', 'unknown-operation', 'cyclic-order',
+    'result-type', 'definition-owner', 'unknown-operation', 'cyclic-order', 'cyclic-later-position',
     'fake-void-result', 'required-location', 'trap-code', 'overflowing-range',
     'overflowing-instruction-id', 'overflowing-count', 'foreign-table', 'missing-page', 'source-anchor',
     'unsupported-origin', 'source-digest', 'signature-chain', 'metadata-restored',
+    'orphan-value', 'orphan-instruction-before-backlink', 'orphan-edge',
     'diamond-nondominance', 'diamond-dominance', 'entry-predecessor',
     'duplicate-edge-owner', 'loop-swap', 'header-value-in-predecessor', 'edge-type',
     'edge-range', 'typed-unreachable', 'malformed-unreachable',

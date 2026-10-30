@@ -1,0 +1,484 @@
+// Transactional scalar-cell promotion: immutable input -> reverified cell-free IR.
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+import compiler.u1_builder as build;
+import compiler.u1_verify as verify;
+import compiler.u1_dominance as dom;
+public type Result {
+    routine identity build.Function; insertedParameters Int; insertedArguments Int;
+    liveStates Int; predecessorVisits Int; placementStates Int; frontierEntries Int;
+    frontierVisits Int; aliasVisits Int; removedBlocks Int; work Int;
+}
+type State {
+    input identity build.Function; output maybe identity build.Function; scratchClosed Bool; stage Int;
+    phase identity budget.Phase; graph identity dom.Graph; plans identity words.Words;
+    cellHeads Int; cellTails Int; nextOp Int; defined Int; live Int; placed Int; queued Int; definitions Int;
+    frontierHeads Int; frontierTails Int; frontierMark Int; phiHeads Int; phiTails Int; predCount Int;
+    aliases Int; phiForValue Int; current Int; edgeHeads Int; edgeTails Int; users Int; userTails Int; queue Int;
+    blockMap Int; valueMap Int; reach Int; undo Int;
+    liveStates Int; predecessorVisits Int; placementStates Int; frontierEntries Int; frontierVisits Int;
+    aliasVisits Int; plannedParameters Int; plannedArguments Int; parameters Int; arguments Int;
+}
+type Layout { aliases Int; values Int; phis Int; edges Int; reach Int; blocks Int; }
+function invalid(message Text) fails verify.InvalidIR {
+    fail verify.InvalidIR { message=message; category="invalid-ir"; stage=5; block=0; instruction=0; location=0; };
+}
+function get(state identity State,table identity words.Words,index Int) returns Int fails budget.LimitError { return try words.get(table,state.phase,index); }
+function read(state identity State,first Int,index Int) returns Int fails budget.LimitError { return try get(state,state.graph.data,first+index); }
+function set(state identity State,first Int,index Int,value Int) fails budget.LimitError { try words.set(state.graph.data,state.phase,first+index,value); }
+function push(state identity State,value Int) returns Int fails budget.LimitError { return try words.push(state.graph.data,state.phase,value); }
+function node(state identity State,index Int,field Int) returns Int fails budget.LimitError { return try read(state,index-1,field); }
+function nodeSet(state identity State,index Int,field Int,value Int) fails budget.LimitError { try set(state,index-1,field,value); }
+function plan(state identity State,index Int,field Int) returns Int fails budget.LimitError { return try get(state,state.plans,(index-1)*9+field); }
+function planSet(state identity State,index Int,field Int,value Int) fails budget.LimitError { try words.set(state.plans,state.phase,(index-1)*9+field,value); }
+function instruction(state identity State,index Int,field Int) returns Int fails budget.LimitError { return try get(state,state.input.instructions,(index-1)*10+field); }
+function zeros(state identity State,count Int) returns Int fails budget.LimitError { return try dom.zeros(state.graph,count); }
+function createPlan(state identity State,cell Int,block Int,value Int) returns Int fails budget.LimitError {
+    let index be state.plans.length/9+1;
+    if cell != 0 { value=state.input.values.length/4+index; }
+    let ignored be try words.push(state.plans,state.phase,cell); ignored=try words.push(state.plans,state.phase,block);
+    ignored=try words.push(state.plans,state.phase,0); ignored=try words.push(state.plans,state.phase,value);
+    ignored=try words.push(state.plans,state.phase,1); let item be 0;
+    while item < 4 { ignored=try words.push(state.plans,state.phase,0); item=item+1; }
+    let tail be try read(state,state.phiTails,block);
+    if tail == 0 { try set(state,state.phiHeads,block,index); } else { try planSet(state,tail,2,index); }
+    try set(state,state.phiTails,block,index); return index;
+}
+function prepare(state identity State) fails budget.LimitError {
+    let routine be state.input; let blocks be routine.blocks.length/5; let edges be routine.edges.length/3;
+    try dom.prepare(state.graph,blocks,edges); let block be 1;
+    while block <= blocks {
+        let term be try get(state,routine.blocks,(block-1)*5+4); let op be try instruction(state,term,0); let count be 0;
+        if op == 6 { count=1; } if op == 7 { count=2; } let item be 0;
+        while item < count {
+            let edge be try instruction(state,term,7+item); let target be try get(state,routine.edges,(edge-1)*3);
+            try dom.addEdge(state.graph,edge,block,target); item=item+1;
+        }
+        block=block+1;
+    }
+    try dom.compute(state.graph); let size be blocks+1; let cells be routine.cells.length/2+1;
+    state.cellHeads=try zeros(state,cells); state.cellTails=try zeros(state,cells); state.nextOp=try zeros(state,routine.instructions.length/10+1);
+    state.defined=try zeros(state,size); state.live=try zeros(state,size); state.placed=try zeros(state,size); state.queued=try zeros(state,size); state.definitions=try zeros(state,size);
+    state.frontierHeads=try zeros(state,size); state.frontierTails=try zeros(state,size); state.frontierMark=try zeros(state,size);
+    state.phiHeads=try zeros(state,size); state.phiTails=try zeros(state,size); state.predCount=try zeros(state,size);
+    state.edgeHeads=try zeros(state,edges+1); state.edgeTails=try zeros(state,edges+1); state.current=try zeros(state,cells);
+    block=1;
+    while block <= blocks {
+        if try dom.get(state.graph,block,2) != 0 {
+            let edge be try dom.get(state.graph,block,1); let count be 0;
+            while edge != 0 {
+                let source be try read(state,state.graph.edgeBase+edge*4,0);
+                if try dom.get(state.graph,source,2) != 0 { count=count+1; }
+                edge=try read(state,state.graph.edgeBase+edge*4,3);
+            }
+            try set(state,state.predCount,block,count);
+            if block != 1 {
+                let first be try get(state,routine.blocks,(block-1)*5); count=try get(state,routine.blocks,(block-1)*5+1); let item be 0;
+                while item < count { let ignored be try createPlan(state,0,block,first+item); item=item+1; }
+            }
+            let cursor be try get(state,routine.blocks,(block-1)*5+2);
+            while cursor != 0 {
+                if try instruction(state,cursor,0) >= 10 {
+                    let cell be try instruction(state,cursor,7); let tail be try read(state,state.cellTails,cell);
+                    if tail == 0 { try set(state,state.cellHeads,cell,cursor); } else { try set(state,state.nextOp,tail,cursor); }
+                    try set(state,state.cellTails,cell,cursor);
+                }
+                cursor=try instruction(state,cursor,9);
+            }
+        }
+        block=block+1;
+    }
+}
+function frontiers(state identity State) fails budget.LimitError {
+    let block be 1;
+    while block <= state.graph.blocks {
+        if try dom.get(state.graph,block,2) != 0 and try read(state,state.predCount,block) >= 2 {
+            let stop be try dom.get(state.graph,block,7); let edge be try dom.get(state.graph,block,1);
+            while edge != 0 {
+                let runner be try read(state,state.graph.edgeBase+edge*4,0);
+                if try dom.get(state.graph,runner,2) != 0 {
+                    while runner != stop {
+                        state.frontierVisits=state.frontierVisits+1;
+                        if try read(state,state.frontierMark,runner) == block { runner=stop; }
+                        else {
+                            try set(state,state.frontierMark,runner,block); let entry be state.graph.data.length+1;
+                            let ignored be try push(state,block); ignored=try push(state,0);
+                            let tail be try read(state,state.frontierTails,runner);
+                            if tail == 0 { try set(state,state.frontierHeads,runner,entry); } else { try nodeSet(state,tail,1,entry); }
+                            try set(state,state.frontierTails,runner,entry); state.frontierEntries=state.frontierEntries+1;
+                            runner=try dom.get(state.graph,runner,7);
+                        }
+                    }
+                }
+                edge=try read(state,state.graph.edgeBase+edge*4,3);
+            }
+        }
+        block=block+1;
+    }
+}
+function markLive(state identity State,cell Int,block Int,depth Int) returns Int fails budget.LimitError {
+    if try read(state,state.live,block) == cell { return depth; }
+    if state.liveStates >= state.input.cells.length/2*state.graph.reachable { try budget.exceed(state.phase.owner,1,0); }
+    state.liveStates=state.liveStates+1; try set(state,state.live,block,cell);
+    try set(state,state.graph.stackBase,depth,block); return depth+1;
+}
+function placement(state identity State) fails budget.LimitError {
+    let cell be 1;
+    while cell <= state.input.cells.length/2 {
+        let cursor be try read(state,state.cellHeads,cell); let depth be 0; let definitions be 0;
+        while cursor != 0 {
+            let block be try instruction(state,cursor,1); let op be try instruction(state,cursor,0);
+            if op == 11 {
+                if try read(state,state.defined,block) != cell { depth=try markLive(state,cell,block,depth); }
+            } else {
+                if try read(state,state.defined,block) != cell {
+                    try set(state,state.defined,block,cell); try set(state,state.definitions,definitions,block); definitions=definitions+1;
+                }
+            }
+            cursor=try read(state,state.nextOp,cursor);
+        }
+        while depth > 0 {
+            depth=depth-1; let block be try read(state,state.graph.stackBase,depth); let edge be try dom.get(state.graph,block,1);
+            while edge != 0 {
+                let predecessor be try read(state,state.graph.edgeBase+edge*4,0);
+                if try dom.get(state.graph,predecessor,2) != 0 {
+                    if state.predecessorVisits >= state.input.cells.length/2*state.graph.reachableEdges { try budget.exceed(state.phase.owner,1,0); }
+                    state.predecessorVisits=state.predecessorVisits+1;
+                    if try read(state,state.defined,predecessor) != cell { depth=try markLive(state,cell,predecessor,depth); }
+                }
+                edge=try read(state,state.graph.edgeBase+edge*4,3);
+            }
+        }
+        let count be 0;
+        while count < definitions {
+            let block be try read(state,state.definitions,count); try set(state,state.queued,block,cell);
+            try set(state,state.graph.stackBase,count,block); state.placementStates=state.placementStates+1; count=count+1;
+        }
+        let next be 0;
+        while next < count {
+            let block be try read(state,state.graph.stackBase,next); next=next+1; let entry be try read(state,state.frontierHeads,block);
+            while entry != 0 {
+                state.frontierVisits=state.frontierVisits+1; let target be try node(state,entry,0);
+                if try read(state,state.live,target) == cell and try read(state,state.placed,target) != cell {
+                    let incoming be try read(state,state.predCount,target);
+                    if state.plannedParameters >= 1048576 or incoming > 4194304-state.plannedArguments { try budget.exceed(state.phase.owner,1,0); }
+                    state.plannedParameters=state.plannedParameters+1; state.plannedArguments=state.plannedArguments+incoming;
+                    try set(state,state.placed,target,cell); let ignored be try createPlan(state,cell,target,0);
+                    if try read(state,state.queued,target) != cell {
+                        try set(state,state.queued,target,cell); try set(state,state.graph.stackBase,count,target); count=count+1;
+                        state.placementStates=state.placementStates+1;
+                    }
+                }
+                entry=try node(state,entry,1);
+            }
+        }
+        cell=cell+1;
+    }
+}
+function resolve(state identity State,value Int) returns Int fails budget.LimitError,verify.InvalidIR {
+    let limit be state.input.values.length/4+state.plans.length/9+1;
+    if value < 1 or value >= limit { try invalid("promotion substitution outside value table"); }
+    let root be value; let steps be 0;
+    while try read(state,state.aliases,root) != root {
+        root=try read(state,state.aliases,root); steps=steps+1; state.aliasVisits=state.aliasVisits+1;
+        if root < 1 or root >= limit or steps >= limit { try invalid("cyclic or missing promotion substitution"); }
+    }
+    while value != root { let next be try read(state,state.aliases,value); try set(state,state.aliases,value,root); value=next; state.aliasVisits=state.aliasVisits+1; }
+    return root;
+}
+function bind(state identity State,cell Int,value Int) fails budget.LimitError,verify.InvalidIR {
+    let previous be try read(state,state.current,cell); let entry be state.graph.data.length+1;
+    let ignored be try push(state,cell); ignored=try push(state,previous); ignored=try push(state,state.undo); state.undo=entry;
+    try set(state,state.current,cell,try resolve(state,value));
+}
+function incoming(state identity State,phi Int,edge Int,value Int) fails budget.LimitError {
+    let entry be state.graph.data.length+1; let ignored be try push(state,phi); ignored=try push(state,value);
+    ignored=try push(state,0); ignored=try push(state,0);
+    let tail be try read(state,state.edgeTails,edge);
+    if tail == 0 { try set(state,state.edgeHeads,edge,entry); } else { try nodeSet(state,tail,2,entry); }
+    try set(state,state.edgeTails,edge,entry); tail=try plan(state,phi,6);
+    if tail == 0 { try planSet(state,phi,5,entry); } else { try nodeSet(state,tail,3,entry); }
+    try planSet(state,phi,6,entry);
+}
+function enter(state identity State,block Int) fails budget.LimitError,verify.InvalidIR {
+    try dom.set(state.graph,block,14,state.undo); let phi be try read(state,state.phiHeads,block);
+    while phi != 0 { let cell be try plan(state,phi,0); if cell != 0 { try bind(state,cell,try plan(state,phi,3)); } phi=try plan(state,phi,2); }
+    let cursor be try get(state,state.input.blocks,(block-1)*5+2);
+    while cursor != 0 {
+        let op be try instruction(state,cursor,0);
+        if op >= 10 {
+            let cell be try instruction(state,cursor,7);
+            if op == 11 {
+                let value be try read(state,state.current,cell); if value == 0 { try invalid("missing value at cell read"); }
+                try set(state,state.aliases,try instruction(state,cursor,4),try resolve(state,value));
+            } else {
+                let first be try instruction(state,cursor,2); try bind(state,cell,try get(state,state.input.operands,first));
+            }
+        }
+        cursor=try instruction(state,cursor,9);
+    }
+    let edge be try dom.get(state.graph,block,0);
+    while edge != 0 {
+        let target be try read(state,state.graph.edgeBase+edge*4,1); phi=try read(state,state.phiHeads,target);
+        while phi != 0 {
+            let cell be try plan(state,phi,0); let value be 0;
+            if cell == 0 {
+                let original be try plan(state,phi,3); let ordinal be try get(state,state.input.values,(original-1)*4+3);
+                let first be try get(state,state.input.edges,(edge-1)*3+1); value=try get(state,state.input.arguments,first+ordinal);
+            } else { value=try read(state,state.current,cell); }
+            if value == 0 { try invalid("missing incoming value during cell promotion"); }
+            try incoming(state,phi,edge,value); phi=try plan(state,phi,2);
+        }
+        edge=try read(state,state.graph.edgeBase+edge*4,2);
+    }
+    try dom.set(state.graph,block,16,try dom.get(state.graph,block,10));
+}
+function rename(state identity State) fails budget.LimitError,verify.InvalidIR {
+    let size be state.input.values.length/4+state.plans.length/9+1;
+    state.aliases=try zeros(state,size); state.phiForValue=try zeros(state,size); state.valueMap=try zeros(state,size);
+    let value be 1; while value < size { try set(state,state.aliases,value,value); value=value+1; }
+    let phi be 1; while phi <= state.plans.length/9 { try set(state,state.phiForValue,try plan(state,phi,3),phi); phi=phi+1; }
+    let depth be 1; try set(state,state.graph.stackBase,depth,1); try enter(state,1);
+    while depth > 0 {
+        let block be try read(state,state.graph.stackBase,depth); let child be try dom.get(state.graph,block,16);
+        if child != 0 {
+            try dom.set(state.graph,block,16,try dom.get(state.graph,child,11)); depth=depth+1;
+            try set(state,state.graph.stackBase,depth,child); try enter(state,child);
+        } else {
+            let stop be try dom.get(state.graph,block,14);
+            while state.undo != stop {
+                let cell be try node(state,state.undo,0); let previous be try node(state,state.undo,1);
+                state.undo=try node(state,state.undo,2); try set(state,state.current,cell,previous);
+            }
+            depth=depth-1;
+        }
+    }
+}
+function enqueue(state identity State,phi Int,count Int) returns Int fails budget.LimitError {
+    if try plan(state,phi,4) == 0 or try plan(state,phi,7) != 0 { return count; }
+    try planSet(state,phi,7,1); try set(state,state.queue,count,phi); return count+1;
+}
+function simplify(state identity State) fails budget.LimitError,verify.InvalidIR {
+    let size be state.plans.length/9+1; state.users=try zeros(state,size); state.userTails=try zeros(state,size); state.queue=try zeros(state,size);
+    let phi be 1; let count be 0;
+    while phi < size {
+        count=try enqueue(state,phi,count); let entry be try plan(state,phi,5);
+        while entry != 0 {
+            let root be try resolve(state,try node(state,entry,1)); let producer be try read(state,state.phiForValue,root);
+            if producer != 0 {
+                let use be state.graph.data.length+1; let ignored be try push(state,phi); ignored=try push(state,0);
+                let tail be try read(state,state.userTails,producer);
+                if tail == 0 { try set(state,state.users,producer,use); } else { try nodeSet(state,tail,1,use); }
+                try set(state,state.userTails,producer,use);
+            }
+            entry=try node(state,entry,3);
+        }
+        phi=phi+1;
+    }
+    while count > 0 {
+        count=count-1; phi=try read(state,state.queue,count); try planSet(state,phi,7,0);
+        if try plan(state,phi,4) != 0 {
+            let own be try plan(state,phi,3); let candidate be 0; let different be false; let entry be try plan(state,phi,5);
+            while entry != 0 {
+                let value be try resolve(state,try node(state,entry,1));
+                if value != own { if candidate == 0 { candidate=value; } else { if candidate != value { different=true; } } }
+                entry=try node(state,entry,3);
+            }
+            if not different and candidate != 0 {
+                try set(state,state.aliases,own,candidate); try planSet(state,phi,4,0);
+                let use be try read(state,state.users,phi);
+                while use != 0 { count=try enqueue(state,try node(state,use,0),count); use=try node(state,use,1); }
+                let producer be try read(state,state.phiForValue,candidate); let head be try read(state,state.users,phi);
+                if producer != 0 and head != 0 {
+                    let tail be try read(state,state.userTails,producer);
+                    if tail == 0 { try set(state,state.users,producer,head); } else { try nodeSet(state,tail,1,head); }
+                    try set(state,state.userTails,producer,try read(state,state.userTails,phi));
+                }
+                try set(state,state.users,phi,0); try set(state,state.userTails,phi,0);
+            }
+        }
+    }
+}
+function fill(table identity words.Words,phase identity budget.Phase,count Int) returns Int fails budget.LimitError {
+    let first be table.length; let index be 0;
+    while index < count { let ignored be try words.push(table,phase,0); index=index+1; } return first;
+}
+function compactInto(state identity State,target identity words.Words) returns Layout fails budget.LimitError,verify.InvalidIR {
+    let size be state.input.values.length/4+state.plans.length/9+1; let aliases be target.length;
+    let ignored be try words.push(target,state.phase,0); let index be 1;
+    while index < size { ignored=try words.push(target,state.phase,try resolve(state,index)); index=index+1; }
+    let values be try fill(target,state.phase,size); let phis be target.length; index=0;
+    while index <= state.graph.blocks { ignored=try words.push(target,state.phase,try read(state,state.phiHeads,index)); index=index+1; }
+    let edges be try fill(target,state.phase,state.graph.edges+1); let reach be target.length;
+    ignored=try words.push(target,state.phase,0); index=1;
+    while index <= state.graph.blocks {
+        let present be 0; if try dom.get(state.graph,index,2) != 0 { present=1; }
+        ignored=try words.push(target,state.phase,present); index=index+1;
+    }
+    let blocks be try fill(target,state.phase,state.graph.blocks+1); let edge be 1;
+    while edge <= state.graph.edges {
+        let entry be try read(state,state.edgeHeads,edge); let tail be 0;
+        while entry != 0 {
+            let phi be try node(state,entry,0);
+            if try plan(state,phi,4) != 0 {
+                let fresh be target.length+1; ignored=try words.push(target,state.phase,phi);
+                ignored=try words.push(target,state.phase,try resolve(state,try node(state,entry,1))); ignored=try words.push(target,state.phase,0);
+                if tail == 0 { try words.set(target,state.phase,edges+edge,fresh); } else { try words.set(target,state.phase,tail-1+2,fresh); }
+                tail=fresh;
+            }
+            entry=try node(state,entry,2);
+        }
+        edge=edge+1;
+    }
+    return Layout { aliases=aliases; values=values; phis=phis; edges=edges; reach=reach; blocks=blocks; };
+}
+function compact(state identity State) fails budget.LimitError,verify.InvalidIR {
+    // Keep only resolved substitutions and surviving parameter/edge plans across
+    // output construction. Liveness, frontiers, undo and use lists are dead now.
+    let target be try words.create(state.input.owner,33554432);
+    let layout be compactInto(state,target) else error budget.LimitError { try words.close(target); fail error; }
+        else error verify.InvalidIR { try words.close(target); fail error; };
+    let old be state.graph.data; state.graph.data=target;
+    state.aliases=layout.aliases; state.valueMap=layout.values; state.phiHeads=layout.phis;
+    state.edgeHeads=layout.edges; state.reach=layout.reach; state.blockMap=layout.blocks;
+    try words.close(old);
+}
+function appendValue(state identity State,output identity build.Function,value Int,kind Int,definition Int,ordinal Int) returns Int fails budget.LimitError {
+    let result be output.values.length/4+1;
+    if result > 1048576 { try budget.exceed(state.phase.owner,1,0); }
+    let valueType be 0; let oldCount be state.input.values.length/4;
+    if value <= oldCount { valueType=try get(state,state.input.values,(value-1)*4); }
+    else { let cell be try plan(state,value-oldCount,0); valueType=try get(state,state.input.cells,(cell-1)*2); }
+    let ignored be try words.push(output.values,state.phase,valueType); ignored=try words.push(output.values,state.phase,kind);
+    ignored=try words.push(output.values,state.phase,definition); ignored=try words.push(output.values,state.phase,ordinal);
+    try set(state,state.valueMap,value,result); return result;
+}
+function emitEdge(state identity State,output identity build.Function,edge Int) returns Int fails budget.LimitError {
+    let target be try get(state,state.input.edges,(edge-1)*3); let first be output.arguments.length; let entry be try read(state,state.edgeHeads,edge);
+    while entry != 0 {
+        let phi be try node(state,entry,0);
+        if try plan(state,phi,4) != 0 {
+            let ignored be try words.push(output.arguments,state.phase,try node(state,entry,1));
+            if try plan(state,phi,0) != 0 { state.arguments=state.arguments+1; }
+        }
+        entry=try node(state,entry,2);
+    }
+    let result be output.edges.length/3+1; let ignored be try words.push(output.edges,state.phase,try read(state,state.blockMap,target));
+    ignored=try words.push(output.edges,state.phase,first); ignored=try words.push(output.edges,state.phase,output.arguments.length-first); return result;
+}
+function emitInstruction(state identity State,output identity build.Function,old Int,block Int) fails budget.LimitError {
+    let op be try instruction(state,old,0);
+    if op >= 10 { return; }
+    let index be output.instructions.length/10+1; let firstOperand be output.operands.length;
+    let first be try instruction(state,old,2); let count be try instruction(state,old,3); let item be 0;
+    while item < count { let ignored be try words.push(output.operands,state.phase,try get(state,state.input.operands,first+item)); item=item+1; }
+    first=try instruction(state,old,4); let results be try instruction(state,old,5); let firstResult be 0; item=0;
+    while item < results { let value be try appendValue(state,output,first+item,1,index,item); if item == 0 { firstResult=value; } item=item+1; }
+    let payload be try instruction(state,old,7); let extra be try instruction(state,old,8);
+    if op == 6 or op == 7 { payload=try emitEdge(state,output,payload); if op == 7 { extra=try emitEdge(state,output,extra); } }
+    let ignored be try words.push(output.instructions,state.phase,op); ignored=try words.push(output.instructions,state.phase,block);
+    ignored=try words.push(output.instructions,state.phase,firstOperand); ignored=try words.push(output.instructions,state.phase,count);
+    ignored=try words.push(output.instructions,state.phase,firstResult); ignored=try words.push(output.instructions,state.phase,results);
+    ignored=try words.push(output.instructions,state.phase,try instruction(state,old,6)); ignored=try words.push(output.instructions,state.phase,payload);
+    ignored=try words.push(output.instructions,state.phase,extra); ignored=try words.push(output.instructions,state.phase,0);
+    let offset be (block-1)*5;
+    if op >= 6 and op <= 8 { try words.set(output.blocks,state.phase,offset+4,index); }
+    else {
+        let previous be try get(state,output.blocks,offset+3);
+        if previous == 0 { try words.set(output.blocks,state.phase,offset+2,index); } else { try words.set(output.instructions,state.phase,(previous-1)*10+9,index); }
+        try words.set(output.blocks,state.phase,offset+3,index);
+    }
+}
+function rewrite(state identity State,table identity words.Words) fails budget.LimitError,verify.InvalidIR {
+    let index be 0;
+    while index < table.length {
+        let root be try resolve(state,try get(state,table,index)); let mapped be try read(state,state.valueMap,root);
+        if mapped == 0 { try invalid("no emitted definition for promoted value"); } try words.set(table,state.phase,index,mapped); index=index+1;
+    }
+}
+function rebuild(state identity State) fails budget.LimitError,verify.InvalidIR {
+    let output be try build.create(state.input.metadata,state.input.signature,state.input.owner,state.phase); state.output=output;
+    let block be 1;
+    while block <= state.graph.blocks {
+        if try read(state,state.reach,block) != 0 {
+            let index be output.blocks.length/5+1; try set(state,state.blockMap,block,index);
+            let first be output.values.length/4+1; let count be 0;
+            if block == 1 {
+                let oldFirst be try get(state,state.input.blocks,0); let oldCount be try get(state,state.input.blocks,1);
+                while count < oldCount { let ignored be try appendValue(state,output,oldFirst+count,0,index,count); count=count+1; }
+            } else {
+                let phi be try read(state,state.phiHeads,block);
+                while phi != 0 {
+                    if try plan(state,phi,4) != 0 {
+                        let ignored be try appendValue(state,output,try plan(state,phi,3),0,index,count); count=count+1;
+                        if try plan(state,phi,0) != 0 { state.parameters=state.parameters+1; }
+                    }
+                    phi=try plan(state,phi,2);
+                }
+            }
+            if count == 0 { first=0; }
+            let ignored be try words.push(output.blocks,state.phase,first); ignored=try words.push(output.blocks,state.phase,count);
+            ignored=try words.push(output.blocks,state.phase,0); ignored=try words.push(output.blocks,state.phase,0); ignored=try words.push(output.blocks,state.phase,0);
+        }
+        block=block+1;
+    }
+    block=1;
+    while block <= state.graph.blocks {
+        let mapped be try read(state,state.blockMap,block);
+        if mapped != 0 {
+            let cursor be try get(state,state.input.blocks,(block-1)*5+2);
+            while cursor != 0 { try emitInstruction(state,output,cursor,mapped); cursor=try instruction(state,cursor,9); }
+            try emitInstruction(state,output,try get(state,state.input.blocks,(block-1)*5+4),mapped);
+        }
+        block=block+1;
+    }
+    try rewrite(state,output.operands); try rewrite(state,output.arguments); output.revision=state.input.revision+1; try build.complete(output);
+}
+function closeScratch(state identity State) fails budget.LimitError {
+    if not state.scratchClosed { state.scratchClosed=true; try words.close(state.plans); try dom.close(state.graph); }
+}
+function perform(state identity State) returns Result fails budget.LimitError,verify.InvalidIR {
+    try prepare(state); state.stage=1; try frontiers(state); state.stage=2; try placement(state);
+    state.stage=3; try rename(state); state.stage=4; try simplify(state); state.stage=5; try compact(state); state.stage=6; try rebuild(state);
+    // The sealed output no longer uses analysis storage. Retire it BEFORE the
+    // independent verifier allocates its own workspace; input remains intact.
+    try closeScratch(state);
+    let output be state.output;
+    if output != none {
+        state.stage=7;
+        let checked be try verify.verify(output,try budget.verificationPhase(output.owner));
+        return Result { routine=output; insertedParameters=state.parameters; insertedArguments=state.arguments;
+        liveStates=state.liveStates; predecessorVisits=state.predecessorVisits; placementStates=state.placementStates;
+        frontierEntries=state.frontierEntries; frontierVisits=state.frontierVisits; aliasVisits=state.aliasVisits;
+        removedBlocks=state.graph.blocks-state.graph.reachable; work=state.phase.used; }; }
+    try invalid("missing completed promotion output");
+    fail verify.InvalidIR { message="missing output"; category="invalid-ir"; stage=5; block=0; instruction=0; location=0; };
+}
+function stageName(stage Int) returns Text {
+    if stage == 0 { return "CFG preparation"; } if stage == 1 { return "frontiers"; } if stage == 2 { return "liveness/placement"; }
+    if stage == 3 { return "renaming"; } if stage == 4 { return "trivial parameters"; } if stage == 5 { return "plan compaction"; }
+    if stage == 6 { return "output construction"; } return "output verification";
+}
+function discard(state identity State) fails budget.LimitError {
+    let output be state.output; state.output=none; if output != none { try build.close(output); }
+    try closeScratch(state); try budget.finishPhase(state.phase);
+}
+public function promote(input identity build.Function,phase identity budget.Phase) returns Result fails budget.LimitError,verify.InvalidIR {
+    if phase.owner != input.owner or phase.state != 0 or phase.used != 0 or phase.prepaid != 0 { try budget.reject("promotion requires a fresh function phase"); }
+    if input.revision == 9223372036854775807 { try budget.exceed(input.owner,1,0); }
+    let checked be verify.construction(input,try budget.verificationPhase(input.owner))
+        else error verify.InvalidIR { try budget.finishPhase(phase); fail error; }
+        else error budget.LimitError { try budget.finishPhase(phase); fail error; };
+    let preflight be try budget.reserve(input.owner,1024); try budget.cancelReservation(preflight);
+    let graph be try dom.create(input.owner,phase); let plans be try words.create(input.owner,18874368);
+    let state be identity State { input=input; output=none; scratchClosed=false; stage=0; phase=phase; graph=graph; plans=plans;
+        cellHeads=0; cellTails=0; nextOp=0; defined=0; live=0; placed=0; queued=0; definitions=0;
+        frontierHeads=0; frontierTails=0; frontierMark=0; phiHeads=0; phiTails=0; predCount=0;
+        aliases=0; phiForValue=0; current=0; edgeHeads=0; edgeTails=0; users=0; userTails=0; queue=0;
+        blockMap=0; valueMap=0; reach=0; undo=0; liveStates=0; predecessorVisits=0; placementStates=0;
+        frontierEntries=0; frontierVisits=0; aliasVisits=0; plannedParameters=0; plannedArguments=0; parameters=0; arguments=0; };
+    let result be perform(state) else error verify.InvalidIR { try discard(state); fail error; }
+        else error budget.LimitError { try discard(state);
+            fail budget.LimitError { message="U1a promotion "+stageName(state.stage)+": "+error.message; category=error.category; requested=error.requested; remaining=error.remaining; }; };
+    state.output=none; try closeScratch(state); try budget.finishPhase(phase); return result;
+}

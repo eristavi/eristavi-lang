@@ -1,0 +1,259 @@
+import std.process;
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+import compiler.u1_meta as meta;
+import compiler.u1_builder as build;
+import compiler.u1_verify as verify;
+import compiler.u1_promote as promote;
+error ProbeError { message Text; }
+type Harness { root identity budget.Owner; shared identity budget.Owner; data identity meta.Metadata;
+    owner identity budget.Owner; routine identity build.Function; location meta.LocId; alternate meta.LocId; }
+function check(condition Bool,message Text) fails ProbeError { if not condition { fail ProbeError { message=message; }; } }
+function create(parameters,results,qualification Bool) returns identity Harness fails budget.LimitError {
+    let root be try budget.developmentRequest(); let shared be try budget.metadataOwner(root); let phase be try budget.constructionPhase(shared);
+    let data be try meta.create(shared,phase); let signature be try meta.signature(data,phase,parameters,results);
+    let source be try meta.source(data,phase,"promotion","0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",64);
+    let location be try meta.location(data,phase,source,0,8,0,1,1); let alternate be try meta.location(data,phase,source,8,16,8,2,1);
+    try meta.freeze(data); try budget.finishPhase(phase); let owner be try budget.functionOwner(root,qualification);
+    let routine be try build.create(data,signature,owner,try budget.constructionPhase(owner));
+    return identity Harness { root=root; shared=shared; data=data; owner=owner; routine=routine; location=location; alternate=alternate; };
+}
+function close(harness identity Harness) fails budget.LimitError,ProbeError {
+    try build.close(harness.routine); try meta.close(harness.data);
+    try check(harness.root.live == 0 and harness.root.pending == 0,"promotion backing leak");
+    try budget.close(harness.owner); try budget.close(harness.shared); try budget.close(harness.root);
+}
+function cell(routine identity build.Function,index Int) returns build.CellId { return build.CellId { owner=routine.key; index=index+1; }; }
+function initialize(harness identity Harness,block build.BlockId,width Int) fails budget.LimitError {
+    let index be 0;
+    while index < width { let local be try build.cell(harness.routine,meta.i64());
+        let value be try build.integer(harness.routine,block,index,harness.location);
+        try build.initialize(harness.routine,block,local,value,harness.location); index=index+1; }
+}
+function update(harness identity Harness,block build.BlockId,width Int,delta Int) fails budget.LimitError {
+    let index be 0; let increment be try build.integer(harness.routine,block,delta,harness.alternate);
+    while index < width {
+        let local be cell(harness.routine,index); let old be try build.readCell(harness.routine,block,local,harness.location);
+        let sum be try build.addOverflow(harness.routine,block,old,increment,harness.alternate);
+        let ok be try build.negatePredicate(harness.routine,block,sum.overflow,harness.alternate);
+        try build.guard(harness.routine,block,ok,1,harness.alternate); try build.writeCell(harness.routine,block,local,sum.value,harness.location); index=index+1;
+    }
+}
+function finish(harness identity Harness,block build.BlockId,width Int) fails budget.LimitError {
+    let index be 0; let sum be try build.integer(harness.routine,block,0,harness.location);
+    while index < width {
+        let value be try build.readCell(harness.routine,block,cell(harness.routine,index),harness.location);
+        let added be try build.addOverflow(harness.routine,block,sum,value,harness.location);
+        let ok be try build.negatePredicate(harness.routine,block,added.overflow,harness.location);
+        try build.guard(harness.routine,block,ok,1,harness.location); sum=added.value; index=index+1;
+    }
+    try build.returnValues(harness.routine,block,[sum],harness.location); try build.complete(harness.routine); try budget.finishPhase(harness.routine.phase);
+}
+function dumpTable(table identity words.Words,phase identity budget.Phase) fails budget.LimitError {
+    output(table.length); let index be 0; while index < table.length { output(try words.get(table,phase,index)); index=index+1; }
+}
+function dump(routine identity build.Function) fails budget.LimitError {
+    let phase be try budget.verificationPhase(routine.owner);
+    try dumpTable(routine.blocks,phase); try dumpTable(routine.values,phase); try dumpTable(routine.instructions,phase);
+    try dumpTable(routine.operands,phase); try dumpTable(routine.edges,phase); try dumpTable(routine.arguments,phase); try dumpTable(routine.cells,phase); try budget.finishPhase(phase);
+}
+function hashTable(table identity words.Words,phase identity budget.Phase,seed Int) returns Int fails budget.LimitError {
+    let hash be seed; let index be 0;
+    while index < table.length { let value be (try words.get(table,phase,index))%2147483629; if value < 0 { value=value+2147483629; }
+        hash=(hash*131+value)%2147483629; index=index+1; } return (hash*131+table.length)%2147483629;
+}
+function fingerprint(routine identity build.Function) returns Int fails budget.LimitError {
+    let phase be try budget.verificationPhase(routine.owner); let hash be 17;
+    hash=try hashTable(routine.blocks,phase,hash); hash=try hashTable(routine.values,phase,hash); hash=try hashTable(routine.instructions,phase,hash);
+    hash=try hashTable(routine.operands,phase,hash); hash=try hashTable(routine.edges,phase,hash); hash=try hashTable(routine.arguments,phase,hash); hash=try hashTable(routine.cells,phase,hash);
+    try budget.finishPhase(phase); return hash;
+}
+function promoted(harness identity Harness,name Text,parameters Int,arguments Int) fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let routine be harness.routine; let revision be routine.revision; let count be routine.instructions.length; let hash be try fingerprint(routine);
+    let result be try promote.promote(routine,try budget.promotionPhase(harness.owner));
+    try check(result.routine.cells.length == 0 and result.insertedParameters == parameters and result.insertedArguments == arguments,"unexpected promotion shape: "+name);
+    try check(routine.revision == revision and routine.instructions.length == count and routine.state == 1,"promotion changed immutable input");
+    try check(hash == try fingerprint(routine),"promotion changed input records");
+    try check(result.liveStates <= routine.cells.length/2*(routine.blocks.length/5) and result.predecessorVisits <= routine.cells.length/2*(routine.edges.length/3),"duplicate liveness states");
+    try check(result.placementStates <= routine.cells.length/2*(routine.blocks.length/5),"duplicate placement states");
+    // Selected modeled capacity/traffic lifecycle includes eight fresh verifications.
+    let index be 0; while index < repetitions() { let checked be try verify.verify(result.routine,try budget.verificationPhase(harness.owner)); index=index+1; }
+    output(name); output(result.insertedParameters); output(result.insertedArguments); output(result.removedBlocks);
+    output(harness.owner.peak); output(harness.owner.traffic); output(result.work);
+    try dump(routine); try dump(result.routine); try build.close(result.routine); try close(harness);
+}
+function diamond(width Int,redundant Bool) fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let harness be try create([meta.pred()],[meta.i64()],true); let routine be harness.routine;
+    let entry be try build.block(routine,[meta.pred()]); let left be try build.block(routine,[]); let right be try build.block(routine,[]); let join be try build.block(routine,[]);
+    try initialize(harness,entry,width); try build.branch(routine,entry,try build.parameter(routine,entry,0),left,[],right,[],harness.location);
+    if redundant {
+        let index be 0;
+        while index < width {
+            let local be cell(routine,index); let phase be routine.phase;
+            let init be try words.get(routine.cells,phase,index*2+1); let first be try words.get(routine.instructions,phase,(init-1)*10+2);
+            let value be build.ValueId { owner=routine.key; index=try words.get(routine.operands,phase,first); };
+            try build.writeCell(routine,left,local,value,harness.location); try build.writeCell(routine,right,local,value,harness.location); index=index+1;
+        }
+    } else { try update(harness,left,width,1); try update(harness,right,width,2); }
+    try build.jump(routine,left,join,[],harness.location); try build.jump(routine,right,join,[],harness.location); try finish(harness,join,width);
+    if redundant { try promoted(harness,"redundant",0,0); } else { try promoted(harness,"diamond",width,width*2); }
+}
+function loop(width Int) fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let harness be try create([meta.pred()],[meta.i64()],true); let routine be harness.routine;
+    let entry be try build.block(routine,[meta.pred()]); let header be try build.block(routine,[meta.pred()]); let body be try build.block(routine,[]); let done be try build.block(routine,[]);
+    try initialize(harness,entry,width+1); try build.jump(routine,entry,header,[try build.parameter(routine,entry,0)],harness.location);
+    try build.branch(routine,header,try build.parameter(routine,header,0),body,[],done,[],harness.location);
+    try update(harness,body,width+1,1); let stop be try build.predicate(routine,body,false,harness.location);
+    try build.jump(routine,body,header,[stop],harness.location); try finish(harness,done,width+1); try promoted(harness,"loop",width+1,(width+1)*2);
+}
+function swap() fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let harness be try create([meta.i64(),meta.i64(),meta.pred()],[meta.i64(),meta.i64()],true); let routine be harness.routine;
+    let entry be try build.block(routine,[meta.i64(),meta.i64(),meta.pred()]); let header be try build.block(routine,[meta.pred()]); let body be try build.block(routine,[]); let done be try build.block(routine,[]);
+    let first be try build.cell(routine,meta.i64()); let second be try build.cell(routine,meta.i64());
+    try build.initialize(routine,entry,first,try build.parameter(routine,entry,0),harness.location); try build.initialize(routine,entry,second,try build.parameter(routine,entry,1),harness.location);
+    try build.jump(routine,entry,header,[try build.parameter(routine,entry,2)],harness.location);
+    try build.branch(routine,header,try build.parameter(routine,header,0),body,[],done,[],harness.location);
+    let a be try build.readCell(routine,body,first,harness.location); let b be try build.readCell(routine,body,second,harness.location);
+    try build.writeCell(routine,body,first,b,harness.location); try build.writeCell(routine,body,second,a,harness.location);
+    try build.jump(routine,body,header,[try build.predicate(routine,body,false,harness.location)],harness.location);
+    a=try build.readCell(routine,done,first,harness.location); b=try build.readCell(routine,done,second,harness.location);
+    try build.returnValues(routine,done,[a,b],harness.location); try build.complete(routine);
+    try promoted(harness,"swap",2,4);
+}
+function reset() fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let harness be try create([],[],true); let routine be harness.routine;
+    let entry be try build.block(routine,[]); let header be try build.block(routine,[meta.pred(),meta.pred()]); let body be try build.block(routine,[]); let done be try build.block(routine,[]);
+    let yes be try build.predicate(routine,entry,true,harness.location); let no be try build.predicate(routine,entry,false,harness.location);
+    try build.jump(routine,entry,header,[yes,yes],harness.location);
+    try build.branch(routine,header,try build.parameter(routine,header,0),body,[],done,[],harness.location);
+    let local be try build.cell(routine,meta.pred()); try build.initialize(routine,body,local,yes,harness.location);
+    try build.guard(routine,body,try build.readCell(routine,body,local,harness.location),4,harness.alternate); try build.writeCell(routine,body,local,no,harness.location);
+    try build.jump(routine,body,header,[try build.parameter(routine,header,1),no],harness.location);
+    try build.returnValues(routine,done,[],harness.location); try build.complete(routine); try promoted(harness,"reset",0,0);
+}
+function irreducible() fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let harness be try create([meta.pred(),meta.pred(),meta.pred()],[meta.i64()],true); let routine be harness.routine;
+    let entry be try build.block(routine,[meta.pred(),meta.pred(),meta.pred()]); let first be try build.block(routine,[]); let second be try build.block(routine,[]); let done be try build.block(routine,[]);
+    try initialize(harness,entry,1); try build.branch(routine,entry,try build.parameter(routine,entry,0),first,[],second,[],harness.location);
+    try update(harness,first,1,1); try build.branch(routine,first,try build.parameter(routine,entry,1),second,[],done,[],harness.location);
+    try update(harness,second,1,2); try build.branch(routine,second,try build.parameter(routine,entry,2),first,[],done,[],harness.location);
+    try finish(harness,done,1); try promoted(harness,"irreducible",3,6);
+}
+function invalidCell(mode Int) fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let harness be try create([meta.pred()],[meta.i64()],true); let routine be harness.routine;
+    let entry be try build.block(routine,[meta.pred()]); let left be try build.block(routine,[]); let right be try build.block(routine,[]); let join be try build.block(routine,[]);
+    let local be try build.cell(routine,meta.i64()); let value be try build.integer(routine,entry,0,harness.location);
+    if mode == 0 { let premature be try build.readCell(routine,entry,local,harness.location); try build.initialize(routine,entry,local,value,harness.location); }
+    try build.branch(routine,entry,try build.parameter(routine,entry,0),left,[],right,[],harness.location);
+    if mode == 1 { try build.initialize(routine,left,local,value,harness.location); }
+    try build.jump(routine,left,join,[],harness.location); try build.jump(routine,right,join,[],harness.location);
+    try build.returnValues(routine,join,[try build.readCell(routine,join,local,harness.location)],harness.location); try build.complete(routine);
+    let live be harness.owner.live; let phase be try budget.promotionPhase(harness.owner);
+    let unexpected be promote.promote(routine,phase) else error verify.InvalidIR {
+        let stage be 4; if mode == 2 { stage=2; }
+        try check(error.stage == stage and harness.owner.live == live and harness.owner.pending == 0 and phase.state == 1,"initializer rejection or cleanup");
+        try close(harness); output("invalid-init:ok"); return;
+    } else error budget.LimitError { fail error; }; fail ProbeError { message="invalid initializer accepted"; };
+}
+function dead(malformed Bool) fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let harness be try create([],[meta.i64()],true); let routine be harness.routine;
+    let entry be try build.block(routine,[]); let unused be try build.block(routine,[]);
+    let zero be try build.integer(routine,entry,0,harness.location); try build.returnValues(routine,entry,[zero],harness.location);
+    let local be try build.cell(routine,meta.i64()); try build.initialize(routine,unused,local,zero,harness.location);
+    let read be try build.readCell(routine,unused,local,harness.location); try build.returnValues(routine,unused,[read],harness.location); try build.complete(routine);
+    if malformed {
+        routine.instructions.frozen=false; try words.set(routine.instructions,routine.phase,30,99); routine.instructions.frozen=true;
+        let phase be try budget.promotionPhase(harness.owner); let live be harness.owner.live;
+        let unexpected be promote.promote(routine,phase) else error verify.InvalidIR {
+            try check(error.stage == 2 and error.block == 2 and harness.owner.live == live,"dead block must be validated before removal");
+            try close(harness); output("malformed-dead:ok"); return;
+        } else error budget.LimitError { fail error; }; fail ProbeError { message="invalid dead instruction dropped"; };
+    }
+    try promoted(harness,"dead",0,0);
+}
+function failedWork() fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let harness be try create([],[meta.i64()],true); let routine be harness.routine; let entry be try build.block(routine,[]);
+    try initialize(harness,entry,1); try finish(harness,entry,1); let live be harness.owner.live; let revision be routine.revision;
+    let phase be try budget.phase(harness.owner,100);
+    let unexpected be promote.promote(routine,phase) else error budget.LimitError {
+        try check(error.category == "resource-limit" and harness.owner.live == live and harness.owner.pending == 0 and phase.state == 1 and routine.revision == revision,"partial promotion cleanup");
+        try close(harness); output("promotion-limit:ok"); return;
+    } else error verify.InvalidIR { fail error; }; fail ProbeError { message="promotion quota ignored"; };
+}
+function canonicalReject() fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let harness be try create([],[meta.i64()],true); let entry be try build.block(harness.routine,[]);
+    try initialize(harness,entry,1); try finish(harness,entry,1); let live be harness.owner.live;
+    let unexpected be verify.verify(harness.routine,try budget.verificationPhase(harness.owner)) else error verify.InvalidIR {
+        try check(error.stage == 5 and harness.owner.live == live,"canonical publication rejects cells"); try close(harness); output("canonical-reject:ok"); return;
+    } else error budget.LimitError { fail error; }; fail ProbeError { message="canonical verifier accepted cells"; };
+}
+function sequential(width Int) fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let harness be try create([meta.pred()],[meta.i64()],true); let routine be harness.routine;
+    let current be try build.block(routine,[meta.pred()]); let test be try build.parameter(routine,current,0); let index be 0;
+    while index < width {
+        let local be try build.cell(routine,meta.i64()); let initial be try build.integer(routine,current,index,harness.location);
+        try build.initialize(routine,current,local,initial,harness.location);
+        let left be try build.block(routine,[]); let right be try build.block(routine,[]); let join be try build.block(routine,[]);
+        try build.branch(routine,current,test,left,[],right,[],harness.location); let branch be 0;
+        while branch < 2 {
+            let target be left; if branch == 1 { target=right; }
+            let increment be try build.integer(routine,target,branch+1,harness.alternate); let old be try build.readCell(routine,target,local,harness.location);
+            let sum be try build.addOverflow(routine,target,old,increment,harness.alternate); let ok be try build.negatePredicate(routine,target,sum.overflow,harness.alternate);
+            try build.guard(routine,target,ok,1,harness.alternate); try build.writeCell(routine,target,local,sum.value,harness.location);
+            try build.jump(routine,target,join,[],harness.location); branch=branch+1;
+        }
+        current=join; index=index+1;
+    }
+    try finish(harness,current,width); try promoted(harness,"sequential",width,width*2);
+}
+function faults(unused Bool) fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let harness be try create([meta.i64(),meta.pred(),meta.pred()],[meta.i64()],true); let routine be harness.routine;
+    let entry be try build.block(routine,[meta.i64(),meta.pred(),meta.pred()]); let left be try build.block(routine,[]); let right be try build.block(routine,[]); let join be try build.block(routine,[]);
+    let local be try build.cell(routine,meta.i64()); try build.initialize(routine,entry,local,try build.parameter(routine,entry,0),harness.location);
+    try build.guard(routine,entry,try build.parameter(routine,entry,2),4,harness.location);
+    try build.branch(routine,entry,try build.parameter(routine,entry,1),left,[],right,[],harness.location);
+    try update(harness,left,1,1); try update(harness,right,1,2); try build.jump(routine,left,join,[],harness.location); try build.jump(routine,right,join,[],harness.location);
+    if unused {
+        try build.returnValues(routine,join,[try build.integer(routine,join,0,harness.location)],harness.location); try build.complete(routine); try promoted(harness,"unused",0,0);
+    } else { try finish(harness,join,1); try promoted(harness,"faults",1,2); }
+}
+function floatCell() fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let harness be try create([meta.f64(),meta.pred()],[meta.f64()],true); let routine be harness.routine;
+    let entry be try build.block(routine,[meta.f64(),meta.pred()]); let left be try build.block(routine,[]); let right be try build.block(routine,[]); let join be try build.block(routine,[]);
+    let local be try build.cell(routine,meta.f64()); try build.initialize(routine,entry,local,try build.parameter(routine,entry,0),harness.location);
+    try build.branch(routine,entry,try build.parameter(routine,entry,1),left,[],right,[],harness.location);
+    try build.writeCell(routine,right,local,try build.floatBits(routine,right,-9223372036854775807-1,harness.location),harness.location);
+    try build.jump(routine,left,join,[],harness.location); try build.jump(routine,right,join,[],harness.location);
+    try build.returnValues(routine,join,[try build.readCell(routine,join,local,harness.location)],harness.location); try build.complete(routine); try promoted(harness,"float-cell",1,2);
+}
+function passthrough() fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let harness be try create([meta.i64(),meta.pred()],[meta.i64()],true); let routine be harness.routine;
+    let entry be try build.block(routine,[meta.i64(),meta.pred()]); let left be try build.block(routine,[meta.i64()]); let right be try build.block(routine,[meta.i64()]); let join be try build.block(routine,[meta.i64()]);
+    let value be try build.parameter(routine,entry,0); try build.branch(routine,entry,try build.parameter(routine,entry,1),left,[value],right,[value],harness.location);
+    try build.jump(routine,left,join,[try build.parameter(routine,left,0)],harness.location); try build.jump(routine,right,join,[try build.parameter(routine,right,0)],harness.location);
+    try build.returnValues(routine,join,[try build.parameter(routine,join,0)],harness.location); try build.complete(routine); try promoted(harness,"passthrough",0,0);
+}
+function failedOutput() fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let harness be try create([],[meta.i64()],true); let routine be harness.routine; let entry be try build.block(routine,[]);
+    try initialize(harness,entry,1); try finish(harness,entry,1);
+    let pilot be try promote.promote(routine,try budget.promotionPhase(harness.owner)); let quota be pilot.work-1; try build.close(pilot.routine);
+    let live be harness.owner.live; let traffic be harness.owner.traffic; let root be routine.instructions.root;
+    let phase be try budget.phase(harness.owner,quota);
+    // Deterministic fault injection at the end of rebuilding, not a qualification
+    // threshold. Post-verification has its own phase and is not in pilot.work.
+    let unexpected be promote.promote(routine,phase) else error budget.LimitError {
+        try check(error.category == "resource-limit" and harness.owner.live == live and harness.owner.pending == 0 and phase.state == 1,"partial output must be discarded");
+        try check(phase.used >= quota-7 and harness.owner.traffic > traffic and routine.instructions.root == root and routine.state == 1,"late failure provenance and immutable input");
+        try close(harness); output("partial-output:ok"); return;
+    } else error verify.InvalidIR { fail error; }; fail ProbeError { message="late promotion quota ignored"; };
+}
+function cancelled() fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let harness be try create([],[meta.i64()],true); let entry be try build.block(harness.routine,[]);
+    try initialize(harness,entry,1); try finish(harness,entry,1); let live be harness.owner.live;
+    let phase be try budget.promotionPhase(harness.owner); budget.cancel(harness.owner);
+    let unexpected be promote.promote(harness.routine,phase) else error budget.LimitError {
+        try check(error.category == "cancelled" and harness.owner.live == live and harness.owner.pending == 0 and phase.used == 0,"cancelled promotion cannot allocate/publish");
+        try close(harness); output("cancelled:ok"); return;
+    } else error verify.InvalidIR { fail error; }; fail ProbeError { message="cancelled promotion completed"; };
+}
+// The Python harness appends run()/main() with its selected cases.

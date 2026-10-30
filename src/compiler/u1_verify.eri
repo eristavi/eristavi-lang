@@ -10,7 +10,7 @@ public type Report { reachableBlocks Int; structuralVisits Int; dominanceVisits 
 type Context {
     routine identity build.Function; phase identity budget.Phase; graph identity dom.Graph;
     stage Int; block Int; instruction Int; location Int; visits Int; scanLimit Int;
-    valueSeen Int; instructionSeen Int; edgeSeen Int; positions Int; buckets Int;
+    positions Int; buckets Int; construction Bool;
 }
 function invalid(context identity Context,message Text) fails InvalidIR {
     fail InvalidIR { message=message; category="invalid-ir"; stage=context.stage;
@@ -48,13 +48,14 @@ function bounds(context identity Context) fails budget.LimitError,InvalidIR {
     try store(context,routine.blocks,routine.owner,5,327680); try store(context,routine.values,routine.owner,4,4194304);
     try store(context,routine.instructions,routine.owner,10,10485760); try store(context,routine.operands,routine.owner,1,16777216);
     try store(context,routine.edges,routine.owner,3,786432); try store(context,routine.arguments,routine.owner,1,4194304);
+    try store(context,routine.cells,routine.owner,2,131072);
     try store(context,data.signatures,data.owner,6,6291456); try store(context,data.types,data.owner,1,8388608);
     try store(context,data.buckets,data.owner,1,64); try store(context,data.sources,data.owner,4,524288);
     try store(context,data.bytes,data.owner,1,8388608); try store(context,data.locations,data.owner,7,7340032);
     try require(context,routine.blocks.length > 0 and data.buckets.length == 64,"missing entry or signature buckets");
     // Individual bounds above make this sum/product safe even for malformed input.
     let records be routine.blocks.length+routine.values.length+routine.instructions.length+routine.operands.length+routine.edges.length+routine.arguments.length;
-    records=records+data.signatures.length+data.types.length+data.buckets.length+data.sources.length+data.bytes.length+data.locations.length;
+    records=records+routine.cells.length+data.signatures.length+data.types.length+data.buckets.length+data.sources.length+data.bytes.length+data.locations.length;
     context.scanLimit=32*(records+1);
     try require(context,routine.signature.owner == data.key and routine.signature.index >= 1 and routine.signature.index <= data.signatures.length/6,"invalid function signature owner or index");
 }
@@ -181,10 +182,8 @@ function locations(context identity Context) fails budget.LimitError,InvalidIR {
 function claimValue(context identity Context,value Int,valueTypeIndex Int,kind Int,definition Int,ordinal Int) fails budget.LimitError,InvalidIR {
     let table be context.routine.values;
     try require(context,value >= 1 and value <= table.length/4,"invalid value definition");
-    try require(context,try scratch(context,context.valueSeen,value) == 0,"duplicate value definition");
     let offset be (value-1)*4;
     try require(context,try read(context,table,offset) == valueTypeIndex and try read(context,table,offset+1) == kind and try read(context,table,offset+2) == definition and try read(context,table,offset+3) == ordinal,"inconsistent value definition");
-    try mark(context,context.valueSeen,value,1);
 }
 function valueType(context identity Context,value Int) returns Int fails budget.LimitError,InvalidIR {
     try require(context,value >= 1 and value <= context.routine.values.length/4,"invalid value use");
@@ -193,7 +192,7 @@ function valueType(context identity Context,value Int) returns Int fails budget.
 function edge(context identity Context,index Int) fails budget.LimitError,InvalidIR {
     let routine be context.routine;
     try require(context,index >= 1 and index <= routine.edges.length/3,"invalid CFG edge");
-    try require(context,try scratch(context,context.edgeSeen,index) == 0,"edge record has multiple owners"); try mark(context,context.edgeSeen,index,1);
+    try require(context,try scratch(context,context.graph.edgeBase+index*4,0) == 0,"edge record has multiple owners");
     let offset be (index-1)*3; let target be try read(context,routine.edges,offset);
     try require(context,target >= 2 and target <= routine.blocks.length/5,"invalid or entry-targeting edge");
     let first be try read(context,routine.edges,offset+1); let count be try read(context,routine.edges,offset+2);
@@ -210,9 +209,16 @@ function instruction(context identity Context,index Int,terminal Bool,position I
     let routine be context.routine; context.instruction=index;
     try require(context,index >= 1 and index <= routine.instructions.length/10,"invalid instruction ID");
     let offset be (index-1)*10;
-    try require(context,try scratch(context,context.instructionSeen,index) == 0,"duplicate or cyclic instruction list");
-    try mark(context,context.instructionSeen,index,1); try mark(context,context.positions,index,position);
+    try require(context,try scratch(context,context.positions,index) == 0,"duplicate or cyclic instruction list");
+    try mark(context,context.positions,index,position);
     let op be try read(context,routine.instructions,offset); try require(context,ops.known(op),"unsupported foundation operation");
+    let cellType be 0;
+    if op >= 10 {
+        let cell be try read(context,routine.instructions,offset+7);
+        try require(context,cell >= 1 and cell <= routine.cells.length/2,"invalid cell ID");
+        cellType=try read(context,routine.cells,(cell-1)*2); try typeIndex(context,cellType);
+        if op == 10 { try require(context,try read(context,routine.cells,(cell-1)*2+1) == index,"duplicate or inconsistent cell initializer"); }
+    }
     try require(context,ops.terminal(op) == terminal,"invalid terminator placement");
     try require(context,try read(context,routine.instructions,offset+1) == context.block,"instruction block owner mismatch");
     let first be try read(context,routine.instructions,offset+2); let count be try read(context,routine.instructions,offset+3);
@@ -221,6 +227,7 @@ function instruction(context identity Context,index Int,terminal Bool,position I
     try require(context,count == expected,"instruction operand arity mismatch"); let item be 0;
     while item < count {
         let actual be try valueType(context,try read(context,routine.operands,first+item)); let valueTypeIndex be ops.operandType(op,item);
+        if op >= 10 { valueTypeIndex=cellType; }
         if op == 8 { let resultStart be try read(context,routine.metadata.signatures,(routine.signature.index-1)*6+4); valueTypeIndex=try read(context,routine.metadata.types,resultStart+item); }
         try require(context,actual == valueTypeIndex,"instruction operand type mismatch"); item=item+1;
     }
@@ -229,7 +236,10 @@ function instruction(context identity Context,index Int,terminal Bool,position I
     if count == 0 { try require(context,first == 0,"zero-result instruction has a fake value"); }
     else { try require(context,first >= 1 and first <= routine.values.length/4 and count <= routine.values.length/4-first+1,"invalid result range"); }
     item=0;
-    while item < count { try claimValue(context,first+item,ops.resultType(op,item),1,index,item); item=item+1; }
+    while item < count {
+        let resultType be ops.resultType(op,item); if op == 11 { resultType=cellType; }
+        try claimValue(context,first+item,resultType,1,index,item); item=item+1;
+    }
     let payload be try read(context,routine.instructions,offset+7); let extra be try read(context,routine.instructions,offset+8);
     if op == 2 { try require(context,payload == 0 or payload == 1,"invalid predicate bits"); }
     if op == 5 { try require(context,payload >= 1 and payload <= 4,"invalid trap code"); }
@@ -240,10 +250,16 @@ function instruction(context identity Context,index Int,terminal Bool,position I
 }
 function structure(context identity Context) fails budget.LimitError,InvalidIR {
     context.stage=2; let routine be context.routine;
-    context.valueSeen=try dom.zeros(context.graph,routine.values.length/4+1);
-    context.instructionSeen=try dom.zeros(context.graph,routine.instructions.length/10+1);
-    context.edgeSeen=try dom.zeros(context.graph,routine.edges.length/3+1);
+    // Position zero also means unclaimed. Edge source zero is its claim marker.
+    // Definition back-references below establish value coverage without a bitmap.
     context.positions=try dom.zeros(context.graph,routine.instructions.length/10+1);
+    let cell be 1;
+    while cell <= routine.cells.length/2 {
+        try typeIndex(context,try read(context,routine.cells,(cell-1)*2));
+        let initializer be try read(context,routine.cells,(cell-1)*2+1);
+        try require(context,initializer >= 1 and initializer <= routine.instructions.length/10,"missing cell initializer");
+        try require(context,try read(context,routine.instructions,(initializer-1)*10) == 10 and try read(context,routine.instructions,(initializer-1)*10+7) == cell,"invalid initializer declaration"); cell=cell+1;
+    }
     let cursor be 0; let item be 0;
     while item < routine.instructions.length/10 {
         let first be try read(context,routine.instructions,item*10+2); let count be try read(context,routine.instructions,item*10+3);
@@ -279,9 +295,22 @@ function structure(context identity Context) fails budget.LimitError,InvalidIR {
         try instruction(context,try read(context,routine.blocks,offset+4),true,position); context.block=context.block+1;
     }
     context.block=0; context.instruction=0; item=1;
-    while item <= routine.values.length/4 { try require(context,try scratch(context,context.valueSeen,item) == 1,"orphan value definition"); item=item+1; }
-    item=1; while item <= routine.instructions.length/10 { try require(context,try scratch(context,context.instructionSeen,item) == 1,"orphan instruction"); item=item+1; }
-    item=1; while item <= routine.edges.length/3 { try require(context,try scratch(context,context.edgeSeen,item) == 1,"orphan CFG edge"); item=item+1; }
+    while item <= routine.instructions.length/10 { try require(context,try scratch(context,context.positions,item) != 0,"orphan instruction"); item=item+1; }
+    item=1;
+    while item <= routine.values.length/4 {
+        let offset be (item-1)*4; try typeIndex(context,try read(context,routine.values,offset));
+        let kind be try read(context,routine.values,offset+1); let definition be try read(context,routine.values,offset+2); let ordinal be try read(context,routine.values,offset+3);
+        try require(context,ordinal >= 0,"invalid definition ordinal"); let first be 0; let count be 0;
+        if kind == 0 {
+            try require(context,definition >= 1 and definition <= routine.blocks.length/5,"orphan parameter definition");
+            first=try read(context,routine.blocks,(definition-1)*5); count=try read(context,routine.blocks,(definition-1)*5+1);
+        } else {
+            try require(context,kind == 1 and definition >= 1 and definition <= routine.instructions.length/10,"orphan instruction definition");
+            first=try read(context,routine.instructions,(definition-1)*10+4); count=try read(context,routine.instructions,(definition-1)*10+5);
+        }
+        try require(context,ordinal < count and first <= item and item-first == ordinal,"orphan or duplicate value definition"); item=item+1;
+    }
+    item=1; while item <= routine.edges.length/3 { try require(context,try scratch(context,context.graph.edgeBase+item*4,0) != 0,"orphan CFG edge"); item=item+1; }
 }
 function use(context identity Context,value Int,position Int) fails budget.LimitError,InvalidIR {
     let routine be context.routine; let offset be (value-1)*4;
@@ -298,6 +327,12 @@ function ssaInstruction(context identity Context,index Int) fails budget.LimitEr
     let count be try read(context,routine.instructions,offset+3); let item be 0;
     while item < count { try use(context,try read(context,routine.operands,first+item),position); item=item+1; }
     let op be try read(context,routine.instructions,offset); let number be 0; if op == 6 { number=1; } if op == 7 { number=2; }
+    if op == 11 or op == 12 {
+        let cell be try read(context,routine.instructions,offset+7); let initializer be try read(context,routine.cells,(cell-1)*2+1);
+        let initBlock be try read(context,routine.instructions,(initializer-1)*10+1);
+        if initBlock == context.block { try require(context,try scratch(context,context.positions,initializer) < position,"cell access precedes initialization"); }
+        else { try require(context,try dom.dominates(context.graph,initBlock,context.block),"cell initialization does not dominate access"); }
+    }
     item=0;
     while item < number {
         let edge be try read(context,routine.instructions,offset+7+item); first=try read(context,routine.edges,(edge-1)*3+1); count=try read(context,routine.edges,(edge-1)*3+2);
@@ -319,15 +354,17 @@ function inspect(context identity Context) returns Report fails budget.LimitErro
     try bounds(context); try dom.prepare(context.graph,context.routine.blocks.length/5,context.routine.edges.length/3);
     try signatures(context); try sources(context); try structure(context);
     try locations(context); try reachableSSA(context);
+    if not context.construction { context.stage=5; context.block=0; context.instruction=0; context.location=0;
+        try require(context,context.routine.cells.length == 0,"unpromoted cells in canonical U1"); }
     return Report { reachableBlocks=context.graph.reachable; structuralVisits=context.visits;
         dominanceVisits=context.graph.visits; work=context.phase.used; revision=context.routine.revision; };
 }
-public function verify(routine identity build.Function,phase identity budget.Phase) returns Report fails budget.LimitError,InvalidIR {
+function verifyMode(routine identity build.Function,phase identity budget.Phase,construction Bool) returns Report fails budget.LimitError,InvalidIR {
     try budget.poll(routine.owner);
     if phase.owner != routine.owner or phase.used != 0 or phase.prepaid != 0 or phase.state != 0 { try budget.reject("verification requires a fresh function phase"); }
     let graph be try dom.create(routine.owner,phase);
     let context be identity Context { routine=routine; phase=phase; graph=graph; stage=0; block=0; instruction=0; location=0;
-        visits=0; scanLimit=0; valueSeen=0; instructionSeen=0; edgeSeen=0; positions=0; buckets=0; };
+        visits=0; scanLimit=0; positions=0; buckets=0; construction=construction; };
     let report be inspect(context) else error InvalidIR { try dom.close(graph); try budget.finishPhase(phase); fail error; }
     else error budget.LimitError {
         try dom.close(graph); try budget.finishPhase(phase);
@@ -335,4 +372,10 @@ public function verify(routine identity build.Function,phase identity budget.Pha
     };
     try dom.close(graph); try budget.finishPhase(phase); return report;
     // Report has no executable/verified capability. Every call derives facts anew.
+}
+public function verify(routine identity build.Function,phase identity budget.Phase) returns Report fails budget.LimitError,InvalidIR {
+    return try verifyMode(routine,phase,false);
+}
+public function construction(routine identity build.Function,phase identity budget.Phase) returns Report fails budget.LimitError,InvalidIR {
+    return try verifyMode(routine,phase,true);
 }
