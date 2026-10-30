@@ -36,7 +36,9 @@ PROTOCOL = ''.join(name + ':ok\n' for name in (
     'synthetic-origin-valid', 'synthetic-root-reason',
     'synthetic-origin-anchor', 'synthetic-origin-cycle',
     'synthetic-origin-reason', 'synthetic-origin-negative',
-    'synthetic-origin-restored', 'many-dominated-uses'))
+    'synthetic-origin-restored',
+    'narrow-core-signatures', 'narrow-type-mismatch', 'narrow-type-restored',
+    'many-dominated-uses'))
 
 
 def dominator_oracle(blocks, edges):
