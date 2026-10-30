@@ -1,6 +1,6 @@
 # U1a multi-function reference execution and trusted imports
 
-Status: **isolated compiler-development profile, draft PR #92**. The existing
+Status: **isolated U1a reference profile, qualified and merged as PR #92**. The existing
 Eristavi frontend → Typed IR → native compiler paths are **not replaced**.
 The governing approved design is
 [the U1 contract](docs/architecture/Eristavi-UIR-U1-Contract-2026-10-29.md)
@@ -90,3 +90,10 @@ CI workflow; **one** final four-platform CI and the required completed-batch
 qualification on the exact final source revision are mandatory before merging
 compiler-code changes. Experimental `owned-self-build` is still separately
 selected and not implied by this release.
+
+
+## Qualified merge evidence — 2026-10-31
+
+- Merged PR: [#92](https://github.com/eristavi/eristavi-lang/pull/92), main commit `e59ef7e6401990da5498b24f357077cc46e41e51`.
+- Tested head `65b8109c9248162e63b4f1cedf91e5a25e4835df` passed the [complete four-platform CI](https://github.com/eristavi/eristavi-lang/actions/runs/41138028053) and [required completed-batch qualification](https://github.com/eristavi/eristavi-lang/actions/runs/41138028110). The merged implementation Git tree is identical to tested head: `0d85a50abbf1390e741ec7ff0705254ec5fc2c1a`.
+- The experiment-only owned compiler self-build remains skipped, not qualified. Production/native UIR integration and the limitations documented above remain future work.
