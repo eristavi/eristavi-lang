@@ -54,6 +54,7 @@ function run() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError 
     let pair be try meta.signature(data,phase,[meta.i64()],[meta.i64(),meta.pred()]);
     let nothing be try meta.signature(data,phase,[meta.i64()],[]);
     let identitySig be try meta.signature(data,phase,[meta.i64()],[meta.i64()]);
+    let floatSig be try meta.signature(data,phase,[meta.i64()],[meta.f64()]);
     let evenId be try meta.declaration(data,phase,predicate,"recursive.even",1,32,0);
     let oddId be try meta.declaration(data,phase,predicate,"recursive.odd",1,32,0);
     let pairId be try meta.declaration(data,phase,pair,"result.pair",1,32,0);
@@ -61,6 +62,8 @@ function run() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError 
     let identityId be try meta.declaration(data,phase,identitySig,"u1.test.identity",2,0,1);
     let safeId be try meta.declaration(data,phase,nothing,"test.safe",1,4,0);
     let defectId be try meta.declaration(data,phase,nothing,"test.defect",1,20,0);
+    let relayId be try meta.declaration(data,phase,nothing,"test.relay",1,20,0);
+    let floatId be try meta.declaration(data,phase,floatSig,"test.unsupportedFloat",1,0,0);
     let source be try meta.source(data,phase,"u1-execution",
         "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",64);
     let loc be try meta.location(data,phase,source,0,8,1,1,2);
@@ -134,13 +137,32 @@ function run() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError 
     try build.returnValues(defect,defectEntry,[],faultLoc);
     try build.complete(defect); try budget.finishPhase(phaseDefect);
 
+    let ownerRelay be try budget.functionOwner(root,false);
+    let phaseRelay be try budget.constructionPhase(ownerRelay);
+    let relay be try build.create(data,nothing,ownerRelay,phaseRelay);
+    let relayEntry be try build.block(relay,[meta.i64()]);
+    let relayN be try build.parameter(relay,relayEntry,0);
+    let nested be try build.call(relay,relayEntry,defectId,[relayN],loc);
+    try build.returnValues(relay,relayEntry,[],loc);
+    try build.complete(relay); try budget.finishPhase(phaseRelay);
+
+    let ownerFloat be try budget.functionOwner(root,false);
+    let phaseFloat be try budget.constructionPhase(ownerFloat);
+    let floating be try build.create(data,floatSig,ownerFloat,phaseFloat);
+    let floatEntry be try build.block(floating,[meta.i64()]);
+    let fpBits be try build.floatBits(floating,floatEntry,0,loc);
+    try build.returnValues(floating,floatEntry,[fpBits],loc);
+    try build.complete(floating); try budget.finishPhase(phaseFloat);
+
     let registry be try link.create(data);
     let bound be try link.bind(registry,oddId,odd);
     bound=try link.bind(registry,evenId,even);
     bound=try link.bind(registry,pairId,twin);
     bound=try link.bind(registry,safeId,safe);
     bound=try link.bind(registry,defectId,defect);
-    try check(try link.seal(registry) == 5,"missing callable local definitions");
+    bound=try link.bind(registry,relayId,relay);
+    bound=try link.bind(registry,floatId,floating);
+    try check(try link.seal(registry) == 7,"missing callable local definitions");
 
     let policy be try imports.create(registry);
     let bad be try deniedSelect(policy,traceId,2,"wrong-import-adapter");
@@ -170,6 +192,7 @@ function run() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError 
     try check(try effects.mask(summary,pairId) == 32,"transitive recursive effect");
     try check(try effects.mask(summary,safeId) == 4,"trusted external effect");
     try check(try effects.mask(summary,defectId) == 20,"first external and terminal fault");
+    try check(try effects.mask(summary,relayId) == 20,"caller inherits external fault ordering");
     try effects.close(summary);
     let under be try budget.constructionPhase(shared);
     data.declarations.frozen=false;
@@ -208,6 +231,15 @@ function run() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError 
     try check(result.kind == 1 and result.code == 3 and result.location == faultLoc.index and
         result.trace == "trace:7;","first effect then exact originating trap");
     output("first-effect-and-fault-location:ok");
+    result=try exec.run(registry,policy,relayId,[7],400,64);
+    try check(result.kind == 1 and result.code == 3 and
+        result.location == faultLoc.index and result.trace == "trace:7;",
+        "nested callee fault replaced original diagnostic origin");
+    output("nested-first-fault:ok");
+    result=try exec.run(registry,policy,floatId,[7],400,64);
+    try check(result.kind == 3 and result.code == 9 and result.location == loc.index,
+        "unsupported strict f64 executed with guessed semantics");
+    output("unsupported-strict-f64:ok");
     result=try exec.run(registry,policy,evenId,[-1],30,12);
     try check(result.kind == 2,"unbounded recursion escaped fuel or depth cap");
     output("bounded-divergence:ok");
@@ -226,10 +258,12 @@ function run() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError 
 
     try imports.close(policy); try link.close(registry);
     try build.close(odd); try build.close(even); try build.close(twin);
-    try build.close(safe); try build.close(defect); try meta.close(data);
+    try build.close(safe); try build.close(defect);
+    try build.close(relay); try build.close(floating); try meta.close(data);
     try check(root.live == 0 and root.pending == 0,"U1a machine charges leaked");
     try budget.close(ownerOdd); try budget.close(ownerEven); try budget.close(ownerPair);
     try budget.close(ownerSafe); try budget.close(ownerDefect);
+    try budget.close(ownerRelay); try budget.close(ownerFloat);
     try budget.close(shared); try budget.close(root);
     output("recovered-budgets:ok");
     return true;
