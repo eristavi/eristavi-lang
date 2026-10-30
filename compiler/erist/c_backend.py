@@ -4,7 +4,7 @@ from .ir import *
 
 class CBackend:
     def __init__(self):
-        self.indent=0; self.temp=0; self.struct_names=set(); self.maybe_types=set(); self.maybe_defined=set(); self.extra_list_types=set(); self.structs={}
+        self.indent=0; self.temp=0; self.struct_names=set(); self.maybe_types=set(); self.maybe_defined=set(); self.extra_list_types=set(); self.structs={}; self._handler_recovery=False
 
     def emit(self,p:IRProgram)->str:
         self.struct_names={s.name for s in p.structs}; self.structs={s.name:s for s in p.structs}
@@ -205,7 +205,10 @@ static bool {h}_eq({h} a,{h} b){{ if(a.count!=b.count)return false; for(size_t i
     def _handler_dispatch(self,handlers,must_terminate,n,cleanups):
         saved=f'_eri_failure_{n}'; out=f'eri_failure_value {saved} = eri_failure;\n'; parts=[]; catchall=None
         for h in handlers:
-            body=self._stmts(h.body,cleanups)
+            recovering=self._handler_recovery
+            self._handler_recovery=True
+            try: body=self._stmts(h.body,cleanups)
+            finally: self._handler_recovery=recovering
             if h.error_type is None:
                 bind=f'eri_error_view {cname("error")} = {{ {saved}.message }};\n'; catchall=bind+body+(('eri_fault("value error handler completed without terminating");\n') if must_terminate else '')
             else:
@@ -241,7 +244,12 @@ static bool {h}_eq({h} a,{h} b){{ if(a.count!=b.count)return false; for(size_t i
                 if v==float('-inf'): return '(-INFINITY)'
                 return repr(v)
             return str(e.value)
-        if isinstance(e,IRVar): return cname(e.name)
+        if isinstance(e,IRVar):
+            name=cname(e.name)
+            # Reload recovery reads across the non-local checked-error boundary.
+            # In particular, do not reuse pre-setjmp facts about identity fields.
+            if self._handler_recovery: return f'(*({ctype(e.type_name)} volatile *)&{name})'
+            return name
         if isinstance(e,IRMaybeNone): return f'({ctype(e.type_name)}){{.has=false}}'
         if isinstance(e,IRMaybeSome): return f'({ctype(e.type_name)}){{.has=true,.value={self._expr(e.value)}}}'
         if isinstance(e,IRMaybeGet): return f'{maybe_get(e.value.type_name)}({self._expr(e.value)})'
