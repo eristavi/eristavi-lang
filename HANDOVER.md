@@ -263,9 +263,9 @@ The present checkout had no applicable AGENTS.md when inspected.
 Repository slice records: UIR_U1A_FOUNDATION.md, UIR_U1A_VERIFIER.md,
 UIR_U1A_PROMOTION.md, UIR_U1A_BUDGETS.json, UIR_U1A_PROMOTION_EVIDENCE.json.
 
-Design decision records maintained separately from the repository (search by
-exact filename in the user's saved project documents, then read the latest
-contents before acting):
+Design decision records are now published under [docs/architecture](docs/architecture).
+The [project records index](docs/README.md) links every record and the archived
+local experiments. Read the complete current contents before acting:
 
 - Eristavi-Lexer-Architecture-2026-10-29.md
 - Eristavi-Parser-Architecture-Proposal-2026-10-29.md
@@ -277,9 +277,11 @@ contents before acting):
 - Eristavi-UIR-U1a-Budgets-2026-10-29.json
 - Eristavi-UIR-U0-Evidence-2026-10-29.zip
 
-Do not silently reconstruct an unseen decision document from a filename or old
-conversation summary. This handover records the key constraints, while the full
-contracts remain authoritative when available.
+The original U0 evidence archive is under
+[docs/evidence/2026-10-30](docs/evidence/2026-10-30), alongside captured U0/U1
+work archives, a per-file manifest and SHA-256 checksums. Do not reconstruct an
+unseen decision document from a filename or old conversation summary. Read the
+published contracts and their status before continuing.
 
 Qualification artifacts for run 41018345033 (GitHub-reported archive digests;
 retained for 14 days, not an independent local rehash):
@@ -320,8 +322,11 @@ Cached Unicode dependencies, if still present:
 Use `PYTHONPATH` with the checkout and those dependencies only if needed;
 prefer the repository's normal install instructions in a fresh environment.
 
-Temporary logs/probes: `uir-u0`, `uir-u1a-work`, `uir-u1a-verifier-work`,
-`uir-u1a-promotion-work` beneath that workspace root. A private Clang 18 toolchain
+Logs/probes from `uir-u0`, `uir-u1a-work`, `uir-u1a-verifier-work`,
+`uir-u1a-promotion-work` and the budget worksheet are now preserved in the
+[local evidence archives](docs/evidence/2026-10-30). See
+[recovery instructions](docs/README.md#recover-the-workspace) for original paths,
+checksums and exclusions. A private Clang 18 toolchain
 was extracted under `uir-u1a-promotion-work/clang-toolchain`; it needs its
 `usr/lib/x86_64-linux-gnu` on LD_LIBRARY_PATH. It is optional and not a repository
 dependency. Do not rely on temporary tool binaries or directory survival.
