@@ -546,3 +546,26 @@ The initial verifier-protocol test failure on earlier PR revisions was a mistake
 The implementation order, non-goals and verifiable acceptance gates are expanded in `docs/architecture/ERISTAVI_U1_TO_U3_EXECUTION_PLAN.md`. This plan is an engineering staging document, not authorization to declare unfinished stages complete.
 
 **Current remaining U1a**: strict Float, direct calls/import effects, sparse multiway switch/edge tables, full provenance and revision discipline. **U1b, U2, U3 remain separate major implementation milestones.** No later stages are claimed finished here. Every compiler code PR still requires four-platform CI and completed-batch qualification before merge under `CI_QUALIFICATION.md`. The separate 900-second owned compiler self-build remains a manual, unqualified experiment.
+
+
+## 17. Verified strict Float and synthetic-origin merge checkpoint — 2026-10-30
+
+**Repository state verified on GitHub after separate CI and qualification runs.** `main` is now `da18809210bafd77885596ccf9059b7a533a0fd7`. PR #69 and PR #70 are **merged**, not pending as in earlier sections.
+
+| Slice | Tested PR head | Merge | Four-platform CI | Completed-batch qualification |
+| --- | --- | --- | --- | --- |
+| [#69 strict f64](https://github.com/eristavi/eristavi-lang/pull/69) | `2e6fb223748adbe539a0e8fbe2b381a3e4a5c718` | `f1b955b4f21b6cbcffdcbd9f5fe14a9e4d592606` | [41102130453](https://github.com/eristavi/eristavi-lang/actions/runs/41102130453) success | [41104201269](https://github.com/eristavi/eristavi-lang/actions/runs/41104201269) success |
+| [#70 owned source origins](https://github.com/eristavi/eristavi-lang/pull/70) | `116c79c9dc911c72f6048febbeadec5936309506` | `da18809210bafd77885596ccf9059b7a533a0fd7` | [41107778150](https://github.com/eristavi/eristavi-lang/actions/runs/41107778150) success | [41108898014](https://github.com/eristavi/eristavi-lang/actions/runs/41108898014) success |
+
+#70 was deliberately re-merged against #69's strict Float verifier before its final qualification; **the tested PR #70 Git tree and merged `main` tree are identical** (`37d492dec2b7f9b366681329fc0bb037191a50d9`). All four normal CI platforms passed on both PR final revisions, as did the three bootstrap/offline jobs and owned integration. The separate experimental full owned-compiler self-build was intentionally skipped and remains unqualified.
+
+Implemented, isolated U1a: private binary64 add/sub/mul/div/neg and six comparisons with exact-rational expected-results oracle and before/after SSA promotion tests; owned synthetic source roots, bounded strictly acyclic origin chains, and independent malformed source/anchor rejection. **Not implemented here:** complete native strict floating-environment adapter, multi-parent origin chains, full revision-bound publication capabilities, exported artifact remapping, broader runtime integration.
+
+### Concurrent work — not yet merged or qualified
+
+- [PR #78](https://github.com/eristavi/eristavi-lang/pull/78), `compiler/u1a-function-declarations-calls`: owned declared FunctionId/signatures and direct-call structural verifier. Initial first CI failed on an Eristavi `else if` parse error in a builder edit; corrected on subsequent revision, no green-head qualification yet. Full multi-function execution, trusted import contracts and SCC effect derivation remain issue #71.
+- [PR #79](https://github.com/eristavi/eristavi-lang/pull/79), `compiler/u1a-sparse-switch`: typed sparse i64 switch case tables, common successor iterator and differential/malformed tests; CI/qualification pending. Issue #72 governs release gate.
+- Both drafts originated before the #70 origin merge. **Reconcile both with current `main` and retest final merged integration trees before any merge.** Do not use old green head/partial CI as qualification. Avoid unrelated PRs.
+- [Issues #73–#75](https://github.com/eristavi/eristavi-lang/issues/73) remain distinct substantial U1b (extra widths + immutable aggregates), U2 (managed values, checked failures, cleanup, roots), and U3 (direct frontend→UIR and one-native-target) implementation gates. Issues #76–#77 retain strict native f64 and complete origin/revision goals.
+
+**Next safe steps:** diagnose and fix each draft from its actual CI logs; finish independent call execution and switch semantics; rebase/merge **only tested** branches one at a time; update this handover after each qualified merge; continue U1b→U2→U3 behind working compiler compatibility gates. Keep the historical 900-second experimental B→C self-build out of automated qualification. Do not report completed redesign or v0.1.0 from isolated UIR tests.
