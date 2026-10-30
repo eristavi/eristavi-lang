@@ -14,14 +14,14 @@ function deniedBind(registry identity link.Program,target meta.FunctionId,
     let index be link.bind(registry,target,body) else error budget.LimitError {
         try check(error.category == "invalid-state","invalid bind category: "+label);
         output(label+":ok"); return true;
-    };
+    } else error verify.InvalidIR { fail error; };
     fail ProbeError { message="accepted invalid binding: "+label; };
 }
 function deniedSeal(registry identity link.Program) returns Bool fails ProbeError,verify.InvalidIR {
     let count be link.seal(registry) else error budget.LimitError {
         try check(error.category == "invalid-state","invalid seal category");
         output("incomplete-module:ok"); return true;
-    };
+    } else error verify.InvalidIR { fail error; };
     fail ProbeError { message="sealed module with missing definitions"; };
 }
 function deniedResolve(registry identity link.Program,target meta.FunctionId,label Text) returns Bool fails ProbeError {
