@@ -213,7 +213,7 @@ function instruction(context identity Context,index Int,terminal Bool,position I
     try mark(context,context.positions,index,position);
     let op be try read(context,routine.instructions,offset); try require(context,ops.known(op),"unsupported foundation operation");
     let cellType be 0;
-    if op >= 10 {
+    if ops.isCell(op) {
         let cell be try read(context,routine.instructions,offset+7);
         try require(context,cell >= 1 and cell <= routine.cells.length/2,"invalid cell ID");
         cellType=try read(context,routine.cells,(cell-1)*2); try typeIndex(context,cellType);
@@ -227,7 +227,7 @@ function instruction(context identity Context,index Int,terminal Bool,position I
     try require(context,count == expected,"instruction operand arity mismatch"); let item be 0;
     while item < count {
         let actual be try valueType(context,try read(context,routine.operands,first+item)); let valueTypeIndex be ops.operandType(op,item);
-        if op >= 10 { valueTypeIndex=cellType; }
+        if ops.isCell(op) { valueTypeIndex=cellType; }
         if op == 8 { let resultStart be try read(context,routine.metadata.signatures,(routine.signature.index-1)*6+4); valueTypeIndex=try read(context,routine.metadata.types,resultStart+item); }
         try require(context,actual == valueTypeIndex,"instruction operand type mismatch"); item=item+1;
     }
@@ -246,7 +246,9 @@ function instruction(context identity Context,index Int,terminal Bool,position I
     if op == 3 or op == 4 or op == 8 { try require(context,payload == 0,"unsupported operation payload"); }
     if op != 7 { try require(context,extra == 0,"unsupported operation attribute"); }
     if terminal { try require(context,try read(context,routine.instructions,offset+9) == 0,"terminator has a successor instruction"); }
-    if op == 6 or op == 7 { try edge(context,payload); if op == 7 { try edge(context,extra); } }
+    let inline be ops.inlineEdges(op);
+    if inline > 0 { try edge(context,payload); }
+    if inline == 2 { try edge(context,extra); }
 }
 function structure(context identity Context) fails budget.LimitError,InvalidIR {
     context.stage=2; let routine be context.routine;
@@ -326,7 +328,7 @@ function ssaInstruction(context identity Context,index Int) fails budget.LimitEr
     let position be try scratch(context,context.positions,index); let first be try read(context,routine.instructions,offset+2);
     let count be try read(context,routine.instructions,offset+3); let item be 0;
     while item < count { try use(context,try read(context,routine.operands,first+item),position); item=item+1; }
-    let op be try read(context,routine.instructions,offset); let number be 0; if op == 6 { number=1; } if op == 7 { number=2; }
+    let op be try read(context,routine.instructions,offset); let number be ops.inlineEdges(op);
     if op == 11 or op == 12 {
         let cell be try read(context,routine.instructions,offset+7); let initializer be try read(context,routine.cells,(cell-1)*2+1);
         let initBlock be try read(context,routine.instructions,(initializer-1)*10+1);

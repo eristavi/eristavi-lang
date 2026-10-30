@@ -99,7 +99,7 @@ function append(routine identity Function,block BlockId,op Int,arguments,locatio
     let index be 0;
     while index < arguments.count {
         let valueType be try valueType(routine,arguments[index]);
-        if op != 8 and op < 10 { if valueType.index != ops.operandType(op,index) { try budget.reject("U1a operand type mismatch"); } } index=index+1;
+        if op != 8 and not ops.isCell(op) { if valueType.index != ops.operandType(op,index) { try budget.reject("U1a operand type mismatch"); } } index=index+1;
     }
     if op == 2 and payload != 0 and payload != 1 { try budget.reject("invalid U1a predicate constant"); }
     if op == 5 and (payload < 1 or payload > 4) { try budget.reject("invalid U1a trap code"); }

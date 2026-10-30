@@ -36,6 +36,40 @@ class U1FoundationTests(unittest.TestCase):
         p = subprocess.run([str(self.binary)], capture_output=True, text=True, timeout=120)
         self.assertEqual((p.returncode, p.stdout, p.stderr), (0, EXPECTED, ''))
 
+
+    def test_opcode_categories_and_inline_edges_are_explicit(self):
+        """Future opcodes must never be mistaken for construction cells or CFG edges."""
+        source = self.root / 'opcode-classes.eri'
+        source.write_text('''
+import compiler.u1_ops as ops;
+let opcode be -1;
+while opcode <= 15 {
+    let flags be 0;
+    if ops.known(opcode) { flags=flags+1; }
+    if ops.isCell(opcode) { flags=flags+2; }
+    if ops.terminal(opcode) { flags=flags+4; }
+    flags=flags+8*ops.inlineEdges(opcode);
+    output(flags);
+    opcode=opcode+1;
+}
+''')
+        binary = self.root / 'opcode-classes'
+        self.assertEqual(build_native(source, binary, self.root), 0)
+        completed = subprocess.run([str(binary)], capture_output=True, text=True, timeout=30)
+        expected = ''.join(str(
+            (1 if 1 <= op <= 12 else 0)
+            + (2 if op in (10, 11, 12) else 0)
+            + (4 if op in (6, 7, 8) else 0)
+            + (8 if op == 6 else 16 if op == 7 else 0)
+        ) + '\n' for op in range(-1, 16))
+        self.assertEqual((completed.returncode, completed.stdout, completed.stderr),
+                         (0, expected, ''))
+
+        for relative in ('src/compiler/u1_builder.eri', 'src/compiler/u1_verify.eri',
+                         'src/compiler/u1_promote.eri'):
+            source_text = (ROOT / relative).read_text()
+            self.assertNotRegex(source_text, r'\bop\s*(?:>=\s*10|<\s*10)\b')
+
     def test_nominal_ids_do_not_accept_a_block_as_a_value(self):
         source = self.root / 'bad.eri'
         source.write_text('''
