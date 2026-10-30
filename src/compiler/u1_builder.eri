@@ -114,8 +114,12 @@ function append(routine identity Function,block BlockId,op Int,arguments,locatio
                 try budget.reject("U1a call operand type mismatch");
             }
         } else {
-            if op != 8 and not ops.isCell(op) {
-                if valueType.index != ops.operandType(op,index) { try budget.reject("U1a operand type mismatch"); }
+            if op >= 37 and op <= 40 {
+                if valueType.index != extra { try budget.reject("narrow operand TypeId mismatch"); }
+            } else {
+                if op != 8 and not ops.isCell(op) {
+                    if valueType.index != ops.operandType(op,index) { try budget.reject("U1a operand type mismatch"); }
+                }
             }
         }
         index=index+1;
@@ -133,6 +137,11 @@ function append(routine identity Function,block BlockId,op Int,arguments,locatio
         if extra == 6 { max=4294967295; }
         if payload < 0 or payload > max { try budget.reject("narrow constant bits outside declared width"); }
     }
+    if op >= 37 and op <= 40 {
+        if extra < 4 or extra > 6 { try budget.reject("invalid narrow arithmetic TypeId"); }
+        if op == 40 { if payload < 1 or payload > 10 { try budget.reject("invalid narrow comparison relation"); } }
+        else { if payload < 1 or payload > 3 { try budget.reject("invalid narrow arithmetic mode"); } }
+    }
     let produced be ops.results(op);
     if op == 34 { produced=try meta.resultCount(routine.metadata,routine.phase,signature); }
     if routine.instructions.length/10 >= 1048576 or produced > 1048576-routine.values.length/4 { try budget.exceed(routine.owner,1,0); }
@@ -145,7 +154,7 @@ function append(routine identity Function,block BlockId,op Int,arguments,locatio
         let resultType be ops.resultType(op,index);
         if op == 34 { resultType=(try meta.resultType(routine.metadata,routine.phase,signature,index)).index; }
         if op == 11 { resultType=try words.get(routine.cells,routine.phase,(payload-1)*2); }
-        if op == 36 { resultType=extra; }
+        if op == 36 or ((op == 37 or op == 38 or op == 39) and index == 0) { resultType=extra; }
         let ignored be try words.push(routine.values,routine.phase,resultType); ignored=try words.push(routine.values,routine.phase,1);
         ignored=try words.push(routine.values,routine.phase,result.index); ignored=try words.push(routine.values,routine.phase,index); index=index+1;
     }
@@ -259,6 +268,24 @@ public function negateFloat(routine identity Function,block BlockId,value ValueI
 // Relations 1..6: IEEE eq, ne, lt, le, gt, ge. NaN is unordered.
 public function compareFloat(routine identity Function,block BlockId,first ValueId,second ValueId,relation Int,location meta.LocId) returns ValueId fails budget.LimitError {
     return try result(routine,try append(routine,block,33,[first,second],location,relation,0),0);
+}
+public function narrowWrap(routine identity Function,block BlockId,first ValueId,second ValueId,
+    operation Int,width meta.TypeId,location meta.LocId) returns ValueId fails budget.LimitError {
+    return try result(routine,try append(routine,block,37,[first,second],location,operation,width.index),0);
+}
+public function narrowSignedOverflow(routine identity Function,block BlockId,first ValueId,second ValueId,
+    operation Int,width meta.TypeId,location meta.LocId) returns Pair fails budget.LimitError {
+    let instruction be try append(routine,block,38,[first,second],location,operation,width.index);
+    return Pair { value=try result(routine,instruction,0); overflow=try result(routine,instruction,1); };
+}
+public function narrowUnsignedOverflow(routine identity Function,block BlockId,first ValueId,second ValueId,
+    operation Int,width meta.TypeId,location meta.LocId) returns Pair fails budget.LimitError {
+    let instruction be try append(routine,block,39,[first,second],location,operation,width.index);
+    return Pair { value=try result(routine,instruction,0); overflow=try result(routine,instruction,1); };
+}
+public function narrowCompare(routine identity Function,block BlockId,first ValueId,second ValueId,
+    relation Int,width meta.TypeId,location meta.LocId) returns ValueId fails budget.LimitError {
+    return try result(routine,try append(routine,block,40,[first,second],location,relation,width.index),0);
 }
 public function negatePredicate(routine identity Function,block BlockId,value ValueId,location meta.LocId) returns ValueId fails budget.LimitError {
     return try result(routine,try append(routine,block,4,[value],location,0,0),0);

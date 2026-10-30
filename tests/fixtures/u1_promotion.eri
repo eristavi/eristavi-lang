@@ -525,4 +525,63 @@ function narrowConstants() fails budget.LimitError,verify.InvalidIR,ProbeError {
     try build.complete(routine); try promoted(harness,"narrow-constants",0,0);
 }
 
+
+function narrowArithmetic(width meta.TypeId,name Text) fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let types be [width,width,width,
+        width,meta.pred(),width,meta.pred(),width,meta.pred(),
+        width,meta.pred(),width,meta.pred(),width,meta.pred(),
+        meta.pred(),meta.pred(),meta.pred(),meta.pred(),meta.pred(),
+        meta.pred(),meta.pred(),meta.pred(),meta.pred(),meta.pred()];
+    let harness be try create([width,width],types,true); let routine be harness.routine;
+    let entry be try build.block(routine,[width,width]);
+    let a be try build.parameter(routine,entry,0); let b be try build.parameter(routine,entry,1);
+    let add be try build.narrowWrap(routine,entry,a,b,1,width,harness.location);
+    let sub be try build.narrowWrap(routine,entry,a,b,2,width,harness.location);
+    let mul be try build.narrowWrap(routine,entry,a,b,3,width,harness.location);
+    let signedAdd be try build.narrowSignedOverflow(routine,entry,a,b,1,width,harness.alternate);
+    let signedSub be try build.narrowSignedOverflow(routine,entry,a,b,2,width,harness.alternate);
+    let signedMul be try build.narrowSignedOverflow(routine,entry,a,b,3,width,harness.alternate);
+    let unsignedAdd be try build.narrowUnsignedOverflow(routine,entry,a,b,1,width,harness.alternate);
+    let unsignedSub be try build.narrowUnsignedOverflow(routine,entry,a,b,2,width,harness.alternate);
+    let unsignedMul be try build.narrowUnsignedOverflow(routine,entry,a,b,3,width,harness.alternate);
+    let eq be try build.narrowCompare(routine,entry,a,b,1,width,harness.location);
+    let ne be try build.narrowCompare(routine,entry,a,b,2,width,harness.location);
+    let slt be try build.narrowCompare(routine,entry,a,b,3,width,harness.location);
+    let sle be try build.narrowCompare(routine,entry,a,b,4,width,harness.location);
+    let sgt be try build.narrowCompare(routine,entry,a,b,5,width,harness.location);
+    let sge be try build.narrowCompare(routine,entry,a,b,6,width,harness.location);
+    let ult be try build.narrowCompare(routine,entry,a,b,7,width,harness.location);
+    let ule be try build.narrowCompare(routine,entry,a,b,8,width,harness.location);
+    let ugt be try build.narrowCompare(routine,entry,a,b,9,width,harness.location);
+    let uge be try build.narrowCompare(routine,entry,a,b,10,width,harness.location);
+    try build.returnValues(routine,entry,[add,sub,mul,
+        signedAdd.value,signedAdd.overflow,signedSub.value,signedSub.overflow,signedMul.value,signedMul.overflow,
+        unsignedAdd.value,unsignedAdd.overflow,unsignedSub.value,unsignedSub.overflow,unsignedMul.value,unsignedMul.overflow,
+        eq,ne,slt,sle,sgt,sge,ult,ule,ugt,uge],harness.location);
+    try build.complete(routine); try promoted(harness,name,0,0);
+}
+function narrowArithmeticMerge() fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let width be meta.i8();
+    let harness be try create([width,width,meta.pred()],[width,meta.pred(),meta.pred(),meta.pred()],true);
+    let routine be harness.routine;
+    let entry be try build.block(routine,[width,width,meta.pred()]);
+    let left be try build.block(routine,[]); let right be try build.block(routine,[]);
+    let join be try build.block(routine,[]);
+    let a be try build.parameter(routine,entry,0); let b be try build.parameter(routine,entry,1);
+    let flag be try build.parameter(routine,entry,2);
+    let local be try build.cell(routine,width);
+    try build.initialize(routine,entry,local,a,harness.location);
+    try build.branch(routine,entry,flag,left,[],right,[],harness.location);
+    try build.writeCell(routine,left,local,b,harness.location);
+    try build.jump(routine,left,join,[],harness.location);
+    try build.jump(routine,right,join,[],harness.location);
+    let selected be try build.readCell(routine,join,local,harness.location);
+    let sum be try build.narrowWrap(routine,join,selected,b,1,width,harness.location);
+    let less be try build.narrowCompare(routine,join,selected,b,7,width,harness.alternate);
+    let signed be try build.narrowSignedOverflow(routine,join,selected,b,3,width,harness.alternate);
+    let unsigned be try build.narrowUnsignedOverflow(routine,join,selected,b,1,width,harness.alternate);
+    try build.returnValues(routine,join,[sum,less,signed.overflow,unsigned.overflow],harness.location);
+    try build.complete(routine); try promoted(harness,"narrow-ops-merge",1,2);
+}
+
 // The Python harness appends run()/main() with its selected cases.
