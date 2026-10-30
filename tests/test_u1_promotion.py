@@ -606,8 +606,8 @@ def cases_for(name, before):
                         second = expect_pair(selected, b, False, False, loc=1)
                         yield (a, b, flag), ('return', (first[1][0], second[1][0]))
             else:
-                mode = name.split('-')[2]
-                signed = name.split('-')[3] == 'signed'
+                _, mode, polarity, size = name.split('-')
+                signed = polarity == 'signed'
                 yield (a, b), expect_pair(a, b, signed, mode == 'div')
     else: raise AssertionError(f'unknown fixture {name}')
 
