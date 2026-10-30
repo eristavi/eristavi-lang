@@ -109,8 +109,10 @@ function append(routine identity Function,block BlockId,op Int,arguments,locatio
             if valueType.index != (try meta.parameterType(routine.metadata,routine.phase,signature,index)).index {
                 try budget.reject("U1a call operand type mismatch");
             }
-        } else if op != 8 and not ops.isCell(op) {
-            if valueType.index != ops.operandType(op,index) { try budget.reject("U1a operand type mismatch"); }
+        } else {
+            if op != 8 and not ops.isCell(op) {
+                if valueType.index != ops.operandType(op,index) { try budget.reject("U1a operand type mismatch"); }
+            }
         }
         index=index+1;
     }
