@@ -501,6 +501,19 @@ def cases_for(name, before):
                                 expected = ('trap', (2, 1))
                     yield (a, b, allowed), expected
 
+    elif name == 'switch-dense':
+        # Independent expected behavior: signed 0..31, otherwise default.
+        for value in (MIN, -1, 0, 1, 2, 3, 15, 30, 31, 32, MAX):
+            yield (value,), ('return', (1000 + value if 0 <= value < 32 else 9000,))
+    elif name == 'switch-sparse-wide':
+        # Cases are canonical unsigned 64-bit bit patterns; Python oracle is independent.
+        table = {0:100, 1:101, 1024:102, MAX:103, MIN:104, -4096:105, -1:106}
+        for value in (MIN, MIN+1, -4096, -4095, -1, 0, 1, 2, 1024, 1025, MAX-1, MAX):
+            yield (value,), ('return', (table.get(value, 9000),))
+    elif name == 'switch-irreducible':
+        # Two independent entries into an SCC; the decrement guarantees termination.
+        for selector, steps in itertools.product((MIN, -1, 0, 1, MAX), (0, 1, 2, 4)):
+            yield (selector, steps), ('return', (selector,))
     elif name == 'switch-flow':
         for value in (MIN, MIN+1, -1, 0, 1, MAX-1, MAX):
             chosen = 10 if value == 0 else 20 if value == MAX else 30 if value == MIN else 40
@@ -637,7 +650,7 @@ class U1PromotionTests(unittest.TestCase):
                      'narrowDivRem(meta.i32(),42,1,"narrow-rem-signed-32")',
                      'narrowDivRem(meta.i32(),41,2,"narrow-div-unsigned-32")',
                      'narrowDivRem(meta.i32(),42,2,"narrow-rem-unsigned-32")',
-                     'narrowDivRemMerge()', 'switchFlow()', 'switchDistinctEdges()',
+                     'narrowDivRemMerge()', 'switchDense()', 'switchWideSparse()', 'switchIrreducible()', 'switchFlow()', 'switchDistinctEdges()',
                       'invalidCell(0)', 'invalidCell(1)', 'invalidCell(2)', 'dead(true)', 'failedWork()', 'canonicalReject()', 'failedOutput()', 'cancelled()']
         cls.source = cls.root / 'promotion.eri'; cls.source.write_text(probe_source(cls.calls))
         cls.binary = cls.root / 'promotion-c'
@@ -667,7 +680,7 @@ class U1PromotionTests(unittest.TestCase):
         result = subprocess.run([str(self.binary)], capture_output=True, text=True, timeout=120)
         self.assertEqual((result.returncode, result.stderr), (0, ''), result.stdout[-300:])
         snapshots, labels = self.check_snapshots(result.stdout)
-        self.assertEqual(len(snapshots), 52)
+        self.assertEqual(len(snapshots), 55)
         self.assertEqual(labels, ['invalid-init:ok']*3 + ['malformed-dead:ok', 'promotion-limit:ok', 'canonical-reject:ok', 'partial-output:ok', 'cancelled:ok'])
         again = subprocess.run([str(self.binary)], capture_output=True, text=True, timeout=120)
         self.assertEqual((again.returncode, again.stdout, again.stderr), (0, result.stdout, ''))
