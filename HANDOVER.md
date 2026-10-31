@@ -1,8 +1,9 @@
 # Eristavi compiler — current handover
 
 **Authoritative recovery checkpoint: 31 October 2026, Asia/Nicosia.** Start here.
-Section 36 records the *active* optimization-first owned runtime batch (candidate, not qualified).
-Section 35 is the authoritative **qualified, merged PR #98** baseline and remaining issues.
+Section 37 is the authoritative **qualified, merged PR #99** owned-runtime optimization checkpoint.
+Section 36 preserves the earlier active optimization candidate and investigation history.
+Section 35 records the previous qualified compiler batch PR #98 and U1a issue status.
 Sections 33–34 preserve the historical scoped acceptance review and draft work.
 Section 32 records the separate owned-runtime investigation (research only).
 Section 31 preserves the prior PR #96 qualified compiler checkpoint.
@@ -59,58 +60,63 @@ redundant indexing, unbounded caches or unnecessarily expensive CI.
 - Maintain a ranked optimization backlog and update this handover after
   implementation, qualification, merge or a discovered performance regression.
   An unqualified prototype is not production-ready or a future CI time guarantee.
-- **Current highest-priority engineering batch:** production-harden
-  the three mechanisms in
-  [owned-runtime investigation](docs/performance/OWNED_RUNTIME_INVESTIGATION_2026-10-31.md):
-  allocation-pressure-aware graph/text GC, exact-value-slot root filtering
-  and bounded reusable slot-index scratch. Preserve the study's original
-  oracles, watchdogs and failure tests. U1a #77 physical attribution remains
-  a separate scoped acceptance requirement.
+- **Latest optimization batch: completed and qualified through PR #99.**
+  Allocation-pressure-aware graph/text GC, exact-slot root de-duplication and
+  bounded scratch reuse are now merged. Next highest-priority optimization
+  duties: (1) independent same-host matched before/after *production* runtime
+  timing/physical memory and GC event accounting; (2) targeted remaining
+  compiler/registry bottlenecks with repeatability; (3) U1a #77 actual
+  owned-buffer/GC backing attribution, without conflating that UIR acceptance
+  requirement with this owned runtime patch; (4) reduce unnecessary boxing
+  only through separately verified interface-safe redesign. Preserve the
+  original oracles/watchdogs, resource caps, source semantics and ABI.
 
 ## Start a new chat with this
 
-> Continue Eristavi Lang from HANDOVER.md **section 36 (active optimization-first PR #99)** and section 35 (last qualified baseline).
-> The latest qualified/merged U1a compiler batch is
-> [PR #98](https://github.com/eristavi/eristavi-lang/pull/98), merge
-> `b05bd1863181d2a70800586a0efa8f1469d5d8df`, exact tested head `6b2fadf7aca6a6249a4adbf57e38bab15cb916e0` and
-> identical tested/merged Git tree `de5e72f4d03a370f53356a70497d3dd9eae1ec67`.
-> [Four-platform full CI 41193441427](https://github.com/eristavi/eristavi-lang/actions/runs/41193441427)
-> and [completed-batch qualification 41193441428](https://github.com/eristavi/eristavi-lang/actions/runs/41193441428)
-> **passed** on the exact head. No expensive tests are necessary for these
-> documentation-only acceptance updates.
-> #71, #72 and #76 are **closed/completed**. #77 remains **OPEN** for
-> independently attributed physical U1a-owned backing/allocation and
-> broader matched resource stress. Do not confuse modeled owned IR capacity
-> with whole-process RSS or managed runtime GC heap.
-> U1a switches now share the canonical successor interface across Eristavi
-> verifier/promotion/evaluator/simplifier, with independent Python oracle and
-> 8/32/128 dense, wide sparse and irreducible tests.
-> Versioned durable artifacts/cache/source→native integration belong to
-> U3 #75, and managed Text/List/identity/GC roots to U2 #74; neither is
-> implemented by PR #98. U1b immutable aggregates (#73) remain unfinished.
-> The existing production compiler/ABI was preserved.
-> The owned-runtime investigation in section 32 is research only;
-> **production runtime optimization is now actively implemented in draft PR #99**,
-> with 27/27 focused CI passing, not yet merged or fully qualified.
-> **Always prioritize measured compiler/runtime optimizations** after
-> correctness and safety per the standing policy at the top of this file.
-> Preserve the CI policy: focused incremental smoke and one exact-revision
-> final full/qualification batch when code changes. The experimental
-> full owned compiler self-build remains deliberately skipped.
+> Continue Eristavi Lang from **HANDOVER.md section 37** on GitHub main.
+> Runtime/compiler performance, peak and retained memory, predictable
+> compilation time and bounded work are the **highest engineering priorities**
+> after correctness, safety and the frozen language contract; see the standing
+> policy above. This is not optional only for runtime changes: apply it to all
+> future compiler, UIR, backend and test design.
+> Latest qualified production **owned-runtime** batch:
+> [PR #99](https://github.com/eristavi/eristavi-lang/pull/99) **MERGED** at
+> `388bfb6da42a6c0c1de307a0aa72ea987b63bbb0`. Exact tested PR head `fd4828e63826d0fc36f827a938b437f3dd863c3c`; identical
+> tested/merged Git tree `aac54d7534168879e585e9c8045e1c762098dea0`.
+> Four-platform [CI 41196975098](https://github.com/eristavi/eristavi-lang/actions/runs/41196975098)
+> and [owned integration 41196975251](https://github.com/eristavi/eristavi-lang/actions/runs/41196975251)
+> both **PASSED** at that head. The experimental owned compiler full self-build
+> was **SKIPPED** intentionally. All 460 discovered tests in both Linux x86-64
+> toolchains passed; scoped platform skips remain.
+> Actual patch: allocation-pressure-aware graph/Text/failure collector,
+> exact-slot root filter, bounded cleared shared slot-index scratch with
+> no-allocation fallback. Text-only behavior, independent oracle and the public
+> ABI remain unchanged. The two new 64 KiB BSS caches require explicit
+> memory accounting; 8 MiB is a collection pressure threshold, not a global
+> hard heap limit. The original 5.42x five-pair research result is **not**
+> a validated production-patch speedup; cross-run CI timing is informative,
+> not controlled same-host performance evidence.
+> Earlier PR #98 remains the latest qualified **U1a compiler** batch. U1a
+> #71/#72/#76 CLOSED; #77 OPEN for its own physical UIR owner/buffer attribution.
+> U1b aggregates, U2 managed UIR and U3 frontend/native integration incomplete.
+> Next: same-host paired production benchmark and physical memory attribution,
+> then other measured compiler/runtime bottlenecks. Use focused change-specific
+> checks and only one exact-head full/qualification gate per coherent code
+> revision; never enable experimental owned compiler self-build by default.
 
 ## Current verified status — read before historical sections
 
 | Scope | Current status |
 | --- | --- |
 | Repository | https://github.com/eristavi/eristavi-lang |
-| Latest qualified compiler/runtime merge | `b05bd1863181d2a70800586a0efa8f1469d5d8df` ([PR #98](https://github.com/eristavi/eristavi-lang/pull/98)) |
-| Exact tested PR #98 head | `6b2fadf7aca6a6249a4adbf57e38bab15cb916e0` |
-| Exact tested PR #98 / merged Git tree | `de5e72f4d03a370f53356a70497d3dd9eae1ec67` (identical) |
-| Four-platform PR #98 CI | [41193441427](https://github.com/eristavi/eristavi-lang/actions/runs/41193441427): **success** on Linux GCC/Clang, ARM64 Clang and macOS Clang |
-| Completed-batch PR #98 qualification | [41193441428](https://github.com/eristavi/eristavi-lang/actions/runs/41193441428): **success** on three bootstrap jobs and owned integration |
-| PR #98 status | **MERGED**, exact tested/merged tree parity confirmed (`b05bd1863181d2a70800586a0efa8f1469d5d8df`) |
+| Latest qualified compiler/runtime merge | `388bfb6da42a6c0c1de307a0aa72ea987b63bbb0` ([PR #99](https://github.com/eristavi/eristavi-lang/pull/99), owned runtime) |
+| Exact tested PR #99 head | `fd4828e63826d0fc36f827a938b437f3dd863c3c` |
+| Exact tested PR #99 / merged Git tree | `aac54d7534168879e585e9c8045e1c762098dea0` (identical) |
+| Four-platform PR #99 CI | [41196975098](https://github.com/eristavi/eristavi-lang/actions/runs/41196975098): **SUCCESS** on Ubuntu GCC/Clang, Linux ARM64 Clang, macOS Clang; 460 discovered per Linux x86-64 configuration |
+| PR #99 owned runtime integration qualification | [41196975251](https://github.com/eristavi/eristavi-lang/actions/runs/41196975251): **SUCCESS**, x86-64 owned static/offline integration; bootstrap and experimental full owned self-build intentionally skipped |
+| PR #99 status | **MERGED**; exact qualified Git tree matches merge `388bfb6da42a6c0c1de307a0aa72ea987b63bbb0` |
 | U1a scoped acceptance audit | #71/#72/#76 **CLOSED/completed**; #77 **OPEN** for scoped physical memory/resource attribution (see §35) |
-| Owned-runtime investigation | Section 32 documents diagnostic research; **production optimization implemented in draft PR #99**, focused smoke 27/27, final full CI/owned qualification pending. No production optimization merge yet |
+| Owned-runtime optimization | **PRODUCTION MERGED / QUALIFIED** PR #99; three scoped mechanisms, 27/27 focused and 460 Linux x86-64 full tests passed. Direct paired production benchmark and physically attributable memory study remain separate |
 | Separate full owned compiler self-build | Intentionally skipped; NOT qualified |
 | U1a | Scalar/native f64/calls/imports/provenance and shared switch semantics implemented, full CI qualified, merged. **Not formally all-U1a-complete** until #77 U1a-owned physical backing/resource exit gates close |
 | U1b | Narrow i8/i16/i32 IR operations qualified through PR #87; narrow reference execution, immutable aggregates and core-wide acceptance remain incomplete |
@@ -118,11 +124,13 @@ redundant indexing, unbounded caches or unnecessarily expensive CI.
 | U3 | Production frontend → redesigned UIR/native integration NOT implemented; native execution adapter in PR #96 is isolated |
 | Production compiler | Existing frontend/native pipeline and ABI retained; no default backend replacement |
 
-**Reading rule:** Section 35 supersedes sections 31–34 wherever historical
-pre-merge or open-issue statements conflict. PR #98 is the latest qualified
-compiler change; section 32 is unrelated runtime performance research.
-Docs-only updates add no new compiler qualification. Issues #71/#72/#76 are
-closed; #77 remains open. U1b/U2/U3 are separate unfinished milestones.
+**Reading rule:** Section 37 supersedes sections 31–36 wherever historical
+draft, open-issue or pre-merge statements conflict. PR #99 is the latest
+qualified production runtime change, PR #98 the previous U1a compiler batch.
+Section 32 records research only; this PR's new production code is different
+from the disposable diagnostic prototype. Issues #71/#72/#76 are closed;
+#77 remains open and U1b/U2/U3 are separately unfinished. Docs-only
+checkpoint corrections do not change the tested runtime or require full CI.
 
 ## 1. Verified repository checkpoint
 
@@ -1296,7 +1304,7 @@ code. For future substantive code edits, use focused smoke and exactly
 one final coherent-head full CI plus completed-batch qualification, never
 the experimental owned full compiler self-build unless separately selected.
 
-## 36. Active optimization-first owned runtime implementation — 2026-10-31
+## 36. Historical optimization-first owned runtime implementation candidate — superseded by §37
 
 **STATUS: IMPLEMENTED / FOCUSED SMOKE PASSED; NOT YET FULLY QUALIFIED OR MERGED.**
 [Draft PR #99](https://github.com/eristavi/eristavi-lang/pull/99),
@@ -1393,3 +1401,73 @@ Git tree and merge without retesting unchanged code, then immediately
 update this handover on main. If any gate fails, remain draft, fix
 the smallest root cause, repeat only the required evidence on final head.
 If the user pauses work, preserve this section and PR unchanged.
+
+
+## 37. Qualified and merged production owned-runtime optimizations — 2026-10-31
+
+**Current authoritative checkpoint:** [PR #99](https://github.com/eristavi/eristavi-lang/pull/99)
+merged into main as commit `388bfb6da42a6c0c1de307a0aa72ea987b63bbb0`, from exact qualified head
+`fd4828e63826d0fc36f827a938b437f3dd863c3c`. Both commits have identical Git tree
+`aac54d7534168879e585e9c8045e1c762098dea0`. This implementation preserves the original Eristavi
+frontend, frozen semantics, native C reference runtime, public 32-byte
+value ABI and independent mathematical / fault-order / cancellation oracles.
+
+**Accepted and merged mechanisms:**
+- Graph-enabled GC collects by newly committed graph/Text/failure allocation
+  counts and estimated bytes, with a retained-object policy threshold bounded
+  128–4096 and an 8 MiB *fresh allocation pressure* trigger or bounded
+  deferred dirty safe points (1,048,576). Explicit GC and Text-only collection
+  semantics retained. This **does not** impose a new global hard live-heap limit
+  or ship the diagnostic 16x multiplier.
+- 64 KiB bounded exact slot-root lookup cache prevents duplicate owner
+  searches for live slot addresses already traversed. True interior, foreign,
+  protected, failure and >4096-slot cases follow the original safe paths.
+- Separate 64 KiB cleared reusable slot-index scratch for scoped pruning
+  and checked unwind with nested/oversized reservation fallback, allocator
+  refusal and original linear no-allocation recovery.
+- [Implementation and acceptance report](docs/performance/OWNED_RUNTIME_OPTIMIZATION_IMPLEMENTATION_2026-10-31.md)
+  records all scopes, limits, risks and reproduction assumptions. Two extra
+  64 KiB static BSS ranges must be counted in total memory accounting.
+
+**Accepted exact-head evidence:**
+- [Focused CI 41195818485](https://github.com/eristavi/eristavi-lang/actions/runs/41195818485):
+  **27/27** smoke tests on runtime-code-identical implementation revision,
+  including 200k graph stress, memory refusal, true/duplicate root equality,
+  bounded count/bytes/polling, UTF-8 and scratch ownership/clearing.
+- [Final four-platform full CI 41196975098](https://github.com/eristavi/eristavi-lang/actions/runs/41196975098):
+  **SUCCESS** on Ubuntu GCC, Ubuntu Clang, Linux ARM Clang and macOS Clang;
+  all discovered tests and platform-specific skips retained. Both Linux
+  x86-64 test jobs discovered 460 tests and all applicable assertions passed.
+- [Final owned integration qualification 41196975251](https://github.com/eristavi/eristavi-lang/actions/runs/41196975251):
+  **SUCCESS** on the exact same head, no self-build. Full three-platform
+  bootstrap qualification is unnecessary for x86-64 owned-runtime-only
+  changes per CI_QUALIFICATION.md; experimental owned compiler full
+  self-build remains **NOT QUALIFIED** and was deliberately skipped.
+- A first full run on an earlier PR #99 head exposed one stale test harness
+  check that assumed `call erist_rt_reserve` directly inside the unwind
+  index. Updated its *fault-injection interface* to
+  `.Lslots_scratch_acquire`, preserving root/unwind assertions. No runtime
+  code change or test removal was made in that correction; the final
+  exact-head full and owned qualification both passed.
+- **Directional CI timing observations (different hosted machines, not
+  paired controlled samples):** Linux Clang full 759.939 → 267.372 s,
+  Linux GCC full 824.042 → 500.283 s, comparing qualified PR #98 and
+  PR #99 runs. Linux Clang integer worker 257.767 → 40.839 s and
+  verifier/oracle 133.107 → 26.638 s. Actual same-host paired
+  production benchmarks and attributable physical managed-heap/resource
+  measurements remain necessary before making a general speedup claim.
+  Do not extrapolate historical diagnostic 5.42x ratio to arbitrary
+  workloads, alter original watchdogs or conflate BSS, RSS and allocation
+  traffic.
+
+**Permanent next-step priorities:** (1) same-host controlled AB/BA paired
+benchmark of the actual optimized owned runtime vs the exact pre-PR99
+baseline with independent output parity, CPU/wall/collection/owner/OS mapping
+counts and physical memory including 128 KiB BSS; (2) address any remaining
+measured runtime/graph registry and compiler hot paths under original
+semantics/ABI, including issue #51 as relevant; (3) independently attribute
+physical owned UIR resource backing for open U1a issue #77; (4) consider
+boxing/private-word-buffer optimization only with a reviewed ABI and
+resource-acceptance plan. The optimization-first policy at the start of this
+handover governs *all future work*. Do not run full CI for this documentation
+update; use exact tested/merged tree evidence above.
