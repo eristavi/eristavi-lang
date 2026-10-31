@@ -1,10 +1,9 @@
 # Eristavi compiler — current handover
 
 **Authoritative recovery checkpoint: 31 October 2026, Asia/Nicosia.** Start here.
-Section 30 records the active, unqualified integration batch.
-Section 29 records the latest qualified and merged compiler/runtime batch.
-Sections 1–28 retain historical evidence; their draft statuses and next steps
-are not current instructions. Section 25 retains the intentional CI policy.
+Section 31 records the latest qualified and merged compiler/runtime batch.
+Sections 1–30 retain historical development and qualification evidence; their
+draft statuses and next steps are superseded. Section 25 retains the CI policy.
 
 ## Mandatory handover maintenance — standing user instruction
 
@@ -30,52 +29,54 @@ project task, not a separate task that waits for the user to request it.**
 
 ## Start a new chat with this
 
-> Continue Eristavi Lang from HANDOVER.md section 30 on
-> `compiler/u1a-native-trust-publication`; section 29 is the qualified baseline.
-> PR #94 is qualified and merged as
-> `4b4a7f62af98bb91bc3a7c4cb218817b02298fce`.
-> All admitted U1a i64/pred operations now execute in the independent reference
-> evaluator, including six overflow pairs and signed/unsigned division/remainder,
-> alongside recursive calls, switches, effects and mandatory cell promotion.
-> The batch also fixes wrapping intermediates, partial frame cleanup and stale
-> native root addresses after checked unwinding in both native runtimes.
-> Four-platform full CI and completed-batch qualification passed on the exact
-> final head; the merged tree equals the qualified tree. Do not repeat those
-> expensive gates merely to merge or document this unchanged implementation.
-> The redesigned UIR remains isolated from the production frontend.
-> Active batch: native strict binary64 (#76), closed production import trust
-> and broader #71 conformance, source/revision publication and bounded
-> simplification (#77) are implemented on the branch in section 30. Its final
-> CI/qualification must be inspected only when the user requests it. It is not
-> qualified or merged. U1b, U2, U3 and full physical heap/GC gates stay separate.
-> Preserve source semantics, the working compiler/ABI and mandatory promotion.
-> Use focused smoke during edits and one final four-platform CI plus required
-> completed-batch qualification per coherent compiler revision; documentation
-> changes need only a patch check. Never auto-run the experimental 900-second
-> owned compiler self-build.
+> Continue Eristavi Lang from HANDOVER.md section 31 and current GitHub main.
+> PR #96 is qualified and merged as
+> `f5c3904e72009bf2c20051cb002772f75e20b98c`.
+> Exact tested PR head: `eec1dfee100be8c0f9b88a71a98b4866f36fab66`;
+> tested/merged tree: `10fb3c388bea0f9f9bc6e6a5d26cc72867b475ce`.
+> Four-platform full CI and completed-batch qualification passed at that head.
+> The merge reused this evidence and triggered zero workflows. Do not repeat
+> full tests merely to merge or document unchanged implementation.
+> The batch adds isolated native pred/i64/f64 execution, strict binary64 on
+> x86-64/AArch64, two closed production imports, exact revision-bound
+> publication, supplemental source origins, diagnostic-map ingress/remapping
+> and bounded transactional constant/CFG simplification. The existing production
+> frontend and ABI remain intact; this is not U3 integration or a new JIT.
+> Keep #71/#76/#77 open for scoped exit-gate review; full physical UIR heap/GC,
+> broader stress and production artifact migration remain separate.
+> User requested a read-only timing investigation before merging. Logs show
+> owned-runtime execution dominates the two slowest tests; OS/compiler-label
+> effects are not established by these wall timings. Next recommendation is
+> focused profiling of that execution path, not speculative runtime rewrites
+> or reduced coverage. No performance implementation change is authorized yet.
+> Preserve source semantics, mandatory cell promotion and the existing ABI.
+> Use focused smoke during implementation and one final full/qualification
+> boundary per coherent compiler revision. Documentation needs patch checks.
+> The separate experimental owned compiler self-build remains unqualified and
+> must not be automatically selected.
 
 ## Current verified status — read before historical sections
 
 | Scope | Current status |
 | --- | --- |
 | Repository | https://github.com/eristavi/eristavi-lang |
-| Last qualified compiler/runtime merge | `4b4a7f62af98bb91bc3a7c4cb218817b02298fce` ([PR #94](https://github.com/eristavi/eristavi-lang/pull/94)) |
-| Exact tested PR head | `bb2f1ba81bfa4ae039f61ed0e812299a8ab4b872` |
-| Qualified PR #94 / merge tree, before later documentation-only commits | `5567a40a9a710fa3d1008da121e38f5e4b10d5f4` |
-| Four-platform PR #94 CI | [41183090972](https://github.com/eristavi/eristavi-lang/actions/runs/41183090972), success: 448 tests discovered per platform, platform skips retained |
-| Completed-batch PR #94 qualification | [41183091353](https://github.com/eristavi/eristavi-lang/actions/runs/41183091353), success: three repeatable C/D bootstrap/offline jobs and owned integration |
-| Active integration candidate | Draft [PR #96](https://github.com/eristavi/eristavi-lang/pull/96), `compiler/u1a-native-trust-publication`, section 30; native Float/import/source/simplification implementation, NOT qualified or merged |
+| Last qualified compiler/runtime merge | `f5c3904e72009bf2c20051cb002772f75e20b98c` ([PR #96](https://github.com/eristavi/eristavi-lang/pull/96)) |
+| Exact tested PR head | `eec1dfee100be8c0f9b88a71a98b4866f36fab66` |
+| Tested PR #96 / merge tree, before later documentation-only commits | `10fb3c388bea0f9f9bc6e6a5d26cc72867b475ce` |
+| Four-platform PR #96 CI | [41187461690](https://github.com/eristavi/eristavi-lang/actions/runs/41187461690), success: 457 discovered per platform, platform skips retained |
+| Completed-batch PR #96 qualification | [41187461738](https://github.com/eristavi/eristavi-lang/actions/runs/41187461738), success: three bootstrap/offline jobs and owned integration |
+| PR #96 status | Merged; exact tested/merged tree parity verified; zero workflows triggered by merge |
 | Separate full owned compiler self-build | Intentionally skipped; NOT qualified |
-| U1a | Integer/predicate reference execution, recursion/effects, selected test imports, switches, verification and promotion qualified/merged; native strict f64, production imports, full source/publication revisions, simplification and broader resource/conformance gates remain |
+| U1a | Integer/predicate reference execution, recursion/effects, strict native f64 execution, closed production imports, exact publication, additional origins/diagnostic maps and bounded simplification qualified/merged; broader physical-resource/stress and production artifact gates remain |
 | U1b | Narrow i8/i16/i32 IR operations qualified through PR #87; narrow reference execution, immutable aggregates and core-wide acceptance remain incomplete |
 | U2 | Managed Text/List/identity, checked failures, deterministic cleanup and root maps NOT implemented in redesigned UIR |
-| U3 | No direct AST/semantic-facts → redesigned UIR production path or new verified native target; PR #85 is a merged test-only parity baseline |
-| Production compiler | Existing frontend/native pipeline retained; PR #94 corrects native checked-unwind root cleanup without changing the ABI layout or frozen language semantics |
+| U3 | Production frontend → redesigned UIR/native integration NOT implemented; native execution adapter in PR #96 is isolated |
+| Production compiler | Existing frontend/native pipeline and ABI retained; no default backend replacement |
 
-**Reading rule:** Section 29 supersedes earlier candidate/pending descriptions.
-The last qualified implementation is PR #94; later documentation-only commits
-do not imply a different tested compiler revision. Keep issue #71 open.
-PR #94's merge launched no new workflow runs and reused its passed evidence.
+**Reading rule:** Section 31 supersedes the earlier draft/candidate descriptions.
+PR #96 is the latest qualified implementation. Later documentation-only commits
+do not represent a different tested compiler revision. Keep #71/#76/#77 open
+pending scoped exit-gate review; no broader U1a/U1b/U2/U3 completion is implied.
 
 ## 1. Verified repository checkpoint
 
@@ -873,7 +874,9 @@ publication plus bounded simplification (#77), then the independently staged
 U1b/U2/U3 gates. Keep issue #71 open. Full physical heap/GC accounting, larger
 matched stress and complete owned compiler self-hosting remain unqualified.
 
-## 30. Active combined native Float / import trust / publication batch — 2026-10-31
+## 30. Combined native Float / import trust / publication development — historical
+
+**Superseded by section 31. The draft/pending descriptions below are historical.**
 
 User authorized all three next gates in one integration batch, and requested
 that final CI/qualification be launched without following/polling their progress.
@@ -959,3 +962,61 @@ Hosted submission checkpoint:
 - Per the user's instruction, stop monitoring after requesting those runs.
   Wait for the user to ask to inspect results. No merge or issue closure is
   authorized by an uninspected run; no owned compiler self-build is selected.
+
+## 31. Qualified PR #96 merge and timing investigation — 2026-10-31
+
+The user explicitly authorized merging PR #96 and requested no full test rerun
+while merging. The implementation has not changed since its successful final
+qualification. No test, workflow or performance implementation was modified as
+part of the timing investigation or merge.
+
+- Exact qualified PR head: `eec1dfee100be8c0f9b88a71a98b4866f36fab66`.
+- [Four-platform full CI 41187461690](https://github.com/eristavi/eristavi-lang/actions/runs/41187461690)
+  passed Linux x86-64 GCC/Clang, Linux ARM64 Clang and macOS Clang: 457 tests
+  discovered on each, with the existing platform-dependent skips retained.
+- [Completed-batch qualification 41187461738](https://github.com/eristavi/eristavi-lang/actions/runs/41187461738)
+  passed three Linux bootstrap self-build/offline jobs and owned integration.
+  The separate owned compiler self-build job was intentionally skipped and
+  remains unqualified; owned integration is not full owned self-hosting.
+- [PR #96](https://github.com/eristavi/eristavi-lang/pull/96) is merged as
+  `f5c3904e72009bf2c20051cb002772f75e20b98c`. The tested head tree and merged
+  tree both equal `10fb3c388bea0f9f9bc6e6a5d26cc72867b475ce`.
+- To honor the user's no-repeat instruction, the merge used an ordinary
+  two-parent Git merge commit with the exact qualified tree and a non-forced,
+  expected-head update of main. Marking the draft Ready would have triggered
+  another full matrix, so that extra transition was not used. GitHub confirmed
+  PR #96 merged. The merge commit triggered zero workflow runs.
+- Scope and acceptance: `U1A_NATIVE_TRUST_PUBLICATION.md`. Closed production
+  trust covers only version-one identity/write adapters, not arbitrary FFI.
+  Native execution remains separate from the production frontend. Full physical
+  heap/GC accounting, wider matched stress and production artifact migration
+  retain independent gates. #71/#76/#77 remain open; U1b/U2/U3 remain staged.
+
+Read-only CI timing findings (no tests rerun and no optimization implemented):
+
+| Measured phase | Linux x86-64 Clang job | Linux x86-64 GCC job |
+| --- | ---: | ---: |
+| Full test suite | 694.58 s | 528.62 s |
+| Integer parity test, total | 228.55 s | 172.06 s |
+| Integer workers, owned execution | 206.67 s | 157.37 s |
+| Integer workers, C-runtime execution | 17.63 s | 11.12 s |
+| Verifier/oracle parity test, total | 127.37 s | 91.60 s |
+| Verifier/oracle, owned execution | 116.20 s | 81.49 s |
+| Verifier/oracle, C-runtime execution | 7.34 s | 5.80 s |
+| Verifier/oracle assembly emission | 1.93 s | 2.93 s |
+
+The same application assembly is linked to each runtime within a parity test.
+The two slowest tests account for roughly half the full suite; owned execution,
+not assembly emission, dominates them. Candidate profiling areas include runtime
+allocation/GC/value operations and repeated verified fixture work, but these
+logs do not identify a specific code-level hotspot or exonerate all codegen.
+ARM64/macOS skip these Linux x86-64 owned tests, so their shorter totals do not
+establish an OS advantage. In previous qualified CI 41183090972, GCC took
+735.72 s and Clang 448.86 s, the opposite ranking on the same Ubuntu image;
+host variability is a plausible factor, not a proven sole cause.
+
+Next recommended action is focused profiling of the existing owned execution
+path before proposing a performance patch. The user has authorized merging,
+not speculative performance changes. Preserve the passed evidence; documentation
+updates use patch checks only. Do not rerun expensive qualification for unchanged
+implementation or infer complete owned compiler self-hosting from this merge.

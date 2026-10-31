@@ -1,15 +1,16 @@
 # U1a multi-function reference execution and trusted imports
 
-Status: **isolated U1a reference profile, qualified and merged through PR #94**. The existing
+Status: **isolated U1a profile, qualified and merged through PR #96**. The existing
 Eristavi frontend → Typed IR → native compiler paths are **not replaced**.
 The governing approved design is
 [the U1 contract](docs/architecture/Eristavi-UIR-U1-Contract-2026-10-29.md)
 sections 2, 4, 6–9, 13 and [issue #71](https://github.com/eristavi/eristavi-lang/issues/71).
 
-Current integration candidate: [native Float, production imports and source publication](U1A_NATIVE_TRUST_PUBLICATION.md).
-The qualified PR #94 profile below is historical evidence. The new branch adds
-closed production adapters 3/4, a private native executor, exact publication,
-additional origins and simplification; final qualification is pending.
+Current qualified integration: [native Float, production imports and source publication](U1A_NATIVE_TRUST_PUBLICATION.md), merged through PR #96 after full CI and completed-batch qualification.
+The PR #94 reference-profile details below retain their historical scope; PR #96
+adds closed production adapters 3/4, an isolated native executor, exact publication,
+additional origins and bounded simplification. The reference evaluator still
+rejects Float explicitly; strict Float execution uses the new native adapter.
 
 ## Implemented in this slice
 

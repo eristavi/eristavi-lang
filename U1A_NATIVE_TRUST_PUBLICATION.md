@@ -1,9 +1,14 @@
 # U1a native Float, production import trust and source publication batch
 
-Status: integration candidate on `compiler/u1a-native-trust-publication`.
-PR #94 remains the last qualified implementation until the final exact-head
-four-platform CI and completed-batch qualification have been checked.
-The user requested that those final runs be started without polling them.
+Status: **qualified and merged through PR #96** on 31 October 2026.
+Merge commit: `f5c3904e72009bf2c20051cb002772f75e20b98c`.
+Exact tested head: `eec1dfee100be8c0f9b88a71a98b4866f36fab66`.
+Tested/merged tree: `10fb3c388bea0f9f9bc6e6a5d26cc72867b475ce`.
+[Four-platform CI](https://github.com/eristavi/eristavi-lang/actions/runs/41187461690)
+and [completed-batch qualification](https://github.com/eristavi/eristavi-lang/actions/runs/41187461738)
+passed at that exact head. The merge reused the passed evidence and triggered
+zero workflows; no full tests were repeated for merging. Full owned compiler
+self-build remains deliberately skipped/unqualified. The limitations below remain.
 
 ## Execution boundary
 
