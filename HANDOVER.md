@@ -1,7 +1,8 @@
 # Eristavi compiler — current handover
 
 **Authoritative recovery checkpoint: 31 October 2026, Asia/Nicosia.** Start here.
-Section 39 records an active isolated U1b narrow reference-execution candidate (not yet qualified).
+Section 39 records the active qualified-smoke U1b narrow interpreter candidate (not merged).
+Section 38 records the QUALIFIED, MERGED controlled owned-runtime benchmark; #77 physical attribution remains open.
 Section 37 is the authoritative **qualified, merged PR #99** owned-runtime optimization checkpoint.
 Section 36 preserves the earlier active optimization candidate and investigation history.
 Section 35 records the previous qualified compiler batch PR #98 and U1a issue status.
@@ -74,7 +75,7 @@ redundant indexing, unbounded caches or unnecessarily expensive CI.
 
 ## Start a new chat with this
 
-> Continue from handover section 39 for the U1b candidate; section 37 remains the last qualified main baseline. This code is not yet released.
+> Continue Eristavi Lang from **HANDOVER.md section 39** (U1b narrow interpreter candidate) and section 38 (qualified runtime benchmark). Final U1b/U2/U3/U4 gates remain unfinished.
 > Runtime/compiler performance, peak and retained memory, predictable
 > compilation time and bounded work are the **highest engineering priorities**
 > after correctness, safety and the frozen language contract; see the standing
@@ -117,10 +118,10 @@ redundant indexing, unbounded caches or unnecessarily expensive CI.
 | PR #99 owned runtime integration qualification | [41196975251](https://github.com/eristavi/eristavi-lang/actions/runs/41196975251): **SUCCESS**, x86-64 owned static/offline integration; bootstrap and experimental full owned self-build intentionally skipped |
 | PR #99 status | **MERGED**; exact qualified Git tree matches merge `388bfb6da42a6c0c1de307a0aa72ea987b63bbb0` |
 | U1a scoped acceptance audit | #71/#72/#76 **CLOSED/completed**; #77 **OPEN** for scoped physical memory/resource attribution (see §35) |
-| Owned-runtime optimization | **PRODUCTION MERGED / QUALIFIED** PR #99; three scoped mechanisms, 27/27 focused and 460 Linux x86-64 full tests passed. Direct paired production benchmark and physically attributable memory study remain separate |
+| Owned-runtime optimization | **PRODUCTION MERGED / QUALIFIED** PR #99; three scoped mechanisms, 27/27 focused and 460 Linux x86-64 full tests passed. PR #100's actual-production 5-pair AB/BA matched benchmark passed: **5.4414x** on worker0; U1a physical attribution #77 remains open |
 | Separate full owned compiler self-build | Intentionally skipped; NOT qualified |
 | U1a | Scalar/native f64/calls/imports/provenance and shared switch semantics implemented, full CI qualified, merged. **Not formally all-U1a-complete** until #77 U1a-owned physical backing/resource exit gates close |
-| U1b | Narrow i8/i16/i32 IR operations qualified through PR #87; narrow reference execution, immutable aggregates and core-wide acceptance remain incomplete |
+| U1b | Narrow op registry/build/verifier qualified through PR #87. **Isolated i8/i16/i32 independent reference interpreter + 210-oracle regression cases pass focused CI 41199024937 in PR #101 (UNMERGED)**; immutable aggregate make/get/set and full U1b acceptance #73 remain incomplete |
 | U2 | Managed Text/List/identity, checked failures, deterministic cleanup and root maps NOT implemented in redesigned UIR |
 | U3 | Production frontend → redesigned UIR/native integration NOT implemented; native execution adapter in PR #96 is isolated |
 | Production compiler | Existing frontend/native pipeline and ABI retained; no default backend replacement |
@@ -1473,9 +1474,85 @@ resource-acceptance plan. The optimization-first policy at the start of this
 handover governs *all future work*. Do not run full CI for this documentation
 update; use exact tested/merged tree evidence above.
 
+
+## 38. Qualified production-runtime benchmark and remaining milestone program — 2026-10-31
+
+**Current status update:** PR #100 (measurement/tooling and evidence
+only) is **MERGED** at [PR #100](https://github.com/eristavi/eristavi-lang/pull/100),
+merge `f5ab4ec79f54fc784382139853e9f0c041f474b9`.
+Its [same-host five-pair benchmark](https://github.com/eristavi/eristavi-lang/actions/runs/41198570405)
+**SUCCEEDED**, exact median worker0 baseline 21.869176 s and optimized
+4.019040 s (**5.4414×** on this one actual production-runtime worker).
+Raw [artifact #13040469945](https://github.com/eristavi/eristavi-lang/actions/runs/41198570405/artifacts/13040469945)
+and [evidence summary](docs/evidence/2026-10-31/owned-runtime-production-paired.md)
+are saved. The updated PR head `1be4cd36578591e27e179939d699c9e11eea162e`
+passed [focused CI 41198974402](https://github.com/eristavi/eristavi-lang/actions/runs/41198974402)
+with no runtime/compiler code changes. Physical full-process RSS is *not*
+physical UIR buffer attribution. Do not claim all-language, whole-compiler
+or managed-GC performance from this fixed workload; U1a #77 still OPEN.
+
+**Historical candidate state (superseded by this completion note):** implementation was in progress; do not merge or
+close milestone issues solely from draft source.** Branch
+`milestone/paired-runtime-u1-acceptance-20261031` begins at main `30b9d3f11238d0164f3603cd8a06f1f2e83b6586`.
+PR #99 and full owned-runtime optimization CI remain the last qualified
+production code. All future design prioritizes measured execution speed,
+compile time, bounded memory/GC work, and predictable CI costs while
+preserving correctness, safety, ABI and frozen language semantics.
+
+**Authorized user goals (strict dependency order):**
+1. Paired baseline-vs-optimized *actual production* owned-runtime AB/BA,
+   independent output oracle and physical RSS/CPU measurements on the same
+   host. Do NOT claim the prior disposable-prototype gains are production.
+2. Investigate exact graph-registry growth and compiler/owned bottlenecks
+   with controlled evidence. #51 remains open without a verified change.
+3. Complete U1a #77 in-memory IR physical backing, retained owners,
+   allocation traffic, stress and cleanup attribution. A process RSS peak
+   or modeled charge alone is not sufficient; don't silently waive a gate.
+4. U1b #73: full i8/i16/i32 independent reference execution and immutable
+   aggregate metadata/build/get/set, by-value cycle rejection and faults.
+5. U2 #74: typed managed Text/List/identity, checked-failure continuations,
+   scoped exactly-once deterministic resources, root maps and deep conformance.
+6. U3 #75: frozen frontend→new UIR adapters, one end-to-end native target,
+   source/contract-linked artifacts, independent Stage-0 parity and rollback.
+7. U4: measured target legalization and machine lowering, additional targets,
+   artifact migration and all relevant contracts, independent qualification.
+
+**Controlled performance benchmark SUCCESS**: the opt-in
+[run 41198570405](https://github.com/eristavi/eristavi-lang/actions/runs/41198570405)
+produced five AB/BA *same-host paired* measurements at exact harness head
+`e846f06d12fcb5d802ce9b34804d1bf7d1906366`. Median actual pre-PR99
+owned runtime worker0 = **21.869176 s**; qualified post-PR99 =
+**4.019040 s**, a measured **5.4414x** speedup on that workload only.
+All 10 worker outputs matched the independent unbounded-integer oracle and
+each other's digest. Five pairs and child CPU/RSS samples, pinned toolchain
+and exact hashes are preserved in the raw
+[artifact 13040469945](https://github.com/eristavi/eristavi-lang/actions/runs/41198570405/artifacts/13040469945).
+Per-process peak RSS was **127628 KiB** in both variants, not a
+UIR-owned physical-memory attribution. Interpretation and raw
+per-pair wall/user CPU values are also checked in at
+`docs/evidence/2026-10-31/owned-runtime-production-paired.md`.
+The CI-runner result must not be extrapolated to whole compiler,
+all U1a/U1b programs or GC/allocator size. The exact U1a resource gate
+issue #77 remains open.
+
+**Completed within active candidate so far:** adds opt-in tooling at
+`tools/bench_owned_runtime_pairs.py` plus a dedicated PR-label workflow.
+It pins exact qualified pre-PR99 and post-PR99 runtime revisions; verifies the
+compiled source/fixture/frontend parity and unchanged native app assembly,
+then compares five serialized alternating AB/BA worker0 pairs using the
+original independent unbounded-integer result/fault oracle with 120-second
+watchdogs. Records wall/user/system CPU, per-child peak RSS, output and binary
+hashes, host/compiler identity and raw samples. It did not invoke full CI or experimental compiler self-build.
+The AB/BA run passed and its exact raw results were independently inspected.
+
+**Next:** U1a #77 physical UIR private backing attribution and larger matched stress; advance independent U1b narrow reference executor in [PR #101](https://github.com/eristavi/eristavi-lang/pull/101) after exact-head full qualification, then immutable aggregates. U2, U3 and U4 require their own accepted functional code and remain **NOT COMPLETE**. Never rerun the already-verified paired benchmark or experimental full owned compiler self-build without a changed acceptance need. U2/U3/U4 must NOT be described as complete until
+their actual source integration, independent reference tests and exact-head
+qualification pass. Keep these old and new milestones transparent in status
+and do not publish broad "all done" claims.
+
 ## 39. Active U1b narrow independent execution — 2026-10-31
 
-**STATUS: CANDIDATE ON BRANCH ONLY, not qualified or merged.** Branch
+**STATUS: FOCUSED SMOKE PASSED, FINAL QUALIFICATION PENDING; NOT MERGED.** Branch
 `milestone/u1b-independent-narrow-execution-20261031` forked from the qualified PR #99 docs-only main checkpoint
 `30b9d3f11238d0164f3603cd8a06f1f2e83b6586`. It is independent
 of the paired runtime benchmark branch and its acceptance evidence.
@@ -1496,7 +1573,7 @@ of the paired runtime benchmark branch and its acceptance evidence.
   outcomes using Python unbounded integer arithmetic. It exercises exact
   returned value bits, signed/unsigned comparison, overflow flags and
   terminal source-located faults. All original U1a tests remain enabled.
-- Added this reference test to focused CI. Before calling the slice complete,
+- Added this reference test to focused CI. [Smoke 41199024937](https://github.com/eristavi/eristavi-lang/actions/runs/41199024937) **PASSED 28/28** at exact code head `f4fc991d35704cb9d536b6a2629d0d359bddad79`. The 210 independent mathematical outputs and faults are evaluated in three separately scoped 70-case linked UIR requests (no budget increased). Before calling the slice complete,
   inspect the actual run, fix any implementation/test issue, preserve
   malformed-IR/revision/budget checks and then qualify at the selected
   final code revision. Do not run the experimental owned self-build.

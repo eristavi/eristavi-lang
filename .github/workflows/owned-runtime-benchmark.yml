@@ -1,0 +1,50 @@
+name: Controlled owned-runtime performance (opt-in)
+
+on:
+  pull_request:
+    types: [labeled]
+
+permissions:
+  contents: read
+
+jobs:
+  same-host-ABBA:
+    if: >-
+      github.event.label.name == 'performance-validation' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      PYTHONPATH: .
+      CC: clang
+      LANG: C
+      LC_ALL: C
+      TZ: UTC
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install pinned reference bootstrap dependencies
+        run: python -m pip install -e .
+      - name: Verify toolchain and pinned references
+        run: |
+          python --version
+          clang --version
+          git cat-file -e 4f876009c9786d4e47807d42fe91d922f147a2b4^{commit}
+          git cat-file -e 388bfb6da42a6c0c1de307a0aa72ea987b63bbb0^{commit}
+      - name: Run five AB/BA matched runtime pairs with independent oracle
+        run: |
+          python tools/bench_owned_runtime_pairs.py \
+            --report owned-runtime-paired.json --pairs 5 --timeout 120
+      - name: Upload raw performance and physical process measurements
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: owned-runtime-abba-${{ github.run_id }}
+          path: owned-runtime-paired.json
+          if-no-files-found: warn
+          retention-days: 30
