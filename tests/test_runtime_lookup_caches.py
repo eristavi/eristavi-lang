@@ -62,7 +62,7 @@ _start:
    # If the index refuses an oversized slot set, run the original safe path.
    movq $4097,.Lvalue_slot_count(%rip)
    call erist_rt_graph_mark_roots
-   cmpq $3,.Lprobe_owner_calls(%rip)
+   cmpq $4,.Lprobe_owner_calls(%rip)
    jne .Lcache_fail
    movq $1,.Lvalue_slot_count(%rip)
    # Release the true interior key: object must now be unreachable.
@@ -70,7 +70,7 @@ _start:
    call erist_rt_graph_mark_roots
    cmpq $0,24(%r14)
    jne .Lcache_fail
-   cmpq $3,.Lprobe_owner_calls(%rip)
+   cmpq $4,.Lprobe_owner_calls(%rip)
    jne .Lcache_fail
    call erist_rt_graph_sweep
    cmpq $0,.Lgraph_count(%rip)
