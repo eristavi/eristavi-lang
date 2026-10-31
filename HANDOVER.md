@@ -1,6 +1,7 @@
 # Eristavi compiler — current handover
 
 **Authoritative recovery checkpoint: 31 October 2026, Asia/Nicosia.** Start here.
+Section 40 is an active real C-managed-heap vs UIR owner model diagnostic (candidate, NOT #77 acceptance).
 Section 38 records the QUALIFIED, MERGED controlled owned-runtime benchmark; #77 physical attribution remains open.
 Section 37 is the authoritative **qualified, merged PR #99** owned-runtime optimization checkpoint.
 Section 36 preserves the earlier active optimization candidate and investigation history.
@@ -74,7 +75,7 @@ redundant indexing, unbounded caches or unnecessarily expensive CI.
 
 ## Start a new chat with this
 
-> Continue Eristavi Lang from **HANDOVER.md section 38** for the measured runtime result and section 37 for qualified production code. Future U1b #73, U2 #74, U3 #75 and U4 work remains incomplete.
+> Continue Eristavi Lang from **HANDOVER.md section 40** for the ongoing physical U1a heap diagnostic; section 38 contains the qualified production-runtime benchmark and section 37 the qualified runtime implementation. U1b/U2/U3/U4 are unfinished.
 > Runtime/compiler performance, peak and retained memory, predictable
 > compilation time and bounded work are the **highest engineering priorities**
 > after correctness, safety and the frozen language contract; see the standing
@@ -1548,3 +1549,42 @@ The AB/BA run passed and its exact raw results were independently inspected.
 their actual source integration, independent reference tests and exact-head
 qualification pass. Keep these old and new milestones transparent in status
 and do not publish broad "all done" claims.
+
+## 40. Active U1a private physical-heap diagnostic — 2026-10-31
+
+**Candidate only; not qualified or merged.** Branch
+`milestone/u1a-physical-heap-evidence-20261031` from last successful handover main `1784f846ef2c54c6e1c7b79db73e63c14a0c1176`.
+It records the requested *next slice* of U1a #77 real physical
+measurements, not a conclusion that the U1a UIR-owned attribution gate
+has been met. The independent U1b narrow interpreter is progressing on
+a different PR. Do not merge/rewrite source compiler/runtime code here.
+
+- New `tests/test_u1_c_heap_physical.py` emits four frozen hand-built UIR
+  fixtures: empty control and dense 8/32/128-case switch/SSA promotion
+  variants; compiles identical C-native runtime source with a **private
+  diagnostic exit observer** reporting native managed heap bytes, peak
+  bytes, live blocks, GC collections and reclaimed blocks/bytes.
+- Five fresh process samples per fixture collect full process peak RSS
+  via `wait4()`, physical C-native managed heap statistics, exact output
+  digest and original bounded modeled function owner peak/traffic/work.
+  The independent Python `evaluate()` checks original/promoted SSA
+  traces and arithmetic/control-flow oracle for each switch.
+- **Attribution rule:** this C collector metric includes every managed
+  allocation in the process and is NOT directly attributable to only the
+  UIR owner; control-versus-workload differences are only comparative and
+  do not establish physical object ownership. Never close #77 or conflate
+  modeled `budget.Owner` charges with physical heap bytes. The eventual
+  #77 exit still needs exact per-owner backing/allocator/GC charge
+  correlation and wider mixed-graph/cleanup stress.
+- This is test-only private instrumentation (no persistent public API or
+  artifact). It retains the original 8 MiB/64 MiB/33,554,432 work gates;
+  no new global memory cap, no ABI/frontend/default backend change, and
+  no experimental full owned compiler self-build.
+- Added targeted probe to focused CI. **Not yet validated** at the time of
+  this entry: inspect run, fix test/measurement mistakes with original
+  oracles and resource thresholds unchanged, store trustworthy evidence,
+  then qualify only if implementation changes require it. U1a #77 stays OPEN.
+
+**Next:** inspect real C GC physical samples. If attribution remains mixed,
+design a separately reviewed tagged-owner allocation accounting adapter
+rather than adjusting resource-policy thresholds or guessing heap sizes.
