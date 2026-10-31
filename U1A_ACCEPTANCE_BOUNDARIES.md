@@ -21,16 +21,19 @@ The private C-native emitter still has an independent, verified switch adapter
 at a different execution boundary; future U3 machine lowering must consult
 the validated UIR successor/case schema, not silently invent a new encoding.
 
-Acceptance fixtures: a 32-arm dense case table; widely separated unsigned-sorted
+Acceptance fixtures: three dense case-table scales (8/32/128 arms); widely separated unsigned-sorted
 case *bits*, including both signed endpoints; two different edges to the same
 target; an SCC with two independent entries and finite loop counts; original
 and promoted SSA snapshots and independent Python return/trace predictions.
 Verify the pre-existing malformed unreachable switch/edge fixtures and
 cancellation/budget tests. Captured owner peak, fresh allocation traffic,
 work visits and before/after semantic parity must remain within the U1a
-qualification policy. A large-count/multi-scale stress family and actual
-physical allocation/GC measurements are distinct evidence requests and are
-not silently satisfied by these small correctness fixtures.
+qualification policy. Five fresh-process, real C-native resource observations run these scaled
+fixtures with exact output parity and per-function owned capacity/traffic/work
+counters. Report raw process RSS separately, in platform-specific units.
+This does **not** attribute runtime GC/allocator heap retention to individual
+UIR buffers or prove the large owner/runtime physical-memory gate, which remains
+an explicit follow-up acceptance condition.
 
 ## #77: ownership of remaining acceptance
 
