@@ -27,6 +27,7 @@ SMOKE_TESTS=(
     'test_native_runtime_lifetimes.NativeRuntimeLifetimeTests.test_native_handler_and_abandoned_call_allocations_are_reclaimed',
     'test_u1_verifier.U1VerifierTests.test_malformed_ir_and_budget_protocol',
     'test_u1_promotion.U1PromotionTests.test_differential_execution_shapes_and_failure_cleanup',
+    'test_u1_promotion.U1PromotionTests.test_switch_physical_samples',
     'test_u3_stage0_parity_baseline.U3Stage0ParityBaseline.test_frozen_successful_programs_match_existing_native_compilers',
 )
 
