@@ -5,7 +5,7 @@
 import compiler.u1_budget as budget;
 import compiler.u1_words as words;
 import compiler.u1_meta as meta;
-import compiler.u1_builder as build;
+import compiler.u1_builder as build;\nimport compiler.u1_successors as succ;
 import compiler.u1_module as link;
 import compiler.u1_imports as imports;
 import compiler.u1_effects as effects;
@@ -348,27 +348,13 @@ function walk(program identity link.Program,policy identity imports.Policy,
                 return outcome(0,0,0,results,operandCount);
             }
             if op == 6 or op == 7 {
-                let edge be payload;
-                if op == 7 and a == 0 {
-                    edge=try field(frame,routine.instructions,offset+8);
-                }
-                block=try jump(frame,edge);
+                let ordinal be 0;
+                if op == 7 and a == 0 { ordinal=1; }
+                block=try jump(frame,try succ.edge(routine,frame.phase,current,ordinal));
                 instruction=0; terminator=0;
             }
             if op == 35 {
-                let header be (payload-1)*3;
-                let begin be try field(frame,routine.switches,header);
-                let cases be try field(frame,routine.switches,header+1);
-                let edge be try field(frame,routine.switches,header+2);
-                let cursor be 0;
-                while cursor < cases {
-                    let bits be try field(frame,routine.cases,(begin+cursor)*2);
-                    if a == bits {
-                        edge=try field(frame,routine.cases,(begin+cursor)*2+1);
-                        cursor=cases;
-                    } else { cursor=cursor+1; }
-                }
-                block=try jump(frame,edge);
+                block=try jump(frame,try succ.choose(routine,frame.phase,current,a));
                 instruction=0; terminator=0;
             }
             if op != 1 and op != 2 and op != 3 and op != 4 and op != 13 and op != 14 and
