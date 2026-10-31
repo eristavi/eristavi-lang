@@ -1,6 +1,7 @@
 # Eristavi compiler — current handover
 
 **Authoritative recovery checkpoint: 31 October 2026, Asia/Nicosia.** Start here.
+Section 39 records the active qualified-smoke U1b narrow interpreter candidate (not merged).
 Section 38 records the QUALIFIED, MERGED controlled owned-runtime benchmark; #77 physical attribution remains open.
 Section 37 is the authoritative **qualified, merged PR #99** owned-runtime optimization checkpoint.
 Section 36 preserves the earlier active optimization candidate and investigation history.
@@ -74,7 +75,7 @@ redundant indexing, unbounded caches or unnecessarily expensive CI.
 
 ## Start a new chat with this
 
-> Continue Eristavi Lang from **HANDOVER.md section 38** for the measured runtime result and section 37 for qualified production code. Future U1b #73, U2 #74, U3 #75 and U4 work remains incomplete.
+> Continue Eristavi Lang from **HANDOVER.md section 39** (U1b narrow interpreter candidate) and section 38 (qualified runtime benchmark). Final U1b/U2/U3/U4 gates remain unfinished.
 > Runtime/compiler performance, peak and retained memory, predictable
 > compilation time and bounded work are the **highest engineering priorities**
 > after correctness, safety and the frozen language contract; see the standing
@@ -120,7 +121,7 @@ redundant indexing, unbounded caches or unnecessarily expensive CI.
 | Owned-runtime optimization | **PRODUCTION MERGED / QUALIFIED** PR #99; three scoped mechanisms, 27/27 focused and 460 Linux x86-64 full tests passed. PR #100's actual-production 5-pair AB/BA matched benchmark passed: **5.4414x** on worker0; U1a physical attribution #77 remains open |
 | Separate full owned compiler self-build | Intentionally skipped; NOT qualified |
 | U1a | Scalar/native f64/calls/imports/provenance and shared switch semantics implemented, full CI qualified, merged. **Not formally all-U1a-complete** until #77 U1a-owned physical backing/resource exit gates close |
-| U1b | Narrow i8/i16/i32 IR operations qualified through PR #87; narrow reference execution, immutable aggregates and core-wide acceptance remain incomplete |
+| U1b | Narrow op registry/build/verifier qualified through PR #87. **Isolated i8/i16/i32 independent reference interpreter + 210-oracle regression cases pass focused CI 41199024937 in PR #101 (UNMERGED)**; immutable aggregate make/get/set and full U1b acceptance #73 remain incomplete |
 | U2 | Managed Text/List/identity, checked failures, deterministic cleanup and root maps NOT implemented in redesigned UIR |
 | U3 | Production frontend → redesigned UIR/native integration NOT implemented; native execution adapter in PR #96 is isolated |
 | Production compiler | Existing frontend/native pipeline and ABI retained; no default backend replacement |
@@ -1548,3 +1549,40 @@ The AB/BA run passed and its exact raw results were independently inspected.
 their actual source integration, independent reference tests and exact-head
 qualification pass. Keep these old and new milestones transparent in status
 and do not publish broad "all done" claims.
+
+## 39. Active U1b narrow independent execution — 2026-10-31
+
+**STATUS: FOCUSED SMOKE PASSED, FINAL QUALIFICATION PENDING; NOT MERGED.** Branch
+`milestone/u1b-independent-narrow-execution-20261031` forked from the qualified PR #99 docs-only main checkpoint
+`30b9d3f11238d0164f3603cd8a06f1f2e83b6586`. It is independent
+of the paired runtime benchmark branch and its acceptance evidence.
+
+- Extend private `u1_execute` (not the production frontend/native ABI) to
+  interpret already-verified U1b i8/i16/i32 raw bit-pattern operations:
+  constant, modular add/sub/mul, signed/unsigned overflow, all ten compare
+  relations, signed/unsigned division and remainder. Signed MIN/-1 must
+  produce *original-location* terminal overflow on **both** div/rem; zero
+  divisor remains a distinct fault. For i32 unsigned multiplication, avoid
+  overflowing host signed Int64; normalizing two's-complement bit arithmetic
+  must be mathematical, not compiler UB.
+- Validate all U1b entry raw input bits to exact declared width and reject
+  f64/unsupported U2/U3 operations. Keep the frozen Eristavi source type
+  system and strict 32-byte public ABI unchanged.
+- New `tests/test_u1_narrow_execution.py` generates 30 hand-built linked
+  functions (three widths x 10 operations) and 210 separately expected
+  outcomes using Python unbounded integer arithmetic. It exercises exact
+  returned value bits, signed/unsigned comparison, overflow flags and
+  terminal source-located faults. All original U1a tests remain enabled.
+- Added this reference test to focused CI. [Smoke 41199024937](https://github.com/eristavi/eristavi-lang/actions/runs/41199024937) **PASSED 28/28** at exact code head `f4fc991d35704cb9d536b6a2629d0d359bddad79`. The 210 independent mathematical outputs and faults are evaluated in three separately scoped 70-case linked UIR requests (no budget increased). Before calling the slice complete,
+  inspect the actual run, fix any implementation/test issue, preserve
+  malformed-IR/revision/budget checks and then qualify at the selected
+  final code revision. Do not run the experimental owned self-build.
+- This slice **does NOT** implement immutable aggregates or satisfy full U1b
+  issue #73. Aggregate field make/get/set, recursive by-value type-cycle
+  rejection, typed aggregate verifier and physical memory evidence still
+  remain. U2 managed semantics, U3 source/frontend integration and U4 machine
+  lowering remain later acceptance milestones.
+
+**Next:** inspect focused smoke of the branch, then expand U1b aggregate
+representation using the existing independent type graph without
+prematurely modifying the public TypeId contract or inventing U2 identities.
