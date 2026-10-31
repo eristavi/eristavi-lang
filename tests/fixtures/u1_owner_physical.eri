@@ -42,7 +42,10 @@ function run() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError 
     let construct be try budget.constructionPhase(owner);
     let routine be try build.create(data,signature,owner,construct);
     let entry be try build.block(routine,[meta.i64()]);
-    try build.returnValues(routine,entry,[try build.parameter(routine,entry,0)],location);
+    let exit be try build.block(routine,[meta.i64()]);
+    let input be try build.parameter(routine,entry,0);
+    try build.jump(routine,entry,exit,[input],location);
+    try build.returnValues(routine,exit,[try build.parameter(routine,exit,0)],location);
     try build.complete(routine); try budget.finishPhase(construct);
 
     let program be try link.create(data); let count be try link.bind(program,target,routine);
