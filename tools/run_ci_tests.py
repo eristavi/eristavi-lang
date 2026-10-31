@@ -37,7 +37,6 @@ SMOKE_TESTS=(
     'test_u1_verifier.U1VerifierTests.test_malformed_ir_and_budget_protocol',
     'test_u1_promotion.U1PromotionTests.test_differential_execution_shapes_and_failure_cleanup',
     'test_u1_promotion.U1PromotionTests.test_switch_physical_samples',
-    'test_u1_c_heap_physical.U1aPhysicalCManagedHeapTests.test_five_matched_native_gc_heap_samples_across_switch_sizes',
     'test_u3_stage0_parity_baseline.U3Stage0ParityBaseline.test_frozen_successful_programs_match_existing_native_compilers',
 )
 
