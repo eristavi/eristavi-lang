@@ -117,7 +117,7 @@ redundant indexing, unbounded caches or unnecessarily expensive CI.
 | Current independent C evidence | Refreshed 20/20 whole C-managed samples passed; source-hashed C inputs unchanged during later owned-only collision tuning. Not per-owner C allocation attribution |
 | Performance | Five final-code AB/BA worker0 pairs: 8.135968 → 8.254257 s (0.9857×), roughly flat amid host variance. **No whole-compiler speedup claim**; #51 full compiler phase profiling remains open |
 | U1a | Scalar/SSA/calls/recursion/effects/switches/strict native f64/provenance/bounded simplification plus scoped physical acceptance **COMPLETE within the adopted U1a boundary** |
-| U1b #73 | Narrow i8/i16/i32 reference slice qualified/merged (#101, 210 independent results). **Draft opt-in aggregate type graph and independent verifier on `compiler/u1b-owned-aggregate-graph-20261031` are NOT YET TESTED or qualified**; canonical UIR `make/get/set`, reference execution and whole-stage physical acceptance remain pending |
+| U1b #73 | Narrow i8/i16/i32 reference slice qualified/merged (#101, 210 independent results). **Draft #106 opt-in aggregate type graph and independent verifier: FOCUSED TESTED (37/37, run 41234799166, exact code head `539d9d6`), NOT full qualified or merged**. Canonical UIR `make/get/set`, reference execution and physical acceptance remain pending |
 | U2 #74 | New UIR managed Text/List/identity, checked failures, root maps and deterministic cleanup **NOT IMPLEMENTED** |
 | U3 #75 | Direct frozen frontend → new UIR → production native target/artifact/cache integration **NOT IMPLEMENTED**. Existing adapter is isolated; #104 is test-only reference parity |
 | U4 #102 | Redesigned UIR machine/legalization/artifact migration **NOT IMPLEMENTED / NOT QUALIFIED** |
@@ -2012,8 +2012,10 @@ checking; do not rerun costly CI or experimental self-build for this update.
 
 **Branch:** `compiler/u1b-owned-aggregate-graph-20261031`, forked from main
 `ccfe726ad80212c9a10ee16d5f3cf17e52db160a`.
-**Status: SOURCE CANDIDATE ONLY — hosted CI / independent runtime qualification PENDING,
-NOT merged, NOT full U1b completion.** Last qualified release remains U1a §44.
+**Status: SOURCE + FOCUSED SMOKE TESTED (37/37); final U1b qualification PENDING,
+NOT merged, NOT full U1b completion.** Draft [PR #106](https://github.com/eristavi/eristavi-lang/pull/106),
+exact focused-passed code head `539d9d6b4589759d47e2c53d5941d1ac8dc7fdbc`.
+Last qualified release remains U1a §44.
 The source review also read `DESIGN_PHILOSOPHY.md`, `LANGUAGE_SEMANTICS.md`,
 the approved U1 operation contract §§2–4, independent verifier/resource rules
 and `CI_QUALIFICATION.md`. The standing philosophy-first mandate in this
@@ -2041,11 +2043,13 @@ handover is still binding.
   canonical empty/nested types, deliberate hash collision, foreign owner
   rejection, static field range, tampered by-value cycle, malformed bucket,
   duplicate record, frozen-only verification and exact owner reclamation.
+  On the exact final focused code head these checks passed in hosted smoke;
+  this does not certify full U1b operations or independent physical backing.
 - Existing `u1_meta.Metadata` and `u1_builder.Function` physical layouts,
   scalar opcode registry and production frontend/backend remain unchanged to
   preserve the already-qualified #105 physical fixture and 32-byte public ABI.
   This is a deliberately isolated metadata sidecar, **not** U1b operations or
-  integration. No tests are claimed passed merely because source exists.
+  integration. Existing U1a tests also passed in the focused hosted batch.
 
 ### Performance-first constraints and remaining acceptance
 
@@ -2055,11 +2059,21 @@ handover is still binding.
   hash-chain lookup is bounded by records/work limits but worst-case collision
   work may be high; measure real memory, traffic and adversarial collisions
   and improve if needed before promotion. Do NOT claim any measured speedup.
-- **Before marking this small slice tested:** run the focused native Python
-  test and inspect smoke logs on the exact branch head. Fix syntax, resource,
-  hash/ownership or independent-verifier defects and update evidence.
-  No workspace mirror is available in this session's container; use the
-  connected GitHub repository and hosted tests as the source of truth.
+- **Focused qualification evidence (NOT full qualification):** hosted CI
+  [41234799166](https://github.com/eristavi/eristavi-lang/actions/runs/41234799166)
+  **PASSED, 37/37 tests**, 101.65 seconds, on exact code head
+  `539d9d6b4589759d47e2c53d5941d1ac8dc7fdbc`. New native graph+verifier
+  test passed. The two earlier exploratory runs failed only because the
+  standalone test initially omitted checked error forwarding
+  ([41234293306](https://github.com/eristavi/eristavi-lang/actions/runs/41234293306))
+  and then lacked a concrete existing U1a generic metadata signature
+  specialization ([41234590567](https://github.com/eristavi/eristavi-lang/actions/runs/41234590567)).
+  Corrective fixture commits `1f810ee` and `539d9d6` resolved both without
+  any changes to the existing U1a metadata/runtime implementation.
+  These are historical failed test candidates, not current regressions.
+  Existing smoke cases passed in all three runs; last run is green.
+  This environment's container had no GitHub-resolvable repository checkout;
+  GitHub-hosted smoke provides test evidence, not full owned self-build certification.
 - **Before claiming full U1b:** connect the aggregate type graph to the
   existing program-owned metadata/TypeId semantics with explicit schema/
   contract validation; add `aggregate.make/get/set` to the builder, closed
@@ -2077,6 +2091,19 @@ handover is still binding.
   production runtime/ABI/source behavior unchanged. U2 #74, U3 #75 and
   U4 #102 remain strictly downstream, not green from this candidate.
 
-**Next action:** open a draft PR for this isolated candidate and inspect its
-focused hosted CI. Any smoke failure is a blocker and the branch must remain
-unqualified until resolved. Keep this section current with exact evidence.
+**Next action:** PR #106 is already open as DRAFT and focused smoke is green.
+Proceed with deliberate program-owned TypeId/schema integration and
+`aggregate.make/get/set` + true independent value-copy execution and negative
+verification in further focused code slices. Retain the isolated graph as
+unpromoted, measure high-collision/large/deep physical backing and owner
+lifetimes, and run the expensive full matrix/qualification once only after a
+coherent final code batch. Do not merge this PR or close #73 from a green smoke.
+The handover-only status reconciliation after `539d9d6` changes no tested
+compiler/runtime inputs and requires only lightweight documentation checking.
+
+### Tested aggregate-graph checkpoint — 2026-10-31
+
+- **Last code-bearing candidate:** `539d9d6b4589759d47e2c53d5941d1ac8dc7fdbc` (unmerged draft #106).
+- **Exact-head smoke:** [run 41234799166](https://github.com/eristavi/eristavi-lang/actions/runs/41234799166) — 37/37 passed, 101.65 seconds, including the new U1b aggregate type graph test and existing U1a physical-ownership checks. Full matrix and owned compiler qualification intentionally **not requested**.
+- **No milestone promotion:** U1b still open. Full aggregate operations, independent execution/conformance, malformed UIR, budget/cancellation and owner physical acceptance not delivered. U2–U4 untouched.
+- **Next stage:** integrate type owner references and canonical aggregate `make/get/set` with independently verified exact value-copy semantics. Keep ABI/source/production behavior unchanged and optimize measured work/memory from design, not at the end.
