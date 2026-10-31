@@ -330,7 +330,7 @@ _start:
             result = lifetime_tests.FreestandingTextLifetimeTests._link_run(
                 self, directory, 'roots-no-index-memory', fallback, probe)
             self.assertEqual((result.returncode, result.stdout, result.stderr),
-                             (0, b'A\0\\xc3\\xa9\\nA\0\\xc3\\xa9\\ntmp\\ninner\\n', b''))
+                             (0, b'A\0\xc3\xa9\nA\0\xc3\xa9\ntmp\ninner\n', b''))
             # Every indexed probe must use exact membership, never the
             # slow frame-by-frame fallback. Count acquire/release pairs
             # instead of syscalls: shared cache ownership is the contract.
