@@ -1,0 +1,181 @@
+{
+  "scope": "Verified hand-built U1a private scalar/CFG switch acceptance only; not end-to-end production compiler, GC heap attribution or public artifact ABI",
+  "source": {
+    "repo": "eristavi/eristavi-lang",
+    "pr": 98,
+    "smoke_run": 41193213024,
+    "smoke_url": "https://github.com/eristavi/eristavi-lang/actions/runs/41193213024",
+    "exact_code_head": "33897f21b1a38d9c3b819d50acdd978b910489fe",
+    "profile": "smoke",
+    "discovered_tests": 21,
+    "passed": 21,
+    "failed": 0
+  },
+  "fixtures": [
+    "switch-dense-8",
+    "switch-dense",
+    "switch-dense-128",
+    "switch-sparse-wide",
+    "switch-irreducible"
+  ],
+  "requirements": {
+    "unmodified_owner_cap_bytes": 8388608,
+    "unmodified_owner_traffic_cap_bytes": 67108864,
+    "unmodified_promotion_work_cap": 33554432,
+    "oracle": "Independent Python switch/CFG evaluator before and after SSA promotion; Eristavi evaluator and simplifier share canonical u1_successors",
+    "physical_method": "five serialized fresh native child process executions with POSIX wait4(), peak RSS and wall timing",
+    "caveats": [
+      "Peak RSS includes baseline native runtime, allocator/GC and potentially inherited pages and is not exact UIR private heap attribution",
+      "owner.peak and owner.traffic conservatively model backing capacity and allocation traffic but exclude runtime allocator/GC metadata",
+      "No whole-compiler speedup claim; complete owned UIR heap/GC/multi-kiloword stress and U3 artifact execution remain separate gates"
+    ]
+  },
+  "measurements": [
+    {
+      "function_peak_bytes": [
+        162368,
+        274528,
+        720704,
+        162368,
+        177088
+      ],
+      "function_traffic_bytes": [
+        400160,
+        681056,
+        1741536,
+        398592,
+        441728
+      ],
+      "function_work_visits": [
+        13676,
+        38713,
+        138775,
+        12689,
+        18307
+      ],
+      "peak_rss_native_units": 125048,
+      "peak_rss_units": "KiB",
+      "trial": 1,
+      "wall_seconds": 0.04495
+    },
+    {
+      "function_peak_bytes": [
+        162368,
+        274528,
+        720704,
+        162368,
+        177088
+      ],
+      "function_traffic_bytes": [
+        400160,
+        681056,
+        1741536,
+        398592,
+        441728
+      ],
+      "function_work_visits": [
+        13676,
+        38713,
+        138775,
+        12689,
+        18307
+      ],
+      "peak_rss_native_units": 125048,
+      "peak_rss_units": "KiB",
+      "trial": 2,
+      "wall_seconds": 0.060572
+    },
+    {
+      "function_peak_bytes": [
+        162368,
+        274528,
+        720704,
+        162368,
+        177088
+      ],
+      "function_traffic_bytes": [
+        400160,
+        681056,
+        1741536,
+        398592,
+        441728
+      ],
+      "function_work_visits": [
+        13676,
+        38713,
+        138775,
+        12689,
+        18307
+      ],
+      "peak_rss_native_units": 125048,
+      "peak_rss_units": "KiB",
+      "trial": 3,
+      "wall_seconds": 0.040443
+    },
+    {
+      "function_peak_bytes": [
+        162368,
+        274528,
+        720704,
+        162368,
+        177088
+      ],
+      "function_traffic_bytes": [
+        400160,
+        681056,
+        1741536,
+        398592,
+        441728
+      ],
+      "function_work_visits": [
+        13676,
+        38713,
+        138775,
+        12689,
+        18307
+      ],
+      "peak_rss_native_units": 125048,
+      "peak_rss_units": "KiB",
+      "trial": 4,
+      "wall_seconds": 0.040441
+    },
+    {
+      "function_peak_bytes": [
+        162368,
+        274528,
+        720704,
+        162368,
+        177088
+      ],
+      "function_traffic_bytes": [
+        400160,
+        681056,
+        1741536,
+        398592,
+        441728
+      ],
+      "function_work_visits": [
+        13676,
+        38713,
+        138775,
+        12689,
+        18307
+      ],
+      "peak_rss_native_units": 125048,
+      "peak_rss_units": "KiB",
+      "trial": 5,
+      "wall_seconds": 0.040424
+    }
+  ],
+  "interpretation": {
+    "max_owner_peak_bytes": 720704,
+    "max_owner_traffic_bytes": 1741536,
+    "max_work": 138775,
+    "all_five_outputs_identical": true
+  },
+  "qualification": {
+    "four_platform_final": "not launched as of this smoke evidence",
+    "completed_batch_final": "not launched",
+    "owned_compiler_self_build": "intentionally excluded"
+  }
+}
