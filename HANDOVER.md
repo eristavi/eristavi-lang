@@ -1552,7 +1552,7 @@ and do not publish broad "all done" claims.
 
 ## 40. Active U1a private physical-heap diagnostic — 2026-10-31
 
-**Candidate only; not qualified or merged.** Branch
+**Measured preliminary test accepted (20/20 physical samples), but PR not yet merged; #77 NOT fully accepted.** Branch
 `milestone/u1a-physical-heap-evidence-20261031` from last successful handover main `1784f846ef2c54c6e1c7b79db73e63c14a0c1176`.
 It records the requested *next slice* of U1a #77 real physical
 measurements, not a conclusion that the U1a UIR-owned attribution gate
@@ -1580,11 +1580,31 @@ a different PR. Do not merge/rewrite source compiler/runtime code here.
   artifact). It retains the original 8 MiB/64 MiB/33,554,432 work gates;
   no new global memory cap, no ABI/frontend/default backend change, and
   no experimental full owned compiler self-build.
-- Added targeted probe to focused CI. **Not yet validated** at the time of
-  this entry: inspect run, fix test/measurement mistakes with original
-  oracles and resource thresholds unchanged, store trustworthy evidence,
-  then qualify only if implementation changes require it. U1a #77 stays OPEN.
+- **Measured [CI #41199687957](https://github.com/eristavi/eristavi-lang/actions/runs/41199687957) PASSED 28/28**, including this private test at exact code head
+  `38c5ffe4737ed0dadee52a9262f9f5ed99d3d11f`.
+  Twenty samples (5 each control/dense8/dense32/dense128), unmodified
+  independent switch result/trace tests and fixed model charge gates passed.
+  [Raw machine-readable samples](docs/evidence/2026-10-31/u1a-c-physical-heap-samples.json)
+  are checked in: C-managed peak bytes 0/control, **8,423,198**
+  (dense8), **8,476,364** (dense32), **9,172,962** (dense128);
+  C-managed live bytes **2,571,379 / 3,355,569 / 5,793,989**;
+  collections **22/59/207**. Whole-process RSS was **125,032 KiB**
+  throughout (not attributable). Original UIR modeled function owner
+  peaks **162,368 / 274,528 / 720,704 bytes** are separate.
+- **CI-performance fix:** the original 20-sample physical test took
+  **105.081 seconds** in targeted CI, unacceptable as a routine smoke/
+  full-suite additive cost. The identical measurement logic moved to
+  `tools/probes/u1_c_heap_physical.py`, outside automatic
+  `test_*.py` discovery; explicit opt-in
+  `.github/workflows/u1a-physical-heap.yml` uses the
+  `uir-physical-evidence` label. The original smoke list was restored.
+  No private physical study is silently run on every normal PR.
+- **Do not close issue #77:** the C-managed heap includes bootstrap/runtime
+  allocations as well as UIR storage, and is not allocation-site tagged
+  to UIR owner identities. The exact per-owner physical backing/collector
+  attribution and larger mixed-stress remain mandatory. No source compiler
+  or runtime implementation was changed by the diagnostic.
 
-**Next:** inspect real C GC physical samples. If attribution remains mixed,
+**Next:** review opt-in probe path and retain checked-in raw samples. Because owner attribution remains mixed,
 design a separately reviewed tagged-owner allocation accounting adapter
 rather than adjusting resource-policy thresholds or guessing heap sizes.
