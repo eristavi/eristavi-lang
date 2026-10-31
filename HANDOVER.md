@@ -1,6 +1,7 @@
 # Eristavi compiler — current handover
 
 **Authoritative recovery checkpoint: 31 October 2026, Asia/Nicosia.** Start here.
+Section 32 records the completed owned-runtime investigation and ranked options.
 Section 31 records the latest qualified and merged compiler/runtime batch.
 Sections 1–30 retain historical development and qualification evidence; their
 draft statuses and next steps are superseded. Section 25 retains the CI policy.
@@ -29,7 +30,8 @@ project task, not a separate task that waits for the user to request it.**
 
 ## Start a new chat with this
 
-> Continue Eristavi Lang from HANDOVER.md section 31 and current GitHub main.
+> Continue Eristavi Lang from HANDOVER.md section 32 for performance findings;
+> section 31 remains the qualified implementation baseline on GitHub main.
 > PR #96 is qualified and merged as
 > `f5c3904e72009bf2c20051cb002772f75e20b98c`.
 > Exact tested PR head: `eec1dfee100be8c0f9b88a71a98b4866f36fab66`;
@@ -44,11 +46,15 @@ project task, not a separate task that waits for the user to request it.**
 > frontend and ABI remain intact; this is not U3 integration or a new JIT.
 > Keep #71/#76/#77 open for scoped exit-gate review; full physical UIR heap/GC,
 > broader stress and production artifact migration remain separate.
-> User requested a read-only timing investigation before merging. Logs show
-> owned-runtime execution dominates the two slowest tests; OS/compiler-label
-> effects are not established by these wall timings. Next recommendation is
-> focused profiling of that execution path, not speculative runtime rewrites
-> or reduced coverage. No performance implementation change is authorized yet.
+> Full owned-runtime investigation is complete: see section 32 and
+> docs/performance/OWNED_RUNTIME_INVESTIGATION_2026-10-31.md. Collection cadence,
+> duplicate slot-root ownership searches and repeated scratch mapping are
+> measured causes. Disposable probes preserve all original outputs: all eight
+> integer workers 244.90 → 57.34 s locally; five-pair representative median
+> 37.62 → 6.94 s. These are diagnostic results, not qualified runtime changes.
+> Next recommendation: a reviewed runtime batch with allocation-pressure-aware
+> GC, exact root filtering and bounded scratch reuse. No production performance
+> patch is implemented or authorized by the investigation request alone.
 > Preserve source semantics, mandatory cell promotion and the existing ABI.
 > Use focused smoke during implementation and one final full/qualification
 > boundary per coherent compiler revision. Documentation needs patch checks.
@@ -66,6 +72,7 @@ project task, not a separate task that waits for the user to request it.**
 | Four-platform PR #96 CI | [41187461690](https://github.com/eristavi/eristavi-lang/actions/runs/41187461690), success: 457 discovered per platform, platform skips retained |
 | Completed-batch PR #96 qualification | [41187461738](https://github.com/eristavi/eristavi-lang/actions/runs/41187461738), success: three bootstrap/offline jobs and owned integration |
 | PR #96 status | Merged; exact tested/merged tree parity verified; zero workflows triggered by merge |
+| Owned-runtime investigation | Completed in section 32; measured diagnostic prototypes only, no production optimization code merged |
 | Separate full owned compiler self-build | Intentionally skipped; NOT qualified |
 | U1a | Integer/predicate reference execution, recursion/effects, strict native f64 execution, closed production imports, exact publication, additional origins/diagnostic maps and bounded simplification qualified/merged; broader physical-resource/stress and production artifact gates remain |
 | U1b | Narrow i8/i16/i32 IR operations qualified through PR #87; narrow reference execution, immutable aggregates and core-wide acceptance remain incomplete |
@@ -1020,3 +1027,86 @@ path before proposing a performance patch. The user has authorized merging,
 not speculative performance changes. Preserve the passed evidence; documentation
 updates use patch checks only. Do not rerun expensive qualification for unchanged
 implementation or infer complete owned compiler self-hosting from this merge.
+
+## 32. Owned-runtime investigation completed — 2026-10-31
+
+**The interim notes below preserve development history; the final measured
+checkpoint at the end of this section supersedes their pending statuses.**
+
+User requested a full investigation and ranked optimization options for the slow
+owned-runtime tests. Active branch: `investigation/owned-runtime-profile`, based
+on `0a2caea09ae9bb05a062a986a3412bc045bbf96b`. No production performance patch
+is being applied. Build pinned diagnostic copies in scratch, reproduce actual
+workers with exact outputs, separate CPU/syscall/allocation/GC/verification cost,
+and test candidate mechanisms only in disposable diagnostic copies. Preserve
+source semantics and all validation/coverage. Do not run the full CI matrix or
+experimental compiler self-build just to investigate. Save measured findings
+and clearly label diagnostic estimates versus qualified improvements.
+
+Profiling baseline reproduced all eight original integer-runtime parity workers
+with exact mathematical-oracle outputs. On this local host, C-runtime workers
+total 17.77 s (17.58 user / 0.19 system), owned workers total 244.90 s
+(230.41 user / 14.47 system). This is a pinned local reproduction, not a claim
+that the CI's 206.67 s must match another host. External ptrace sampling is
+blocked by this container, so disposable assembly uses a low-frequency
+SIGPROF CPU sampler and separate exact event counters. No production code,
+compiler semantics, test coverage or CI workflow has changed.
+
+First diagnostic attribution: a 5 ms CPU-time sampler collected 6,659 samples
+from integer worker 0 with exact outputs. About 24.1% fell in graph-owner lookup,
+20.5% in the graph interval-index heapsort helper and 7.0% in index preparation.
+Separate flag-preserving event counters (not timed performance samples) observed
+72,284,485 allocations, 68,089,958 value-slot creations, 150,818 graph/text
+collections, 118,397,346 owner lookups and 36,806 slot-index scratch reservations
+in that worker. First temporary probes retained exact outputs: owner-root
+filtering ~27.35 s vs baseline ~34.02 s; 4x/16x longer graph-GC scheduling
+budgets ~14.24/9.27 s; combined filtering/lazy preparation + 16x budget ~8.66 s.
+These are exploratory single samples, not qualified production improvements.
+Five-pair confirmation, full original integer-worker coverage and independent
+verifier/oracle probes are pending. No performance code is committed.
+
+### Final measured checkpoint
+
+- Report: `docs/performance/OWNED_RUNTIME_INVESTIGATION_2026-10-31.md`.
+  Raw measurements, hashes and portable diagnostic harness documentation:
+  `docs/evidence/2026-10-31/owned-runtime-profile-evidence.md`.
+- Baseline code: `0a2caea09ae9bb05a062a986a3412bc045bbf96b`; all code
+  files remain unchanged. Temporary probes varied only copied generated runtime
+  assembly. The application assembly was identical within all runtime comparisons.
+- All eight original integer workers retained every independent output, trace,
+  fault, quota/cancellation and stale-verification check: C baseline 17.775 s;
+  owned baseline 244.901 s; combined prototype 57.335 s. This is one complete
+  local pass per runtime, not five full-suite repetitions.
+- Original verifier protocol: owned 57.017 → 11.016 s; original 91-graph and
+  128-block-chain oracle: 80.800 → 11.041 s. All observations matched exactly.
+- Five additional fresh-process, serialized AB/BA pairs on integer worker 0:
+  baseline median 37.617 s, prototype median 6.943 s (5.42x ratio of medians).
+  Baseline range 35.996–39.640 s, prototype 6.550–7.841 s. Do not multiply
+  ratios across unrelated workloads or promise the same hosted-CI timing.
+- CPU sample attribution (6,659 samples): owner lookup 24.1%, interval-index
+  heapsort 20.5%, preparation 7.0%; further time is root traversal/marking/sweep.
+  Allocator free-list scan averaged 1.06 visits/allocation and was only ~1.5%
+  of samples; allocator replacement is not the first recommended target.
+- Separate instrumented counters on worker 0, baseline → prototype:
+  graph/text collections 150,818 → 9,735; owner lookups 118,397,346 → 33,116;
+  index preparations 150,818 → 7,729; OS reservations 36,827 → 65. Value-slot
+  creations remain exactly 68,089,958; graph-object creations remain 1,784,454;
+  slot collections remain 36,806. No workload/check was deleted.
+- Independent C runtime made 55 managed-heap collections in this worker. Its
+  trigger/representation differs; this is not an equal-memory-policy comparison.
+- Dynamic owned reserved-mapping peak: 1,458,176 → 1,409,024 bytes in worker 0,
+  plus 1 MiB static virtual BSS for the prototype exact-slot table. Mapping
+  traffic fell 2,896,707,584 → 2,162,688 bytes; traffic is cumulative virtual
+  reservation, not simultaneous RAM. RSS attribution was unreliable here and
+  is excluded. These observations do not close full physical UIR heap/GC gates.
+- Rank: (1) allocation-pressure-aware graph/text GC policy with memory limits;
+  (2) exact-slot root filtering using the independent C implementation as a
+  precedent; (3) bounded reusable slot-index scratch with clearing, ownership,
+  failure fallback and cleanup; later review boxed-scalar/private word storage.
+  The diagnostic 16x scheduling multiplier must not be blindly shipped.
+- Full production acceptance still needs aggressive forced-GC/tiny-memory/OOM,
+  interior/protected/colliding roots, unwinding and scratch refusal, shared value
+  versus identity/Text/resource lifetime cases, physical capacity accounting,
+  and the normal final four-platform/full qualification once a production patch
+  exists. No performance patch, test coverage change, full CI rerun or experimental
+  owned compiler self-build was performed in this investigation.
