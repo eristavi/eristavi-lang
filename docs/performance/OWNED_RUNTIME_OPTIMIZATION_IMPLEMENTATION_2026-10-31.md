@@ -1,6 +1,6 @@
 # Owned runtime optimization: production implementation and acceptance
 
-Checkpoint: 2026-10-31. [PR #99](https://github.com/eristavi/eristavi-lang/pull/99) implements the three high-priority optimizations from [the owned-runtime investigation](docs/performance/OWNED_RUNTIME_INVESTIGATION_2026-10-31.md). Unlike the 5.42x *disposable diagnostic prototype*, this is an **actual source change** in the owned x86-64 runtime. It does **not** change Eristavi source syntax, the old production frontend, imported contracts, native C runtime, or the ABI.
+Checkpoint: 2026-10-31. [PR #99](https://github.com/eristavi/eristavi-lang/pull/99) implements the three high-priority optimizations from [the owned-runtime investigation](OWNED_RUNTIME_INVESTIGATION_2026-10-31.md). Unlike the 5.42x *disposable diagnostic prototype*, this is an **actual source change** in the owned x86-64 runtime. It does **not** change Eristavi source syntax, the old production frontend, imported contracts, native C runtime, or the ABI.
 
 ## Design
 
@@ -17,13 +17,13 @@ Checkpoint: 2026-10-31. [PR #99](https://github.com/eristavi/eristavi-lang/pull/
 
 ## Performance measurements: keep each scope honest
 
-The baseline research appendix [owned-runtime-profile-evidence.md](docs/evidence/2026-10-31/owned-runtime-profile-evidence.md) showed 244.9 s → 57.3 s for eight workers, and five-pair worker0 37.617 s → 6.943 s, **on a disposable assembly prototype**, not on this patch. It is evidence of possible benefit, *not* a qualified speedup or a future CI duration guarantee. The checked-in policy eliminates repeated GC caused solely by scalar safe points; the exact-root and scratch tests check redundant work and correct storage ownership. Fresh same-host before/after **production-patch timing, CPU, collection count, allocator mapping activity and attributable physical RSS** must be measured before advertising a speedup. A target-specific CI timing report alone must not be divided against the baseline research host's timings.
+The baseline research appendix [owned-runtime-profile-evidence.md](../evidence/2026-10-31/owned-runtime-profile-evidence.md) showed 244.9 s → 57.3 s for eight workers, and five-pair worker0 37.617 s → 6.943 s, **on a disposable assembly prototype**, not on this patch. It is evidence of possible benefit, *not* a qualified speedup or a future CI duration guarantee. The checked-in policy eliminates repeated GC caused solely by scalar safe points; the exact-root and scratch tests check redundant work and correct storage ownership. Fresh same-host before/after **production-patch timing, CPU, collection count, allocator mapping activity and attributable physical RSS** must be measured before advertising a speedup. A target-specific CI timing report alone must not be divided against the baseline research host's timings.
 
 ## Known limits and follow-up gates
 
 - The static exact-root cap forces conservative fallback with large live slot sets. Resource ceilings and cancellation remain unchanged.
 - GC byte pressure is estimated from committed record/backing capacity and separately saturates; allocator metadata, full managed graph reachability, peaks and OS overhead are not represented. Live heap hard cap, true collector/GC physical root attribution and whole source→native comparison are separate policy decisions.
 - Full forced tiny-memory/OOМ, recycled-address interior collisions, protected temporaries, Text/views/identity/List alias, nested cleanup and deterministic resource semantics must remain valid under the complete suite. No test or watchdog is deleted.
-- **Release gate for x86-64 owned-runtime-only code:** exact-head full four-platform CI **and owned integration qualification**, per [CI_QUALIFICATION.md](CI_QUALIFICATION.md). Do not select the experimental full owned compiler self-build or run three unnecessary repeated bootstrap self-build jobs. Merge only after tests pass and tested-vs-merged tree parity is confirmed.
+- **Release gate for x86-64 owned-runtime-only code:** exact-head full four-platform CI **and owned integration qualification**, per [CI_QUALIFICATION.md](../../CI_QUALIFICATION.md). Do not select the experimental full owned compiler self-build or run three unnecessary repeated bootstrap self-build jobs. Merge only after tests pass and tested-vs-merged tree parity is confirmed.
 
-Optimization-first development is a permanent direction in [HANDOVER.md](HANDOVER.md): prioritize measured runtime/compiler bottlenecks and bounded efficiency while keeping correctness, compatibility and safe failures non-negotiable.
+Optimization-first development is a permanent direction in [HANDOVER.md](../../HANDOVER.md): prioritize measured runtime/compiler bottlenecks and bounded efficiency while keeping correctness, compatibility and safe failures non-negotiable.
