@@ -1,7 +1,7 @@
 # Eristavi compiler — current handover
 
 **Authoritative recovery checkpoint: 31 October 2026, Asia/Nicosia.** Start here.
-Section 40 records the QUALIFIED C-managed physical heap study (PR #103 opt-in), NOT full UIR owner attribution.
+Section 40 records the QUALIFIED and MERGED PR #103 C-managed physical heap study; exact UIR per-owner attribution #77 still OPEN.
 Section 39 records the QUALIFIED and MERGED U1b narrow execution slice (PR #101); immutable aggregates remain pending.
 Section 38 records the QUALIFIED, MERGED controlled owned-runtime benchmark; #77 physical attribution remains open.
 Section 37 is the authoritative **qualified, merged PR #99** owned-runtime optimization checkpoint.
@@ -76,7 +76,7 @@ redundant indexing, unbounded caches or unnecessarily expensive CI.
 
 ## Start a new chat with this
 
-> Continue Eristavi Lang from **HANDOVER.md section 40** (qualified U1a C-managed heap observation, but exact per-owner #77 remains OPEN), section 39 (qualified U1b narrow execution) and section 38 (measured 5.4414x runtime worker0 benchmark). Full U1b aggregates, U2 #74, U3 #75 and U4 #102 remain incomplete.
+> Continue Eristavi Lang from **HANDOVER.md section 40** (MERGED PR #103 verified C-managed heap study; owner-specific #77 remains OPEN), section 39 (qualified U1b narrow execution) and section 38 (measured 5.4414x runtime worker0 benchmark). Full U1b aggregates, U2 #74, U3 #75 and U4 #102 remain incomplete.
 > Runtime/compiler performance, peak and retained memory, predictable
 > compilation time and bounded work are the **highest engineering priorities**
 > after correctness, safety and the frozen language contract; see the standing
@@ -121,7 +121,7 @@ redundant indexing, unbounded caches or unnecessarily expensive CI.
 | PR #99 owned runtime integration qualification | [41196975251](https://github.com/eristavi/eristavi-lang/actions/runs/41196975251): **SUCCESS**, x86-64 owned static/offline integration; bootstrap and experimental full owned self-build intentionally skipped |
 | PR #99 status | **MERGED**; exact qualified Git tree matches merge `388bfb6da42a6c0c1de307a0aa72ea987b63bbb0` |
 | U1a scoped acceptance audit | #71/#72/#76 **CLOSED/completed**; #77 **OPEN** for scoped physical memory/resource attribution (see §35) |
-| U1a C-managed actual heap study | **20/20 samples PASSED** (control/8/32/128) on [CI 41199687957](https://github.com/eristavi/eristavi-lang/actions/runs/41199687957); explicit [physical opt-in 41200109602](https://github.com/eristavi/eristavi-lang/actions/runs/41200109602) PASSED. Managed peak 8.42–9.17 MiB on switch workloads; **not per-owner physical backing**; #77 still OPEN |
+| U1a C-managed actual heap study | **PR #103 MERGED, 20/20 samples PASSED** (control/8/32/128) on [CI 41199687957](https://github.com/eristavi/eristavi-lang/actions/runs/41199687957); explicit [physical opt-in 41200109602](https://github.com/eristavi/eristavi-lang/actions/runs/41200109602) PASSED. Managed peak 8.42–9.17 MiB on switch workloads; **not per-owner physical backing**; #77 still OPEN |
 | Owned-runtime optimization | **PRODUCTION MERGED / QUALIFIED** PR #99; three scoped mechanisms, 27/27 focused and 460 Linux x86-64 full tests passed. PR #100's actual-production 5-pair AB/BA matched benchmark passed: **5.4414x** on worker0; U1a physical attribution #77 remains open |
 | Separate full owned compiler self-build | Intentionally skipped; NOT qualified |
 | U1a | Scalar/native f64/calls/imports/provenance and shared switch semantics implemented, full CI qualified, merged. **Not formally all-U1a-complete** until #77 U1a-owned physical backing/resource exit gates close |
@@ -1593,7 +1593,7 @@ of the paired runtime benchmark branch and its acceptance evidence.
 
 ## 40. Qualified U1a C-managed heap diagnostic (not per-owner acceptance) — 2026-10-31
 
-**20/20 C-heap samples measured and private opt-in workflow QUALIFIED; #77 NOT fully accepted. PR #103 is a test-only workstream.** Branch
+**MERGED PR #103, physical C-managed heap study VERIFIED (20/20 raw samples + opt-in workflow). Issue #77 remains OPEN for exact per-UIR owner backing attribution.** Branch
 `milestone/u1a-physical-heap-evidence-20261031` from last successful handover main `1784f846ef2c54c6e1c7b79db73e63c14a0c1176`.
 It records the requested *next slice* of U1a #77 real physical
 measurements, not a conclusion that the U1a UIR-owned attribution gate
@@ -1651,3 +1651,8 @@ a different PR. Do not merge/rewrite source compiler/runtime code here.
 **Next:** Because owner attribution remains mixed,
 design a separately reviewed tagged-owner allocation accounting adapter
 rather than adjusting resource-policy thresholds or guessing heap sizes.
+
+
+### Final PR #103 merge checkpoint (section 40 addendum)
+
+PR [#103](https://github.com/eristavi/eristavi-lang/pull/103) merged at `6422feab353886d957f49fa8ee332b905ef58c40`, preserving the exact opt-in diagnostic script bytes and all 20 independently verified C-managed heap measurements. Existing main PR #101 narrow execution qualification is unchanged; `tools/probes/u1_c_heap_physical.py` is **not** automatically discovered by routine CI, avoiding its observed 105.081-second cost. [Raw evidence](docs/evidence/2026-10-31/u1a-c-physical-heap-samples.json) remains on main. GitHub [issue #77](https://github.com/eristavi/eristavi-lang/issues/77) stays **OPEN**: C-runtime collector counters and process RSS cannot independently attribute allocations to each UIR owner. Future measurement requires tagged managed allocation/backing correlation and mixed-stress validation; no general GC/ABI redesign authorized by this study.
