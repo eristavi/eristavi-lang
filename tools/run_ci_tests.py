@@ -25,6 +25,7 @@ SMOKE_TESTS=(
     'test_u1_native.U1NativeTests',
     'test_u1_integer_execution.U1IntegerExecutionTests.test_integer_recursion_switch_promotion_and_fault_traces',
     'test_u1_narrow_execution.U1NarrowExecutionTests.test_independent_canonical_narrow_execution_and_faults',
+    'test_u1_aggregate_graph.U1AggregateTypeGraphTests.test_native_owned_type_graph_and_independent_verifier',
     # U1a #77 acceptance: exact owner-partition backing under both the C bootstrap
     # and freestanding owned runtime, independently predicted large radix/scratch
     # shapes, and the retained PR #103 C-heap evidence boundary.
