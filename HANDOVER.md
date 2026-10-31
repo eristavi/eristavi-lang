@@ -1931,4 +1931,40 @@ reconciliation; the tested implementation is unchanged.
 
 **Administrative closure verified:** issue #77 was closed as completed on 31 October 2026 after the qualified merge and acceptance documentation were recorded. U1a is complete within its adopted boundary. U1b aggregates, U2, U3 and U4 remain open. This status-only reconciliation changes no tested implementation.
 
-**Next-stage blocker:** the execution server disconnected and the environment reports unavailable. #105/#77 release work is complete and preserved. U1b aggregate implementation, U2, U3 and U4 have not been performed; resume the already-authorized sequence when an execution workspace is available, without requesting authorization again. Do not substitute an untested broad compiler rewrite for the missing development/test workspace.
+### Latest recovery checkpoint — 2026-10-31
+
+**Execution workspace restored; previous next-stage blocker resolved.** Shell,
+repository reads and a clean worktree were verified. The investigation worktree
+remains at qualified head `f1fba11`; main contains the merge and subsequent
+acceptance documentation. Start the next implementation branch from current
+main, preserving the investigation branch and its evidence.
+
+GitHub status was rechecked: #105 is merged at `8c625b1`, #77 is closed,
+and smoke, full CI and completed-batch qualification above all report success
+for exact head `f1fba11`. No implementation or expensive test rerun was needed
+for this handover-only update.
+
+| Work | Current status | Resume point |
+| --- | --- | --- |
+| U1a / #105 / #77 | ✅ Scoped acceptance qualified, merged and closed | Preserve boundaries and raw evidence above |
+| U1b #73 — narrow integers | ✅ i8/i16/i32 reference execution slice complete | Preserve existing coverage; U1b as a whole is not complete |
+| U1b #73 — immutable aggregates | ⬜ Not started | Next implementation stage |
+| U2 #74 | ⬜ Pending | After U1b aggregates |
+| U3 #75 | ⬜ Pending | After U2 |
+| U4 #102 | ⬜ Pending | After U3 |
+| Compiler performance #51 | ⬜ Complete phase profiling unfinished | Continue throughout the sequence |
+
+Resume by reading #73, the U1 contract §§3–4, the remaining acceptance plan and
+`CI_QUALIFICATION.md`. Implement and independently verify owner-scoped immutable
+aggregate types and make/get/set operations with static field checks, value-copy
+semantics, cycle rejection and bounded resources. Aggregate design discussions
+were planning only; no aggregate implementation has been written or qualified.
+The existing authorization covers this continuation; no renewed permission is
+needed.
+
+Final accepted stress results remain **24,400,832 → 7,853,712 B phase peak**,
+**21,957,296 B cumulative traffic**, and **72,682 graph allocations**, with the
+original 8 MiB / 64 MiB gates unchanged. Exact retained backing is **6,653,840 B /
+16,938 objects**, all reclaimed. Final worker0 timing remains roughly flat:
+8.135968 → 8.254257 s median (0.9857×); this is no whole-compiler speedup claim.
+The experimental owned compiler full self-build remains unqualified.
