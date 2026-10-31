@@ -1357,6 +1357,36 @@ runtime, UIR or tests should be cost-budgeted and optimized by default,
 but correctness, safety, precise diagnostics, explicit resource limits,
 the frozen language contract and deterministic cleanup are non-negotiable.
 
+### Final full-CI discovery and corrected fault-injection test
+
+The first exact-head full four-platform run at
+`5224cfbb464a399d0fb2c8881462d7ce2e1c6b3c`
+([CI 41196060338](https://github.com/eristavi/eristavi-lang/actions/runs/41196060338))
+passed macOS and Linux ARM64, but Linux Clang failed **one outdated test
+assumption**: `test_u1_integer_execution.py` expected a call to
+`erist_rt_reserve` inside the old unwind-index builder. This production
+implementation correctly uses the bounded shared
+`.Lslots_scratch_acquire` wrapper, so the fixture must inject allocation
+refusal through that wrapper instead, retain the existing output/stack/slot
+assertions and verify that `rax` and `rdx` are zero in the refusal
+case. The fixture was repaired in commit
+`c2dfdb4ea3a2f8cf9a4442af9b9cbabcb6e101ae` with **no runtime
+code changes and no removal of existing correctness work**.
+This failed full CI is NOT acceptance evidence for the new revision.
+The previous owned-integration qualification
+[41196060289](https://github.com/eristavi/eristavi-lang/actions/runs/41196060289)
+passed on the earlier source and needs final-head reconciliation after
+the test edit. The stale `owned-qualification` label was deliberately
+removed before requesting final checks; no experimental self-build was run.
+
+An indicative same-workload but *not same-runner-paired* Linux Clang
+observation: the integer executor test elapsed 59.879 s on the first
+PR #99 full run versus 257.767 s on the qualified PR #98 Clang run;
+the verifier/oracle elapsed 38.588 s versus 133.107 s. Do NOT call
+this a certified production speedup or a measured whole compiler
+performance gain. The independently recorded original investigation's
+5.42x five-pair ratio remains a disposable prototype result.
+
 **Next action:** confirm final PR #99 exact head and successful full CI +
 owned-integration; if all mandatory gates pass, compare the qualified
 Git tree and merge without retesting unchanged code, then immediately
