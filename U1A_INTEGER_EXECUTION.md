@@ -70,7 +70,7 @@ does not copy the evaluator's wrapping/threshold/division algorithms.
   existing Eristavi x86-64 backend and executes 44 numeric observations plus
   the failure checks on both native-C and static owned runtimes. It checks
   import-free/static ELF, non-executable stack and execution with an unusable
-  PATH. Three independent workers retain all cases with the unchanged 120s
+  PATH. Eight independent workers retain all cases with the unchanged 120s
   per-worker watchdog. An initial single-worker 42-observation owned attempt
   timed out and is not a completed performance/qualification sample. The full
   8,190-case grid uses the C-bootstrap path on each CI platform.

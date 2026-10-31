@@ -188,7 +188,9 @@ class U1IntegerExecutionTests(unittest.TestCase):
         # Independent worker groups retain EVERY case and the existing 120s
         # per-worker watchdog. The first single-process 42-case owned run
         # exceeded that watchdog; it is not a completed performance sample.
-        groups = [(recipes[:13], False), (recipes[13:26], False), (recipes[26:], True)]
+        groups = [(recipes[:13], False), (recipes[13:26], False), (recipes[26:34], False)]
+        groups += [(recipes[index:index+1], False) for index in range(34, len(recipes))]
+        groups += [([], True)]
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             (root / 'compiler').symlink_to(ROOT / 'src/compiler', target_is_directory=True)
