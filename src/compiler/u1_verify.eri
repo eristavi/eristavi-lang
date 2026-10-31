@@ -600,14 +600,20 @@ public function verifyAggregates(routine identity build.Function,
        routine.owner.parent != registry.owner.parent {
         try budget.reject("foreign or mutable U1b aggregate verification context");
     }
+    if phase.owner != routine.owner or phase.used != 0 or
+       phase.prepaid != 0 or phase.state != 0 {
+        try budget.reject("aggregate verification requires a fresh function phase");
+    }
     let graphPhase be try budget.verificationPhase(registry.owner);
     let okay be aggregateVerify.verify(registry,graphPhase)
         else error aggregateVerify.InvalidGraph {
             try budget.finishPhase(graphPhase);
+            try budget.finishPhase(phase);
             fail InvalidIR { message=error.message; category="invalid-ir";
                 stage=1; block=0; instruction=0; location=0; };
         } else error budget.LimitError {
-            try budget.finishPhase(graphPhase); fail error;
+            try budget.finishPhase(graphPhase); try budget.finishPhase(phase);
+            fail error;
         };
     try budget.finishPhase(graphPhase);
     return try verifyMode(routine,phase,false,registry);
