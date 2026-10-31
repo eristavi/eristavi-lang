@@ -1,7 +1,7 @@
 # Eristavi compiler — current handover
 
 **Authoritative recovery checkpoint: 31 October 2026, Asia/Nicosia.** Start here.
-Section 38 records the active controlled performance and resource-accounting continuation (unqualified candidate).
+Section 38 records the QUALIFIED, MERGED controlled owned-runtime benchmark; #77 physical attribution remains open.
 Section 37 is the authoritative **qualified, merged PR #99** owned-runtime optimization checkpoint.
 Section 36 preserves the earlier active optimization candidate and investigation history.
 Section 35 records the previous qualified compiler batch PR #98 and U1a issue status.
@@ -74,7 +74,7 @@ redundant indexing, unbounded caches or unnecessarily expensive CI.
 
 ## Start a new chat with this
 
-> Continue Eristavi Lang from **HANDOVER.md section 38** for the active candidate work, and section 37 for the last qualified main baseline.
+> Continue Eristavi Lang from **HANDOVER.md section 38** for the measured runtime result and section 37 for qualified production code. Future U1b #73, U2 #74, U3 #75 and U4 work remains incomplete.
 > Runtime/compiler performance, peak and retained memory, predictable
 > compilation time and bounded work are the **highest engineering priorities**
 > after correctness, safety and the frozen language contract; see the standing
@@ -117,7 +117,7 @@ redundant indexing, unbounded caches or unnecessarily expensive CI.
 | PR #99 owned runtime integration qualification | [41196975251](https://github.com/eristavi/eristavi-lang/actions/runs/41196975251): **SUCCESS**, x86-64 owned static/offline integration; bootstrap and experimental full owned self-build intentionally skipped |
 | PR #99 status | **MERGED**; exact qualified Git tree matches merge `388bfb6da42a6c0c1de307a0aa72ea987b63bbb0` |
 | U1a scoped acceptance audit | #71/#72/#76 **CLOSED/completed**; #77 **OPEN** for scoped physical memory/resource attribution (see §35) |
-| Owned-runtime optimization | **PRODUCTION MERGED / QUALIFIED** PR #99; three scoped mechanisms, 27/27 focused and 460 Linux x86-64 full tests passed. Direct paired production benchmark and physically attributable memory study remain separate |
+| Owned-runtime optimization | **PRODUCTION MERGED / QUALIFIED** PR #99; three scoped mechanisms, 27/27 focused and 460 Linux x86-64 full tests passed. PR #100's actual-production 5-pair AB/BA matched benchmark passed: **5.4414x** on worker0; U1a physical attribution #77 remains open |
 | Separate full owned compiler self-build | Intentionally skipped; NOT qualified |
 | U1a | Scalar/native f64/calls/imports/provenance and shared switch semantics implemented, full CI qualified, merged. **Not formally all-U1a-complete** until #77 U1a-owned physical backing/resource exit gates close |
 | U1b | Narrow i8/i16/i32 IR operations qualified through PR #87; narrow reference execution, immutable aggregates and core-wide acceptance remain incomplete |
@@ -1474,9 +1474,23 @@ handover governs *all future work*. Do not run full CI for this documentation
 update; use exact tested/merged tree evidence above.
 
 
-## 38. Active all-milestones development — performance and resource verification first (2026-10-31)
+## 38. Qualified production-runtime benchmark and remaining milestone program — 2026-10-31
 
-**Current state: implementation in progress, UNQUALIFIED; do not merge or
+**Current status update:** PR #100 (measurement/tooling and evidence
+only) is **MERGED** at [PR #100](https://github.com/eristavi/eristavi-lang/pull/100),
+merge `f5ab4ec79f54fc784382139853e9f0c041f474b9`.
+Its [same-host five-pair benchmark](https://github.com/eristavi/eristavi-lang/actions/runs/41198570405)
+**SUCCEEDED**, exact median worker0 baseline 21.869176 s and optimized
+4.019040 s (**5.4414×** on this one actual production-runtime worker).
+Raw [artifact #13040469945](https://github.com/eristavi/eristavi-lang/actions/runs/41198570405/artifacts/13040469945)
+and [evidence summary](docs/evidence/2026-10-31/owned-runtime-production-paired.md)
+are saved. The updated PR head `1be4cd36578591e27e179939d699c9e11eea162e`
+passed [focused CI 41198974402](https://github.com/eristavi/eristavi-lang/actions/runs/41198974402)
+with no runtime/compiler code changes. Physical full-process RSS is *not*
+physical UIR buffer attribution. Do not claim all-language, whole-compiler
+or managed-GC performance from this fixed workload; U1a #77 still OPEN.
+
+**Historical candidate state (superseded by this completion note):** implementation was in progress; do not merge or
 close milestone issues solely from draft source.** Branch
 `milestone/paired-runtime-u1-acceptance-20261031` begins at main `30b9d3f11238d0164f3603cd8a06f1f2e83b6586`.
 PR #99 and full owned-runtime optimization CI remain the last qualified
@@ -1530,11 +1544,7 @@ watchdogs. Records wall/user/system CPU, per-child peak RSS, output and binary
 hashes, host/compiler identity and raw samples. It did not invoke full CI or experimental compiler self-build.
 The AB/BA run passed and its exact raw results were independently inspected.
 
-**Next:** merge the measurement-only PR after lightweight CI/patch check
-(no compiler-code full qualification, no repeated performance job);
-investigate U1a #77 physical owned backing with real allocator attribution
-and larger stress; progress the separate U1b narrow reference executor
-in PR #101. The independent U2/U3/U4 gates are not certified by this work. U2/U3/U4 must NOT be described as complete until
+**Next:** U1a #77 physical UIR private backing attribution and larger matched stress; advance independent U1b narrow reference executor in [PR #101](https://github.com/eristavi/eristavi-lang/pull/101) after exact-head full qualification, then immutable aggregates. U2, U3 and U4 require their own accepted functional code and remain **NOT COMPLETE**. Never rerun the already-verified paired benchmark or experimental full owned compiler self-build without a changed acceptance need. U2/U3/U4 must NOT be described as complete until
 their actual source integration, independent reference tests and exact-head
 qualification pass. Keep these old and new milestones transparent in status
 and do not publish broad "all done" claims.
