@@ -54,6 +54,26 @@ source-to-UIR comparison. Do not mark #77 fully accepted until outstanding
 U1a-owned stress/resource accounting is independently evidenced, or the owner
 signs off on a specific contract revision to move named gates.
 
+## Verified focused evidence — 2026-10-31
+
+On exact code head `33897f21b1a38d9c3b819d50acdd978b910489fe`, the
+[focused smoke workflow](https://github.com/eristavi/eristavi-lang/actions/runs/41193213024)
+passed **21/21** tests. The 8/32/128 dense switch families, wide sparse
+signed-boundary cases and two-entry SCC all agreed with the independent Python
+reference before and after mandatory SSA promotion. Five fresh C-native
+process executions gave identical output; full raw values, capacities, work,
+peak RSS and caveats are retained in
+[docs/evidence/2026-10-31/u1-switch-acceptance.json](docs/evidence/2026-10-31/u1-switch-acceptance.json).
+The 128-arm fixture's modeled UIR owner peak was 720,704 bytes, under the
+unchanged 8 MiB development qualification ceiling. This is not an inferred
+physical UIR heap size or a managed runtime GC acceptance claim.
+
+The **final four-platform CI/completed-batch qualification** remains a separate
+explicit gate on the exact final PR head. Only after it passes can #72 be
+considered for closure. #77 still requires explicit recognition of the
+private U1a physical-owner limits and the deferred U2/U3 boundaries; no
+out-of-scope artifact/GC feature is claimed implemented.
+
 ## Release policy
 
 Use local/static checks and focused Linux smoke on incremental candidate
