@@ -1,7 +1,8 @@
 # Eristavi compiler — current handover
 
 **Authoritative recovery checkpoint: 31 October 2026, Asia/Nicosia.** Start here.
-Section 35 is the authoritative **qualified, merged PR #98** checkpoint and remaining issues.
+Section 36 records the *active* optimization-first owned runtime batch (candidate, not qualified).
+Section 35 is the authoritative **qualified, merged PR #98** baseline and remaining issues.
 Sections 33–34 preserve the historical scoped acceptance review and draft work.
 Section 32 records the separate owned-runtime investigation (research only).
 Section 31 preserves the prior PR #96 qualified compiler checkpoint.
@@ -29,6 +30,42 @@ project task, not a separate task that waits for the user to request it.**
 - Status-only documentation updates need a lightweight patch check. Reuse valid
   qualification evidence for unchanged implementation; do not rerun expensive
   compiler/runtime tests merely to keep this file current.
+
+## Optimization-first engineering policy — standing user priority
+
+**From this checkpoint onward, treat runtime and compiler performance,
+memory/resource efficiency, and predictable compilation times as the
+HIGHEST development priorities, after correctness, safety and frozen
+language semantics.** Every newly designed or revised compiler/runtime
+component must budget algorithmic cost, hot-path allocations, retained
+memory, work/GC pressure, cancellation and determinism before adoption.
+Do not accumulate avoidable temporary boxes, repeated full-heap passes,
+redundant indexing, unbounded caches or unnecessarily expensive CI.
+
+- Preserve the existing frontend, ABI, fault and cleanup order, independent
+  acceptance oracles and observable language behavior. Never trade safety
+  or correctness for benchmark gains; never skip/delete tests to look faster.
+- Establish and retain **before/after** targeted wall/CPU,
+  allocation/collection counts, modeled owner capacity/traffic and actual
+  physical resource samples, stating attribution and platform limits.
+- For incremental changes run the narrowest useful focused tests and
+  differential/fault/forced-memory probes; run the complete four-platform
+  CI plus required qualification **once per coherent final code batch**.
+  Never enable experimental owned compiler full self-build without permission.
+- Give priority to existing measured runtime bottlenecks before introducing
+  competing optimizations. Prefer bounded, reversible production edits with
+  explicit allocation-failure and no-allocation fallback. Resist public
+  ABI churn, speculative whole-compiler rewrites and benchmark overclaiming.
+- Maintain a ranked optimization backlog and update this handover after
+  implementation, qualification, merge or a discovered performance regression.
+  An unqualified prototype is not production-ready or a future CI time guarantee.
+- **Current highest-priority engineering batch:** production-harden
+  the three mechanisms in
+  [owned-runtime investigation](docs/performance/OWNED_RUNTIME_INVESTIGATION_2026-10-31.md):
+  allocation-pressure-aware graph/text GC, exact-value-slot root filtering
+  and bounded reusable slot-index scratch. Preserve the study's original
+  oracles, watchdogs and failure tests. U1a #77 physical attribution remains
+  a separate scoped acceptance requirement.
 
 ## Start a new chat with this
 
@@ -1255,3 +1292,36 @@ for this docs-only handover update or the previously qualified unchanged
 code. For future substantive code edits, use focused smoke and exactly
 one final coherent-head full CI plus completed-batch qualification, never
 the experimental owned full compiler self-build unless separately selected.
+
+## 36. Active optimization-first owned runtime implementation — 2026-10-31
+
+**STATUS: DEVELOPMENT ONLY, NOT YET QUALIFIED OR MERGED.**
+Branch: `runtime/owned-gc-pressure-roots-scratch-20261031`, forked from main `4f876009c9786d4e47807d42fe91d922f147a2b4`.
+The full runtime investigation and disposable profiling evidence remain
+in docs/performance/OWNED_RUNTIME_INVESTIGATION_2026-10-31.md and
+docs/evidence/2026-10-31/owned-runtime-profile-evidence.md.
+
+Authorized engineering targets: (1) allocation-pressure-driven and hard-limit
+bounded graph/text GC cadence (not the diagnostic fixed 16x multiplier),
+(2) exact-slot mark-root de-duplication retaining interior/foreign/
+protected/failure roots and conservative failure fallback, (3) capped
+reusable slot-index scratch, cleared before every use and released at
+deterministic final runtime boundary. No source grammar, UIR type system,
+frontend, ABI or default target change.
+
+Verification plan: first compile and focused runtime/ownership smoke; retain
+all native C/owned independent reference semantics, negative GC/root/
+allocation refusal/forced-low-memory/unwinding/cleanup cases, original
+120-second watchdogs, resource accounting and five paired serial
+run comparisons. Final exact-head four-platform CI + completed-batch
+qualification once after the integrated code and tests settle. The
+experimental full owned compiler self-build stays unselected.
+Do not claim the historical 5.42x local prototype ratio as production
+runtime or CI improvement before it is reproduced on accepted code.
+
+**Next:** inspect assembler emitters, add bounded production safeguards and
+test hooks before changing GC cadence, then validate root filtering and
+scratch reuse independently, compare combined outcomes, update this section
+and keep the working handover authoritative. User preference: optimization
+is highest priority for all future Eristavi Lang development (after safety,
+correctness, compatibility).
