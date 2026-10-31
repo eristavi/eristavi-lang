@@ -105,7 +105,8 @@ public function aggregate(reg identity Registry,phase identity budget.Phase,comp
     }
     hash=(hash*131+components.count)%2147483629;
     let bucket be hash%256;
-    let cursor be try words.get(reg.buckets,phase,bucket);
+    let previousHead be try words.get(reg.buckets,phase,bucket);
+    let cursor be previousHead;
     while cursor != 0 {
         let offset be (cursor-1)*4;
         if try words.get(reg.records,phase,offset) == hash and
@@ -130,7 +131,7 @@ public function aggregate(reg identity Registry,phase identity budget.Phase,comp
     }
     let record be reg.records.length/4+1;
     let ignored be try words.push(reg.records,phase,hash);
-    ignored=try words.push(reg.records,phase,cursor);
+    ignored=try words.push(reg.records,phase,previousHead);
     ignored=try words.push(reg.records,phase,start);
     ignored=try words.push(reg.records,phase,components.count);
     try words.set(reg.buckets,phase,bucket,record);
