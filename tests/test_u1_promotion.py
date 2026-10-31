@@ -501,10 +501,11 @@ def cases_for(name, before):
                                 expected = ('trap', (2, 1))
                     yield (a, b, allowed), expected
 
-    elif name == 'switch-dense':
-        # Independent expected behavior: signed 0..31, otherwise default.
-        for value in (MIN, -1, 0, 1, 2, 3, 15, 30, 31, 32, MAX):
-            yield (value,), ('return', (1000 + value if 0 <= value < 32 else 9000,))
+    elif name == 'switch-dense' or name.startswith('switch-dense-'):
+        # Three structural/resource scales, one independent signed-value oracle.
+        width = 32 if name == 'switch-dense' else int(name.rsplit('-', 1)[1])
+        for value in (MIN, -1, 0, 1, 2, 3, width//2, width-2, width-1, width, MAX):
+            yield (value,), ('return', (1000 + value if 0 <= value < width else 9000,))
     elif name == 'switch-sparse-wide':
         # Cases are canonical unsigned 64-bit bit patterns; Python oracle is independent.
         table = {0:100, 1:101, 1024:102, MAX:103, MIN:104, -4096:105, -1:106}
@@ -650,7 +651,7 @@ class U1PromotionTests(unittest.TestCase):
                      'narrowDivRem(meta.i32(),42,1,"narrow-rem-signed-32")',
                      'narrowDivRem(meta.i32(),41,2,"narrow-div-unsigned-32")',
                      'narrowDivRem(meta.i32(),42,2,"narrow-rem-unsigned-32")',
-                     'narrowDivRemMerge()', 'switchDense()', 'switchWideSparse()', 'switchIrreducible()', 'switchFlow()', 'switchDistinctEdges()',
+                     'narrowDivRemMerge()', 'switchDense8()', 'switchDense()', 'switchDense128()', 'switchWideSparse()', 'switchIrreducible()', 'switchFlow()', 'switchDistinctEdges()',
                       'invalidCell(0)', 'invalidCell(1)', 'invalidCell(2)', 'dead(true)', 'failedWork()', 'canonicalReject()', 'failedOutput()', 'cancelled()']
         cls.source = cls.root / 'promotion.eri'; cls.source.write_text(probe_source(cls.calls))
         cls.binary = cls.root / 'promotion-c'
@@ -680,7 +681,7 @@ class U1PromotionTests(unittest.TestCase):
         result = subprocess.run([str(self.binary)], capture_output=True, text=True, timeout=120)
         self.assertEqual((result.returncode, result.stderr), (0, ''), result.stdout[-300:])
         snapshots, labels = self.check_snapshots(result.stdout)
-        self.assertEqual(len(snapshots), 55)
+        self.assertEqual(len(snapshots), 57)
         self.assertEqual(labels, ['invalid-init:ok']*3 + ['malformed-dead:ok', 'promotion-limit:ok', 'canonical-reject:ok', 'partial-output:ok', 'cancelled:ok'])
         again = subprocess.run([str(self.binary)], capture_output=True, text=True, timeout=120)
         self.assertEqual((again.returncode, again.stdout, again.stderr), (0, result.stdout, ''))
