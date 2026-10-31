@@ -1,0 +1,178 @@
+import std.process;
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+import compiler.u1_meta as meta;
+import compiler.u1_aggregate as aggregate;
+import compiler.u1_aggregate_verify as verify;
+
+error ProbeError { message Text; }
+function check(okay Bool,message Text) fails ProbeError {
+    if not okay { fail ProbeError { message=message; }; }
+}
+function frozenBeforeVerify(reg identity aggregate.Registry,phase identity budget.Phase)
+    returns Bool fails budget.LimitError,ProbeError {
+    let checked be verify.verify(reg,phase)
+        else error verify.InvalidGraph {
+            try check(error.message == "aggregate verification requires frozen metadata and its owner",
+                "reject unsealed graph"); return true;
+        };
+    fail ProbeError { message="unfrozen aggregate was verified"; };
+}
+function wrongField(reg identity aggregate.Registry,phase identity budget.Phase,
+    value aggregate.TypeId) returns Bool fails budget.LimitError,ProbeError {
+    let chosen be aggregate.field(reg,phase,value,999)
+        else error budget.LimitError {
+            try check(error.category == "invalid-state","reject invalid field index");
+            return true;
+        };
+    fail ProbeError { message="field index accepted outside layout"; };
+}
+function wrongOwner(reg identity aggregate.Registry,phase identity budget.Phase,
+    foreign aggregate.TypeId) returns Bool fails budget.LimitError,ProbeError {
+    let chosen be aggregate.aggregate(reg,phase,[foreign])
+        else error budget.LimitError {
+            try check(error.category == "invalid-state","reject foreign aggregate TypeId");
+            return true;
+        };
+    fail ProbeError { message="foreign field graph accepted"; };
+}
+function invalidCycle(reg identity aggregate.Registry,phase identity budget.Phase)
+    returns Bool fails budget.LimitError,ProbeError {
+    let checked be verify.verify(reg,phase)
+        else error verify.InvalidGraph {
+            try check(error.message == "invalid, forward, or cyclic aggregate member",
+                "independent verifier rejects forward graph edge");
+            return true;
+        };
+    fail ProbeError { message="cyclic by-value record was verified"; };
+}
+function invalidBucket(reg identity aggregate.Registry,phase identity budget.Phase)
+    returns Bool fails budget.LimitError,ProbeError {
+    let checked be verify.verify(reg,phase)
+        else error verify.InvalidGraph {
+            try check(error.message == "wrong aggregate bucket head","detect forged hash bucket");
+            return true;
+        };
+    fail ProbeError { message="forged bucket head was verified"; };
+}
+function invalidDuplicate(reg identity aggregate.Registry,phase identity budget.Phase)
+    returns Bool fails budget.LimitError,ProbeError {
+    let checked be verify.verify(reg,phase)
+        else error verify.InvalidGraph {
+            try check(error.message == "duplicate noncanonical aggregate shape",
+                "independent verifier catches identical shape in canonical records");
+            return true;
+        };
+    fail ProbeError { message="noncanonical duplicate was verified"; };
+}
+function normal() returns Bool fails budget.LimitError,verify.InvalidGraph,ProbeError {
+    let root be try budget.request(33554432,67108864,67108864);
+    let owner be try budget.metadataOwner(root);
+    let phase be try budget.constructionPhase(owner);
+    let graph be try aggregate.create(owner,phase);
+    let other be try aggregate.create(owner,phase);
+    let i8 be try aggregate.primitive(graph,meta.i8());
+    let i64 be try aggregate.primitive(graph,meta.i64());
+    let f64 be try aggregate.primitive(graph,meta.f64());
+    let i32 be try aggregate.primitive(graph,meta.i32());
+    try check(try frozenBeforeVerify(graph,phase),"frozen-only publication");
+    let empty be try aggregate.aggregate(graph,phase,[]);
+    let collision be try aggregate.aggregate(graph,phase,[f64,i32,i8]);
+    try check(empty.index == 7 and collision.index == 8,"first and colliding aggregate identifiers");
+    let emptyAgain be try aggregate.aggregate(graph,phase,[]);
+    try check(emptyAgain.index == empty.index,"hash collision does not change empty canonical identity");
+    let pair be try aggregate.aggregate(graph,phase,[i8,i64]);
+    let nested be try aggregate.aggregate(graph,phase,[pair,empty,i64]);
+    let duplicate be try aggregate.aggregate(graph,phase,[i8,i64]);
+    try check(pair.index == duplicate.index and nested.index != pair.index,
+        "nested canonical interning");
+    try check((try aggregate.fieldCount(graph,phase,empty)) == 0 and
+        (try aggregate.fieldCount(graph,phase,nested)) == 3,
+        "empty and nested aggregate dimensions");
+    try check((try aggregate.field(graph,phase,nested,0)).index == pair.index,
+        "nested field TypeId");
+    try check((try aggregate.field(graph,phase,pair,1)).index == i64.index,
+        "static field type");
+    try check(try wrongField(graph,phase,pair),"out of range field");
+    let foreign be try aggregate.primitive(other,meta.i8());
+    let before be graph.records.length;
+    try check(try wrongOwner(graph,phase,foreign) and graph.records.length == before,
+        "reject foreign type before mutation");
+    try aggregate.freeze(graph);
+    try check(try verify.verify(graph,phase),"independent structural verification");
+    try aggregate.close(graph); try aggregate.close(other);
+    try budget.finishPhase(phase);
+    try check(root.live == 0 and owner.live == 0 and root.pending == 0 and owner.pending == 0,
+        "all owner allocations reclaimed");
+    try budget.close(owner); try budget.close(root);
+    output("canonical-and-physical-owner:ok");
+    return true;
+}
+function badCycles() returns Bool fails budget.LimitError,ProbeError {
+    let root be try budget.developmentRequest();
+    let owner be try budget.metadataOwner(root);
+    let phase be try budget.constructionPhase(owner);
+    let graph be try aggregate.create(owner,phase);
+    let primitive be try aggregate.primitive(graph,meta.i64());
+    let one be try aggregate.aggregate(graph,phase,[primitive]);
+    try words.set(graph.fields,phase,0,one.index);
+    try aggregate.freeze(graph);
+    try check(try invalidCycle(graph,phase),"forged cycle rejected");
+    try aggregate.close(graph); try budget.finishPhase(phase);
+    try budget.close(owner); try budget.close(root);
+    output("cycle-rejection:ok"); return true;
+}
+function badBuckets() returns Bool fails budget.LimitError,ProbeError {
+    let root be try budget.developmentRequest();
+    let owner be try budget.metadataOwner(root);
+    let phase be try budget.constructionPhase(owner);
+    let graph be try aggregate.create(owner,phase);
+    let primitive be try aggregate.primitive(graph,meta.i64());
+    let one be try aggregate.aggregate(graph,phase,[primitive]);
+    try words.set(graph.buckets,phase,0,123);
+    try aggregate.freeze(graph);
+    try check(try invalidBucket(graph,phase),"forged bucket rejected");
+    try aggregate.close(graph); try budget.finishPhase(phase);
+    try budget.close(owner); try budget.close(root);
+    output("bucket-rejection:ok"); return true;
+}
+function badDuplicates() returns Bool fails budget.LimitError,ProbeError {
+    let root be try budget.developmentRequest();
+    let owner be try budget.metadataOwner(root);
+    let phase be try budget.constructionPhase(owner);
+    let graph be try aggregate.create(owner,phase);
+    let primitive be try aggregate.primitive(graph,meta.i64());
+    let one be try aggregate.aggregate(graph,phase,[primitive]);
+    let hash be try words.get(graph.records,phase,0);
+    let bucket be hash%256;
+    let start be graph.fields.length;
+    let ignored be try words.push(graph.fields,phase,primitive.index);
+    ignored=try words.push(graph.records,phase,hash);
+    ignored=try words.push(graph.records,phase,1);
+    ignored=try words.push(graph.records,phase,start);
+    ignored=try words.push(graph.records,phase,1);
+    try words.set(graph.buckets,phase,bucket,2);
+    try aggregate.freeze(graph);
+    try check(try invalidDuplicate(graph,phase),"forged duplicate rejected");
+    try aggregate.close(graph); try budget.finishPhase(phase);
+    try budget.close(owner); try budget.close(root);
+    output("duplicate-rejection:ok"); return true;
+}
+function run() returns Bool fails budget.LimitError,verify.InvalidGraph,ProbeError {
+    let okay be try normal();
+    okay=try badCycles();
+    okay=try badBuckets();
+    okay=try badDuplicates();
+    return okay;
+}
+function main() {
+    let okay be run()
+    else error budget.LimitError {
+        output("limit:"+error.category+":"+error.message); process.setExitCode(1); return;
+    } else error verify.InvalidGraph {
+        output("invalid:"+error.message); process.setExitCode(1); return;
+    } else error ProbeError {
+        output("probe:"+error.message); process.setExitCode(1); return;
+    };
+}
+main();
