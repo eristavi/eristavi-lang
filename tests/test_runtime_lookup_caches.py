@@ -27,6 +27,66 @@ class RuntimeLookupCacheHarness:
   v=lifetime.FreestandingTextLifetimeTests._link_run(self,self.directory,name,self.runtime if runtime is None else runtime,descriptors()+asm)
   self.assertEqual((v.returncode,v.stdout,v.stderr),(0,b'',b''))
 class RuntimeLookupCacheTests(RuntimeLookupCacheHarness,unittest.TestCase):
+  def test_owned_graph_exact_slot_roots_preserve_interior_and_fallback(self):
+   # Independent observed owner-call count: exact slots were already traced,
+   # but a true interior cell must still reach the original owner validation.
+   old='erist_rt_graph_owner:\n'
+   self.assertEqual(self.runtime.count(old),1)
+   runtime=self.runtime.replace(old,old+'    incq .Lprobe_owner_calls(%rip)\n',1)
+   self.probe('graph-exact-root-dedup',r'''
+.text
+.globl _start
+_start:
+    call evn_scope_enter
+    movq %rax,%r12
+    movl $1,%edi
+    call erist_rt_graph_new_object
+    movq %rax,%r14
+    movl $7,%edi
+    call evn_int
+    movq %rax,%r13
+    movq %r13,.Lprobe_roots(%rip)
+    movq 8(%r14),%rax
+    movq %rax,.Lprobe_roots+8(%rip)
+    movq %r13,.Lprobe_roots+16(%rip)
+    movq %r12,%rdi
+    leaq .Lprobe_roots(%rip),%rsi
+    leaq .Lprobe_classes(%rip),%rdx
+    movl $3,%ecx
+    call evn_bind_roots
+    call erist_rt_graph_mark_roots
+    cmpq $1,24(%r14)
+    jne .Lcache_fail
+    cmpq $1,.Lprobe_owner_calls(%rip)
+    jne .Lcache_fail
+    # If the index refuses an oversized slot set, run the original safe path.
+    movq $4097,.Lvalue_slot_count(%rip)
+    call erist_rt_graph_mark_roots
+    cmpq $3,.Lprobe_owner_calls(%rip)
+    jne .Lcache_fail
+    movq $1,.Lvalue_slot_count(%rip)
+    # Release the true interior key: object must now be unreachable.
+    movq $0,.Lprobe_roots+8(%rip)
+    call erist_rt_graph_mark_roots
+    cmpq $0,24(%r14)
+    jne .Lcache_fail
+    cmpq $3,.Lprobe_owner_calls(%rip)
+    jne .Lcache_fail
+    call erist_rt_graph_sweep
+    cmpq $0,.Lgraph_count(%rip)
+    jne .Lcache_fail
+'''+FINISH+'''
+.bss
+.p2align 3
+.Lprobe_owner_calls:
+.quad 0
+.Lprobe_roots:
+.zero 24
+.section .rodata
+.Lprobe_classes:
+.byte 1,1,1
+''',runtime=runtime)
+
  def test_region_page_cache_reuse_validation_and_release_all(self):
   rt=self.runtime.replace('.Lfree_region_scan:\n','.Lfree_region_scan:\n    incq .Lcache_scans(%rip)\n',1)
   asm='''
