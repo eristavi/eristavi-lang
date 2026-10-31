@@ -125,9 +125,13 @@ function run() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError 
     // Malformed aggregate instructions in this unreachable block MUST still
     // be diagnosed, rather than ignored by CFG reachability.
     let dead be try build.block(routine,[]);
-    let deadAggregate be try agbuild.make(routine,graph,dead,pairType,[one,two],location);
-    let deadResult be try agbuild.get(routine,graph,dead,deadAggregate,0,location);
-    try build.returnValues(routine,dead,[deadResult],location);
+    let deadNext be try build.block(routine,[meta.i64()]);
+    // This concrete edge exercises U1a's generic checkEdge specialization;
+    // the entire dead component remains unreachable from the entry.
+    try build.jump(routine,dead,deadNext,[one],location);
+    let deadAggregate be try agbuild.make(routine,graph,deadNext,pairType,[one,two],location);
+    let deadResult be try agbuild.get(routine,graph,deadNext,deadAggregate,0,location);
+    try build.returnValues(routine,deadNext,[deadResult],location);
     try build.complete(routine); try budget.finishPhase(construct);
     try check(try defaultRejected(routine,owner),"U1a fail-closed");
     try check(try accepted(routine,graph,owner,1,"typed-aggregate-valid"),
