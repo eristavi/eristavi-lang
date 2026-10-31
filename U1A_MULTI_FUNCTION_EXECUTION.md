@@ -1,6 +1,6 @@
 # U1a multi-function reference execution and trusted imports
 
-Status: **isolated U1a reference profile, qualified and merged as PR #92**. The existing
+Status: **isolated U1a reference profile, qualified and merged through PR #94**. The existing
 Eristavi frontend → Typed IR → native compiler paths are **not replaced**.
 The governing approved design is
 [the U1 contract](docs/architecture/Eristavi-UIR-U1-Contract-2026-10-29.md)
@@ -42,8 +42,9 @@ pred.and/pred.or, wrapping i64 add/sub/mul, all six signed/unsigned i64
 overflow pairs, all ten integer comparisons, signed/unsigned i64
 division/remainder with first-fault codes, guards, jump/branch/sparse-switch,
 direct calls and returns. The integer-coverage extension is described in
-[U1A_INTEGER_EXECUTION.md](U1A_INTEGER_EXECUTION.md); its final qualification
-must be checked separately from PR #92's historical evidence below.
+[U1A_INTEGER_EXECUTION.md](U1A_INTEGER_EXECUTION.md), qualified and merged as
+[PR #94](https://github.com/eristavi/eristavi-lang/pull/94). PR #92's evidence
+below is the earlier call/effect/import checkpoint.
 Unsupported instructions have a distinct explicit outcome (kind 3), **never**
 guessed host semantics. In particular, strict binary64 (including native
 rounding environment), U1b narrow integer execution,
@@ -101,3 +102,18 @@ selected and not implied by this release.
 - Merged PR: [#92](https://github.com/eristavi/eristavi-lang/pull/92), main commit `e59ef7e6401990da5498b24f357077cc46e41e51`.
 - Tested head `65b8109c9248162e63b4f1cedf91e5a25e4835df` passed the [complete four-platform CI](https://github.com/eristavi/eristavi-lang/actions/runs/41138028053) and [required completed-batch qualification](https://github.com/eristavi/eristavi-lang/actions/runs/41138028110). The merged implementation Git tree is identical to tested head: `0d85a50abbf1390e741ec7ff0705254ec5fc2c1a`.
 - The experiment-only owned compiler self-build remains skipped, not qualified. Production/native UIR integration and the limitations documented above remain future work.
+
+## Qualified integer extension and merge — 2026-10-31
+
+[PR #94](https://github.com/eristavi/eristavi-lang/pull/94) merged as
+`4b4a7f62af98bb91bc3a7c4cb218817b02298fce` after
+[four-platform CI](https://github.com/eristavi/eristavi-lang/actions/runs/41183090972)
+and [completed-batch qualification](https://github.com/eristavi/eristavi-lang/actions/runs/41183091353)
+passed on head `bb2f1ba81bfa4ae039f61ed0e812299a8ab4b872`.
+Tested and merged trees equal `5567a40a9a710fa3d1008da121e38f5e4b10d5f4`.
+It completes admitted i64/pred reference execution, fixes wrapping and partial
+frame cleanup, and clears abandoned native slot roots on checked unwinding in
+both native runtimes. See the integer record for independent oracle, native
+parity, quota, cancellation and deterministic root/fallback evidence.
+The merge ran no new workflows. Strict native f64, production imports,
+source/publication revisions and the other limits above remain pending.

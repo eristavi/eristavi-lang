@@ -1,7 +1,9 @@
 # U1a integer reference execution coverage
 
-Status: implementation candidate, **not yet qualified or merged**. Baseline:
-main `007aa4ac897a4d618b00955b7808db19792b2404`, following qualified PR #92.
+Status: **qualified and merged** as [PR #94](https://github.com/eristavi/eristavi-lang/pull/94),
+main commit `4b4a7f62af98bb91bc3a7c4cb218817b02298fce`.
+The implementation baseline was main
+`007aa4ac897a4d618b00955b7808db19792b2404`, following qualified PR #92.
 Governing contracts: U1 operation contract §§4, 6–10, 13–15,
 `INTEGER_REMAINDER.md`, `CI_QUALIFICATION.md`, `HANDOVER.md` §§25, 28–29.
 
@@ -86,14 +88,22 @@ tests, with the usual explicit Linux x86-64 restriction on owned native parity.
 
 ## Acceptance and limits
 
-Before accepting the batch, require focused tests, final four-platform full CI
-and completed-batch bootstrap/offline plus owned-integration qualification on
-the exact final revision. Record their links in the PR; never substitute PR
-#92's green results. The separate experimental 900-second owned compiler
-self-build remains unselected. Do not merge based on smoke alone.
+The batch passed [four-platform full CI 41183090972](https://github.com/eristavi/eristavi-lang/actions/runs/41183090972)
+and [completed-batch qualification 41183091353](https://github.com/eristavi/eristavi-lang/actions/runs/41183091353)
+on exact head `bb2f1ba81bfa4ae039f61ed0e812299a8ab4b872`.
+All four CI configurations passed, each discovering 448 tests with platform
+skips retained. Three Linux bootstrap jobs completed repeatable C/D builds
+and offline audits; owned integration passed its offline audit with
+repeatable=false. All source snapshots remained unchanged. The separate
+experimental 900-second owned compiler self-build remains unselected.
+
+The tested tree and merged PR #94 tree are both
+`5567a40a9a710fa3d1008da121e38f5e4b10d5f4`.
+The merge reused these results and launched no new workflows. Later
+documentation-only commits do not change this qualified implementation.
 
 This completes the integer/predicate portion of the **reference evaluator**,
-subject to those gates. It does not complete U1a or issue #71: native strict
+with the gates above passed. It does not complete U1a or issue #71: native strict
 f64, production selected import trust, source-origin/publication guarantees,
 bounded simplification and wider physical-resource qualification remain.
 U1b narrow execution/aggregates, U2 managed failures/resources and U3 production
