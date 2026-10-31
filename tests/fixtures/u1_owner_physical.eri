@@ -108,10 +108,14 @@ function run() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError 
     try check(stressOwner.live == 0 and stressOwner.pending == 0,"stress backing ledger leak");
     try budget.close(stressOwner);
 
+    // Publication copies can retain function-owned table backing. Preserve the
+    // original dependency order: retire publication/import/module references
+    // before closing the function and metadata owners they may reference.
+    process.setExitCode(102);
+    try publication.close(stamp); try imports.close(policy); try link.close(program);
     process.setExitCode(103);
     try build.close(routine); try budget.close(owner);
     process.setExitCode(102);
-    try publication.close(stamp); try imports.close(policy); try link.close(program);
     try meta.close(data); try budget.close(shared);
     process.setExitCode(101);
     try check(root.live == 0 and root.pending == 0,"U1 owner physical probe ledger leak");
