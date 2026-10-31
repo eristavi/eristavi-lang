@@ -1,6 +1,7 @@
 # Eristavi compiler — current handover
 
 **Authoritative recovery checkpoint: 31 October 2026, Asia/Nicosia.** Start here.
+Section 32 records the current U1a issue-by-issue acceptance audit.
 Section 31 records the latest qualified and merged compiler/runtime batch.
 Sections 1–30 retain historical development and qualification evidence; their
 draft statuses and next steps are superseded. Section 25 retains the CI policy.
@@ -29,7 +30,7 @@ project task, not a separate task that waits for the user to request it.**
 
 ## Start a new chat with this
 
-> Continue Eristavi Lang from HANDOVER.md section 31 and current GitHub main.
+> Continue Eristavi Lang from HANDOVER.md sections 32 and 31 and current GitHub main.
 > PR #96 is qualified and merged as
 > `f5c3904e72009bf2c20051cb002772f75e20b98c`.
 > Exact tested PR head: `eec1dfee100be8c0f9b88a71a98b4866f36fab66`;
@@ -42,7 +43,8 @@ project task, not a separate task that waits for the user to request it.**
 > publication, supplemental source origins, diagnostic-map ingress/remapping
 > and bounded transactional constant/CFG simplification. The existing production
 > frontend and ABI remain intact; this is not U3 integration or a new JIT.
-> Keep #71/#76/#77 open for scoped exit-gate review; full physical UIR heap/GC,
+> Issue #71 was already closed, and #76 is now closed after scoped acceptance review.
+> Keep #72 and #77 open for their listed unverified gates; full physical UIR heap/GC,
 > broader stress and production artifact migration remain separate.
 > User requested a read-only timing investigation before merging. Logs show
 > owned-runtime execution dominates the two slowest tests; OS/compiler-label
@@ -66,6 +68,7 @@ project task, not a separate task that waits for the user to request it.**
 | Four-platform PR #96 CI | [41187461690](https://github.com/eristavi/eristavi-lang/actions/runs/41187461690), success: 457 discovered per platform, platform skips retained |
 | Completed-batch PR #96 qualification | [41187461738](https://github.com/eristavi/eristavi-lang/actions/runs/41187461738), success: three bootstrap/offline jobs and owned integration |
 | PR #96 status | Merged; exact tested/merged tree parity verified; zero workflows triggered by merge |
+| U1a scoped issue audit | #71 and #76 CLOSED (completed); #72 OPEN (switch conformance evidence); #77 OPEN (artifact/resource/source conformance) — see section 32 |
 | Separate full owned compiler self-build | Intentionally skipped; NOT qualified |
 | U1a | Integer/predicate reference execution, recursion/effects, strict native f64 execution, closed production imports, exact publication, additional origins/diagnostic maps and bounded simplification qualified/merged; broader physical-resource/stress and production artifact gates remain |
 | U1b | Narrow i8/i16/i32 IR operations qualified through PR #87; narrow reference execution, immutable aggregates and core-wide acceptance remain incomplete |
@@ -75,7 +78,7 @@ project task, not a separate task that waits for the user to request it.**
 
 **Reading rule:** Section 31 supersedes the earlier draft/candidate descriptions.
 PR #96 is the latest qualified implementation. Later documentation-only commits
-do not represent a different tested compiler revision. Keep #71/#76/#77 open
+do not represent a different tested compiler revision. #71 and #76 are closed as completed, while #72 and #77 remain open
 pending scoped exit-gate review; no broader U1a/U1b/U2/U3 completion is implied.
 
 ## 1. Verified repository checkpoint
@@ -1020,3 +1023,20 @@ path before proposing a performance patch. The user has authorized merging,
 not speculative performance changes. Preserve the passed evidence; documentation
 updates use patch checks only. Do not rerun expensive qualification for unchanged
 implementation or infer complete owned compiler self-hosting from this merge.
+
+## 32. U1a scoped acceptance audit — 2026-10-31
+
+**Status is audited on GitHub main `0a2caea09ae9bb05a062a986a3412bc045bbf96b`. This section supersedes historical open/pending wording for U1a issues.** It is a documentation-only acceptance record; no implementation, production frontend, native ABI, test runner, or CI policy is changed.
+
+| Issue | Current disposition | Basis / remaining evidence |
+| --- | --- | --- |
+| [#71](https://github.com/eristavi/eristavi-lang/issues/71) | **CLOSED / completed** (already closed on GitHub) | Recursive FunctionId calls, zero/multiple results, SCC effect propagation, closed test and production import contracts, independent integer execution, source/fault preservation, exact-head qualified PRs #92/#94/#96. Does not authorize generic FFI or production frontend migration. |
+| [#76](https://github.com/eristavi/eristavi-lang/issues/76) | **CLOSED / completed** in this audit | Native x86-64/AArch64 strict binary64 adapter; FP-control save/establish/restore and foreign boundary checks, Float rational oracle, hostile environment/non-FMA and fault origin regressions; five matched physical native resource observations; exact-head green PR #96 CI and qualification. Not full physical UIR heap/GC acceptance or a production-backend/JIT replacement. |
+| [#72](https://github.com/eristavi/eristavi-lang/issues/72) | **OPEN — needs explicit final acceptance** | Sparse i64 switches implemented/merged with qualified PR #83 and covered by later PR #96. Reconcile issue's single-successor-schema requirement: verifier/promoter use `u1_successors`, evaluator/simplifier independently decode cases. Complete documented wide/dense/sparse/irreducible/cancellation/resource acceptance matrix, or formally scope intentional independent-oracle exceptions; only then close. |
+| [#77](https://github.com/eristavi/eristavi-lang/issues/77) | **OPEN — broader artifact/resource gates** | Exact revisions/publications, multi-parent origins, diagnostic source map and safe transactional simplification qualified through PR #96. Actual reusable artifact/cache ingestion/manifest and physical heap/GC/large matched stress/aggregate resource accounting remain outside demonstrated acceptance. Decide which artifact requirements transfer explicitly to U3 rather than silently granting them here. |
+
+**Evidence:** PR #83 tested/merged tree `bfda0d1278a8185b2d48a6e24114f5ed10e743fa`; [CI 41119775019](https://github.com/eristavi/eristavi-lang/actions/runs/41119775019) / [qualification 41121497695](https://github.com/eristavi/eristavi-lang/actions/runs/41121497695). PR #96 exact head `eec1dfee100be8c0f9b88a71a98b4866f36fab66`, tree `10fb3c388bea0f9f9bc6e6a5d26cc72867b475ce`; [CI 41187461690](https://github.com/eristavi/eristavi-lang/actions/runs/41187461690) / [qualification 41187461738](https://github.com/eristavi/eristavi-lang/actions/runs/41187461738). The unchanged implementation must not be requalified merely because this review updates documentation.
+
+**Current completion claim:** U1a's major scalar, call, effect, native Float, and publication *implementation slices* are qualified and merged, but **full U1a acceptance is not complete** while #72/#77 remain open. The previous informal 11/12 progress bar is not a formal certification. The isolated UIR executor remains separate from the production frontend (U3); the experimental full owned compiler self-build remains intentionally skipped.
+
+**Next safe development steps:** finish the #72 common-schema/independent acceptance evidence in a focused batch, then #77 publication/artifact/physical-resource exit-gate reconciliation. Close each only with a linked evidentiary report; if implementation changes, use focused smoke while editing and one final four-platform plus completed-batch qualification on the exact revised code tree. Do not repeat unchanged expensive jobs. Continue U1b immutable aggregate development independently of U2/U3 readiness.
