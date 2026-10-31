@@ -112,6 +112,8 @@ _start:
     call erist_rt_free
     testq %rax,%rax
     jne .Lfail
+    cmpq $0,.Lslots_scratch_busy(%rip)
+    jne .Lfail
     call erist_rt_allocator_release_all
     testq %rax,%rax
     jne .Lfail
@@ -318,26 +320,30 @@ _start:
                 self, directory, 'roots', emitted.stdout, probe)
             self.assertEqual((result.returncode, result.stdout, result.stderr),
                              (0, b'A\0\xc3\xa9\nA\0\xc3\xa9\ntmp\ninner\n', b''))
-            # Force scratch reservation failure only in index preparation. The
-            # original search must preserve exactly the same survivors/output.
-            prepare, rest = emitted.stdout.split('.Lslots_prepare_index:\n', 1)
-            body, after = rest.split('.Lslots_index_unavailable:', 1)
-            self.assertEqual(body.count('    call erist_rt_reserve\n'), 1)
-            fallback = prepare+'.Lslots_prepare_index:\n'+body.replace(
-                '    call erist_rt_reserve\n', '    xorl %eax,%eax\n', 1
-            )+'.Lslots_index_unavailable:'+after
+            # Production index now has 64 KiB of reusable cleared scratch.
+            # Force acquire failure to verify the *same* linear fallback,
+            # without changing or weakening any root-output oracles.
+            entry = '.Lslots_scratch_acquire:\n'
+            self.assertEqual(emitted.stdout.count(entry), 1)
+            fallback = emitted.stdout.replace(
+                entry, entry+'    xorl %eax,%eax\n    xorl %edx,%edx\n    ret\n', 1)
             result = lifetime_tests.FreestandingTextLifetimeTests._link_run(
                 self, directory, 'roots-no-index-memory', fallback, probe)
             self.assertEqual((result.returncode, result.stdout, result.stderr),
                              (0, b'A\0\xc3\xa9\nA\0\xc3\xa9\ntmp\ninner\n', b''))
+            # Every indexed probe must use exact membership, never the
+            # slow frame-by-frame fallback. Count acquire/release pairs
+            # instead of syscalls: shared cache ownership is the contract.
             indexed = emitted.stdout.replace('.Lslots_root:\n',
                 '.Lslots_root:\n    jmp .Lfail\n', 1)
             indexed = indexed.replace('.Lslots_index_find_probe:\n',
                 '.Lslots_index_find_probe:\n    incq .Lroot_probes(%rip)\n', 1)
-            indexed = indexed.replace('    movq %rdx,%r15\n    decq %r14\n',
-                '    movq %rdx,%r15\n    incq .Lroot_reservations(%rip)\n    decq %r14\n', 1)
-            indexed = indexed.replace('    call erist_rt_release\n    testq %rax,%rax\n    jne .Lslots_internal',
-                '    call erist_rt_release\n    incq .Lroot_releases(%rip)\n    testq %rax,%rax\n    jne .Lslots_internal', 1)
+            indexed = indexed.replace(entry,
+                entry+'    incq .Lroot_reservations(%rip)\n', 1)
+            release_entry = '.Lslots_scratch_release:\n'
+            self.assertEqual(indexed.count(release_entry), 1)
+            indexed = indexed.replace(release_entry,
+                release_entry+'    incq .Lroot_releases(%rip)\n', 1)
             for name, runtime, bound in [('indexed', indexed, 20000),
                                          ('fallback', fallback, 0)]:
                 result = lifetime_tests.FreestandingTextLifetimeTests._link_run(

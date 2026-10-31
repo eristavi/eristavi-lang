@@ -246,8 +246,8 @@ class U1IntegerExecutionTests(unittest.TestCase):
                 if fallback:
                     before, after = text.split('.Lunwind_index_allocate:', 1)
                     allocation, after = after.split('.Lunwind_index_fallback:', 1)
-                    self.assertEqual(allocation.count('call erist_rt_reserve'), 1)
-                    allocation = allocation.replace('call erist_rt_reserve', 'xorl %eax,%eax')
+                    self.assertEqual(allocation.count('call .Lslots_scratch_acquire'), 1)
+                    allocation = allocation.replace('call .Lslots_scratch_acquire', 'xorl %eax,%eax\n    xorl %edx,%edx')
                     text = before + '.Lunwind_index_allocate:' + allocation + '.Lunwind_index_fallback:' + after
                 path, obj, binary = root / 'unwind.s', root / 'unwind.o', root / 'unwind'
                 path.write_text(text + probe)
