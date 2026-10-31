@@ -5,11 +5,18 @@ It walks the concrete U1 graph objects, while this test independently predicts
 radix backing and pins the owned allocator/header contract. Existing PR #103
 C-runtime physical samples remain a separate allocator/GC observation rather
 than being converted into a guessed per-owner multiplier.
+
+For the owned runtime, a private diagnostic build also proves that no graph
+allocation in the measured process receives an oversized free-list block. That
+turns the independently derived graph request + allocator-header totals into
+actual block capacities for this acceptance run. After the fixture releases its
+U1 owners, the diagnostic forces collection and requires at least the complete
+65,536-word stress store's 8,469 graph objects to disappear before process
+teardown. The production runtime source and resource policy are unchanged.
 """
 from pathlib import Path
 import json
 import platform
-import re
 import shutil
 import subprocess
 import tempfile
@@ -19,6 +26,7 @@ from compiler.erist.cli import build_native
 from u1_native_tools import shared_u1_compilers
 
 ROOT = Path(__file__).resolve().parents[1]
+STRESS_OBJECTS = 8469
 
 
 def _radix_counts(word_count):
@@ -68,6 +76,83 @@ def _parse(text):
     return physical, logical, cleanup
 
 
+def _instrument_owned_runtime(runtime):
+    """Acceptance-only proof of exact graph capacity and post-close GC progress."""
+    state = '.Lalloc_regions:\n.quad 0\n'
+    assert runtime.count(state) == 1
+    runtime = runtime.replace(
+        state,
+        '.Ltest_graph_alloc_active:\n.quad 0\n'
+        '.Ltest_oversized_graph_reuse:\n.quad 0\n'
+        '.Ltest_graph_before:\n.quad 0\n' + state,
+        1,
+    )
+
+    graph_alloc = '    addq $64,%rdi\n    call erist_rt_alloc\n    testq %rax,%rax\n'
+    assert runtime.count(graph_alloc) == 1
+    runtime = runtime.replace(
+        graph_alloc,
+        '    addq $64,%rdi\n'
+        '    movq $1,.Ltest_graph_alloc_active(%rip)\n'
+        '    call erist_rt_alloc\n'
+        '    movq $0,.Ltest_graph_alloc_active(%rip)\n'
+        '    testq %rax,%rax\n',
+        1,
+    )
+
+    reuse = '.Lfreelist_reuse:\n    movq %r14,%rdx\n'
+    assert runtime.count(reuse) == 1
+    runtime = runtime.replace(
+        reuse,
+        '.Lfreelist_reuse:\n'
+        '    pushfq\n'
+        '    pushq %rax\n'
+        '    cmpq $0,.Ltest_graph_alloc_active(%rip)\n'
+        '    je .Ltest_graph_reuse_checked\n'
+        '    movq -96(%rbp),%rax\n'
+        '    cmpq %r12,%rax\n'
+        '    je .Ltest_graph_reuse_checked\n'
+        '    incq .Ltest_oversized_graph_reuse(%rip)\n'
+        '.Ltest_graph_reuse_checked:\n'
+        '    popq %rax\n'
+        '    popfq\n'
+        '    movq %r14,%rdx\n',
+        1,
+    )
+
+    startup = (
+        '    call erist_entry\n'
+        '    call erist_rt_allocator_release_all\n'
+        '    testq %rax,%rax\n'
+        '    jne .Lscalar_app_fail\n'
+    )
+    assert runtime.count(startup) == 1
+    runtime = runtime.replace(
+        startup,
+        '    call erist_entry\n'
+        '    cmpq $0,.Ltest_oversized_graph_reuse(%rip)\n'
+        '    jne .Ltest_u1_physical_fail\n'
+        '    call erist_rt_graph_live_objects\n'
+        '    movq %rax,.Ltest_graph_before(%rip)\n'
+        '    call erist_rt_text_collect\n'
+        '    call erist_rt_graph_live_objects\n'
+        '    movq .Ltest_graph_before(%rip),%rcx\n'
+        '    subq %rax,%rcx\n'
+        f'    cmpq ${STRESS_OBJECTS},%rcx\n'
+        '    jb .Ltest_u1_physical_fail\n'
+        '    call erist_rt_allocator_release_all\n'
+        '    testq %rax,%rax\n'
+        '    jne .Lscalar_app_fail\n'
+        '    jmp .Ltest_u1_physical_done\n'
+        '.Ltest_u1_physical_fail:\n'
+        '    movl $77,%edi\n'
+        '    jmp erist_rt_exit\n'
+        '.Ltest_u1_physical_done:\n',
+        1,
+    )
+    return runtime
+
+
 class U1OwnerPhysicalTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -101,14 +186,21 @@ class U1OwnerPhysicalTests(unittest.TestCase):
     def test_owned_layout_contract_and_independent_large_radix_oracle(self):
         graph = (ROOT / 'src/runtime/graph_heap_x86_64.eri').read_text()
         memory = (ROOT / 'src/compiler/runtime_memory.eri').read_text()
+        allocator = (ROOT / 'src/runtime/allocator_x86_64.eri').read_text()
         self.assertRegex(graph, r'shlq\s+\$5,%rdi')
         self.assertRegex(graph, r'addq\s+\$64,%rdi')
         self.assertIn('call erist_rt_alloc', graph)
         self.assertIn('public function blockHeaderSize() returns Int { return 32; }', memory)
         self.assertIn('public function regionHeaderSize() returns Int { return 48; }', memory)
+        # Oversized reuse is possible in production, so the owned acceptance run
+        # below must explicitly prove it did not occur before calling the structural
+        # totals exact actual block capacities.
+        self.assertIn('cmpq %r12,%rax', allocator)
+        self.assertIn('.Lfreelist_reuse:', allocator)
 
         physical, logical = self._run(self.bootstrap)
         self.assertEqual(physical['stress'], _word_backing(65536))
+        self.assertEqual(physical['stress'][0], STRESS_OBJECTS)
         self.assertEqual(physical['scratch'], _scratch_backing(513, 1024))
         # Publication copies are partitioned by the source table's exact owner.
         self.assertGreater(physical['publication-metadata'][3], physical['module'][3])
@@ -138,7 +230,7 @@ class U1OwnerPhysicalTests(unittest.TestCase):
 
     @unittest.skipUnless(platform.system() == 'Linux' and platform.machine().lower() in ('x86_64', 'amd64'),
                          'owned runtime execution requires Linux x86-64')
-    def test_c_and_owned_execution_report_identical_owner_partition(self):
+    def test_owned_exact_capacity_gc_and_c_partition_parity(self):
         for tool in ('as', 'ld'):
             if not shutil.which(tool):
                 self.skipTest(f'{tool} unavailable')
@@ -149,18 +241,34 @@ class U1OwnerPhysicalTests(unittest.TestCase):
         assembly = self.root / 'owner-physical.s'; assembly.write_text(emitted.stdout)
         runtime = subprocess.run([str(generator)], capture_output=True, text=True, timeout=90)
         self.assertEqual((runtime.returncode, runtime.stderr), (0, ''))
-        runtime_source = self.root / 'owned-runtime.s'; runtime_source.write_text(runtime.stdout)
-        obj, runtime_obj = self.root / 'owner-physical.o', self.root / 'runtime.o'
-        for source, target in ((assembly, obj), (runtime_source, runtime_obj)):
-            subprocess.run(['as', '--64', str(source), '-o', str(target)], check=True,
+
+        obj = self.root / 'owner-physical.o'
+        subprocess.run(['as', '--64', str(assembly), '-o', str(obj)], check=True,
+                       capture_output=True, timeout=30)
+
+        def link_runtime(name, source_text):
+            source = self.root / f'{name}.s'; source.write_text(source_text)
+            runtime_obj = self.root / f'{name}.o'
+            subprocess.run(['as', '--64', str(source), '-o', str(runtime_obj)], check=True,
                            capture_output=True, timeout=30)
-        owned = self.root / 'owner-physical-owned'
-        subprocess.run(['ld', '-nostdlib', '-static', '-e', '_start', str(obj), str(runtime_obj), '-o', str(owned)],
-                       check=True, capture_output=True, timeout=30)
+            executable = self.root / name
+            subprocess.run(['ld', '-nostdlib', '-static', '-e', '_start', str(obj), str(runtime_obj), '-o', str(executable)],
+                           check=True, capture_output=True, timeout=30)
+            return executable
+
+        owned = link_runtime('owner-physical-owned', runtime.stdout)
+        diagnostic = link_runtime('owner-physical-owned-diagnostic', _instrument_owned_runtime(runtime.stdout))
         c_physical, c_logical = self._run(self.bootstrap)
         owned_physical, owned_logical = self._run(owned)
         self.assertEqual(owned_physical, c_physical)
         self.assertEqual(owned_logical, c_logical)
+        # A zero exit from the diagnostic proves both conditions encoded in the
+        # private runtime: no graph allocation reused an oversized block, and a
+        # forced collection after logical owner cleanup reclaimed at least every
+        # graph object in the 65,536-word stress store.
+        diagnostic_physical, diagnostic_logical = self._run(diagnostic)
+        self.assertEqual(diagnostic_physical, owned_physical)
+        self.assertEqual(diagnostic_logical, owned_logical)
 
 
 if __name__ == '__main__':
