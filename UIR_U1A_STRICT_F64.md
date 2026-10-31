@@ -1,5 +1,6 @@
 # Isolated U1a strict binary64 operation and oracle slice
 
+Current integration candidate: see [U1A_NATIVE_TRUST_PUBLICATION.md](U1A_NATIVE_TRUST_PUBLICATION.md). The original slice/evidence below is historical; final qualification of the new batch is pending.
 Checkpoint: 2026-10-30. Governing contracts: `FLOAT.md`, `LANGUAGE_SEMANTICS.md`, `docs/architecture/Eristavi-UIR-U1-Contract-2026-10-29.md` §§4–7 and §13, and `CI_QUALIFICATION.md`. This is **not** a declaration of complete U1a or runtime/backend floating-environment certification.
 
 ## Private scalar operations

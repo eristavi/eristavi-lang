@@ -55,12 +55,13 @@ function bounds(context identity Context) fails budget.LimitError,InvalidIR {
     try store(context,data.signatures,data.owner,6,6291456); try store(context,data.types,data.owner,1,8388608);
     try store(context,data.buckets,data.owner,1,64); try store(context,data.sources,data.owner,4,524288);
     try store(context,data.bytes,data.owner,1,8388608); try store(context,data.locations,data.owner,7,7340032);
+    try store(context,data.originLinks,data.owner,3,3145728);
     try store(context,data.declarations,data.owner,6,393216); try store(context,data.symbolBytes,data.owner,1,16777216);
     try require(context,routine.blocks.length > 0 and data.buckets.length == 64,"missing entry or signature buckets");
     // Individual bounds above make this sum/product safe even for malformed input.
     let records be routine.blocks.length+routine.values.length+routine.instructions.length+routine.operands.length+routine.edges.length+routine.arguments.length;
     records=records+routine.cells.length+routine.switches.length+routine.cases.length+data.signatures.length+data.types.length+data.buckets.length+data.sources.length+data.bytes.length+data.locations.length;
-    records=records+data.declarations.length+data.symbolBytes.length;
+    records=records+data.declarations.length+data.symbolBytes.length+data.originLinks.length;
     context.scanLimit=32*(records+1);
     try require(context,routine.signature.owner == data.key and routine.signature.index >= 1 and routine.signature.index <= data.signatures.length/6,"invalid function signature owner or index");
 }
@@ -213,6 +214,25 @@ function locations(context identity Context) fails budget.LimitError,InvalidIR {
             }
         }
         index=index+1;
+    }
+    index=0; let previous be 0;
+    while index < data.originLinks.length/3 {
+        let child be try read(context,data.originLinks,index*3);
+        let parent be try read(context,data.originLinks,index*3+1);
+        let role be try read(context,data.originLinks,index*3+2);
+        try require(context,child >= previous and child <= data.locations.length/7 and
+            parent >= 1 and parent < child and role >= 1 and role <= 4,
+            "invalid ordered acyclic additional origin");
+        let prior be index-1;
+        while prior >= 0 {
+            if try words.get(data.originLinks,context.phase,prior*3) != child { prior=-1; }
+            else {
+                try require(context,try words.get(data.originLinks,context.phase,prior*3+1) != parent or
+                    try words.get(data.originLinks,context.phase,prior*3+2) != role,"duplicate origin link");
+                prior=prior-1;
+            }
+        }
+        previous=child; index=index+1;
     }
     context.block=1;
     while context.block <= context.routine.blocks.length/5 {

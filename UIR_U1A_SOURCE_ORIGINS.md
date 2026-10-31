@@ -1,5 +1,6 @@
 # U1a synthetic source-origin chain — bounded first slice
 
+Current integration candidate: see [U1A_NATIVE_TRUST_PUBLICATION.md](U1A_NATIVE_TRUST_PUBLICATION.md). The original slice/evidence below is historical; final qualification of the new batch is pending.
 Checkpoint: 2026-10-30. Scope: private in-memory metadata/independent verification only. Governing contract: `docs/architecture/Eristavi-UIR-U1-Contract-2026-10-29.md` §§9–10, plus the agreed source-location policy and `CI_QUALIFICATION.md`.
 
 The metadata location record already has seven physical fields; its seventh previously required zero. This change gives it a checked *private* encoding for a **single parent** and transformation reason without enlarging metadata tables or changing U1 budget reservations:

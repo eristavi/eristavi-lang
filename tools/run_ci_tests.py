@@ -22,6 +22,7 @@ SMOKE_TESTS=(
     'test_u1_calls.U1CallContracts.test_direct_call_declarations_and_verifier',
     'test_u1_module.U1ModuleBindingTests.test_declarations_bind_exact_verified_bodies',
     'test_u1_execution.U1CallExecutionTests.test_recursive_frames_effects_and_versioned_imports',
+    'test_u1_native.U1NativeTests',
     'test_u1_integer_execution.U1IntegerExecutionTests.test_integer_recursion_switch_promotion_and_fault_traces',
     'test_native_runtime_lifetimes.NativeRuntimeLifetimeTests.test_native_handler_and_abandoned_call_allocations_are_reclaimed',
     'test_u1_verifier.U1VerifierTests.test_malformed_ir_and_budget_protocol',

@@ -1,0 +1,321 @@
+// Hand-built UIR acceptance; production source lowering does not compute results.
+import std.process;
+import compiler.format as format;
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+import compiler.u1_meta as meta;
+import compiler.u1_builder as build;
+import compiler.u1_module as link;
+import compiler.u1_imports as imports;
+import compiler.u1_verify as verify;
+import compiler.u1_publication as publication;
+import compiler.u1_simplify as simplify;
+import compiler.u1_native as native;
+import compiler.u1_execute as execute;
+
+error ProbeError { message Text; }
+function check(ok Bool,message Text) fails ProbeError {
+    if not ok { fail ProbeError { message=message; }; }
+}
+function run() returns Bool fails budget.LimitError,verify.InvalidIR,native.Unsupported,ProbeError {
+    let args be process.arguments();
+    let originalMode be args.count == 1 and args[0] == "original";
+    let root be try budget.developmentRequest(); let shared be try budget.metadataOwner(root);
+    let phase be try budget.constructionPhase(shared); let data be try meta.create(shared,phase);
+    let fp be try meta.signature(data,phase,[meta.f64(),meta.f64()],
+        [meta.f64(),meta.f64(),meta.f64(),meta.f64(),meta.f64(),
+         meta.pred(),meta.pred(),meta.pred(),meta.pred(),meta.pred(),meta.pred(),meta.f64()]);
+    let scalar be try meta.signature(data,phase,[meta.i64(),meta.i64()],[meta.i64()]);
+    let one be try meta.signature(data,phase,[meta.i64()],[meta.i64()]);
+    let io be try meta.signature(data,phase,[meta.i64()],[]);
+    let fpId be try meta.declaration(data,phase,fp,"probe.float",1,0,0);
+    let divId be try meta.declaration(data,phase,scalar,"probe.effects",1,20,0);
+    let identitySymbol be "erist.u1.i64.identity"; let identityAdapter be 3;
+    if args.count == 1 and args[0] == "test-import" { identitySymbol="u1.test.identity"; identityAdapter=2; }
+    let identityId be try meta.declaration(data,phase,one,identitySymbol,2,0,1);
+    let writeId be try meta.declaration(data,phase,io,"erist.u1.i64.write",2,20,1);
+    let foldId be try meta.declaration(data,phase,one,"probe.fold",1,48,0);
+    let recursiveId be try meta.declaration(data,phase,one,"probe.recursion",1,32,0);
+    let relayId be try meta.declaration(data,phase,fp,"probe.float.relay",1,0,0);
+    let zeroId be try meta.declaration(data,phase,io,"probe.zero",1,20,0);
+    let arithmeticSig be try meta.signature(data,phase,[meta.i64(),meta.i64()],[meta.i64(),meta.pred(),meta.i64(),meta.i64(),meta.i64(),meta.i64(),meta.pred(),meta.i64(),meta.pred(),meta.i64(),meta.pred(),meta.i64(),meta.pred(),meta.i64(),meta.pred(),meta.i64(),meta.i64(),meta.i64(),meta.i64(),meta.pred(),meta.pred(),meta.pred(),meta.pred(),meta.pred(),meta.pred(),meta.pred(),meta.pred(),meta.pred(),meta.pred()]);
+    let arithmeticId be try meta.declaration(data,phase,arithmeticSig,"probe.arithmetic",1,16,0);
+    let flowId be try meta.declaration(data,phase,scalar,"probe.flow",1,32,0);
+    let source be try meta.source(data,phase,"native-probe",
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",64);
+    let site be try meta.location(data,phase,source,0,8,0,1,1);
+    let fault be try meta.location(data,phase,source,8,16,8,2,1);
+    let origin be try meta.synthetic(data,phase,fault,4);
+    try meta.origin(data,phase,origin,site,2);
+    try meta.origin(data,phase,origin,fault,3);
+    try meta.freeze(data); try budget.finishPhase(phase);
+    let owner be try budget.functionOwner(root,false);
+    let body be try build.create(data,fp,owner,try budget.constructionPhase(owner));
+    let entry be try build.block(body,[meta.f64(),meta.f64()]);
+    let a be try build.parameter(body,entry,0); let b be try build.parameter(body,entry,1);
+    let sum be try build.addFloat(body,entry,a,b,site);
+    let difference be try build.subtractFloat(body,entry,a,b,site);
+    let product be try build.multiplyFloat(body,entry,a,b,site);
+    let quotient be try build.divideFloat(body,entry,a,b,site);
+    let negative be try build.negateFloat(body,entry,a,site);
+    let eq be try build.compareFloat(body,entry,a,b,1,site);
+    let ne be try build.compareFloat(body,entry,a,b,2,site);
+    let lt be try build.compareFloat(body,entry,a,b,3,site);
+    let le be try build.compareFloat(body,entry,a,b,4,site);
+    let gt be try build.compareFloat(body,entry,a,b,5,site);
+    let ge be try build.compareFloat(body,entry,a,b,6,site);
+    let x be try build.floatBits(body,entry,4607182418833571840,site);
+    let y be try build.floatBits(body,entry,4607182418732908544,site);
+    let minusOne be try build.floatBits(body,entry,-4616189618054758400,site);
+    let intermediate be try build.multiplyFloat(body,entry,x,y,site);
+    let nonfma be try build.addFloat(body,entry,intermediate,minusOne,site);
+    try build.returnValues(body,entry,[sum,difference,product,quotient,negative,eq,ne,lt,le,gt,ge,nonfma],site);
+    try build.complete(body); try budget.finishPhase(body.phase);
+    let integerOwner be try budget.functionOwner(root,false);
+    let integer be try build.create(data,scalar,integerOwner,try budget.constructionPhase(integerOwner));
+    let integerEntry be try build.block(integer,[meta.i64(),meta.i64()]);
+    let n be try build.parameter(integer,integerEntry,0); let d be try build.parameter(integer,integerEntry,1);
+    let before be try build.call(integer,integerEntry,zeroId,[n],site);
+    let divided be try build.divideSigned(integer,integerEntry,n,d,origin);
+    let after be try build.call(integer,integerEntry,writeId,[d],site);
+    let copied be try build.call(integer,integerEntry,identityId,[divided],site);
+    try build.returnValues(integer,integerEntry,[try build.result(integer,copied,0)],site);
+    try build.complete(integer); try budget.finishPhase(integer.phase);
+    let foldOwner be try budget.functionOwner(root,false);
+    let original be try build.create(data,one,foldOwner,try budget.constructionPhase(foldOwner));
+    let foldEntry be try build.block(original,[meta.i64()]);
+    let input be try build.parameter(original,foldEntry,0);
+    let first be try build.integer(original,foldEntry,9223372036854775807,site);
+    let second be try build.integer(original,foldEntry,1,site);
+    let wrapped be try build.wrapAdd(original,foldEntry,first,second,site);
+    let answer be try build.wrapAdd(original,foldEntry,input,wrapped,site);
+    let exit be try build.block(original,[meta.i64()]);
+    let discarded be try build.block(original,[]);
+    let always be try build.compareInteger(original,foldEntry,first,first,1,site);
+    try build.branch(original,foldEntry,always,exit,[answer],discarded,[],site);
+    let no be try build.predicate(original,discarded,false,site);
+    try build.guard(original,discarded,no,3,fault);
+    try build.jump(original,discarded,exit,[input],site);
+    let finish be try build.block(original,[meta.i64()]);
+    let wrong be try build.block(original,[meta.i64()]);
+    let chosen be try build.parameter(original,exit,0);
+    let zeroCase be try build.edge(original,wrong,[input]);
+    let minCase be try build.edge(original,finish,[chosen]);
+    let fallbackCase be try build.edge(original,wrong,[input]);
+    try build.switchInteger(original,exit,wrapped,[0,-9223372036854775807-1],[zeroCase,minCase],fallbackCase,site);
+    try build.returnValues(original,finish,[try build.parameter(original,finish,0)],site);
+    let wrongPred be try build.predicate(original,wrong,false,site);
+    try build.guard(original,wrong,wrongPred,3,fault);
+    try build.returnValues(original,wrong,[try build.parameter(original,wrong,0)],site);
+    try build.complete(original); try budget.finishPhase(original.phase);
+    let folded be try simplify.simplify(original);
+    try check(folded.blocks.length < original.blocks.length and folded.switches.length == 0,
+        "constant branch/switch did not simplify canonically");
+    let recursiveOwner be try budget.functionOwner(root,false);
+    let recursive be try build.create(data,one,recursiveOwner,try budget.constructionPhase(recursiveOwner));
+    let recEntry be try build.block(recursive,[meta.i64()]);
+    let recN be try build.parameter(recursive,recEntry,0);
+    let zero be try build.integer(recursive,recEntry,0,site);
+    let stop be try build.compareInteger(recursive,recEntry,recN,zero,1,site);
+    let recDone be try build.block(recursive,[]); let recBody be try build.block(recursive,[]);
+    try build.branch(recursive,recEntry,stop,recDone,[],recBody,[],site);
+    try build.returnValues(recursive,recDone,[zero],site);
+    let oneValue be try build.integer(recursive,recBody,1,site);
+    let previous be try build.wrapSubtract(recursive,recBody,recN,oneValue,site);
+    let called be try build.call(recursive,recBody,recursiveId,[previous],site);
+    let added be try build.wrapAdd(recursive,recBody,try build.result(recursive,called,0),oneValue,site);
+    try build.returnValues(recursive,recBody,[added],site);
+    try build.complete(recursive); try budget.finishPhase(recursive.phase);
+    let relayOwner be try budget.functionOwner(root,false);
+    let relay be try build.create(data,fp,relayOwner,try budget.constructionPhase(relayOwner));
+    let relayEntry be try build.block(relay,[meta.f64(),meta.f64()]);
+    let relayCall be try build.call(relay,relayEntry,fpId,[try build.parameter(relay,relayEntry,0),try build.parameter(relay,relayEntry,1)],site);
+    try build.returnValues(relay,relayEntry,[try build.result(relay,relayCall,0),try build.result(relay,relayCall,1),try build.result(relay,relayCall,2),try build.result(relay,relayCall,3),try build.result(relay,relayCall,4),try build.result(relay,relayCall,5),try build.result(relay,relayCall,6),try build.result(relay,relayCall,7),try build.result(relay,relayCall,8),try build.result(relay,relayCall,9),try build.result(relay,relayCall,10),try build.result(relay,relayCall,11)],site);
+    try build.complete(relay); try budget.finishPhase(relay.phase);
+    let zeroOwner be try budget.functionOwner(root,false);
+    let zeroBody be try build.create(data,io,zeroOwner,try budget.constructionPhase(zeroOwner));
+    let zeroEntry be try build.block(zeroBody,[meta.i64()]);
+    let writeCall be try build.call(zeroBody,zeroEntry,writeId,[try build.parameter(zeroBody,zeroEntry,0)],site);
+    try build.returnValues(zeroBody,zeroEntry,[],site);
+    try build.complete(zeroBody); try budget.finishPhase(zeroBody.phase);
+    let arithmeticOwner be try budget.functionOwner(root,false);
+    let arithmetic be try build.create(data,arithmeticSig,arithmeticOwner,try budget.constructionPhase(arithmeticOwner));
+    let arithmeticEntry be try build.block(arithmetic,[meta.i64(),meta.i64()]);
+    let arithmeticA be try build.parameter(arithmetic,arithmeticEntry,0);
+    let arithmeticB be try build.parameter(arithmetic,arithmeticEntry,1);
+    let op3 be try build.addOverflow(arithmetic,arithmeticEntry,arithmeticA,arithmeticB,site);
+    let op15 be try build.wrapAdd(arithmetic,arithmeticEntry,arithmeticA,arithmeticB,site);
+    let op16 be try build.wrapSubtract(arithmetic,arithmeticEntry,arithmeticA,arithmeticB,site);
+    let op17 be try build.wrapMultiply(arithmetic,arithmeticEntry,arithmeticA,arithmeticB,site);
+    let op19 be try build.subtractOverflow(arithmetic,arithmeticEntry,arithmeticA,arithmeticB,site);
+    let op20 be try build.multiplyOverflow(arithmetic,arithmeticEntry,arithmeticA,arithmeticB,site);
+    let op21 be try build.unsignedAddOverflow(arithmetic,arithmeticEntry,arithmeticA,arithmeticB,site);
+    let op22 be try build.unsignedSubtractOverflow(arithmetic,arithmeticEntry,arithmeticA,arithmeticB,site);
+    let op23 be try build.unsignedMultiplyOverflow(arithmetic,arithmeticEntry,arithmeticA,arithmeticB,site);
+    let op24 be try build.divideSigned(arithmetic,arithmeticEntry,arithmeticA,arithmeticB,site);
+    let op25 be try build.remainderSigned(arithmetic,arithmeticEntry,arithmeticA,arithmeticB,site);
+    let op26 be try build.divideUnsigned(arithmetic,arithmeticEntry,arithmeticA,arithmeticB,site);
+    let op27 be try build.remainderUnsigned(arithmetic,arithmeticEntry,arithmeticA,arithmeticB,site);
+    let cmp1 be try build.compareInteger(arithmetic,arithmeticEntry,arithmeticA,arithmeticB,1,site);
+    let cmp2 be try build.compareInteger(arithmetic,arithmeticEntry,arithmeticA,arithmeticB,2,site);
+    let cmp3 be try build.compareInteger(arithmetic,arithmeticEntry,arithmeticA,arithmeticB,3,site);
+    let cmp4 be try build.compareInteger(arithmetic,arithmeticEntry,arithmeticA,arithmeticB,4,site);
+    let cmp5 be try build.compareInteger(arithmetic,arithmeticEntry,arithmeticA,arithmeticB,5,site);
+    let cmp6 be try build.compareInteger(arithmetic,arithmeticEntry,arithmeticA,arithmeticB,6,site);
+    let cmp7 be try build.compareInteger(arithmetic,arithmeticEntry,arithmeticA,arithmeticB,7,site);
+    let cmp8 be try build.compareInteger(arithmetic,arithmeticEntry,arithmeticA,arithmeticB,8,site);
+    let cmp9 be try build.compareInteger(arithmetic,arithmeticEntry,arithmeticA,arithmeticB,9,site);
+    let cmp10 be try build.compareInteger(arithmetic,arithmeticEntry,arithmeticA,arithmeticB,10,site);
+    try build.returnValues(arithmetic,arithmeticEntry,[op3.value,op3.overflow,op15,op16,op17,op19.value,op19.overflow,op20.value,op20.overflow,op21.value,op21.overflow,op22.value,op22.overflow,op23.value,op23.overflow,op24,op25,op26,op27,cmp1,cmp2,cmp3,cmp4,cmp5,cmp6,cmp7,cmp8,cmp9,cmp10],site);
+    try build.complete(arithmetic); try budget.finishPhase(arithmetic.phase);
+    let flowOwner be try budget.functionOwner(root,false);
+    let flow be try build.create(data,scalar,flowOwner,try budget.constructionPhase(flowOwner));
+    let flowEntry be try build.block(flow,[meta.i64(),meta.i64()]);
+    let flowA be try build.parameter(flow,flowEntry,0); let flowB be try build.parameter(flow,flowEntry,1);
+    let flowZero be try build.integer(flow,flowEntry,0,site);
+    let loop be try build.block(flow,[meta.i64(),meta.i64(),meta.i64()]);
+    let againBody be try build.block(flow,[]); let flowExit be try build.block(flow,[meta.i64()]);
+    let e0 be try build.edge(flow,loop,[flowA,flowB,flowZero]);
+    let eMax be try build.edge(flow,loop,[flowB,flowA,flowZero]);
+    let eMin be try build.edge(flow,loop,[flowB,flowA,flowZero]);
+    let eOnes be try build.edge(flow,loop,[flowA,flowB,flowZero]);
+    let eDefault be try build.edge(flow,loop,[flowA,flowB,flowZero]);
+    try build.switchInteger(flow,flowEntry,flowA,[0,9223372036854775807,-9223372036854775807-1,-1],
+        [e0,eMax,eMin,eOnes],eDefault,site);
+    let loopA be try build.parameter(flow,loop,0); let loopB be try build.parameter(flow,loop,1);
+    let loopN be try build.parameter(flow,loop,2);
+    let three be try build.integer(flow,loop,3,site);
+    let again be try build.compareInteger(flow,loop,loopN,three,3,site);
+    try build.branch(flow,loop,again,againBody,[],flowExit,[loopA],site);
+    let step be try build.integer(flow,againBody,1,site);
+    let next be try build.wrapAdd(flow,againBody,loopN,step,site);
+    try build.jump(flow,againBody,loop,[loopB,loopA,next],site);
+    try build.returnValues(flow,flowExit,[try build.parameter(flow,flowExit,0)],site);
+    try build.complete(flow); try budget.finishPhase(flow.phase);
+    let program be try link.create(data);
+    let bound be try link.bind(program,fpId,body);
+    bound=try link.bind(program,divId,integer);
+    if originalMode { bound=try link.bind(program,foldId,original); }
+    else { bound=try link.bind(program,foldId,folded); }
+    bound=try link.bind(program,recursiveId,recursive);
+    bound=try link.bind(program,relayId,relay); bound=try link.bind(program,zeroId,zeroBody);
+    bound=try link.bind(program,arithmeticId,arithmetic); bound=try link.bind(program,flowId,flow);
+    let sealed be try link.seal(program);
+    let policy be try imports.create(program);
+    let selected be try imports.select(policy,identityId,identityAdapter); selected=try imports.select(policy,writeId,4);
+    let frozen be try imports.freeze(policy);
+    let stamp be try publication.publish(program,policy);
+    if originalMode or (args.count == 1 and (args[0] == "emit" or args[0] == "test-import")) { try native.emit(stamp); }
+    else { if args.count == 1 and args[0] == "map" { try native.sourceMap(stamp); }
+    else {
+        try publication.validate(stamp);
+        // Well-typed mutation with unchanged body revision must fail publication.
+        let edit be try budget.constructionPhase(foldOwner);
+        let old be try words.get(folded.instructions,edit,7);
+        folded.instructions.frozen=false; try words.set(folded.instructions,edit,7,old-1);
+        folded.instructions.frozen=true;
+        let denied be try deniedPublication(stamp);
+        try check(denied,"same-revision mutation retained publication");
+        folded.instructions.frozen=false; try words.set(folded.instructions,edit,7,old);
+        folded.instructions.frozen=true; try budget.finishPhase(edit);
+        try publication.validate(stamp);
+        let result be try execute.run(program,policy,foldId,[7],100,16);
+        try check(result.kind == 0 and try execute.value(result,0) == -9223372036854775807+6,"fold changed wrapping result");
+        // Content digest edits remain syntactically valid but cannot reuse a stamp.
+        let metaEdit be try budget.constructionPhase(shared);
+        let digestStart be try words.get(data.sources,metaEdit,2);
+        let oldByte be try words.get(data.bytes,metaEdit,digestStart);
+        data.bytes.frozen=false; try words.set(data.bytes,metaEdit,digestStart,49); data.bytes.frozen=true;
+        try check(try deniedPublication(stamp),"changed source digest retained publication");
+        data.bytes.frozen=false; try words.set(data.bytes,metaEdit,digestStart,oldByte); data.bytes.frozen=true;
+        let oldVersion be try words.get(data.declarations,metaEdit,(identityId.index-1)*6+5);
+        data.declarations.frozen=false;
+        try words.set(data.declarations,metaEdit,(identityId.index-1)*6+5,2); data.declarations.frozen=true;
+        try check(try deniedPublication(stamp),"changed native contract retained publication");
+        data.declarations.frozen=false;
+        try words.set(data.declarations,metaEdit,(identityId.index-1)*6+5,oldVersion); data.declarations.frozen=true;
+        // A forward/self parent is invalid even if no instruction uses that origin.
+        data.originLinks.frozen=false; try words.set(data.originLinks,metaEdit,1,origin.index); data.originLinks.frozen=true;
+        let malformed be try deniedOrigin(folded);
+        try check(malformed,"origin self cycle accepted");
+        data.originLinks.frozen=false; try words.set(data.originLinks,metaEdit,1,site.index); data.originLinks.frozen=true;
+        try budget.finishPhase(metaEdit);
+        folded.revision=folded.revision+1;
+        // Link rejects the stale body revision before any native emission.
+        try check(try deniedPublication(stamp),"changed body revision retained publication");
+        folded.revision=folded.revision-1;
+        try publication.validate(stamp);
+        let previousLive be root.live; let previousTraffic be root.traffic;
+        let previousWork be root.work; let oldLimit be foldOwner.limit;
+        foldOwner.limit=foldOwner.live+24000;
+        let refused be try deniedPublish(program,policy);
+        foldOwner.limit=oldLimit; foldOwner.state=0;
+        try check(refused and root.live == previousLive and root.pending == 0 and
+            root.traffic >= previousTraffic and root.work >= previousWork,"publication quota cleanup");
+        let unchanged be root.live;
+        let revise be original.revision;
+        let deadEdit be try budget.constructionPhase(foldOwner);
+        let deadTerm be try words.get(original.blocks,deadEdit,(discarded.index-1)*5+4);
+        let oldLoc be try words.get(original.instructions,deadEdit,(deadTerm-1)*10+6);
+        original.instructions.frozen=false;
+        try words.set(original.instructions,deadEdit,(deadTerm-1)*10+6,0); original.instructions.frozen=true;
+        try check(try deniedSimplify(original),"simplification discarded malformed dead CFG");
+        original.instructions.frozen=false;
+        try words.set(original.instructions,deadEdit,(deadTerm-1)*10+6,oldLoc); original.instructions.frozen=true;
+        try budget.finishPhase(deadEdit);
+        try budget.cancel(foldOwner);
+        try check(try deniedSimplify(original),"simplification ignored cancellation");
+        foldOwner.state=0;
+        try check(root.live == unchanged and original.revision == revise,"failed simplification changed input or ownership");
+        output("publication-exact-content:ok"); output("transactional-folding:ok");
+        output("source-import-revision-rejection:ok"); output("publication-quota-cleanup:ok");
+        output("simplification-dead-cfg-cancellation:ok");
+    }
+    }
+    try publication.close(stamp); try imports.close(policy); try link.close(program);
+    try build.close(body); try build.close(integer); try build.close(original); try build.close(folded); try build.close(recursive);
+    try build.close(relay); try build.close(zeroBody); try build.close(arithmetic); try build.close(flow);
+    try budget.close(owner); try budget.close(integerOwner); try budget.close(foldOwner); try budget.close(recursiveOwner);
+    try budget.close(relayOwner); try budget.close(zeroOwner); try budget.close(arithmeticOwner); try budget.close(flowOwner);
+    try meta.close(data); try budget.close(shared);
+    try check(root.live == 0 and root.pending == 0,"native fixture ledger leak");
+    try budget.close(root); return true;
+}
+function deniedSimplify(body identity build.Function) returns Bool fails budget.LimitError,verify.InvalidIR {
+    let result be simplify.simplify(body)
+        else error verify.InvalidIR { return true; }
+        else error budget.LimitError { return true; };
+    try build.close(result); return false;
+}
+function deniedOrigin(body identity build.Function) returns Bool fails budget.LimitError,verify.InvalidIR {
+    let checked be verify.verify(body,try budget.verificationPhase(body.owner))
+        else error verify.InvalidIR { return true; }
+        else error budget.LimitError { fail error; };
+    return false;
+}
+function deniedPublish(program identity link.Program,policy identity imports.Policy)
+    returns Bool fails budget.LimitError,verify.InvalidIR {
+    let stamp be publication.publish(program,policy)
+        else error budget.LimitError {
+            return error.category == "resource-limit" and
+                error.message == "U1 publication snapshot: U1a resource limit exceeded";
+        }
+        else error verify.InvalidIR { fail error; };
+    try publication.close(stamp); return false;
+}
+function deniedPublication(stamp identity publication.Publication) returns Bool fails budget.LimitError,verify.InvalidIR {
+    let valid be accept(stamp) else error budget.LimitError { return true; }
+        else error verify.InvalidIR { fail error; };
+    return false;
+}
+function accept(stamp identity publication.Publication) returns Bool fails budget.LimitError,verify.InvalidIR {
+    try publication.validate(stamp); return true;
+}
+function main() {
+    let done be run()
+    else error budget.LimitError { output(error.category+":"+error.message); process.setExitCode(1); return; }
+    else error verify.InvalidIR { output(error.message); process.setExitCode(1); return; }
+    else error native.Unsupported { output(error.message); process.setExitCode(1); return; }
+    else error ProbeError { output(error.message); process.setExitCode(1); return; };
+}
+main();

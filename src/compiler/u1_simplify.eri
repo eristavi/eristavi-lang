@@ -1,0 +1,203 @@
+// Bounded, transactional canonical simplification. Never folds traps/calls.
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+import compiler.u1_builder as build;
+import compiler.u1_promote as promote;
+import compiler.u1_verify as verify;
+import compiler.u1_execute as execute;
+
+function fold(body identity build.Function,phase identity budget.Phase,
+    known identity words.Words,bits identity words.Words,operands identity words.Words)
+    returns Int fails budget.LimitError {
+    let index be 0; let changes be 0;
+    while index < body.values.length/4 {
+        let ignored be try words.push(known,phase,0);
+        ignored=try words.push(bits,phase,0); index=index+1;
+    }
+    let block be 1;
+    while block <= body.blocks.length/5 {
+        let current be try words.get(body.blocks,phase,(block-1)*5+2);
+        let end be try words.get(body.blocks,phase,(block-1)*5+4);
+        while current != 0 or end != 0 {
+            if current == 0 { current=end; end=0; }
+            let offset be (current-1)*10;
+            let op be try words.get(body.instructions,phase,offset);
+            let first be try words.get(body.instructions,phase,offset+2);
+            let count be try words.get(body.instructions,phase,offset+3);
+            let result be try words.get(body.instructions,phase,offset+4);
+            let payload be try words.get(body.instructions,phase,offset+7);
+            let a be 0; let b be 0; let constant be false;
+            if count > 0 {
+                let source be try words.get(body.operands,phase,first);
+                constant=try words.get(known,phase,source-1) == 1;
+                a=try words.get(bits,phase,source-1);
+            }
+            if count > 1 {
+                let source be try words.get(body.operands,phase,first+1);
+                constant=constant and try words.get(known,phase,source-1) == 1;
+                b=try words.get(bits,phase,source-1);
+            }
+            let replacement be 0; let answer be 0;
+            if constant {
+                if op == 4 { replacement=2; if a == 0 { answer=1; } }
+                if op == 13 or op == 14 {
+                    replacement=2;
+                    if (op == 13 and a == 1 and b == 1) or
+                       (op == 14 and (a == 1 or b == 1)) { answer=1; }
+                }
+                if op == 18 { replacement=2; answer=execute.cmp(a,b,payload); }
+                if op == 15 { replacement=1; answer=execute.wrapAdd(a,b); }
+                if op == 16 { replacement=1; answer=execute.wrapSub(a,b); }
+                if op == 17 { replacement=1; answer=try execute.wrapMul(a,b,phase); }
+            }
+            if constant and (op == 7 or op == 35) {
+                let chosen be payload;
+                if op == 7 and a == 0 { chosen=try words.get(body.instructions,phase,offset+8); }
+                if op == 35 {
+                    let header be (payload-1)*3;
+                    let start be try words.get(body.switches,phase,header);
+                    let size be try words.get(body.switches,phase,header+1);
+                    chosen=try words.get(body.switches,phase,header+2);
+                    let cursor be 0;
+                    while cursor < size {
+                        if a == try words.get(body.cases,phase,(start+cursor)*2) {
+                            chosen=try words.get(body.cases,phase,(start+cursor)*2+1);
+                        }
+                        cursor=cursor+1;
+                    }
+                }
+                try words.set(body.instructions,phase,offset,6);
+                try words.set(body.instructions,phase,offset+3,0);
+                try words.set(body.instructions,phase,offset+7,chosen);
+                try words.set(body.instructions,phase,offset+8,0);
+                op=6; payload=chosen; count=0; changes=changes+1;
+            }
+            if replacement != 0 {
+                try words.set(body.instructions,phase,offset,replacement);
+                try words.set(body.instructions,phase,offset+3,0);
+                try words.set(body.instructions,phase,offset+7,answer);
+                try words.set(body.instructions,phase,offset+8,0);
+                op=replacement; payload=answer; count=0; changes=changes+1;
+            }
+            try words.set(body.instructions,phase,offset+2,operands.length);
+            let item be 0;
+            while item < count {
+                let ignored be try words.push(operands,phase,try words.get(body.operands,phase,first+item));
+                item=item+1;
+            }
+            if op == 1 or op == 2 or op == 9 {
+                try words.set(known,phase,result-1,1);
+                try words.set(bits,phase,result-1,payload);
+            }
+            current=try words.get(body.instructions,phase,offset+9);
+        }
+        block=block+1;
+    }
+    return changes;
+}
+public function simplify(input identity build.Function)
+    returns identity build.Function fails budget.LimitError,verify.InvalidIR {
+    // Promotion provides a private verified clone and removes dead blocks and
+    // trivial parameters only AFTER independent all-block construction checks.
+    let promoted be try promote.promote(input,try budget.promotionPhase(input.owner));
+    let body be promoted.routine;
+    let done be transform(body) else error budget.LimitError { try build.close(body); fail error; }
+        else error verify.InvalidIR { try build.close(body); fail error; };
+    // Re-prune blocks made dead by safe constant branches/switches, retaining
+    // all-block validation before removing them. No faulting operation folds.
+    let final be promote.promote(body,try budget.promotionPhase(body.owner))
+        else error budget.LimitError { try build.close(body); fail error; }
+        else error verify.InvalidIR { try build.close(body); fail error; };
+    try build.close(body); return final.routine;
+}
+function transform(body identity build.Function) returns Bool fails budget.LimitError,verify.InvalidIR {
+    let phase be try budget.promotionPhase(body.owner);
+    let known be try words.create(body.owner,1048576);
+    let bits be words.create(body.owner,1048576)
+        else error budget.LimitError { try words.close(known); try budget.finishPhase(phase); fail error; };
+    let operands be words.create(body.owner,16777216)
+        else error budget.LimitError { try words.close(known); try words.close(bits); try budget.finishPhase(phase); fail error; };
+    body.revision=body.revision+1; body.instructions.frozen=false;
+    let changes be fold(body,phase,known,bits,operands)
+        else error budget.LimitError {
+            try words.close(known); try words.close(bits); try words.close(operands);
+            try budget.finishPhase(phase); fail error;
+        };
+    try words.close(known); try words.close(bits);
+    try words.freeze(operands); try words.close(body.operands); body.operands=operands;
+    try pools(body,phase);
+    try words.freeze(body.instructions); try budget.finishPhase(phase);
+    let report be try verify.verify(body,try budget.verificationPhase(body.owner));
+    return true;
+}
+
+type Pools { edges identity words.Words; arguments identity words.Words;
+    switches identity words.Words; cases identity words.Words; }
+function edge(body identity build.Function,phase identity budget.Phase,pools identity Pools,old Int)
+    returns Int fails budget.LimitError {
+    let base be (old-1)*3; let target be try words.get(body.edges,phase,base);
+    let start be try words.get(body.edges,phase,base+1);
+    let count be try words.get(body.edges,phase,base+2);
+    let index be pools.edges.length/3+1;
+    let ignored be try words.push(pools.edges,phase,target);
+    ignored=try words.push(pools.edges,phase,pools.arguments.length);
+    ignored=try words.push(pools.edges,phase,count);
+    let item be 0;
+    while item < count {
+        ignored=try words.push(pools.arguments,phase,try words.get(body.arguments,phase,start+item));
+        item=item+1;
+    }
+    return index;
+}
+function rebuild(body identity build.Function,phase identity budget.Phase,pools identity Pools)
+    returns Bool fails budget.LimitError {
+    let index be 0;
+    while index < body.instructions.length/10 {
+        let offset be index*10; let op be try words.get(body.instructions,phase,offset);
+        if op == 6 or op == 7 {
+            let first be try edge(body,phase,pools,try words.get(body.instructions,phase,offset+7));
+            try words.set(body.instructions,phase,offset+7,first);
+            if op == 7 {
+                let second be try edge(body,phase,pools,try words.get(body.instructions,phase,offset+8));
+                try words.set(body.instructions,phase,offset+8,second);
+            }
+        }
+        if op == 35 {
+            let old be try words.get(body.instructions,phase,offset+7);
+            let base be (old-1)*3;
+            let start be try words.get(body.switches,phase,base);
+            let count be try words.get(body.switches,phase,base+1);
+            let defaultEdge be try edge(body,phase,pools,try words.get(body.switches,phase,base+2));
+            let number be pools.switches.length/3+1;
+            let ignored be try words.push(pools.switches,phase,pools.cases.length/2);
+            ignored=try words.push(pools.switches,phase,count);
+            ignored=try words.push(pools.switches,phase,defaultEdge);
+            let item be 0;
+            while item < count {
+                ignored=try words.push(pools.cases,phase,try words.get(body.cases,phase,(start+item)*2));
+                let target be try edge(body,phase,pools,try words.get(body.cases,phase,(start+item)*2+1));
+                ignored=try words.push(pools.cases,phase,target); item=item+1;
+            }
+            try words.set(body.instructions,phase,offset+7,number);
+        }
+        index=index+1;
+    }
+    return true;
+}
+function pools(body identity build.Function,phase identity budget.Phase) fails budget.LimitError {
+    let edges be try words.create(body.owner,786432);
+    let arguments be words.create(body.owner,4194304)
+        else error budget.LimitError { try words.close(edges); fail error; };
+    let switches be words.create(body.owner,196608)
+        else error budget.LimitError { try words.close(edges); try words.close(arguments); fail error; };
+    let cases be words.create(body.owner,524288)
+        else error budget.LimitError { try words.close(edges); try words.close(arguments); try words.close(switches); fail error; };
+    let pools be identity Pools { edges=edges; arguments=arguments; switches=switches; cases=cases; };
+    let done be rebuild(body,phase,pools)
+        else error budget.LimitError {
+            try words.close(edges); try words.close(arguments); try words.close(switches); try words.close(cases); fail error;
+        };
+    try words.freeze(edges); try words.freeze(arguments); try words.freeze(switches); try words.freeze(cases);
+    try words.close(body.edges); try words.close(body.arguments); try words.close(body.switches); try words.close(body.cases);
+    body.edges=edges; body.arguments=arguments; body.switches=switches; body.cases=cases;
+}

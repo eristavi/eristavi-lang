@@ -6,6 +6,11 @@ The governing approved design is
 [the U1 contract](docs/architecture/Eristavi-UIR-U1-Contract-2026-10-29.md)
 sections 2, 4, 6–9, 13 and [issue #71](https://github.com/eristavi/eristavi-lang/issues/71).
 
+Current integration candidate: [native Float, production imports and source publication](U1A_NATIVE_TRUST_PUBLICATION.md).
+The qualified PR #94 profile below is historical evidence. The new branch adds
+closed production adapters 3/4, a private native executor, exact publication,
+additional origins and simplification; final qualification is pending.
+
 ## Implemented in this slice
 
 - `u1_module.eri`: immutable-metadata FunctionId → independently verified

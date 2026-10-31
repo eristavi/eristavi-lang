@@ -1,0 +1,129 @@
+// Session-local exact publication snapshot. Never an artifact trust flag.
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+import compiler.u1_module as link;
+import compiler.u1_imports as imports;
+import compiler.u1_effects as effects;
+import compiler.u1_verify as verify;
+
+public type Table {
+    source identity words.Words; copy identity words.Words; charge identity budget.Allocation;
+    next maybe identity Table;
+}
+public type Publication {
+    program identity link.Program; policy identity imports.Policy;
+    tables maybe identity Table; tail maybe identity Table; cursor maybe identity Table;
+    control identity budget.Allocation; versions identity words.Words; closed Bool; count Int;
+}
+function table(stamp identity Publication,source identity words.Words,capture Bool)
+    fails budget.LimitError {
+    let phase be try budget.verificationPhase(source.owner);
+    if capture {
+        let copy be try words.create(source.owner,source.limit);
+        let reserved be budget.reserve(source.owner,128)
+            else error budget.LimitError { try words.close(copy); fail error; };
+        let node be identity Table { source=source; copy=copy; charge=try budget.commit(reserved); next=none; };
+        let tail be stamp.tail;
+        if tail == none { stamp.tables=node; } else { tail.next=node; }
+        stamp.tail=node;
+        let index be 0;
+        while index < source.length {
+            let ignored be try words.push(copy,phase,try words.get(source,phase,index));
+            index=index+1;
+        }
+        try words.freeze(copy);
+    } else {
+        let node be stamp.cursor;
+        if node == none { try budget.reject("changed U1 publication table count"); }
+        else {
+            if node.source != source or node.copy.length != source.length {
+                try budget.reject("changed U1 publication table identity or shape");
+            }
+            let index be 0;
+            while index < source.length {
+                if try words.get(source,phase,index) != try words.get(node.copy,phase,index) {
+                    try budget.reject("stale U1 publication contents");
+                }
+                index=index+1;
+            }
+            stamp.cursor=node.next;
+        }
+    }
+    try budget.finishPhase(phase);
+}
+function inspect(stamp identity Publication,capture Bool) fails budget.LimitError {
+    let program be stamp.program; let data be program.metadata;
+    try table(stamp,data.signatures,capture); try table(stamp,data.types,capture);
+    try table(stamp,data.buckets,capture); try table(stamp,data.sources,capture);
+    try table(stamp,data.bytes,capture); try table(stamp,data.locations,capture);
+    try table(stamp,data.originLinks,capture); try table(stamp,data.declarations,capture);
+    try table(stamp,data.symbolBytes,capture);
+    let cursor be program.head; let count be 0;
+    while cursor != none {
+        let body be cursor.body;
+        let versionPhase be try budget.verificationPhase(data.owner);
+        if capture {
+            let ignored be try words.push(stamp.versions,versionPhase,cursor.target.index);
+            ignored=try words.push(stamp.versions,versionPhase,cursor.revision);
+            ignored=try words.push(stamp.versions,versionPhase,body.revision);
+            ignored=try words.push(stamp.versions,versionPhase,body.signature.index);
+        } else {
+            if count >= stamp.count or
+               try words.get(stamp.versions,versionPhase,count*4) != cursor.target.index or
+               try words.get(stamp.versions,versionPhase,count*4+1) != cursor.revision or
+               try words.get(stamp.versions,versionPhase,count*4+2) != body.revision or
+               try words.get(stamp.versions,versionPhase,count*4+3) != body.signature.index {
+                try budget.reject("stale U1 publication binding revision");
+            }
+        }
+        try budget.finishPhase(versionPhase);
+        try table(stamp,body.blocks,capture); try table(stamp,body.values,capture);
+        try table(stamp,body.instructions,capture); try table(stamp,body.operands,capture);
+        try table(stamp,body.edges,capture); try table(stamp,body.arguments,capture);
+        try table(stamp,body.cells,capture); try table(stamp,body.switches,capture);
+        try table(stamp,body.cases,capture);
+        count=count+1; cursor=cursor.next;
+    }
+    if capture { stamp.count=count; }
+    else {
+        if count != stamp.count or stamp.cursor != none {
+            try budget.reject("changed U1 publication definition set");
+        }
+    }
+}
+public function close(stamp identity Publication) fails budget.LimitError {
+    if stamp.closed { try budget.reject("double close of U1 publication"); }
+    stamp.closed=true; let cursor be stamp.tables;
+    stamp.tables=none; stamp.tail=none; stamp.cursor=none;
+    while cursor != none {
+        let node be cursor; cursor=node.next; node.next=none;
+        try words.close(node.copy); try budget.release(node.charge);
+    }
+    try words.close(stamp.versions); try budget.release(stamp.control);
+}
+public function publish(program identity link.Program,policy identity imports.Policy)
+    returns identity Publication fails budget.LimitError,verify.InvalidIR {
+    let checked be try effects.inspect(program,policy); try effects.close(checked);
+    let versions be try words.create(program.metadata.owner,262144);
+    let pending be budget.reserve(program.metadata.owner,256)
+        else error budget.LimitError { try words.close(versions); fail error; };
+    let stamp be identity Publication { program=program; policy=policy;
+        tables=none; tail=none; cursor=none; control=try budget.commit(pending);
+        versions=versions; closed=false; count=0; };
+    let done be capture(stamp) else error budget.LimitError {
+        try close(stamp);
+        fail budget.LimitError { message="U1 publication snapshot: "+error.message;
+            category=error.category; requested=error.requested; remaining=error.remaining; };
+    };
+    return stamp;
+}
+function capture(stamp identity Publication) returns Bool fails budget.LimitError {
+    try inspect(stamp,true); try words.freeze(stamp.versions); return true;
+}
+public function validate(stamp identity Publication) fails budget.LimitError,verify.InvalidIR {
+    if stamp.closed { try budget.reject("closed U1 publication"); }
+    // Fresh verification/effect/import checks, followed by exact content checks.
+    // Same-revision well-formed changes must also invalidate the old capability.
+    let checked be try effects.inspect(stamp.program,stamp.policy); try effects.close(checked);
+    stamp.cursor=stamp.tables; try inspect(stamp,false);
+}

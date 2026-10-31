@@ -1,6 +1,7 @@
 # Eristavi compiler — current handover
 
 **Authoritative recovery checkpoint: 31 October 2026, Asia/Nicosia.** Start here.
+Section 30 records the active, unqualified integration batch.
 Section 29 records the latest qualified and merged compiler/runtime batch.
 Sections 1–28 retain historical evidence; their draft statuses and next steps
 are not current instructions. Section 25 retains the intentional CI policy.
@@ -29,7 +30,8 @@ project task, not a separate task that waits for the user to request it.**
 
 ## Start a new chat with this
 
-> Continue Eristavi Lang from HANDOVER.md section 29 and current GitHub main.
+> Continue Eristavi Lang from HANDOVER.md section 30 on
+> `compiler/u1a-native-trust-publication`; section 29 is the qualified baseline.
 > PR #94 is qualified and merged as
 > `4b4a7f62af98bb91bc3a7c4cb218817b02298fce`.
 > All admitted U1a i64/pred operations now execute in the independent reference
@@ -41,10 +43,11 @@ project task, not a separate task that waits for the user to request it.**
 > final head; the merged tree equals the qualified tree. Do not repeat those
 > expensive gates merely to merge or document this unchanged implementation.
 > The redesigned UIR remains isolated from the production frontend.
-> Next recommendation: strict native binary64 execution under issue #76, first
-> reading its exit gates and the frozen Float contract. Production import trust
-> and broader #71 conformance, source/publication revisions and bounded
-> simplification (#77), then U1b aggregates, U2 and U3 remain separate.
+> Active batch: native strict binary64 (#76), closed production import trust
+> and broader #71 conformance, source/revision publication and bounded
+> simplification (#77) are implemented on the branch in section 30. Its final
+> CI/qualification must be inspected only when the user requests it. It is not
+> qualified or merged. U1b, U2, U3 and full physical heap/GC gates stay separate.
 > Preserve source semantics, the working compiler/ABI and mandatory promotion.
 > Use focused smoke during edits and one final four-platform CI plus required
 > completed-batch qualification per coherent compiler revision; documentation
@@ -61,6 +64,7 @@ project task, not a separate task that waits for the user to request it.**
 | Qualified PR #94 / merge tree, before later documentation-only commits | `5567a40a9a710fa3d1008da121e38f5e4b10d5f4` |
 | Four-platform PR #94 CI | [41183090972](https://github.com/eristavi/eristavi-lang/actions/runs/41183090972), success: 448 tests discovered per platform, platform skips retained |
 | Completed-batch PR #94 qualification | [41183091353](https://github.com/eristavi/eristavi-lang/actions/runs/41183091353), success: three repeatable C/D bootstrap/offline jobs and owned integration |
+| Active integration candidate | `compiler/u1a-native-trust-publication`, section 30; native Float/import/source/simplification implementation, NOT qualified or merged |
 | Separate full owned compiler self-build | Intentionally skipped; NOT qualified |
 | U1a | Integer/predicate reference execution, recursion/effects, selected test imports, switches, verification and promotion qualified/merged; native strict f64, production imports, full source/publication revisions, simplification and broader resource/conformance gates remain |
 | U1b | Narrow i8/i16/i32 IR operations qualified through PR #87; narrow reference execution, immutable aggregates and core-wide acceptance remain incomplete |
@@ -868,3 +872,75 @@ native import trust and broader #71 conformance, full source/revision
 publication plus bounded simplification (#77), then the independently staged
 U1b/U2/U3 gates. Keep issue #71 open. Full physical heap/GC accounting, larger
 matched stress and complete owned compiler self-hosting remain unqualified.
+
+## 30. Active combined native Float / import trust / publication batch — 2026-10-31
+
+User authorized all three next gates in one integration batch, and requested
+that final CI/qualification be launched without following/polling their progress.
+Check those results only when the user subsequently instructs it.
+
+- Baseline: main `3f33daa87a2f92a57b599a8dd53125d2f1bf62bc`.
+- Active branch: `compiler/u1a-native-trust-publication`. No implementation
+  changes qualified or merged yet. PR #94 remains the qualified implementation.
+- Batch scope: strict native binary64 (#76), closed production import trust
+  and conformance (#71), source origins/revision-bound publication and bounded
+  canonical simplification (#77). Read the exact exit gates and frozen contract.
+- Preserve production frontend, language semantics, ABI and mandatory promotion.
+- Run focused local developer checks; at the completed batch start one final
+  four-platform full CI and completed-batch qualification on its exact head.
+  Do not follow those runs or start the separate owned compiler self-build.
+- Full acceptance and physical-resource claims require evidence, not code alone.
+
+Implementation checkpoint (unqualified):
+- Added `u1_native.eri` + private `runtime/u1_native.h`: real x86-64 SSE2 /
+  AArch64 scalar binary64 instructions with explicit FP-control save/establish/
+  restore, no FMA/excess intermediates, gradual underflow and canonical NaNs.
+  Adapter executes verified linked scalar UIR, including bounded native call
+  frames, first-fault LocIds, work/cancellation and active allocation limits.
+- Closed production catalog: version-one `erist.u1.i64.identity` (mask 0) and
+  `erist.u1.i64.write` (mask 20, external+terminal fault). No arbitrary callback
+  or dynamic symbol/effect selection. Test adapters do not authorize this path.
+- `u1_publication.eri` captures exact owned metadata/body tables and revisions,
+  revalidates effects/imports/verifier before use, rejects same-revision edits.
+- Additional ordered source-origin parent sets retain original anchors; new
+  private diagnostic-map ingress/remapping checks source/contract revisions and
+  refuses stale text excerpts. This is not a public serialized UIR format.
+- `u1_simplify.eri` works on a private promoted clone: exact predicate/wrapping
+  integer folds, constant branch/switch selection, edge-pool rebuild, subsequent
+  dead-block/trivial-parameter cleanup and fresh verification. Calls, guards,
+  div/rem and Float arithmetic are never folded speculatively.
+- Focused native acceptance now covers Float/integer oracles, recursive and
+  zero/multi-result calls, switches/parallel copies, hostile FP state and foreign
+  boundary corruption, first write/fault, strip, source-map ingress/remap, stale
+  source/import/body rejection, exact same-revision edits, malformed dead CFG,
+  cancellation and partial publication-snapshot quota cleanup.
+- Completed local smoke evidence and final workflow launch state are recorded
+  below. No final workflow result has been inspected.
+
+Final implementation candidate — before hosted qualification:
+
+- Detailed scope: `U1A_NATIVE_TRUST_PUBLICATION.md`. Native execution is a private
+  linked-UIR executor with real x86-64/AArch64 FP instructions, not U3 frontend
+  integration, a JIT or a new production default backend. The native catalog is
+  only the two explicitly implemented/versioned production functions, not general
+  foreign callbacks. Old test adapters cannot authorize native execution.
+- Nine new acceptance tests; local integration smoke discovers 20 tests.
+  Local C/native ASan+UBSan probes passed (container-only LSan task inspection
+  disabled); hosted sanitizer defaults remain unchanged.
+- Matched original/simplified native evidence is in
+  `docs/evidence/2026-10-31/u1-native-physical.json`: five alternating fresh-process
+  pairs, identical semantics, raw time/peak-RSS and exact native frame bytes.
+  RSS may include pre-exec inherited pages; do not infer an isolated allocator
+  measurement, whole-compiler speedup or complete physical UIR heap/GC pass.
+- Keep #71/#76/#77 open until the actual scoped exit gates and hosted results
+  have been reviewed. Broader physical heap/GC/stress and production artifact
+  migration remain separate; no U1b/U2/U3 completion is implied.
+- The final four-platform CI and completed-batch qualification will be requested
+  once, via the `qualification` label on the completed draft PR. Do not mark it
+  Ready as an extra trigger. Do not poll/follow those runs; the user will request
+  result inspection. Do not merge based on uninspected tests.
+
+Local final implementation evidence: `tools/run_ci_tests.py --profile smoke`
+passed all 20 tests in 30.85 seconds; report retained in
+`docs/evidence/2026-10-31/u1-native-smoke.json`. `compileall` and `git diff --check`
+passed. These are local development checks, not hosted qualification.

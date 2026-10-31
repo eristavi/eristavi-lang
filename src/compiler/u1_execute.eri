@@ -87,7 +87,7 @@ function jump(frame identity Frame,edge Int) returns Int fails budget.LimitError
 }
 function signedLess(a Int,b Int) returns Bool { return a < b; }
 function unsignedLess(a Int,b Int) returns Bool { return ops.unsignedLess(a,b); }
-function cmp(a Int,b Int,relation Int) returns Int {
+public function cmp(a Int,b Int,relation Int) returns Int {
     let okay be false;
     if relation == 1 { okay=a==b; }
     if relation == 2 { okay=a!=b; }
@@ -103,7 +103,7 @@ function cmp(a Int,b Int,relation Int) returns Int {
     return 0;
 }
 // Total modulo-2^64 arithmetic; no unchecked host overflow.
-function wrapAdd(a Int,b Int) returns Int {
+public function wrapAdd(a Int,b Int) returns Int {
     let top be 9223372036854775807;
     let bottom be -9223372036854775807-1;
     if b > 0 and a > top-b {
@@ -118,7 +118,7 @@ function wrapAdd(a Int,b Int) returns Int {
     }
     return a+b;
 }
-function wrapSub(a Int,b Int) returns Int {
+public function wrapSub(a Int,b Int) returns Int {
     let top be 9223372036854775807;
     let bottom be -9223372036854775807-1;
     if b > 0 and a < bottom+b {
@@ -131,7 +131,7 @@ function wrapSub(a Int,b Int) returns Int {
     }
     return a-b;
 }
-function wrapMul(a Int,b Int,phase identity budget.Phase) returns Int fails budget.LimitError {
+public function wrapMul(a Int,b Int,phase identity budget.Phase) returns Int fails budget.LimitError {
     let result be 0; let item be b; let power be a;
     while item != 0 {
         try budget.work(phase,1);
@@ -206,11 +206,15 @@ function selected(program identity link.Program,policy identity imports.Policy,
     if count != 1 { try budget.reject("trusted import argument shape mismatch"); }
     if values != none {
         if values.next != none { try budget.reject("trusted import argument shape mismatch"); }
+        if adapter == 4 {
+            // OS writes belong to the closed native adapter, not a fabricated trace.
+            return outcome(3,34,0,none,0);
+        }
         if adapter == 1 {
             state.trace=state.trace+"trace:"+format.integer(values.bits)+";";
             return outcome(0,0,0,none,0);
         }
-        if adapter == 2 {
+        if adapter == 2 or adapter == 3 {
             return outcome(0,0,0,identity Slot { bits=values.bits; next=none; },1);
         }
     } else { try budget.reject("trusted import has no argument"); }
@@ -334,6 +338,7 @@ function walk(program identity link.Program,policy identity imports.Policy,
                 } else {
                     returned=try selected(program,policy,target,callArgs,operandCount,state);
                 }
+                if returned.kind == 3 and returned.location == 0 { returned.location=loc; }
                 if returned.kind != 0 { return returned; }
                 if returned.count != resultCount { try budget.reject("U1a call returned wrong arity"); }
                 try assign(frame,resultStart,returned.first,returned.count);
