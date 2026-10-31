@@ -121,10 +121,21 @@ def generate():
                 code = f"let v{suffix} be try build.narrowRemainder({routine},{entry},{first},{second},{mode},{ty},loc);"
             bodies.append(code)
             expression = f"[v{suffix}.value,v{suffix}.overflow]" if op in (38, 39) else f"[v{suffix}]"
-            bodies.extend((
-                f"try build.returnValues({routine},{entry},{expression},loc);",
-                f"try build.complete({routine}); try budget.finishPhase({phase});",
-            ))
+            if index == 0:
+                # Exercise the real typed CFG edge schema too. The bootstrap
+                # generic-specialization pipeline must see checkEdge on a
+                # concrete List<ValueId>, not an unresolved generic callee.
+                bodies.extend((
+                    f"let then{suffix} be try build.block({routine},[{ty}]);",
+                    f"let otherwise{suffix} be try build.block({routine},[{ty}]);",
+                    f"let yes{suffix} be try build.predicate({routine},{entry},true,loc);",
+                    f"try build.branch({routine},{entry},yes{suffix},then{suffix},[v{suffix}],otherwise{suffix},[v{suffix}],loc);",
+                    f"try build.returnValues({routine},then{suffix},[try build.parameter({routine},then{suffix},0)],loc);",
+                    f"try build.returnValues({routine},otherwise{suffix},[try build.parameter({routine},otherwise{suffix},0)],loc);",
+                ))
+            else:
+                bodies.append(f"try build.returnValues({routine},{entry},{expression},loc);")
+            bodies.append(f"try build.complete({routine}); try budget.finishPhase({phase});")
             bindings.append(f"let ignored{suffix} be try link.bind(program,{declared},{routine});")
             closures.append(f"try build.close({routine}); try budget.close({owner});")
             for case_number, (a, b) in enumerate(cases_for(width)):
