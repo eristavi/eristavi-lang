@@ -1,6 +1,7 @@
 """Scalar-cell SSA promotion: independent execution, shape and failure checks."""
 from pathlib import Path
 import itertools
+import os
 import math
 import struct
 from fractions import Fraction
@@ -501,6 +502,20 @@ def cases_for(name, before):
                                 expected = ('trap', (2, 1))
                     yield (a, b, allowed), expected
 
+    elif name == 'switch-dense' or name.startswith('switch-dense-'):
+        # Three structural/resource scales, one independent signed-value oracle.
+        width = 32 if name == 'switch-dense' else int(name.rsplit('-', 1)[1])
+        for value in (MIN, -1, 0, 1, 2, 3, width//2, width-2, width-1, width, MAX):
+            yield (value,), ('return', (1000 + value if 0 <= value < width else 9000,))
+    elif name == 'switch-sparse-wide':
+        # Cases are canonical unsigned 64-bit bit patterns; Python oracle is independent.
+        table = {0:100, 1:101, 1024:102, MAX:103, MIN:104, -4096:105, -1:106}
+        for value in (MIN, MIN+1, -4096, -4095, -1, 0, 1, 2, 1024, 1025, MAX-1, MAX):
+            yield (value,), ('return', (table.get(value, 9000),))
+    elif name == 'switch-irreducible':
+        # Two independent entries into an SCC; the decrement guarantees termination.
+        for selector, steps in itertools.product((MIN, -1, 0, 1, MAX), (0, 1, 2, 4)):
+            yield (selector, steps), ('return', (selector,))
     elif name == 'switch-flow':
         for value in (MIN, MIN+1, -1, 0, 1, MAX-1, MAX):
             chosen = 10 if value == 0 else 20 if value == MAX else 30 if value == MIN else 40
@@ -637,7 +652,7 @@ class U1PromotionTests(unittest.TestCase):
                      'narrowDivRem(meta.i32(),42,1,"narrow-rem-signed-32")',
                      'narrowDivRem(meta.i32(),41,2,"narrow-div-unsigned-32")',
                      'narrowDivRem(meta.i32(),42,2,"narrow-rem-unsigned-32")',
-                     'narrowDivRemMerge()', 'switchFlow()', 'switchDistinctEdges()',
+                     'narrowDivRemMerge()', 'switchDense8()', 'switchDense()', 'switchDense128()', 'switchWideSparse()', 'switchIrreducible()', 'switchFlow()', 'switchDistinctEdges()',
                       'invalidCell(0)', 'invalidCell(1)', 'invalidCell(2)', 'dead(true)', 'failedWork()', 'canonicalReject()', 'failedOutput()', 'cancelled()']
         cls.source = cls.root / 'promotion.eri'; cls.source.write_text(probe_source(cls.calls))
         cls.binary = cls.root / 'promotion-c'
@@ -667,10 +682,65 @@ class U1PromotionTests(unittest.TestCase):
         result = subprocess.run([str(self.binary)], capture_output=True, text=True, timeout=120)
         self.assertEqual((result.returncode, result.stderr), (0, ''), result.stdout[-300:])
         snapshots, labels = self.check_snapshots(result.stdout)
-        self.assertEqual(len(snapshots), 52)
+        self.assertEqual(len(snapshots), 57)
         self.assertEqual(labels, ['invalid-init:ok']*3 + ['malformed-dead:ok', 'promotion-limit:ok', 'canonical-reject:ok', 'partial-output:ok', 'cancelled:ok'])
         again = subprocess.run([str(self.binary)], capture_output=True, text=True, timeout=120)
         self.assertEqual((again.returncode, again.stdout, again.stderr), (0, result.stdout, ''))
+
+    @unittest.skipUnless(hasattr(os, 'wait4'), 'fresh-child physical RSS requires POSIX wait4')
+    def test_switch_physical_samples(self):
+        """Five fresh C-native direct-UIR runs: real process RSS plus owned UIR budgets.
+
+        This does NOT estimate managed heap/GC usage or total source compiler speed.
+        """
+        import json
+        import time
+        source = self.root / 'switch-physical.eri'
+        source.write_text(probe_source([
+            'switchDense8()', 'switchDense()', 'switchDense128()',
+            'switchWideSparse()', 'switchIrreducible()'
+        ]))
+        binary = self.root / 'switch-physical-c'
+        self.assertFalse(build_native(source, binary, self.root))
+        baseline = None
+        measurements = []
+        for trial in range(5):
+            with tempfile.TemporaryFile(mode='w+t') as stdout, tempfile.TemporaryFile(mode='w+t') as stderr:
+                started = time.monotonic()
+                child = subprocess.Popen([str(binary)], stdout=stdout, stderr=stderr)
+                deadline = started + 40
+                while True:
+                    pid, status, usage = os.wait4(child.pid, os.WNOHANG)
+                    if pid == child.pid:
+                        child.returncode = os.waitstatus_to_exitcode(status)
+                        break
+                    if time.monotonic() >= deadline:
+                        child.kill()
+                        os.wait4(child.pid, 0)
+                        self.fail('U1a switch physical sample exceeded the existing 40s focused watchdog')
+                    time.sleep(0.02)
+                seconds = time.monotonic() - started
+                stdout.seek(0); stderr.seek(0)
+                output, error = stdout.read(), stderr.read()
+            self.assertEqual((child.returncode, error), (0, ''), output[-500:])
+            snapshots, labels = self.check_snapshots(output)
+            self.assertEqual((len(snapshots), labels), (5, []))
+            self.assertEqual([name for name, _, _, _ in snapshots],
+                             ['switch-dense-8', 'switch-dense', 'switch-dense-128',
+                              'switch-sparse-wide', 'switch-irreducible'])
+            if baseline is None: baseline = output
+            else: self.assertEqual(output, baseline, 'fresh native results differ')
+            self.assertGreater(usage.ru_maxrss, 0)
+            measurements.append({
+                'trial': trial + 1,
+                'wall_seconds': round(seconds, 6),
+                'peak_rss_native_units': usage.ru_maxrss,
+                'peak_rss_units': 'bytes' if platform.system() == 'Darwin' else 'KiB',
+                'function_peak_bytes': [row[1][3] for row in snapshots],
+                'function_traffic_bytes': [row[1][4] for row in snapshots],
+                'function_work_visits': [row[1][5] for row in snapshots],
+            })
+        print('U1A_SWITCH_PHYSICAL=' + json.dumps(measurements, sort_keys=True))
 
     def test_nominal_cells_cannot_be_used_as_values(self):
         path = self.root / 'wrong-cell.eri'

@@ -5,6 +5,7 @@ import compiler.u1_builder as build;
 import compiler.u1_promote as promote;
 import compiler.u1_verify as verify;
 import compiler.u1_execute as execute;
+import compiler.u1_successors as succ;
 
 function fold(body identity build.Function,phase identity budget.Phase,
     known identity words.Words,bits identity words.Words,operands identity words.Words)
@@ -51,21 +52,9 @@ function fold(body identity build.Function,phase identity budget.Phase,
                 if op == 17 { replacement=1; answer=try execute.wrapMul(a,b,phase); }
             }
             if constant and (op == 7 or op == 35) {
-                let chosen be payload;
-                if op == 7 and a == 0 { chosen=try words.get(body.instructions,phase,offset+8); }
-                if op == 35 {
-                    let header be (payload-1)*3;
-                    let start be try words.get(body.switches,phase,header);
-                    let size be try words.get(body.switches,phase,header+1);
-                    chosen=try words.get(body.switches,phase,header+2);
-                    let cursor be 0;
-                    while cursor < size {
-                        if a == try words.get(body.cases,phase,(start+cursor)*2) {
-                            chosen=try words.get(body.cases,phase,(start+cursor)*2+1);
-                        }
-                        cursor=cursor+1;
-                    }
-                }
+                let chosen be try succ.edge(body,phase,current,0);
+                if op == 7 and a == 0 { chosen=try succ.edge(body,phase,current,1); }
+                if op == 35 { chosen=try succ.choose(body,phase,current,a); }
                 try words.set(body.instructions,phase,offset,6);
                 try words.set(body.instructions,phase,offset+3,0);
                 try words.set(body.instructions,phase,offset+7,chosen);
@@ -155,27 +144,25 @@ function rebuild(body identity build.Function,phase identity budget.Phase,pools 
     while index < body.instructions.length/10 {
         let offset be index*10; let op be try words.get(body.instructions,phase,offset);
         if op == 6 or op == 7 {
-            let first be try edge(body,phase,pools,try words.get(body.instructions,phase,offset+7));
+            // Read the canonical successor schema before updating the instruction.
+            let first be try edge(body,phase,pools,try succ.edge(body,phase,index+1,0));
+            let second be 0;
+            if op == 7 { second=try edge(body,phase,pools,try succ.edge(body,phase,index+1,1)); }
             try words.set(body.instructions,phase,offset+7,first);
-            if op == 7 {
-                let second be try edge(body,phase,pools,try words.get(body.instructions,phase,offset+8));
-                try words.set(body.instructions,phase,offset+8,second);
-            }
+            if op == 7 { try words.set(body.instructions,phase,offset+8,second); }
         }
         if op == 35 {
-            let old be try words.get(body.instructions,phase,offset+7);
-            let base be (old-1)*3;
-            let start be try words.get(body.switches,phase,base);
-            let count be try words.get(body.switches,phase,base+1);
-            let defaultEdge be try edge(body,phase,pools,try words.get(body.switches,phase,base+2));
+            let size be try succ.count(body,phase,index+1);
+            let count be size-1;
+            let defaultEdge be try edge(body,phase,pools,try succ.edge(body,phase,index+1,count));
             let number be pools.switches.length/3+1;
             let ignored be try words.push(pools.switches,phase,pools.cases.length/2);
             ignored=try words.push(pools.switches,phase,count);
             ignored=try words.push(pools.switches,phase,defaultEdge);
             let item be 0;
             while item < count {
-                ignored=try words.push(pools.cases,phase,try words.get(body.cases,phase,(start+item)*2));
-                let target be try edge(body,phase,pools,try words.get(body.cases,phase,(start+item)*2+1));
+                ignored=try words.push(pools.cases,phase,try succ.caseBits(body,phase,index+1,item));
+                let target be try edge(body,phase,pools,try succ.edge(body,phase,index+1,item));
                 ignored=try words.push(pools.cases,phase,target); item=item+1;
             }
             try words.set(body.instructions,phase,offset+7,number);
