@@ -1,6 +1,6 @@
 # Eristavi compiler — current handover
 
-**Authoritative recovery checkpoint: 31 October 2026, Asia/Nicosia. Read section 44.**
+**Authoritative recovery checkpoint: 31 October 2026, Asia/Nicosia. Read section 45 for the active U1b draft and section 44 for the last qualified release.**
 PR #105 is **QUALIFIED AND MERGED**. U1a's scoped physical acceptance gate passed;
 issue #77 is CLOSED/completed. Sections 1–43 preserve
 historical evidence and rejected prototypes; their pending/keep-open statements
@@ -81,7 +81,8 @@ redundant indexing, unbounded caches or unnecessarily expensive CI.
 > memory from design under correctness and safety gates. The permanent rule above
 > must be preserved in every future handover, without prompting from the user.
 >
-> Continue from **HANDOVER.md section 44**. PR #105 is qualified and merged at
+> Continue from **HANDOVER.md section 45** (unqualified U1b draft),
+> retaining section 44 as the latest qualified release checkpoint. PR #105 is qualified and merged at
 > `8c625b1ece6a229844def93e2bf9563c14e9e273`, tested head `f1fba11ff5e11791ad8c5d635fbf90873c686fa9`,
 > identical tested/merged tree `0d8bf1f4a58f66a15bb9a89bd42f596091ed9c36`.
 > Full four-platform CI **41222506854** and completed-batch qualification
@@ -116,7 +117,7 @@ redundant indexing, unbounded caches or unnecessarily expensive CI.
 | Current independent C evidence | Refreshed 20/20 whole C-managed samples passed; source-hashed C inputs unchanged during later owned-only collision tuning. Not per-owner C allocation attribution |
 | Performance | Five final-code AB/BA worker0 pairs: 8.135968 → 8.254257 s (0.9857×), roughly flat amid host variance. **No whole-compiler speedup claim**; #51 full compiler phase profiling remains open |
 | U1a | Scalar/SSA/calls/recursion/effects/switches/strict native f64/provenance/bounded simplification plus scoped physical acceptance **COMPLETE within the adopted U1a boundary** |
-| U1b #73 | Narrow i8/i16/i32 reference slice qualified/merged (#101, 210 independent results). **Immutable aggregate type graph, make/get/set, independent conformance and resource qualification remain pending** |
+| U1b #73 | Narrow i8/i16/i32 reference slice qualified/merged (#101, 210 independent results). **Draft opt-in aggregate type graph and independent verifier on `compiler/u1b-owned-aggregate-graph-20261031` are NOT YET TESTED or qualified**; canonical UIR `make/get/set`, reference execution and whole-stage physical acceptance remain pending |
 | U2 #74 | New UIR managed Text/List/identity, checked failures, root maps and deterministic cleanup **NOT IMPLEMENTED** |
 | U3 #75 | Direct frozen frontend → new UIR → production native target/artifact/cache integration **NOT IMPLEMENTED**. Existing adapter is isolated; #104 is test-only reference parity |
 | U4 #102 | Redesigned UIR machine/legalization/artifact migration **NOT IMPLEMENTED / NOT QUALIFIED** |
@@ -2006,3 +2007,76 @@ the previously stale workspace warning with the latest restored-workspace
 checkpoint. It changes no compiler/runtime files, qualification inputs,
 accepted U1a results, issue or PR statuses. Use documentation-only patch
 checking; do not rerun costly CI or experimental self-build for this update.
+
+## 45. Active U1b immutable aggregate type-graph foundation — 2026-10-31
+
+**Branch:** `compiler/u1b-owned-aggregate-graph-20261031`, forked from main
+`ccfe726ad80212c9a10ee16d5f3cf17e52db160a`.
+**Status: SOURCE CANDIDATE ONLY — hosted CI / independent runtime qualification PENDING,
+NOT merged, NOT full U1b completion.** Last qualified release remains U1a §44.
+The source review also read `DESIGN_PHILOSOPHY.md`, `LANGUAGE_SEMANTICS.md`,
+the approved U1 operation contract §§2–4, independent verifier/resource rules
+and `CI_QUALIFICATION.md`. The standing philosophy-first mandate in this
+handover is still binding.
+
+### What the draft implements
+
+- `src/compiler/u1_aggregate.eri`: **opt-in, owner-scoped aggregate type
+  graph**, retaining exactly six primitive internal U1 type indices.
+  Canonical ordered structural interning (including zero-field aggregates),
+  collision-checked full field sequences, nested field type references,
+  exact field-count/index access, immutable freeze/close lifecycle and owner
+  cancellation/physical charge through the existing `u1_words` store.
+  Aggregate members may name only an existing type in the same graph, making
+  forward/cyclic by-value type definitions unconstructible through this API.
+  It is explicitly **not** a source nominal-type system, runtime object layout,
+  additional source type/keyword, public UIR serializer or new ABI.
+- `src/compiler/u1_aggregate_verify.eri`: independently walks the frozen
+  record graph, recomputes structural hashes and canonical hash chains,
+  validates nested field order, range/ownership, strictly earlier aggregate
+  references, malformed/cyclic/forward records, duplicate canonical shapes
+  and bucket-head consistency. It does NOT trust the builder's flags.
+- `tests/fixtures/u1_aggregate_graph.eri` and
+  `tests/test_u1_aggregate_graph.py`: proposed focused native smoke for
+  canonical empty/nested types, deliberate hash collision, foreign owner
+  rejection, static field range, tampered by-value cycle, malformed bucket,
+  duplicate record, frozen-only verification and exact owner reclamation.
+- Existing `u1_meta.Metadata` and `u1_builder.Function` physical layouts,
+  scalar opcode registry and production frontend/backend remain unchanged to
+  preserve the already-qualified #105 physical fixture and 32-byte public ABI.
+  This is a deliberately isolated metadata sidecar, **not** U1b operations or
+  integration. No tests are claimed passed merely because source exists.
+
+### Performance-first constraints and remaining acceptance
+
+- Sidecar allocation is opt-in; normal U1a creation has no added graph object.
+  Current provisional ceilings: 65,536 aggregate records, 524,288 field words,
+  at most 4,096 components per aggregate, 256 hash bucket heads. The
+  hash-chain lookup is bounded by records/work limits but worst-case collision
+  work may be high; measure real memory, traffic and adversarial collisions
+  and improve if needed before promotion. Do NOT claim any measured speedup.
+- **Before marking this small slice tested:** run the focused native Python
+  test and inspect smoke logs on the exact branch head. Fix syntax, resource,
+  hash/ownership or independent-verifier defects and update evidence.
+  No workspace mirror is available in this session's container; use the
+  connected GitHub repository and hosted tests as the source of truth.
+- **Before claiming full U1b:** connect the aggregate type graph to the
+  existing program-owned metadata/TypeId semantics with explicit schema/
+  contract validation; add `aggregate.make/get/set` to the builder, closed
+  registry, independent verifier, SSA promotion/copy and truly independent
+  reference executor/oracle. Exercise scalar and nested value-copy/alias
+  behavior, static field types, malformed *unreachable* instructions, cycles,
+  cancellation, owner reclamation, large/deep resource stress and observed
+  physical backing. Preserve original source failure/LocId and pure operations.
+  Keep runtime-managed Text/List/identity out of U1b.
+- After all such code passes focused validation, select **one coherent final
+  four-platform full CI and completed-batch qualification**, compare the exact
+  tested and merge trees, then update issue #73 and the opening handover state.
+  **Never start experimental full owned compiler self-build automatically.**
+- Continue whole-compiler measured phase profiling (#51) separately, with
+  production runtime/ABI/source behavior unchanged. U2 #74, U3 #75 and
+  U4 #102 remain strictly downstream, not green from this candidate.
+
+**Next action:** open a draft PR for this isolated candidate and inspect its
+focused hosted CI. Any smoke failure is a blocker and the branch must remain
+unqualified until resolved. Keep this section current with exact evidence.
