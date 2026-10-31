@@ -72,7 +72,15 @@ public function fieldCount(reg identity Registry,phase identity budget.Phase,val
     returns Int fails budget.LimitError {
     try valid(reg,value);
     if value.index <= 6 { try budget.reject("primitive has no aggregate fields"); }
-    if reg.owner != phase.owner { try budget.reject("foreign aggregate phase"); }
+    // Frozen metadata may be read by a function-owned phase in the SAME
+    // request; u1_words enforces this safe shared-read protocol. Mutable
+    // type construction remains restricted to the exact metadata owner.
+    if reg.owner != phase.owner {
+        if reg.state != 1 or phase.owner.kind != 2 or
+           reg.owner.parent != phase.owner.parent {
+            try budget.reject("foreign aggregate phase");
+        }
+    }
     return try words.get(reg.records,phase,(value.index-7)*4+3);
 }
 
