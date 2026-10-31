@@ -87,6 +87,105 @@ _start:
 .byte 1,1,1
 ''',runtime=runtime)
 
+ def test_owned_slot_scratch_reuse_zeroing_nesting_and_refusal(self):
+  # Exercise the private cache directly; no stale keys, borrowed ownership,
+  # unbounded retained workspace, or reliance on successful mmap.
+  self.probe('slot-scratch-ownership',r'''
+.text
+.globl _start
+_start:
+    movq $128,%rdi
+    call .Lslots_scratch_acquire
+    testq %rax,%rax
+    je .Lcache_fail
+    testq %rdx,%rdx
+    jne .Lcache_fail
+    movq %rax,%r12
+    movq $98765,(%r12)
+    # Nested ownership falls back to an independently releasable mapping.
+    movq $128,%rdi
+    call .Lslots_scratch_acquire
+    testq %rax,%rax
+    je .Lcache_fail
+    cmpq %r12,%rax
+    je .Lcache_fail
+    testq %rdx,%rdx
+    je .Lcache_fail
+    movq %rax,%r13
+    movq %rdx,%r14
+    movq %r13,%rdi
+    movq %r14,%rsi
+    call .Lslots_scratch_release
+    testq %rax,%rax
+    jne .Lcache_fail
+    cmpq $1,.Lslots_scratch_busy(%rip)
+    jne .Lcache_fail
+    movq %r12,%rdi
+    xorl %esi,%esi
+    call .Lslots_scratch_release
+    testq %rax,%rax
+    jne .Lcache_fail
+    cmpq $0,.Lslots_scratch_busy(%rip)
+    jne .Lcache_fail
+    movq $128,%rdi
+    call .Lslots_scratch_acquire
+    cmpq %r12,%rax
+    jne .Lcache_fail
+    cmpq $0,(%rax)
+    jne .Lcache_fail
+    movq %rax,%rdi
+    xorl %esi,%esi
+    call .Lslots_scratch_release
+    testq %rax,%rax
+    jne .Lcache_fail
+    # Oversized indexes must never silently overrun the static 64-KiB cap.
+    movq $65544,%rdi
+    call .Lslots_scratch_acquire
+    testq %rax,%rax
+    je .Lcache_fail
+    testq %rdx,%rdx
+    je .Lcache_fail
+    movq %rax,%rdi
+    movq %rdx,%rsi
+    call .Lslots_scratch_release
+    testq %rax,%rax
+    jne .Lcache_fail
+    cmpq $0,.Lslots_scratch_busy(%rip)
+    jne .Lcache_fail
+'''+FINISH)
+  anchor='.Lslots_scratch_fallback:\n'
+  self.assertEqual(self.runtime.count(anchor),1)
+  refusal=self.runtime.replace(anchor,anchor+
+      '    xorl %eax,%eax\n    xorl %edx,%edx\n    ret\n',1)
+  self.probe('slot-scratch-reserve-refusal',r'''
+.text
+.globl _start
+_start:
+    movq $128,%rdi
+    call .Lslots_scratch_acquire
+    testq %rax,%rax
+    je .Lcache_fail
+    movq %rax,%r12
+    movq $128,%rdi
+    call .Lslots_scratch_acquire
+    testq %rax,%rax
+    jne .Lcache_fail
+    movq %r12,%rdi
+    xorl %esi,%esi
+    call .Lslots_scratch_release
+    testq %rax,%rax
+    jne .Lcache_fail
+    movq $128,%rdi
+    call .Lslots_scratch_acquire
+    cmpq %r12,%rax
+    jne .Lcache_fail
+    movq %rax,%rdi
+    xorl %esi,%esi
+    call .Lslots_scratch_release
+    testq %rax,%rax
+    jne .Lcache_fail
+'''+FINISH,runtime=refusal)
+
  def test_region_page_cache_reuse_validation_and_release_all(self):
   rt=self.runtime.replace('.Lfree_region_scan:\n','.Lfree_region_scan:\n    incq .Lcache_scans(%rip)\n',1)
   asm='''
