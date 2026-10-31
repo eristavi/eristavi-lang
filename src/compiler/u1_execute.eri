@@ -5,7 +5,8 @@
 import compiler.u1_budget as budget;
 import compiler.u1_words as words;
 import compiler.u1_meta as meta;
-import compiler.u1_builder as build;\nimport compiler.u1_successors as succ;
+import compiler.u1_builder as build;
+import compiler.u1_successors as succ;
 import compiler.u1_module as link;
 import compiler.u1_imports as imports;
 import compiler.u1_effects as effects;
