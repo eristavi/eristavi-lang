@@ -1,0 +1,133 @@
+// U1b canonical UIR instruction construction, opt-in for checked immutable
+// structural aggregates. Stores operations in the EXISTING U1 SSA Function
+// tables, not an alternate executable IR. U1a metadata/Function layouts and
+// the production compiler remain unchanged. Verification is mandatory.
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+import compiler.u1_meta as meta;
+import compiler.u1_builder as build;
+import compiler.u1_aggregate as aggregate;
+import compiler.u1_ops as ops;
+
+function access(routine identity build.Function,graph identity aggregate.Registry,
+    block build.BlockId,location meta.LocId) returns Int fails budget.LimitError {
+    try budget.poll(routine.owner);
+    if routine.state != 0 or graph.state != 1 or graph.owner != routine.metadata.owner or
+       not routine.metadata.frozen or routine.metadata.closed or
+       routine.owner.parent != graph.owner.parent or routine.phase.owner != routine.owner {
+        try budget.reject("U1b aggregate instruction needs frozen same-owner type graph and open function");
+    }
+    try meta.validLocation(routine.metadata,location);
+    if block.owner != routine.key or block.index < 1 or
+       block.index > routine.blocks.length/5 {
+        try budget.reject("foreign or invalid U1b aggregate basic block");
+    }
+    let offset be (block.index-1)*5;
+    if try words.get(routine.blocks,routine.phase,offset+4) != 0 {
+        try budget.reject("U1b aggregate instruction after terminator");
+    }
+    return offset;
+}
+
+function typeOf(routine identity build.Function,graph identity aggregate.Registry,
+    value build.ValueId) returns aggregate.TypeId fails budget.LimitError {
+    if value.owner != routine.key or value.index < 1 or
+       value.index > routine.values.length/4 {
+        try budget.reject("foreign or invalid U1b aggregate SSA value");
+    }
+    let index be try words.get(routine.values,routine.phase,(value.index-1)*4);
+    return try aggregate.typeAt(graph,index);
+}
+
+function emit(routine identity build.Function,graph identity aggregate.Registry,
+    block build.BlockId,op Int,inputs,location meta.LocId,
+    payload Int,extra Int,resultType aggregate.TypeId)
+    returns build.ValueId fails budget.LimitError {
+    let blockOffset be try access(routine,graph,block,location);
+    if not ops.isAggregate(op) { try budget.reject("invalid U1b aggregate operation"); }
+    try aggregate.valid(graph,resultType);
+    if routine.instructions.length/10 >= 1048576 or
+       routine.values.length/4 >= 1048576 or
+       inputs.count > routine.operands.limit-routine.operands.length {
+        try budget.exceed(routine.owner,1,0);
+    }
+    // All type/arity/field checks occur in make/get/set before any mutation.
+    let first be routine.operands.length;
+    let item be 0;
+    while item < inputs.count {
+        let value be inputs[item];
+        let checked be try typeOf(routine,graph,value);
+        let ignored be try words.push(routine.operands,routine.phase,value.index);
+        item=item+1;
+    }
+    let instructionIndex be routine.instructions.length/10+1;
+    let valueIndex be routine.values.length/4+1;
+    let ignored be try words.push(routine.values,routine.phase,resultType.index);
+    ignored=try words.push(routine.values,routine.phase,1);
+    ignored=try words.push(routine.values,routine.phase,instructionIndex);
+    ignored=try words.push(routine.values,routine.phase,0);
+    ignored=try words.push(routine.instructions,routine.phase,op);
+    ignored=try words.push(routine.instructions,routine.phase,block.index);
+    ignored=try words.push(routine.instructions,routine.phase,first);
+    ignored=try words.push(routine.instructions,routine.phase,inputs.count);
+    ignored=try words.push(routine.instructions,routine.phase,valueIndex);
+    ignored=try words.push(routine.instructions,routine.phase,1);
+    ignored=try words.push(routine.instructions,routine.phase,location.index);
+    ignored=try words.push(routine.instructions,routine.phase,payload);
+    ignored=try words.push(routine.instructions,routine.phase,extra);
+    ignored=try words.push(routine.instructions,routine.phase,0);
+    let previous be try words.get(routine.blocks,routine.phase,blockOffset+3);
+    if previous == 0 {
+        try words.set(routine.blocks,routine.phase,blockOffset+2,instructionIndex);
+    } else {
+        try words.set(routine.instructions,routine.phase,(previous-1)*10+9,instructionIndex);
+    }
+    try words.set(routine.blocks,routine.phase,blockOffset+3,instructionIndex);
+    routine.revision=routine.revision+1;
+    return build.ValueId { owner=routine.key; index=valueIndex; };
+}
+
+// 43: aggregate.make. Ordered operand types and total arity are structural.
+public function make(routine identity build.Function,graph identity aggregate.Registry,
+    block build.BlockId,shape aggregate.TypeId,inputs,location meta.LocId)
+    returns build.ValueId fails budget.LimitError {
+    let selected be try access(routine,graph,block,location);
+    let count be try aggregate.fieldCount(graph,routine.phase,shape);
+    if inputs.count != count { try budget.reject("aggregate.make field arity mismatch"); }
+    let item be 0;
+    while item < count {
+        let actual be try typeOf(routine,graph,inputs[item]);
+        let required be try aggregate.field(graph,routine.phase,shape,item);
+        if actual.index != required.index {
+            try budget.reject("aggregate.make field type mismatch");
+        }
+        try budget.work(routine.phase,1);
+        item=item+1;
+    }
+    return try emit(routine,graph,block,43,inputs,location,shape.index,0,shape);
+}
+
+// 44: aggregate.get. The field ordinal is an instruction attribute, NOT an SSA
+// runtime index; the operation always returns its declared exact field type.
+public function get(routine identity build.Function,graph identity aggregate.Registry,
+    block build.BlockId,source build.ValueId,index Int,location meta.LocId)
+    returns build.ValueId fails budget.LimitError {
+    let selected be try access(routine,graph,block,location);
+    let shape be try typeOf(routine,graph,source);
+    let fieldType be try aggregate.field(graph,routine.phase,shape,index);
+    return try emit(routine,graph,block,44,[source],location,index,shape.index,fieldType);
+}
+
+// 45: aggregate.set. Pure immutable update: the old SSA value remains valid.
+public function set(routine identity build.Function,graph identity aggregate.Registry,
+    block build.BlockId,source build.ValueId,index Int,replacement build.ValueId,
+    location meta.LocId) returns build.ValueId fails budget.LimitError {
+    let selected be try access(routine,graph,block,location);
+    let shape be try typeOf(routine,graph,source);
+    let fieldType be try aggregate.field(graph,routine.phase,shape,index);
+    let actual be try typeOf(routine,graph,replacement);
+    if actual.index != fieldType.index {
+        try budget.reject("aggregate.set replacement type mismatch");
+    }
+    return try emit(routine,graph,block,45,[source,replacement],location,index,shape.index,shape);
+}
