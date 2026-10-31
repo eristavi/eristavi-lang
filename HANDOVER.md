@@ -1,7 +1,9 @@
 # Eristavi compiler — current handover
 
 **Authoritative recovery checkpoint: 31 October 2026, Asia/Nicosia.** Start here.
-Section 41 is an active U2/U3 source-behavior acceptance baseline candidate (NOT new UIR implementation).
+Section 41 records an executable, focused-qualified U2/U3 Stage-0/native parity baseline (test-only, NOT redesigned UIR integration).
+Section 40 records the QUALIFIED and MERGED PR #103 C-managed physical heap study; exact UIR per-owner attribution #77 still OPEN.
+Section 39 records the QUALIFIED and MERGED U1b narrow execution slice (PR #101); immutable aggregates remain pending.
 Section 38 records the QUALIFIED, MERGED controlled owned-runtime benchmark; #77 physical attribution remains open.
 Section 37 is the authoritative **qualified, merged PR #99** owned-runtime optimization checkpoint.
 Section 36 preserves the earlier active optimization candidate and investigation history.
@@ -75,7 +77,7 @@ redundant indexing, unbounded caches or unnecessarily expensive CI.
 
 ## Start a new chat with this
 
-> Continue Eristavi Lang from **HANDOVER.md section 41** for the active U2/U3 parity baseline candidate; section 38 documents the qualified benchmark. U2/U3/U4 redesigned implementation is still unfinished.
+> Continue Eristavi Lang from **HANDOVER.md section 41** (U2/U3 native behavior parity baseline, not UIR migration), section 40 (MERGED PR #103 verified C-managed heap study; owner-specific #77 remains OPEN), section 39 (qualified U1b narrow execution) and section 38 (measured 5.4414x runtime worker0 benchmark). Full U1b aggregates, U2 #74, U3 #75 and U4 #102 remain incomplete.
 > Runtime/compiler performance, peak and retained memory, predictable
 > compilation time and bounded work are the **highest engineering priorities**
 > after correctness, safety and the frozen language contract; see the standing
@@ -95,14 +97,16 @@ redundant indexing, unbounded caches or unnecessarily expensive CI.
 > no-allocation fallback. Text-only behavior, independent oracle and the public
 > ABI remain unchanged. The two new 64 KiB BSS caches require explicit
 > memory accounting; 8 MiB is a collection pressure threshold, not a global
-> hard heap limit. The original 5.42x five-pair research result is **not**
-> a validated production-patch speedup; cross-run CI timing is informative,
-> not controlled same-host performance evidence.
+> hard heap limit. The older disposable-prototype 5.42x observation is distinct
+> from the **5.4414x measured actual production runtime** in five same-host
+> AB/BA pairs (PR #100) for integer worker0 only, not whole-compiler speed.
 > Earlier PR #98 remains the latest qualified **U1a compiler** batch. U1a
 > #71/#72/#76 CLOSED; #77 OPEN for its own physical UIR owner/buffer attribution.
-> U1b aggregates, U2 managed UIR and U3 frontend/native integration incomplete.
-> Next: same-host paired production benchmark and physical memory attribution,
-> then other measured compiler/runtime bottlenecks. Use focused change-specific
+> **U1b narrow reference execution PR #101 is qualified and merged**.
+> Aggregate make/get/set, physical U1a owner attribution #77, U2 managed UIR,
+> U3 source→new UIR, U4 #102 and reproducible compiler-wide speedups remain
+> unfinished. Next investigate truly attributed backing, aggregates and measured
+> compiler bottlenecks. Use focused change-specific
 > checks and only one exact-head full/qualification gate per coherent code
 > revision; never enable experimental owned compiler self-build by default.
 
@@ -111,22 +115,24 @@ redundant indexing, unbounded caches or unnecessarily expensive CI.
 | Scope | Current status |
 | --- | --- |
 | Repository | https://github.com/eristavi/eristavi-lang |
-| Latest qualified compiler/runtime merge | `388bfb6da42a6c0c1de307a0aa72ea987b63bbb0` ([PR #99](https://github.com/eristavi/eristavi-lang/pull/99), owned runtime) |
+| Latest qualified compiler/runtime merge | `ce4f7a7c6897fbba0cee85a05bb3569312e7ec50` ([PR #101](https://github.com/eristavi/eristavi-lang/pull/101), U1b narrow reference execution) |
 | Exact tested PR #99 head | `fd4828e63826d0fc36f827a938b437f3dd863c3c` |
 | Exact tested PR #99 / merged Git tree | `aac54d7534168879e585e9c8045e1c762098dea0` (identical) |
 | Four-platform PR #99 CI | [41196975098](https://github.com/eristavi/eristavi-lang/actions/runs/41196975098): **SUCCESS** on Ubuntu GCC/Clang, Linux ARM64 Clang, macOS Clang; 460 discovered per Linux x86-64 configuration |
 | PR #99 owned runtime integration qualification | [41196975251](https://github.com/eristavi/eristavi-lang/actions/runs/41196975251): **SUCCESS**, x86-64 owned static/offline integration; bootstrap and experimental full owned self-build intentionally skipped |
 | PR #99 status | **MERGED**; exact qualified Git tree matches merge `388bfb6da42a6c0c1de307a0aa72ea987b63bbb0` |
 | U1a scoped acceptance audit | #71/#72/#76 **CLOSED/completed**; #77 **OPEN** for scoped physical memory/resource attribution (see §35) |
+| U1a C-managed actual heap study | **PR #103 MERGED, 20/20 samples PASSED** (control/8/32/128) on [CI 41199687957](https://github.com/eristavi/eristavi-lang/actions/runs/41199687957); explicit [physical opt-in 41200109602](https://github.com/eristavi/eristavi-lang/actions/runs/41200109602) PASSED. Managed peak 8.42–9.17 MiB on switch workloads; **not per-owner physical backing**; #77 still OPEN |
 | Owned-runtime optimization | **PRODUCTION MERGED / QUALIFIED** PR #99; three scoped mechanisms, 27/27 focused and 460 Linux x86-64 full tests passed. PR #100's actual-production 5-pair AB/BA matched benchmark passed: **5.4414x** on worker0; U1a physical attribution #77 remains open |
 | Separate full owned compiler self-build | Intentionally skipped; NOT qualified |
 | U1a | Scalar/native f64/calls/imports/provenance and shared switch semantics implemented, full CI qualified, merged. **Not formally all-U1a-complete** until #77 U1a-owned physical backing/resource exit gates close |
-| U1b | Narrow i8/i16/i32 IR operations qualified through PR #87; narrow reference execution, immutable aggregates and core-wide acceptance remain incomplete |
+| U1b | Narrow op registry/build/verifier through PR #87 and independent i8/i16/i32 reference execution **QUALIFIED / MERGED PR #101** (210 independent results; [CI 41199325649](https://github.com/eristavi/eristavi-lang/actions/runs/41199325649) and [qualification 41199325706](https://github.com/eristavi/eristavi-lang/actions/runs/41199325706)). Aggregate graph/make/get/set and complete U1b issue #73 remain OPEN |
+| U2/U3 frozen behavior parity | **Test-only** additional List/identity/Unicode Text/checked/import/generic Stage-0 vs existing C-native corpus passed [smoke 41199824619](https://github.com/eristavi/eristavi-lang/actions/runs/41199824619). Redesigned UIR managed lowering #74 and source-to-UIR/native bridge #75 are NOT implemented by parity tests |
 | U2 | Managed Text/List/identity, checked failures, deterministic cleanup and root maps NOT implemented in redesigned UIR |
 | U3 | Production frontend → redesigned UIR/native integration NOT implemented; native execution adapter in PR #96 is isolated |
 | Production compiler | Existing frontend/native pipeline and ABI retained; no default backend replacement |
 
-**Reading rule:** Section 37 supersedes sections 31–36 wherever historical
+**Reading rule:** Sections 39, 38 and 37 supersede sections 31–36 wherever historical
 draft, open-issue or pre-merge statements conflict. PR #99 is the latest
 qualified production runtime change, PR #98 the previous U1a compiler batch.
 Section 32 records research only; this PR's new production code is different
@@ -1550,9 +1556,112 @@ their actual source integration, independent reference tests and exact-head
 qualification pass. Keep these old and new milestones transparent in status
 and do not publish broad "all done" claims.
 
-## 41. Active independent U2/U3 Stage0 parity expansion — 2026-10-31
+## 39. Active U1b narrow independent execution — 2026-10-31
 
-**STATUS: TEST-ONLY CANDIDATE; UNQUALIFIED.** Branch
+**STATUS: QUALIFIED AND MERGED PR #101 (narrow execution slice only).** Historical working branch
+`milestone/u1b-independent-narrow-execution-20261031` forked from the qualified PR #99 docs-only main checkpoint
+`30b9d3f11238d0164f3603cd8a06f1f2e83b6586`. It is independent
+of the paired runtime benchmark branch and its acceptance evidence.
+
+- Extend private `u1_execute` (not the production frontend/native ABI) to
+  interpret already-verified U1b i8/i16/i32 raw bit-pattern operations:
+  constant, modular add/sub/mul, signed/unsigned overflow, all ten compare
+  relations, signed/unsigned division and remainder. Signed MIN/-1 must
+  produce *original-location* terminal overflow on **both** div/rem; zero
+  divisor remains a distinct fault. For i32 unsigned multiplication, avoid
+  overflowing host signed Int64; normalizing two's-complement bit arithmetic
+  must be mathematical, not compiler UB.
+- Validate all U1b entry raw input bits to exact declared width and reject
+  f64/unsupported U2/U3 operations. Keep the frozen Eristavi source type
+  system and strict 32-byte public ABI unchanged.
+- New `tests/test_u1_narrow_execution.py` generates 30 hand-built linked
+  functions (three widths x 10 operations) and 210 separately expected
+  outcomes using Python unbounded integer arithmetic. It exercises exact
+  returned value bits, signed/unsigned comparison, overflow flags and
+  terminal source-located faults. All original U1a tests remain enabled.
+- Added this reference test to focused CI. [Smoke 41199024937](https://github.com/eristavi/eristavi-lang/actions/runs/41199024937) **PASSED 28/28** at exact code head `f4fc991d35704cb9d536b6a2629d0d359bddad79`. The 210 independent mathematical outputs and faults are evaluated in three separately scoped 70-case linked UIR requests (no budget increased). Before calling the slice complete,
+  inspect the actual run, fix any implementation/test issue, preserve
+  malformed-IR/revision/budget checks and then qualify at the selected
+  final code revision. Do not run the experimental owned self-build.
+- This slice **does NOT** implement immutable aggregates or satisfy full U1b
+  issue #73. Aggregate field make/get/set, recursive by-value type-cycle
+  rejection, typed aggregate verifier and physical memory evidence still
+  remain. U2 managed semantics, U3 source/frontend integration and U4 machine
+  lowering remain later acceptance milestones.
+
+**Final merged acceptance:** [PR #101](https://github.com/eristavi/eristavi-lang/pull/101) merged as `ce4f7a7c6897fbba0cee85a05bb3569312e7ec50`, exact qualified head `eb0aa86b382e77a5131793670c8dab2fbf774dc1` and tested/merged Git tree `36eaca25b706e4ed5d1da1ef69ed3e17c9d3e1f6` match. [Four-platform CI 41199325649](https://github.com/eristavi/eristavi-lang/actions/runs/41199325649) and [full qualification 41199325706](https://github.com/eristavi/eristavi-lang/actions/runs/41199325706) PASSED, experimental owned compiler self-build skipped. Original 210 Python big-int oracle cases are independently verified across 3 separately budgeted UIR requests; not the complete U1b #73 milestone.
+
+**Next:** implement budgeted, owner-scoped immutable aggregate type graph with by-value acyclicity and make/get/set, exact field type/arity, independent aggregate oracle, malformed dead CFG and strict physical resource boundaries. Do not silently change public TypeId/ABI or import U2 identity semantics.
+
+## 40. Qualified U1a C-managed heap diagnostic (not per-owner acceptance) — 2026-10-31
+
+**MERGED PR #103, physical C-managed heap study VERIFIED (20/20 raw samples + opt-in workflow). Issue #77 remains OPEN for exact per-UIR owner backing attribution.** Branch
+`milestone/u1a-physical-heap-evidence-20261031` from last successful handover main `1784f846ef2c54c6e1c7b79db73e63c14a0c1176`.
+It records the requested *next slice* of U1a #77 real physical
+measurements, not a conclusion that the U1a UIR-owned attribution gate
+has been met. The independent U1b narrow interpreter is progressing on
+a different PR. Do not merge/rewrite source compiler/runtime code here.
+
+- New explicit opt-in `tools/probes/u1_c_heap_physical.py` emits four frozen hand-built UIR
+  fixtures: empty control and dense 8/32/128-case switch/SSA promotion
+  variants; compiles identical C-native runtime source with a **private
+  diagnostic exit observer** reporting native managed heap bytes, peak
+  bytes, live blocks, GC collections and reclaimed blocks/bytes.
+- Five fresh process samples per fixture collect full process peak RSS
+  via `wait4()`, physical C-native managed heap statistics, exact output
+  digest and original bounded modeled function owner peak/traffic/work.
+  The independent Python `evaluate()` checks original/promoted SSA
+  traces and arithmetic/control-flow oracle for each switch.
+- **Attribution rule:** this C collector metric includes every managed
+  allocation in the process and is NOT directly attributable to only the
+  UIR owner; control-versus-workload differences are only comparative and
+  do not establish physical object ownership. Never close #77 or conflate
+  modeled `budget.Owner` charges with physical heap bytes. The eventual
+  #77 exit still needs exact per-owner backing/allocator/GC charge
+  correlation and wider mixed-graph/cleanup stress.
+- This is test-only private instrumentation (no persistent public API or
+  artifact). It retains the original 8 MiB/64 MiB/33,554,432 work gates;
+  no new global memory cap, no ABI/frontend/default backend change, and
+  no experimental full owned compiler self-build.
+- **Measured [CI #41199687957](https://github.com/eristavi/eristavi-lang/actions/runs/41199687957) PASSED 28/28**, including this private test at exact code head
+  `38c5ffe4737ed0dadee52a9262f9f5ed99d3d11f`.
+  Twenty samples (5 each control/dense8/dense32/dense128), unmodified
+  independent switch result/trace tests and fixed model charge gates passed.
+  [Raw machine-readable samples](docs/evidence/2026-10-31/u1a-c-physical-heap-samples.json)
+  are checked in: C-managed peak bytes 0/control, **8,423,198**
+  (dense8), **8,476,364** (dense32), **9,172,962** (dense128);
+  C-managed live bytes **2,571,379 / 3,355,569 / 5,793,989**;
+  collections **22/59/207**. Whole-process RSS was **125,032 KiB**
+  throughout (not attributable). Original UIR modeled function owner
+  peaks **162,368 / 274,528 / 720,704 bytes** are separate.
+- **CI-performance fix:** the original 20-sample physical test took
+  **105.081 seconds** in targeted CI, unacceptable as a routine smoke/
+  full-suite additive cost. The identical measurement logic moved to
+  `tools/probes/u1_c_heap_physical.py`, outside automatic
+  `test_*.py` discovery; explicit opt-in
+  `.github/workflows/u1a-physical-heap.yml` uses the
+  `uir-physical-evidence` label. The original smoke list was restored.
+  No private physical study is silently run on every normal PR.
+- **Do not close issue #77:** the C-managed heap includes bootstrap/runtime
+  allocations as well as UIR storage, and is not allocation-site tagged
+  to UIR owner identities. The exact per-owner physical backing/collector
+  attribution and larger mixed-stress remain mandatory. No source compiler
+  or runtime implementation was changed by the diagnostic.
+
+**Opt-in path verified:** [physical study workflow 41200109602](https://github.com/eristavi/eristavi-lang/actions/runs/41200109602) **PASSED** on the revised `tools/probes` entrypoint. Routine [CI 41200109570](https://github.com/eristavi/eristavi-lang/actions/runs/41200109570) **PASSED** by correctly skipping the expensive probe; it is no longer discovered in normal smoke/full suites. No tests deleted, only moved to explicit test-only workflow. Preserve raw results and do not rerun merely because the handover changed.
+
+**Next:** Because owner attribution remains mixed,
+design a separately reviewed tagged-owner allocation accounting adapter
+rather than adjusting resource-policy thresholds or guessing heap sizes.
+
+
+### Final PR #103 merge checkpoint (section 40 addendum)
+
+PR [#103](https://github.com/eristavi/eristavi-lang/pull/103) merged at `6422feab353886d957f49fa8ee332b905ef58c40`, preserving the exact opt-in diagnostic script bytes and all 20 independently verified C-managed heap measurements. Existing main PR #101 narrow execution qualification is unchanged; `tools/probes/u1_c_heap_physical.py` is **not** automatically discovered by routine CI, avoiding its observed 105.081-second cost. [Raw evidence](docs/evidence/2026-10-31/u1a-c-physical-heap-samples.json) remains on main. GitHub [issue #77](https://github.com/eristavi/eristavi-lang/issues/77) stays **OPEN**: C-runtime collector counters and process RSS cannot independently attribute allocations to each UIR owner. Future measurement requires tagged managed allocation/backing correlation and mixed-stress validation; no general GC/ABI redesign authorized by this study.
+
+## 41. Qualified independent U2/U3 Stage-0 native behavior baseline — 2026-10-31
+
+**STATUS: Focused CI PASSED; not a new U2/U3 implementation.** Branch
 `milestone/u2-u3-parity-baseline-20261031`, forked from last documentation main
 `1784f846ef2c54c6e1c7b79db73e63c14a0c1176`.
 This is a **real executable reference baseline** needed by U2/U3 migration,
@@ -1570,7 +1679,7 @@ frontend→new-UIR lowering are implemented by these tests.
   parity, success, and original unchanged source files. The existing direct
   native targets are only asserted where previously qualified; do not
   silently route the redesigned UIR through the old path and call it U3.
-- Run focused CI with full existing native resource/semantic regressions;
+- [Focused CI #41199824619](https://github.com/eristavi/eristavi-lang/actions/runs/41199824619) **PASSED**, including the expanded Stage-0/native parity cases and all original selected resource/semantic tests. Run any future substantive compiler changes through the prescribed exact-head full qualification; this test-only parity extension does not require those expensive jobs. Preserve
   if mismatches occur, investigate as real compatibility gaps rather than
   removing test vectors. No public ABI, Unicode17, language grammar,
   source semantics or default backend modifications.
@@ -1582,8 +1691,7 @@ frontend→new-UIR lowering are implemented by these tests.
 - U1a physical #77 and U1b aggregate #73 remain independent gating
   milestones. **Do not mark U2/U3/U4 completed from baseline parity.**
 
-**Next:** inspect actual focused smoke, preserve all authoritative case
-outputs, then reconcile updated milestone status with current main. For
+**Next:** keep the added Stage-0/native outputs as the independent migration baseline and proceed with *real new UIR* U2 managed/checked/resource semantics before promoting U3. This test-only result must not be presented as full U2/U3 completion. For
 implementation, begin U2 with a reviewed versioned managed/checked/resource
 extension profile and a separate function-level owned reference adapter;
 only then attempt U3 source bridge or U4 machine legalization.

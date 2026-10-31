@@ -103,6 +103,61 @@ public function cmp(a Int,b Int,relation Int) returns Int {
     if okay { return 1; }
     return 0;
 }
+// U1b narrow integers use *unsigned canonical bit patterns*, never host-width
+// values. All side effects and division faults retain original LocIds. These
+// helpers are private reference semantics, independent of the Python oracle.
+// Multiplication must not overflow signed Eristavi Int while constructing
+// unsigned i32 products; modulo-2^64 wrapMul is subsequently narrowed.
+function narrowModulus(kind Int) returns Int fails budget.LimitError {
+    if kind == 4 { return 256; }
+    if kind == 5 { return 65536; }
+    if kind == 6 { return 4294967296; }
+    try budget.reject("invalid narrow UIR TypeId");
+    return 0;
+}
+function narrowNormalize(value Int,modulus Int) returns Int {
+    let bits be value%modulus;
+    if bits < 0 { bits=bits+modulus; }
+    return bits;
+}
+function narrowSigned(bits Int,modulus Int) returns Int {
+    if bits >= modulus/2 { return bits-modulus; }
+    return bits;
+}
+function narrowArithmetic(a Int,b Int,mode Int,modulus Int,
+    phase identity budget.Phase) returns Int fails budget.LimitError {
+    if mode == 1 { return narrowNormalize(a+b,modulus); }
+    if mode == 2 { return narrowNormalize(a-b,modulus); }
+    if mode == 3 { return narrowNormalize(try wrapMul(a,b,phase),modulus); }
+    try budget.reject("invalid narrow arithmetic mode");
+    return 0;
+}
+function narrowOverflow(a Int,b Int,mode Int,modulus Int,signed Bool,
+    phase identity budget.Phase) returns Int fails budget.LimitError {
+    if signed {
+        let first be narrowSigned(a,modulus);
+        let second be narrowSigned(b,modulus);
+        let exact be 0;
+        // At width 32 the largest intermediate product is 2^62, still
+        // within signed Int64, so no host undefined overflow is possible.
+        if mode == 1 { exact=first+second; }
+        if mode == 2 { exact=first-second; }
+        if mode == 3 { exact=first*second; }
+        if exact < -(modulus/2) or exact >= modulus/2 { return 1; }
+        return 0;
+    }
+    if mode == 1 and a > modulus-1-b { return 1; }
+    if mode == 2 and a < b { return 1; }
+    if mode == 3 and b != 0 and a > (modulus-1)/b { return 1; }
+    return 0;
+}
+function narrowCompare(a Int,b Int,relation Int,modulus Int) returns Int {
+    if relation >= 3 and relation <= 6 {
+        return cmp(narrowSigned(a,modulus),narrowSigned(b,modulus),relation);
+    }
+    // Unsigned canonical narrow values are nonnegative and fit signed Int.
+    return cmp(a,b,relation);
+}
 // Total modulo-2^64 arithmetic; no unchecked host overflow.
 public function wrapAdd(a Int,b Int) returns Int {
     let top be 9223372036854775807;
@@ -326,6 +381,43 @@ function walk(program identity link.Program,policy identity imports.Policy,
                 }
                 try put(frame,resultStart,answer);
             }
+            if op == 36 {
+                try put(frame,resultStart,payload);
+            }
+            if op >= 37 and op <= 42 {
+                let width be try field(frame,routine.instructions,offset+8);
+                let modulus be try narrowModulus(width);
+                // Independently validate raw inputs at the executor boundary.
+                if a < 0 or b < 0 or a >= modulus or b >= modulus {
+                    try budget.reject("noncanonical narrow input bits");
+                }
+                if op >= 37 and op <= 39 {
+                    let answer be try narrowArithmetic(a,b,payload,modulus,frame.phase);
+                    try put(frame,resultStart,answer);
+                    if op == 38 or op == 39 {
+                        let overflow be try narrowOverflow(a,b,payload,modulus,op == 38,frame.phase);
+                        try put(frame,resultStart+1,overflow);
+                    }
+                }
+                if op == 40 {
+                    try put(frame,resultStart,narrowCompare(a,b,payload,modulus));
+                }
+                if op == 41 or op == 42 {
+                    if b == 0 { return outcome(1,2,loc,none,0); }
+                    let dividend be a; let divisor be b;
+                    if payload == 1 {
+                        dividend=narrowSigned(a,modulus);
+                        divisor=narrowSigned(b,modulus);
+                        if dividend == -(modulus/2) and divisor == -1 {
+                            // Remainder must trap on signed MIN/-1 too.
+                            return outcome(1,1,loc,none,0);
+                        }
+                    }
+                    let answer be dividend/divisor;
+                    if op == 42 { answer=dividend%divisor; }
+                    try put(frame,resultStart,narrowNormalize(answer,modulus));
+                }
+            }
             if op == 5 {
                 if a == 0 { return outcome(1,payload,loc,none,0); }
             }
@@ -360,9 +452,10 @@ function walk(program identity link.Program,policy identity imports.Policy,
             }
             if op != 1 and op != 2 and op != 3 and op != 4 and op != 13 and op != 14 and
                (op < 15 or op > 27) and op != 5 and op != 34 and
-               op != 8 and op != 6 and op != 7 and op != 35 {
-                // Never guess strict f64, narrow widths or future
-                // managed/checked continuation semantics.
+               op != 8 and op != 6 and op != 7 and op != 35 and
+               (op < 36 or op > 42) {
+                // Never guess strict f64 or future managed/checked
+                // continuation semantics.
                 return outcome(3,op,loc,none,0);
             }
         }
@@ -386,9 +479,17 @@ public function run(program identity link.Program,policy identity imports.Policy
     let index be 0;
     while index < inputs.count {
         let kind be (try meta.parameterType(data,signaturePhase,signature,index)).index;
-        if kind != 1 and kind != 2 { try budget.reject("unsupported U1a entry type"); }
+        if kind != 1 and kind != 2 and kind != 4 and kind != 5 and kind != 6 {
+            try budget.reject("unsupported U1 scalar entry type");
+        }
         if kind == 1 and inputs[index] != 0 and inputs[index] != 1 {
-            try budget.reject("invalid U1a entry predicate bits");
+            try budget.reject("invalid U1 entry predicate bits");
+        }
+        if kind >= 4 and kind <= 6 {
+            let modulus be try narrowModulus(kind);
+            if inputs[index] < 0 or inputs[index] >= modulus {
+                try budget.reject("noncanonical narrow entry bits");
+            }
         }
         let next be identity Slot { bits=inputs[index]; next=none; };
         if tail == none { head=next; } else { tail.next=next; }
