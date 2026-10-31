@@ -1,5 +1,11 @@
 # U1a #72/#77 conformance boundaries and evidence
 
+**Current: PR #105 QUALIFIED AND MERGED (`8c625b1ece6a229844def93e2bf9563c14e9e273`).** Its tested/merged
+tree `0d8bf1f4a58f66a15bb9a89bd42f596091ed9c36` matches. U1a physical acceptance is evidenced; #77 administrative
+closure follows this checkpoint. The older open/pending paragraphs below are
+historical and superseded by the final section. Durable U3 artifacts and U2
+managed semantics remain separately unfinished.
+
 Checkpoint: 2026-10-31. [PR #98](https://github.com/eristavi/eristavi-lang/pull/98)
 is **QUALIFIED and MERGED** on main, merge `b05bd1863181d2a70800586a0efa8f1469d5d8df`;
 tested head `6b2fadf7aca6a6249a4adbf57e38bab15cb916e0`, identical tested/merged tree `de5e72f4d03a370f53356a70497d3dd9eae1ec67`.
@@ -87,3 +93,28 @@ rerun expensive CI for docs-only corrections, widen resource limits,
 or automatically run experimental full owned compiler self-build. For any
 future substantive changes, use focused smoke and one exact-head final
 four-platform CI/completed-batch qualification before merging.
+
+## Final physical acceptance — PR #105, 31 October 2026
+
+The final head `f1fba11ff5e11791ad8c5d635fbf90873c686fa9` passed four-platform full CI 41222506854 and
+completed-batch qualification 41222506873. Merge `8c625b1ece6a229844def93e2bf9563c14e9e273` has the identical
+tested tree `0d8bf1f4a58f66a15bb9a89bd42f596091ed9c36`. All 469 discovered tests per platform passed with
+specified platform skips; bootstrap C/D repeatability/offline/unchanged-source
+checks and owned integration offline audit passed. Full owned compiler self-build
+remains skipped and uncertified.
+
+The 65,536-word/4,096-page fixture deliberately makes every identity's initial
+cache hash collide. Phase peak 7,853,712 B and cumulative traffic 21,957,296 B
+satisfy the unchanged 8 MiB/64 MiB gates. Semantic-owner observation independently
+identifies actual retained wrapper/body allocator addresses for metadata, function,
+module/import, publication and scratch/storage structures, with requested layout
+oracles separate from actual capacities. Stress backing is 6,653,840 B / 16,938
+objects; every observed object and allocation-phase ledger is reclaimed. Shared
+reservation/slack, runtime caches and diagnostic maps remain explicitly separate.
+The current 20-sample C study is independent whole-process collector evidence,
+not per-owner C attribution. See the source-hashed raw qualified record and report.
+
+This meets the outstanding U1a-owned physical/resource gate. Existing qualified
+source/revision/diagnostic and bounded-transform gates remain. General U2 managed
+heap/root/cleanup and U3 persistent artifact/source/frontend integration are not
+waived or declared complete. #77 administrative closure follows this checkpoint.

@@ -1,6 +1,12 @@
 # PR #105: physical U1 owner memory investigation
 
-**31 October 2026. Active collision correction; NOT QUALIFIED.** Hosted smoke
+**31 October 2026. PR #105 QUALIFIED AND MERGED** at `8c625b1ece6a229844def93e2bf9563c14e9e273`,
+tested head `f1fba11ff5e11791ad8c5d635fbf90873c686fa9`, identical tested/merged tree `0d8bf1f4a58f66a15bb9a89bd42f596091ed9c36`.
+Full CI 41222506854 and completed-batch qualification 41222506873 passed;
+469 discovered tests per configuration with scoped skips. #77 closure follows
+this checkpoint. Earlier candidate-stage statuses below are historical.
+
+**Rejected prototype history.** Hosted smoke
 [41220371417](https://github.com/eristavi/eristavi-lang/actions/runs/41220371417)
 passed 34/35 but caught a direct-mapped-cache collision: 9,725,616 B peak,
 515,478,752 B traffic and 1,035,287 stress allocations under hosted placement.
@@ -15,9 +21,9 @@ passed, including the adversarial 65,536-word fixture: 7,853,712 B phase peak,
 21,957,296 B traffic, 72,682 allocations; exact stress backing 6,653,840 B /
 16,938 objects, all reclaimed. Eight and sixteen probes without rotating
 victims failed the adversarial traffic gate; those prototypes were rejected.
-Hosted smoke and final release gates remain pending. Full-window eviction,
+Final hosted smoke 41222208171 passed 36/36, and both full release gates passed. Full-window eviction,
 stale-body checks and escaped-reference fallback retain conservative detachment.
-Issue #77 remains open; nothing has been merged.
+U1a physical acceptance is complete; #77 administrative closure follows this checkpoint.
 Local collision-stable implementation checkpoint: `9cf5b30`. The hosted submission/tested tree
 is recorded in HANDOVER; raw source hashes bind these measurements independently
 of commit metadata. No source-language, public value ABI,
@@ -97,10 +103,10 @@ retained UIR buffers. Every original ledger returns to zero independently.
 Focused native regressions verify ordinary snapshots, shared aliases, nested
 value detachment, optional rebinding, escaped-reference fallback, GC cache
 invalidation, free-block tail reuse, high bitmap bit/multiple same-class heads,
-release reset, malformed lease use and unchanged accounting. Six ownership/
+release reset, malformed lease use and unchanged accounting. Seven ownership/
 allocator tests passed; the earlier broader local smoke passed 31/31; added
-optional-identity tests also passed. Final hosted gates must inspect the final
-exact head, including all later test/schema additions.
+optional-identity tests also passed. The final hosted smoke and full gates inspected the exact submitted head,
+including all later test/schema additions, and passed.
 
 ## Performance control and independent C evidence
 
@@ -133,12 +139,13 @@ improvement over the older PR #103 samples. Its C-relevant inputs stayed unchang
 during the subsequent owned-only allocator tuning. See
 [u1a-c-heap-105.json](../evidence/2026-10-31/u1a-c-heap-105.json).
 
-## Remaining release gates and optimization backlog
+## Release disposition and optimization backlog
 
-Run one final four-platform full CI plus completed-batch `qualification`, without
-experimental owned compiler full self-build. Inspect every failure, exact head
-and tested/merged tree equality before merging or closing #77. Keep handover,
-issue disposition and PR description consistent with actual results.
+Final four-platform CI and completed-batch qualification PASSED and the exact
+tested/merged tree was verified before merging. Experimental owned compiler full
+self-build stayed skipped. No implementation changed after qualification; this
+post-merge documentation reconciliation uses a lightweight patch check. U1a's
+scoped acceptance is met; #77 administrative closure follows this checkpoint.
 
 Then implement U1b immutable aggregates, followed by U2 managed semantics,
 U3 production frontend integration and U4 machine/toolchain migration. Profile

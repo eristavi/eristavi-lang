@@ -1,20 +1,11 @@
 # Eristavi compiler — current handover
 
-**Authoritative recovery checkpoint: 31 October 2026, Asia/Nicosia.** Start here.
-Section 43 records active PR #105 investigation; #77 remains OPEN and unqualified.
-Section 42 is the last merged COMPLETE WORK-SESSION CHECKPOINT: benchmark, U1b narrow, U1a physical study, U2/U3 parity, and remaining U1b/U2/U3/U4 gates.
-Section 41 records the MERGED PR #104 frozen source/native behavior parity baseline (test-only; redesigned UIR U2/U3 NOT implemented).
-Section 40 records the QUALIFIED and MERGED PR #103 C-managed physical heap study; exact UIR per-owner attribution #77 still OPEN.
-Section 39 records the QUALIFIED and MERGED U1b narrow execution slice (PR #101); immutable aggregates remain pending.
-Section 38 records the QUALIFIED, MERGED controlled owned-runtime benchmark; #77 physical attribution remains open.
-Section 37 is the authoritative **qualified, merged PR #99** owned-runtime optimization checkpoint.
-Section 36 preserves the earlier active optimization candidate and investigation history.
-Section 35 records the previous qualified compiler batch PR #98 and U1a issue status.
-Sections 33–34 preserve the historical scoped acceptance review and draft work.
-Section 32 records the separate owned-runtime investigation (research only).
-Section 31 preserves the prior PR #96 qualified compiler checkpoint.
-Sections 1–30 retain historical development and qualification evidence; their
-draft statuses and next steps are superseded. Section 25 retains the CI policy.
+**Authoritative recovery checkpoint: 31 October 2026, Asia/Nicosia. Read section 44.**
+PR #105 is **QUALIFIED AND MERGED**. U1a's scoped physical acceptance gate passed;
+issue #77 administrative closure follows this checkpoint. Sections 1–43 preserve
+historical evidence and rejected prototypes; their pending/keep-open statements
+are superseded by section 44. U1b aggregates #73, U2 #74, U3 #75 and U4 #102 remain
+OPEN and unimplemented/unfinished as specified below.
 
 ## Mandatory handover maintenance — standing user instruction
 
@@ -66,81 +57,58 @@ redundant indexing, unbounded caches or unnecessarily expensive CI.
 - Maintain a ranked optimization backlog and update this handover after
   implementation, qualification, merge or a discovered performance regression.
   An unqualified prototype is not production-ready or a future CI time guarantee.
-- **Latest optimization batch: completed and qualified through PR #99.**
-  Allocation-pressure-aware graph/text GC, exact-slot root de-duplication and
-  bounded scratch reuse are now merged. Next highest-priority optimization
-  duties: (1) independent same-host matched before/after *production* runtime
-  timing/physical memory and GC event accounting; (2) targeted remaining
-  compiler/registry bottlenecks with repeatability; (3) U1a #77 actual
-  owned-buffer/GC backing attribution, without conflating that UIR acceptance
-  requirement with this owned runtime patch; (4) reduce unnecessary boxing
-  only through separately verified interface-safe redesign. Preserve the
-  original oracles/watchdogs, resource caps, source semantics and ABI.
+- **Latest qualified batch: PR #105, merge `8c625b1ece6a229844def93e2bf9563c14e9e273`.** Word-store aggregate leases, optional-identity member lowering, bounded collision-stable identity backing reuse and bitmap/split allocator reuse are qualified. The adversarial all-same-hash physical gate passed unchanged 8 MiB / 64 MiB limits. Current matched worker0 timing is roughly flat (~1.5% higher median wall time amid host variance); no whole-compiler speedup is claimed. Profile remaining complete-compiler phases (#51) and apply the same ownership/cost discipline to U1b aggregates, U2, U3 and U4.
 
 ## Start a new chat with this
 
-> Continue Eristavi Lang from **HANDOVER.md section 43** (active #105; section 42 is last merged baseline) (latest all-milestones checkpoint). Sections 38–41 contain qualified PRs #100/#101/#103/#104 and exact evidence. **Optimization is highest priority after correctness and safety**. Full U1a physical owner attribution #77, U1b immutable aggregates #73, U2 #74, U3 #75 and U4 #102 remain OPEN.
-> Runtime/compiler performance, peak and retained memory, predictable
-> compilation time and bounded work are the **highest engineering priorities**
-> after correctness, safety and the frozen language contract; see the standing
-> policy above. This is not optional only for runtime changes: apply it to all
-> future compiler, UIR, backend and test design.
-> Latest qualified production **owned-runtime** batch:
-> [PR #99](https://github.com/eristavi/eristavi-lang/pull/99) **MERGED** at
-> `388bfb6da42a6c0c1de307a0aa72ea987b63bbb0`. Exact tested PR head `fd4828e63826d0fc36f827a938b437f3dd863c3c`; identical
-> tested/merged Git tree `aac54d7534168879e585e9c8045e1c762098dea0`.
-> Four-platform [CI 41196975098](https://github.com/eristavi/eristavi-lang/actions/runs/41196975098)
-> and [owned integration 41196975251](https://github.com/eristavi/eristavi-lang/actions/runs/41196975251)
-> both **PASSED** at that head. The experimental owned compiler full self-build
-> was **SKIPPED** intentionally. All 460 discovered tests in both Linux x86-64
-> toolchains passed; scoped platform skips remain.
-> Actual patch: allocation-pressure-aware graph/Text/failure collector,
-> exact-slot root filter, bounded cleared shared slot-index scratch with
-> no-allocation fallback. Text-only behavior, independent oracle and the public
-> ABI remain unchanged. The two new 64 KiB BSS caches require explicit
-> memory accounting; 8 MiB is a collection pressure threshold, not a global
-> hard heap limit. The older disposable-prototype 5.42x observation is distinct
-> from the **5.4414x measured actual production runtime** in five same-host
-> AB/BA pairs (PR #100) for integer worker0 only, not whole-compiler speed.
-> Earlier PR #98 remains the latest qualified **U1a compiler** batch. U1a
-> #71/#72/#76 CLOSED; #77 OPEN for its own physical UIR owner/buffer attribution.
-> **U1b narrow reference execution PR #101 is qualified and merged**.
-> Aggregate make/get/set, physical U1a owner attribution #77, U2 managed UIR,
-> U3 source→new UIR, U4 #102 and reproducible compiler-wide speedups remain
-> unfinished. Next investigate truly attributed backing, aggregates and measured
-> compiler bottlenecks. Use focused change-specific
-> checks and only one exact-head full/qualification gate per coherent code
-> revision; never enable experimental owned compiler self-build by default.
+> Continue from **HANDOVER.md section 44**. PR #105 is qualified and merged at
+> `8c625b1ece6a229844def93e2bf9563c14e9e273`, tested head `f1fba11ff5e11791ad8c5d635fbf90873c686fa9`,
+> identical tested/merged tree `0d8bf1f4a58f66a15bb9a89bd42f596091ed9c36`.
+> Full four-platform CI **41222506854** and completed-batch qualification
+> **41222506873** PASSED; 469 discovered tests per configuration, scoped skips
+> retained. Three bootstrap jobs completed C/D, repeatability and offline audit
+> with unchanged sources; owned integration passed its offline audit but is NOT
+> full owned compiler self-build certification. That experimental gate was skipped.
+> U1a physical owner backing is accepted; reconcile #77 administrative closure.
+> Next implement **U1b immutable aggregates #73**, then **U2 #74 → U3 #75 → U4 #102**,
+> with measured compiler performance/memory work throughout. Existing source
+> semantics, public 32-byte ABI and default production backend remain.
+> Do not mark later milestones green from the Stage-0/old-native parity baseline.
+> The local execution workspace became unavailable after all candidate code,
+> investigation and raw evidence were preserved on GitHub. Hosted qualification
+> completed successfully through the connected GitHub tools. Do not assume
+> an execution workspace or local worktree is currently available.
 
 ## Current verified status — read before historical sections
 
 | Scope | Current status |
 | --- | --- |
 | Repository | https://github.com/eristavi/eristavi-lang |
-| Latest qualified compiler/runtime merge | `ce4f7a7c6897fbba0cee85a05bb3569312e7ec50` ([PR #101](https://github.com/eristavi/eristavi-lang/pull/101), U1b narrow reference execution) |
-| Exact tested PR #99 head | `fd4828e63826d0fc36f827a938b437f3dd863c3c` |
-| Exact tested PR #99 / merged Git tree | `aac54d7534168879e585e9c8045e1c762098dea0` (identical) |
-| Four-platform PR #99 CI | [41196975098](https://github.com/eristavi/eristavi-lang/actions/runs/41196975098): **SUCCESS** on Ubuntu GCC/Clang, Linux ARM64 Clang, macOS Clang; 460 discovered per Linux x86-64 configuration |
-| PR #99 owned runtime integration qualification | [41196975251](https://github.com/eristavi/eristavi-lang/actions/runs/41196975251): **SUCCESS**, x86-64 owned static/offline integration; bootstrap and experimental full owned self-build intentionally skipped |
-| PR #99 status | **MERGED**; exact qualified Git tree matches merge `388bfb6da42a6c0c1de307a0aa72ea987b63bbb0` |
-| U1a scoped acceptance audit | #71/#72/#76 **CLOSED/completed**; #77 **OPEN** for scoped physical memory/resource attribution (see §35) |
-| U1a C-managed actual heap study | **PR #103 MERGED, 20/20 samples PASSED** (control/8/32/128) on [CI 41199687957](https://github.com/eristavi/eristavi-lang/actions/runs/41199687957); explicit [physical opt-in 41200109602](https://github.com/eristavi/eristavi-lang/actions/runs/41200109602) PASSED. Managed peak 8.42–9.17 MiB on switch workloads; **not per-owner physical backing**; #77 still OPEN |
-| Owned-runtime optimization | **PRODUCTION MERGED / QUALIFIED** PR #99; three scoped mechanisms, 27/27 focused and 460 Linux x86-64 full tests passed. PR #100's actual-production 5-pair AB/BA matched benchmark passed: **5.4414x** on worker0; U1a physical attribution #77 remains open |
-| Separate full owned compiler self-build | Intentionally skipped; NOT qualified |
-| U1a | Scalar/native f64/calls/imports/provenance and shared switch semantics implemented, full CI qualified, merged. **Not formally all-U1a-complete** until #77 U1a-owned physical backing/resource exit gates close |
-| U1b | Narrow op registry/build/verifier through PR #87 and independent i8/i16/i32 reference execution **QUALIFIED / MERGED PR #101** (210 independent results; [CI 41199325649](https://github.com/eristavi/eristavi-lang/actions/runs/41199325649) and [qualification 41199325706](https://github.com/eristavi/eristavi-lang/actions/runs/41199325706)). Aggregate graph/make/get/set and complete U1b issue #73 remain OPEN |
-| U2/U3 frozen behavior parity | **PR #104 MERGED, test-only** additional List/identity/Unicode Text/checked/import/generic Stage-0 vs existing C-native corpus passed [smoke 41199824619](https://github.com/eristavi/eristavi-lang/actions/runs/41199824619). Redesigned UIR managed lowering #74 and source-to-UIR/native bridge #75 are NOT implemented by parity tests |
-| U2 | Managed Text/List/identity, checked failures, deterministic cleanup and root maps NOT implemented in redesigned UIR |
-| U3 | Production frontend → redesigned UIR/native integration NOT implemented; native execution adapter in PR #96 is isolated |
-| Production compiler | Existing frontend/native pipeline and ABI retained; no default backend replacement |
+| Latest qualified compiler/runtime merge | `8c625b1ece6a229844def93e2bf9563c14e9e273` ([PR #105](https://github.com/eristavi/eristavi-lang/pull/105)) |
+| Exact tested #105 head | `f1fba11ff5e11791ad8c5d635fbf90873c686fa9` |
+| Exact tested/merged tree | `0d8bf1f4a58f66a15bb9a89bd42f596091ed9c36` — identical, ordinary two-parent merge, unchanged base |
+| Focused smoke | [41222208171](https://github.com/eristavi/eristavi-lang/actions/runs/41222208171): **36/36 PASSED**, including deliberately colliding full physical fixture |
+| Four-platform full CI | [41222506854](https://github.com/eristavi/eristavi-lang/actions/runs/41222506854): **SUCCESS**, 469 discovered each. Linux GCC/Clang: 4 skips; ARM64: 112; macOS: 121 |
+| Completed-batch qualification | [41222506873](https://github.com/eristavi/eristavi-lang/actions/runs/41222506873): three bootstrap C/D builds, repeatable=true, offline audit and unchanged source snapshots; owned static/offline integration passed with repeatable=false |
+| Experimental full owned compiler self-build | Intentionally skipped; **NOT CERTIFIED** |
+| U1a #77 physical acceptance | **QUALIFIED / MERGED**. Administrative issue closure follows this checkpoint; original 8 MiB / 64 MiB gates preserved |
+| Actual adversarial owned stress | 65,536 words / 4,096 pages, all initial identity hashes collide: **7,853,712 B phase peak**, **21,957,296 B traffic**, 72,682 graph allocations. Exact retained stress backing **6,653,840 B / 16,938 wrapper-body objects**, all reclaimed |
+| Physical scope | Actual per-structure semantic-owner backing plus separate temporary/bookkeeping phase history. Shared region slack, diagnostic maps and shared caches are not attributed to arbitrary U1 owners; this is not process RSS or a global heap cap |
+| Current independent C evidence | Refreshed 20/20 whole C-managed samples passed; source-hashed C inputs unchanged during later owned-only collision tuning. Not per-owner C allocation attribution |
+| Performance | Five final-code AB/BA worker0 pairs: 8.135968 → 8.254257 s (0.9857×), roughly flat amid host variance. **No whole-compiler speedup claim**; #51 full compiler phase profiling remains open |
+| U1a | Scalar/SSA/calls/recursion/effects/switches/strict native f64/provenance/bounded simplification plus scoped physical acceptance **COMPLETE within the adopted U1a boundary** |
+| U1b #73 | Narrow i8/i16/i32 reference slice qualified/merged (#101, 210 independent results). **Immutable aggregate type graph, make/get/set, independent conformance and resource qualification remain pending** |
+| U2 #74 | New UIR managed Text/List/identity, checked failures, root maps and deterministic cleanup **NOT IMPLEMENTED** |
+| U3 #75 | Direct frozen frontend → new UIR → production native target/artifact/cache integration **NOT IMPLEMENTED**. Existing adapter is isolated; #104 is test-only reference parity |
+| U4 #102 | Redesigned UIR machine/legalization/artifact migration **NOT IMPLEMENTED / NOT QUALIFIED** |
+| Production | Existing source language and default compiler pipeline retained; no new-UIR backend promotion |
+| Environment | Local execution workspace unavailable; all implementation, evidence and current checkpoint are durable in the repository |
 
-**Reading rule:** Sections 39, 38 and 37 supersede sections 31–36 wherever historical
-draft, open-issue or pre-merge statements conflict. PR #99 is the latest
-qualified production runtime change, PR #98 the previous U1a compiler batch.
-Section 32 records research only; this PR's new production code is different
-from the disposable diagnostic prototype. Issues #71/#72/#76 are closed;
-#77 remains open and U1b/U2/U3 are separately unfinished. Docs-only
-checkpoint corrections do not change the tested runtime or require full CI.
+**Reading rule:** section 44 is authoritative. Earlier keep-open and pending
+statements describe their historical revisions. U1a acceptance does not certify
+U2 managed GC/cleanup, U3 durable artifacts/source integration or U4 toolchains.
+Documentation-only status reconciliation reuses unchanged implementation evidence
+and must not trigger expensive compiler/runtime qualification again.
 
 ## 1. Verified repository checkpoint
 
@@ -1909,3 +1877,55 @@ C-path 20/20 study remains independent and its C-relevant inputs are unchanged.
 Next submit this coherent revision, inspect hosted smoke, then request one final
 full four-platform CI plus completed-batch qualification. No full owned compiler
 self-build. Merge and #77 closure only after exact-head results/tree parity.
+
+## 44. Qualified merged #105: scoped U1a physical acceptance — 2026-10-31
+
+**QUALIFIED AND MERGED.** Merge `8c625b1ece6a229844def93e2bf9563c14e9e273` has the exact tree
+`0d8bf1f4a58f66a15bb9a89bd42f596091ed9c36` tested at head `f1fba11ff5e11791ad8c5d635fbf90873c686fa9`.
+Base main stayed `79a9a0fcaedd638c5bc81a5b599e7cb9e23aa0b0`; both parents are retained.
+GitHub reports #105 merged. No implementation changed after the final gates.
+Issue #77's scoped acceptance is evidenced; administrative closure follows this
+documentation checkpoint.
+
+### Evidence and rejected alternatives
+
+- [Focused smoke 41222208171](https://github.com/eristavi/eristavi-lang/actions/runs/41222208171): 36/36 passed.
+- [Full CI 41222506854](https://github.com/eristavi/eristavi-lang/actions/runs/41222506854): all four platforms passed, 469 discovered each, existing platform skips retained.
+- [Completed-batch qualification 41222506873](https://github.com/eristavi/eristavi-lang/actions/runs/41222506873): GCC/Clang x86-64 and Clang ARM64 bootstrap C/D, repeatability, offline audit and unchanged sources passed; owned integration offline audit passed with repeatable=false. Experimental owned compiler full self-build skipped.
+- Independent C-managed heap study: 20/20 current-C samples, separate whole-process collector scope, not a guessed owner multiplier.
+- Adversarial physical case forces EVERY initial identity hash to one bucket.
+  Actual stress phase peak 7,853,712 B and traffic 21,957,296 B stay under original
+  8,388,608 / 67,108,864 B limits. All 16,938 observed stress wrapper/body objects
+  (6,653,840 B) and every other observed owner partition are reclaimed.
+- Earlier hosted direct-map candidate failed 34/35 with 9,725,616 B peak and
+  515,478,752 B traffic. Fixed first-slot eviction also failed adversarial traffic;
+  both are rejected historical prototypes. Final sixteen-probe rotating-victim
+  cache passes forced-collision, deletion-hole, full-window, stale-body, snapshot,
+  escaped-reference and GC tests.
+- Shared added runtime state: identity cache 4,112 B; allocator classes/bitmap
+  1,544 B. These and diagnostic maps are not charged to arbitrary U1 owners.
+- Final AB/BA worker0 timing is roughly flat (~1.5% higher median wall time amid
+  variance). Do not claim compiler speedups or reuse prototype speedups.
+  See [investigation](docs/performance/U1A_OWNER_MEMORY_INVESTIGATION_2026-10-31.md)
+  and [qualified raw record](docs/evidence/2026-10-31/u1a-owner-105-qualified.json).
+
+### Accepted boundary and next work
+
+U1a's private in-memory source publication/revisions, diagnostic map ingress,
+bounded scalar transformations, direct-IR owners/buffers/resource measurements
+and independent verification are accepted. Persistent source/native artifact
+formats/cache manifests and end-to-end source physical performance remain **U3 #75**.
+Managed Text/List/identity runtime/root/cleanup acceptance remains **U2 #74**.
+U4 target legalizations/artifacts remain **#102**. No public UIR serialization is frozen.
+
+Next execute the already-authorized sequence: **U1b immutable aggregates #73 →
+U2 #74 → U3 #75 → U4 #102**, with complete compiler phase profiling #51 and
+performance/memory budgeting throughout. Full qualification is once per coherent
+final implementation, with focused tests during development. The source language,
+existing ABI and rollback/default production pipeline must remain intact.
+
+The local execution environment disconnected after preservation of all code and
+raw evidence. GitHub remains available; hosted qualification completed and the
+verified merge is preserved. Do not claim any later milestone was implemented
+during this checkpoint. A documentation-only patch check validates this
+reconciliation; the tested implementation is unchanged.

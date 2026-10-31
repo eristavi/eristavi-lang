@@ -1,6 +1,6 @@
 # Eristavi Lang — Remaining UIR acceptance and optimization plan
 
-**Date:** 31 October 2026. **Scope:** verified `main` after the runtime optimization, controlled benchmark, narrow interpreter, C-heap measurement and U2/U3 parity baseline batches. This document is a dependency and verification plan, **not a claim that U1a/U1b/U2/U3/U4 are complete**. Read the newest [HANDOVER.md](../../HANDOVER.md) checkpoint first.
+**Date:** 31 October 2026. **Latest status:** PR #105 qualified/merged; scoped U1a physical acceptance complete, #77 closure follows. U1b aggregates/U2/U3/U4 remain open. Section A below records the original plan and is superseded by this disposition. **Scope:** verified `main` after the runtime optimization, controlled benchmark, narrow interpreter, C-heap measurement and U2/U3 parity baseline batches. This document is a dependency and verification plan, **not a claim that U1a/U1b/U2/U3/U4 are complete**. Read the newest [HANDOVER.md](../../HANDOVER.md) checkpoint first.
 
 ## Verified work already delivered
 
@@ -13,7 +13,11 @@
 | Native C managed heap observations | [PR #103](https://github.com/eristavi/eristavi-lang/pull/103), [20 raw samples](../evidence/2026-10-31/u1a-c-physical-heap-samples.json), [explicit opt-in CI](https://github.com/eristavi/eristavi-lang/actions/runs/41200109602) | actual whole C collector heap/GC/RSS, but NOT per-UIR-owner backing |
 | U2/U3 frozen behavior A/B baseline | [PR #104](https://github.com/eristavi/eristavi-lang/pull/104), [focused CI](https://github.com/eristavi/eristavi-lang/actions/runs/41199824619) | Stage-0 and **old** native parity over 15 successful corpus cases; NO new UIR managed semantics or source pipeline |
 
-## A. U1a #77 — physical owned allocation attribution, still OPEN
+## A. U1a #77 — physical attribution ACCEPTED through qualified PR #105
+
+Final full CI 41222506854 and qualification 41222506873 passed; tested/merged tree 0d8bf1f4a58f66a15bb9a89bd42f596091ed9c36. The adversarial 65,536-word case passed unchanged peak/traffic gates with actual semantic backing and complete reclamation. HANDOVER section 44 and the final investigation define scope and retained deferrals. Administrative issue closure follows this checkpoint.
+
+### Original acceptance plan (now evidenced)
 
 - Add a **reviewed private instrumentation gate** linking allocation-site tags to the exact `budget.Owner` for UIR metadata, per-function body, construction/promoter/verifier scratch and retained publication. Track allocated backing capacity **and** collector block/header bytes, retained/live/peak bytes, reclamation and cumulative traffic, without altering the frozen 32-byte ABI.
 - Verify actual native C and owned-runtime allocation/GC sources independently. Existing [C collector observations](../evidence/2026-10-31/u1a-c-physical-heap-samples.json) show C-managed peak 8,423,198 / 8,476,364 / 9,172,962 B at dense8/32/128 while modeled function peaks are 162,368 / 274,528 / 720,704 B; these measures cover different ownership scopes. **Do not divide them and call it a memory multiplier.** The empty control's zero C-managed allocation with nearly equal full-process RSS underscores the distinction.
@@ -57,4 +61,4 @@ Lower one complete Linux x86-64 UIR profile to the actual native target, preserv
 - Focused tests and change-specific independent oracle while developing. **One** final exact-head full matrix/qualification when compiler/IR/runtime code changes; docs-only changes need patch check. Do not automatically run experimental owned full compiler self-build.
 - Keep HANDOVER.md recovery/table/latest sections consistent after every qualified implementation, issue state change or merge. Never report U2/U3/U4 completion from isolated reference tests or older Stage-0/Universal IR native routes.
 
-**Dependency truth:** U1a #77 is a scoped physical acceptance gap; U1b #73 is only partially implemented; U2 #74, U3 #75 and U4 #102 remain open. No safe shortcut can substitute a functioning, verified implementation for a milestone checkbox.
+**Dependency truth:** U1a physical acceptance is qualified and merged through #105, with #77 administrative closure following the checkpoint. U1b #73 remains partially implemented; U2 #74, U3 #75 and U4 #102 remain open. No safe shortcut can substitute a functioning, verified implementation for a milestone checkbox.
