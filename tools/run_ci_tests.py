@@ -33,6 +33,8 @@ SMOKE_TESTS=(
     # Owned runtime GC optimization conformance: real graph, interior/slot roots,
     # bounded static scratch, forced pressure, and allocation-refusal fallbacks.
     'test_heap_scaled_collection.HeapScaledCollectionTests.test_large_heap_interval_and_empty_heap_reset',
+    'test_runtime_lookup_caches.IdentityBackingCacheTests',
+    'test_freestanding_graph_values.FreestandingGraphValueTests.test_optional_identity_updates_preserve_aliases_rebinding_and_nested_snapshots',
     'test_runtime_lookup_caches.RuntimeLookupCacheTests.test_owned_graph_exact_slot_roots_preserve_interior_and_fallback',
     'test_runtime_lookup_caches.RuntimeLookupCacheTests.test_owned_slot_scratch_reuse_zeroing_nesting_and_refusal',
     'test_freestanding_text_roots.FreestandingTextRootTests.test_registered_roots_bound_loop_slots_and_preserve_pending_results',

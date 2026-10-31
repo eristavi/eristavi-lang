@@ -14,7 +14,7 @@ from compiler.erist.project import compile_module
 
 ROOT = Path(__file__).resolve().parents[1]
 EXPECTED = ''.join(name + ':ok\n' for name in (
-    'reservations', 'capacity', 'parent', 'traffic', 'transfer', 'transfer-reject', 'transfer-kind',
+    'combined-lease', 'reservations', 'capacity', 'parent', 'traffic', 'transfer', 'transfer-reject', 'transfer-kind',
     'commit-once', 'release-once', 'work', 'request-work', 'cancel', 'abandon',
     'counter-boundary', 'pages', 'metadata', 'signature-collision', 'source-spans', 'builder',
     'immutable', 'loop-edges', 'foreign-id', 'structural-rejections', 'construction-failure'))

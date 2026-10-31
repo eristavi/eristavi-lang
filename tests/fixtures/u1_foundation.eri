@@ -242,8 +242,39 @@ function structuralRejections() fails budget.LimitError,ProbeError {
     try build.close(routine); try meta.close(data); try check(root.live == 0,"structural cleanup");
     try budget.close(owner); try budget.close(shared); try budget.close(root); output("structural-rejections:ok");
 }
+function extendAttempt(reservation identity budget.Reservation,allocation identity budget.Allocation) returns Bool fails budget.LimitError {
+    try budget.commitInto(reservation,allocation); return false;
+}
+function rejectsExtend(reservation identity budget.Reservation,allocation identity budget.Allocation) returns Bool fails budget.LimitError {
+    let unexpected be extendAttempt(reservation,allocation) else error budget.LimitError { return error.category == "invalid-state"; };
+    return false;
+}
+function combinedLease() fails budget.LimitError,ProbeError {
+    let root be try budget.request(128,256,1000);
+    let owner be try budget.child(root,2,128,256,1000);
+    let other be try budget.child(root,2,128,256,1000);
+    let lease be try budget.commit(try budget.reserve(owner,8));
+    let addition be try budget.reserve(owner,24);
+    try budget.commitInto(addition,lease);
+    try check(lease.bytes == 32 and owner.live == 32 and root.live == 32 and
+        owner.pending == 0 and root.pending == 0 and owner.traffic == 32 and root.traffic == 32,"combined lease charges");
+    try check(try rejectsExtend(addition,lease),"combined lease duplicate rejection");
+    try check(lease.bytes == 32 and owner.live == 32,"combined lease duplicate atomicity");
+    let foreign be try budget.reserve(other,16);
+    try check(try rejectsExtend(foreign,lease),"combined lease foreign rejection");
+    try check(lease.bytes == 32 and owner.live == 32 and other.pending == 16 and
+        root.pending == 16 and root.traffic == 32,"combined lease foreign atomicity");
+    try budget.cancelReservation(foreign); try budget.release(lease);
+    let released be try budget.reserve(owner,4);
+    try check(try rejectsExtend(released,lease),"combined lease released rejection");
+    try check(owner.live == 0 and owner.pending == 4 and owner.traffic == 32,"combined lease released atomicity");
+    try budget.cancelReservation(released);
+    try check(root.live == 0 and root.pending == 0 and root.traffic == 32,"combined lease cleanup");
+    try budget.close(owner); try budget.close(other); try budget.close(root);
+    output("combined-lease:ok");
+}
 function run() returns Bool fails budget.LimitError,ProbeError {
-    try reservations(); try failedCapacity(); try failedParent(); try failedTraffic(); try transferCapacity(); try failedTransfer(); try transferKind();
+    try combinedLease(); try reservations(); try failedCapacity(); try failedParent(); try failedTraffic(); try transferCapacity(); try failedTransfer(); try transferKind();
     try duplicateCommit(); try duplicateRelease(); try workCredits(); try requestWork(); try cancellation(); try abandonedAttempt();
     try arithmeticBoundary(); try pageStorage(); try metadataAndBuilders(); try structuralRejections(); try failedConstruction(); return true;
 }

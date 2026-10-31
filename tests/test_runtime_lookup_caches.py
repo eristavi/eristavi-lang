@@ -392,3 +392,210 @@ _start:
 .ascii "hash"
 '''
   self.probe('text-slice-hash',asm)
+
+
+class IdentityBackingCacheTests(RuntimeLookupCacheHarness, unittest.TestCase):
+ def test_identity_writes_preserve_value_snapshots_escaped_refs_and_gc(self):
+  # Explicit ABI snapshot reads must invalidate exclusivity. Mutable payload
+  # references permanently disable caching, because GC cannot revoke them.
+  self.probe('identity-private-backing', r"""
+.text
+.globl _start
+_start:
+    call evn_scope_enter
+    movq %rax,%rbx
+    movl $13,%edi
+    movl $1,%esi
+    call evn_object
+    movq %rax,%r12
+    movl $1,%edi
+    call evn_int
+    movq %r12,%rdi
+    xorl %esi,%esi
+    movq %rax,%rdx
+    call evn_init
+    movl $14,%edi
+    movq %r12,%rsi
+    call evn_wrap
+    movq %rax,%r13
+    # First write detaches the original ordinary Counter; second reuses it.
+    movq %r13,%rdi
+    xorl %esi,%esi
+    call evn_member_ref
+    movq %rax,%r14
+    movq 8(%r13),%rax
+    movq 8(%rax),%rax
+    movq 8(%rax),%r15
+    movq %r13,%rdi
+    xorl %esi,%esi
+    call evn_member_ref
+    cmpq %r14,%rax
+    jne .Lcache_fail
+    movq %rax,%r14
+    movl $2,%edi
+    call evn_int
+    movq %r14,%rdi
+    movq %rax,%rsi
+    call evn_store
+    # The original ordinary value still equals 1.
+    movq %r12,%rdi
+    xorl %esi,%esi
+    call evn_member
+    cmpq $1,8(%rax)
+    jne .Lcache_fail
+    movq %r13,%rdi
+    call evn_get
+    movq %rax,%r12
+    # A later identity write must detach from the published value snapshot.
+    movq %r13,%rdi
+    xorl %esi,%esi
+    call evn_member_ref
+    cmpq %r14,%rax
+    je .Lcache_fail
+    movq %rax,%r14
+    movl $3,%edi
+    call evn_int
+    movq %r14,%rdi
+    movq %rax,%rsi
+    call evn_store
+    movq %r12,%rdi
+    xorl %esi,%esi
+    call evn_member
+    cmpq $2,8(%rax)
+    jne .Lcache_fail
+    movq %r13,%rdi
+    call evn_get_ref
+    cmpq $1,.Lidentity_private_disabled(%rip)
+    jne .Lcache_fail
+    movq %r13,%rdi
+    xorl %esi,%esi
+    call evn_member_ref
+    movq %rax,%r14
+    movq %r13,%rdi
+    xorl %esi,%esi
+    call evn_member_ref
+    cmpq %r14,%rax
+    je .Lcache_fail
+    # Populate and clear a synthetic stale entry: cache is not a GC root.
+    movq $1,.Lidentity_private_keys(%rip)
+    movl $5,%edi
+    call evn_none
+    movq %rax,%rsi
+    movq %rbx,%rdi
+    call evn_scope_leave
+    call erist_rt_text_collect
+    cmpq $0,.Lidentity_private_keys(%rip)
+    jne .Lcache_fail
+    cmpq $0,.Lgraph_count(%rip)
+    jne .Lcache_fail
+""" + FINISH)
+
+ def test_allocator_split_reuses_tail_and_preserves_small_remainder(self):
+  self.probe('allocator-split-tail', r"""
+.text
+.globl _start
+_start:
+    movl $1024,%edi
+    call erist_rt_alloc
+    movq %rax,%r12
+    movq %rax,%rdi
+    call erist_rt_free
+    testq %rax,%rax
+    jne .Lcache_fail
+    movl $64,%edi
+    call erist_rt_alloc
+    cmpq %r12,%rax
+    jne .Lcache_fail
+    cmpq $65,-32(%rax)
+    jne .Lcache_fail
+    movq $1234,(%rax)
+    movl $896,%edi
+    call erist_rt_alloc
+    leaq 96(%r12),%rcx
+    cmpq %rcx,%rax
+    jne .Lcache_fail
+    # A 32-byte remainder cannot fit a new header plus minimum payload.
+    cmpq $929,-32(%rax)
+    jne .Lcache_fail
+    movq %rax,%r13
+    movq $5678,895(%rax)
+    cmpq $1234,(%r12)
+    jne .Lcache_fail
+    movq %r12,%rdi
+    call erist_rt_free
+    testq %rax,%rax
+    jne .Lcache_fail
+    movq %r13,%rdi
+    call erist_rt_free
+    testq %rax,%rax
+    jne .Lcache_fail
+""" + FINISH)
+
+
+ def test_allocator_size_bitmap_high_bit_multiple_heads_and_release_reset(self):
+  self.probe('allocator-size-bitmap', r"""
+.text
+.globl _start
+_start:
+    xorl %edi,%edi
+    call erist_rt_freelist_take
+    cmpq $-1,%rax
+    jne .Lcache_fail
+    movl $17,%edi
+    call erist_rt_freelist_take
+    cmpq $-1,%rax
+    jne .Lcache_fail
+    movl $64,%edi
+    call erist_rt_alloc
+    movq %rax,%r12
+    movl $1024,%edi
+    call erist_rt_alloc
+    movq %rax,%r13
+    movl $1024,%edi
+    call erist_rt_alloc
+    movq %rax,%r14
+    movq %r12,%rdi
+    call erist_rt_free
+    movq %r13,%rdi
+    call erist_rt_free
+    movq %r14,%rdi
+    call erist_rt_free
+    movabsq $-9223372036854775800,%rax
+    cmpq .Lalloc_small_mask(%rip),%rax
+    jne .Lcache_fail
+    movl $1024,%edi
+    call erist_rt_alloc
+    cmpq %r14,%rax
+    jne .Lcache_fail
+    btq $63,.Lalloc_small_mask(%rip)
+    jnc .Lcache_fail
+    movl $1024,%edi
+    call erist_rt_alloc
+    cmpq %r13,%rax
+    jne .Lcache_fail
+    btq $63,.Lalloc_small_mask(%rip)
+    jc .Lcache_fail
+    movl $64,%edi
+    call erist_rt_alloc
+    cmpq %r12,%rax
+    jne .Lcache_fail
+    cmpq $0,.Lalloc_small_mask(%rip)
+    jne .Lcache_fail
+    movq %r12,%rdi
+    call erist_rt_free
+    movq %r13,%rdi
+    call erist_rt_free
+    call erist_rt_allocator_release_all
+    testq %rax,%rax
+    jne .Lcache_fail
+    cmpq $0,.Lalloc_small_mask(%rip)
+    jne .Lcache_fail
+    cmpq $0,.Lalloc_small_heads+72(%rip)
+    jne .Lcache_fail
+    cmpq $0,.Lalloc_small_heads+1512(%rip)
+    jne .Lcache_fail
+    movl $16,%edi
+    call erist_rt_alloc
+    testq %rax,%rax
+    je .Lcache_fail
+""" + FINISH)

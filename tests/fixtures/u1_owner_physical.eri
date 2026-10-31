@@ -40,6 +40,7 @@ function run() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError 
     let data be try meta.create(shared,phase);
     let signature be try meta.signature(data,phase,[meta.i64()],[meta.i64()]);
     let target be try meta.declaration(data,phase,signature,"physical.identity",1,0,0);
+    let imported be try meta.declaration(data,phase,signature,"erist.u1.i64.identity",2,0,1);
     let source be try meta.source(data,phase,"physical-owner-probe",
         "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",64);
     let location be try meta.location(data,phase,source,0,8,0,1,1);
@@ -59,18 +60,20 @@ function run() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError 
     process.setExitCode(102);
     let program be try link.create(data); let count be try link.bind(program,target,routine);
     count=try link.seal(program);
-    let policy be try imports.create(program); let frozen be try imports.freeze(policy);
+    let policy be try imports.create(program);
+    let adapter be try imports.select(policy,imported,3);
+    let frozen be try imports.freeze(policy);
     let stamp be try publication.publish(program,policy);
     try publication.validate(stamp);
 
     // Reporting must not be attributed to a U1 owner.
     process.setExitCode(0);
-    show("metadata",try physical.metadata(data,shared));
-    show("function",try physical.functionBody(routine,owner));
-    show("module",try physical.moduleRegistry(program,shared));
-    show("imports",try physical.importRegistry(policy,shared));
-    show("publication-metadata",try physical.publicationBacking(stamp,shared));
-    show("publication-function",try physical.publicationBacking(stamp,owner));
+    show("metadata",try physical.metadata(data,shared,202));
+    show("function",try physical.functionBody(routine,owner,203));
+    show("module",try physical.moduleRegistry(program,shared,202));
+    show("imports",try physical.importRegistry(policy,shared,202));
+    show("publication-metadata",try physical.publicationBacking(stamp,shared,202));
+    show("publication-function",try physical.publicationBacking(stamp,owner,203));
     logical("metadata",shared); logical("function",owner);
 
     process.setExitCode(104);
@@ -79,7 +82,7 @@ function run() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError 
     let graph be try dom.create(scratchOwner,scratchPhase);
     try dom.prepare(graph,513,1024);
     process.setExitCode(0);
-    show("scratch",try physical.dominanceScratch(graph,scratchOwner));
+    show("scratch",try physical.dominanceScratch(graph,scratchOwner,204));
     logical("scratch",scratchOwner);
     process.setExitCode(104);
     try dom.close(graph); try budget.finishPhase(scratchPhase);
@@ -99,7 +102,7 @@ function run() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError 
         index=index+1;
     }
     process.setExitCode(0);
-    show("stress",try physical.wordStore(stress,stressOwner));
+    show("stress",try physical.wordStore(stress,stressOwner,205));
     logical("stress",stressOwner);
     try check(stressOwner.peak <= stressOwner.limit and
         stressOwner.traffic <= stressOwner.trafficLimit,"stress exceeded original U1 limits");

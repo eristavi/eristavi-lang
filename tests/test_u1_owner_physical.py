@@ -11,10 +11,12 @@ unchanged.
 from pathlib import Path
 import json
 import platform
+import re
 import shutil
 import struct
 import subprocess
 import tempfile
+import time
 import unittest
 
 from compiler.erist.cli import build_native
@@ -24,7 +26,8 @@ ROOT = Path(__file__).resolve().parents[1]
 STRESS_OBJECTS = 8469
 TAG_NAMES = {101: 'request', 102: 'metadata', 103: 'function', 104: 'scratch', 105: 'stress'}
 STAT_FIELDS = ('live', 'peak', 'traffic', 'allocations', 'reclaimed_bytes', 'reclaimed_objects')
-RECORD_BYTES = 8 + len(TAG_NAMES) * len(STAT_FIELDS) * 8
+SEMANTIC_FIELDS = ('observed_bytes', 'live', 'reclaimed_bytes', 'objects', 'reclaimed_objects')
+RECORD_BYTES = 8 + len(TAG_NAMES) * (len(STAT_FIELDS) + len(SEMANTIC_FIELDS)) * 8
 # Acceptance-only address map. It is deliberately much larger than the live U1
 # object set so allocation-history bookkeeping cannot become the limiting factor.
 # This BSS is diagnostic process overhead and is never charged as U1 owner memory.
@@ -88,6 +91,11 @@ def _decode_owner_records(raw):
             row = values[cursor:cursor + len(STAT_FIELDS)]
             snapshot['owners'][TAG_NAMES[tag]] = dict(zip(STAT_FIELDS, row))
             cursor += len(STAT_FIELDS)
+        snapshot['backing'] = {}
+        for name in TAG_NAMES.values():
+            row = values[cursor:cursor + len(SEMANTIC_FIELDS)]
+            snapshot['backing'][name] = dict(zip(SEMANTIC_FIELDS, row))
+            cursor += len(SEMANTIC_FIELDS)
         snapshots.append(snapshot)
     return snapshots
 
@@ -150,6 +158,13 @@ def _instrument_owned_runtime(runtime, diagnostic_fd):
         1,
     )
 
+    equality = 'erist_rt_graph_equal:\n'
+    assert runtime.count(equality) == 1
+    runtime = runtime.replace(equality, equality + (
+        '    pushq %rdi\n    pushq %rsi\n    subq $8,%rsp\n'
+        '    call .Ltest_semantic_observe\n'
+        '    addq $8,%rsp\n    popq %rsi\n    popq %rdi\n'), 1)
+
     diagnostic = f'''
 .bss
 .p2align 3
@@ -158,6 +173,10 @@ def _instrument_owned_runtime(runtime, diagnostic_fd):
     .quad 0
 .Ltest_owner_stats:
     .zero 240
+.Ltest_semantic_stats:
+    .zero 200
+.Ltest_semantic_tags:
+    .zero {ATTRIBUTION_BYTES}
 .Ltest_owner_keys:
     .zero {ATTRIBUTION_BYTES}
 .Ltest_owner_tags:
@@ -198,6 +217,8 @@ def _instrument_owned_runtime(runtime, diagnostic_fd):
     movq $1,.Ltest_owner_error(%rip)
     ret
 .Ltest_owner_alloc_store:
+    leaq .Ltest_semantic_tags(%rip),%rcx
+    movq $0,(%rcx,%r9,8)
     movq %rax,%rcx
     subq $100,%rcx
     movq %rcx,(%r11,%r9,8)
@@ -236,6 +257,7 @@ def _instrument_owned_runtime(runtime, diagnostic_fd):
     je .Ltest_owner_free_ret
     cmpq %r8,%rcx
     je .Ltest_owner_free_found
+.Ltest_owner_free_next:
     incq %r9
     andq ${ATTRIBUTION_MASK},%r9
     decq %rsi
@@ -243,9 +265,10 @@ def _instrument_owned_runtime(runtime, diagnostic_fd):
     movq $3,.Ltest_owner_error(%rip)
     ret
 .Ltest_owner_free_found:
+    call .Ltest_semantic_free
     movq (%r11,%r9,8),%rax
     testq %rax,%rax
-    je .Ltest_owner_free_ret
+    je .Ltest_owner_free_next
     leaq .Ltest_owner_sizes(%rip),%r10
     movq (%r10,%r9,8),%rdx
     decq %rax
@@ -266,6 +289,101 @@ def _instrument_owned_runtime(runtime, diagnostic_fd):
     movq $2,.Ltest_owner_error(%rip)
     ret
 .size .Ltest_owner_free,.-.Ltest_owner_free
+
+
+# Observe exactly the wrapper/body addresses traversed by the semantic owner.
+# Phase allocation history is separate: it includes transient bookkeeping.
+.Ltest_semantic_observe:
+    movq .Lprocess_exit_code(%rip),%rax
+    cmpq $201,%rax
+    jb .Ltest_semantic_observe_ret
+    cmpq $205,%rax
+    ja .Ltest_semantic_observe_ret
+    pushq %rbx
+    pushq %r12
+    pushq %r13
+    movq %rax,%r12
+    movq 8(%rdi),%r13
+    cmpq 8(%rsi),%r13
+    jne .Ltest_semantic_bad_pair
+    movq %r13,%rdi
+    call .Ltest_semantic_capture
+    movq 8(%r13),%rax
+    movq 8(%rax),%rdi
+    call .Ltest_semantic_capture
+    jmp .Ltest_semantic_observe_done
+.Ltest_semantic_bad_pair:
+    movq $4,.Ltest_owner_error(%rip)
+.Ltest_semantic_observe_done:
+    popq %r13
+    popq %r12
+    popq %rbx
+.Ltest_semantic_observe_ret:
+    ret
+.Ltest_semantic_capture:
+    movq %rdi,%r8
+    movq %rdi,%r9
+    shrq $4,%r9
+    andq ${ATTRIBUTION_MASK},%r9
+    leaq .Ltest_owner_keys(%rip),%r10
+    leaq .Ltest_owner_tags(%rip),%r11
+    movl ${ATTRIBUTION_SLOTS},%esi
+.Ltest_semantic_probe:
+    movq (%r10,%r9,8),%rcx
+    testq %rcx,%rcx
+    je .Ltest_semantic_missing
+    cmpq %r8,%rcx
+    jne .Ltest_semantic_next
+    cmpq $0,(%r11,%r9,8)
+    jne .Ltest_semantic_found
+.Ltest_semantic_next:
+    incq %r9
+    andq ${ATTRIBUTION_MASK},%r9
+    decq %rsi
+    jne .Ltest_semantic_probe
+.Ltest_semantic_missing:
+    movq $5,.Ltest_owner_error(%rip)
+    ret
+.Ltest_semantic_found:
+    leaq .Ltest_semantic_tags(%rip),%r10
+    movq (%r10,%r9,8),%rax
+    testq %rax,%rax
+    je .Ltest_semantic_new
+    cmpq %r12,%rax
+    je .Ltest_semantic_capture_ret
+    movq $6,.Ltest_owner_error(%rip)
+    ret
+.Ltest_semantic_new:
+    movq %r12,(%r10,%r9,8)
+    leaq .Ltest_owner_sizes(%rip),%r10
+    movq (%r10,%r9,8),%rdx
+    movq %r12,%rax
+    subq $201,%rax
+    imulq $40,%rax,%rax
+    leaq .Ltest_semantic_stats(%rip),%rcx
+    addq %rax,%rcx
+    addq %rdx,0(%rcx)
+    addq %rdx,8(%rcx)
+    incq 24(%rcx)
+.Ltest_semantic_capture_ret:
+    ret
+.Ltest_semantic_free:
+    leaq .Ltest_semantic_tags(%rip),%r10
+    movq (%r10,%r9,8),%rax
+    testq %rax,%rax
+    je .Ltest_semantic_free_ret
+    movq $0,(%r10,%r9,8)
+    subq $201,%rax
+    imulq $40,%rax,%rax
+    leaq .Ltest_semantic_stats(%rip),%rcx
+    addq %rax,%rcx
+    leaq .Ltest_owner_sizes(%rip),%r10
+    movq (%r10,%r9,8),%rdx
+    subq %rdx,8(%rcx)
+    addq %rdx,16(%rcx)
+    incq 32(%rcx)
+.Ltest_semantic_free_ret:
+    ret
 
 .type .Ltest_owner_write,@function
 .Ltest_owner_write:
@@ -307,9 +425,11 @@ class U1OwnerPhysicalTests(unittest.TestCase):
             raise AssertionError('U1a owner physical probe failed to compile')
 
     def _run(self, executable, timeout=180, pass_fds=()):
+        started = time.monotonic()
         completed = subprocess.run(
             [str(executable)], capture_output=True, text=True, timeout=timeout, pass_fds=pass_fds)
         self.assertEqual((completed.returncode, completed.stderr), (0, ''), completed.stdout[-2000:])
+        print('U1A_OWNER_TIMING=' + json.dumps({'stage': executable.name, 'wall_seconds': time.monotonic()-started}), flush=True)
         physical, logical, cleanup = _parse(completed.stdout)
         self.assertTrue(cleanup, completed.stdout[-2000:])
         self.assertEqual(set(physical), {
@@ -335,6 +455,25 @@ class U1OwnerPhysicalTests(unittest.TestCase):
         self.assertIn('public function regionHeaderSize() returns Int { return 48; }', memory)
         self.assertIn('cmpq %r12,%rax', allocator)
         self.assertIn('.Lfreelist_reuse:', allocator)
+
+        # Independent source-schema pins: adding an owning field must update
+        # the physical observer rather than silently undercounting a new body.
+        schemas = {
+            'u1_words.eri': {'Words': 7, 'Node': 18, 'Page': 17},
+            'u1_meta.eri': {'Metadata': 14},
+            'u1_builder.eri': {'Function': 17},
+            'u1_dominance.eri': {'Graph': 12},
+            'u1_module.eri': {'Program': 6, 'Entry': 5},
+            'u1_imports.eri': {'Policy': 5, 'Selection': 5},
+            'u1_publication.eri': {'Publication': 9, 'Table': 4},
+        }
+        for filename, types in schemas.items():
+            text = (ROOT / 'src/compiler' / filename).read_text()
+            text = re.sub(r'//[^\n]*', '', text)
+            for name, fields in types.items():
+                found = re.search(r'\btype\s+' + name + r'\s*\{([^}]+)\}', text)
+                self.assertIsNotNone(found, (filename, name))
+                self.assertEqual(found.group(1).count(';'), fields, (filename, name))
 
         physical, logical, _ = self._run(self.bootstrap)
         self.assertEqual(physical['stress'], _word_backing(65536))
@@ -426,14 +565,34 @@ class U1OwnerPhysicalTests(unittest.TestCase):
             self.assertEqual(final['reclaimed_bytes'], final['traffic'], name)
             self.assertEqual(final['reclaimed_objects'], final['allocations'], name)
 
+        print('U1A_OWNER_ACTUAL=' + json.dumps({'before_gc': before, 'after_gc': after}, sort_keys=True), flush=True)
+        groups = {
+            'metadata': ('metadata', 'module', 'imports', 'publication-metadata'),
+            'function': ('function', 'publication-function'),
+            'scratch': ('scratch',), 'stress': ('stress',),
+        }
+        for owner, structures in groups.items():
+            first, final = before['backing'][owner], after['backing'][owner]
+            objects = sum(owned_physical[name][0] for name in structures)
+            requested = sum(owned_physical[name][3] for name in structures) + objects * 128
+            # Each source identity owns one wrapper and one current body.
+            # The size oracle is independent of observed allocator capacity.
+            self.assertEqual(first['objects'], objects * 2, owner)
+            self.assertGreaterEqual(first['observed_bytes'], requested, owner)
+            self.assertEqual(final['observed_bytes'], first['observed_bytes'], owner)
+            self.assertEqual(final['live'], 0, owner)
+            self.assertEqual(final['reclaimed_bytes'], final['observed_bytes'], owner)
+            self.assertEqual(final['reclaimed_objects'], final['objects'], owner)
+
         policy = json.loads((ROOT / 'UIR_U1A_BUDGETS.json').read_text())['memory']
+        self.assertLessEqual(before['backing']['stress']['observed_bytes'],
+                             policy['qualification_function_peak_capacity_bytes'])
         stress = before['owners']['stress']
         self.assertLessEqual(stress['peak'], policy['qualification_function_peak_capacity_bytes'])
         self.assertLessEqual(stress['traffic'], policy['qualification_function_allocation_traffic_bytes'])
         self.assertGreaterEqual(stress['traffic'], physical_requested := owned_physical['stress'][3])
         self.assertGreaterEqual(stress['peak'], min(stress['traffic'], physical_requested))
 
-        print('U1A_OWNER_ACTUAL=' + json.dumps({'before_gc': before, 'after_gc': after}, sort_keys=True))
 
 
 if __name__ == '__main__':
