@@ -69,6 +69,11 @@ function normal() returns Bool fails budget.LimitError,verify.InvalidGraph,Probe
     let root be try budget.request(33554432,67108864,67108864);
     let owner be try budget.metadataOwner(root);
     let phase be try budget.constructionPhase(owner);
+    // U1a metadata has a separate generic signature implementation whose
+    // concrete TypeId-list specialization must be analyzed in this standalone
+    // source graph, even though aggregate types remain opt-in.
+    let data be try meta.create(owner,phase);
+    let scalarSignature be try meta.signature(data,phase,[meta.i64()],[meta.i64()]);
     let graph be try aggregate.create(owner,phase);
     let other be try aggregate.create(owner,phase);
     let i8 be try aggregate.primitive(graph,meta.i8());
@@ -102,7 +107,7 @@ function normal() returns Bool fails budget.LimitError,verify.InvalidGraph,Probe
         "reject foreign type before mutation");
     try aggregate.freeze(graph);
     try check(try verify.verify(graph,phase),"independent structural verification");
-    try aggregate.close(graph); try aggregate.close(other);
+    try aggregate.close(graph); try aggregate.close(other); try meta.close(data);
     try budget.finishPhase(phase);
     try check(root.live == 0 and owner.live == 0 and root.pending == 0 and owner.pending == 0,
         "all owner allocations reclaimed");
