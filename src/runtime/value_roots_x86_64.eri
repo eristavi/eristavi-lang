@@ -6,9 +6,10 @@ function runtimeSource(allowGraph Bool) returns Text {
     if allowGraph {
         pins="movq .Lhandler_top(%rip),%r8\n.Lslots_handler_pin:\n    testq %r8,%r8\n    je .Lslots_handler_pin_done\n    cmpq 88(%r8),%r12\n    je .Lslots_keep\n    movq 80(%r8),%r8\n    jmp .Lslots_handler_pin\n.Lslots_handler_pin_done:\n    ";
         protect="movq %rdi,.Lgraph_protected_value(%rip)\n    ";
-        // Graph/failure/text allocations mark the heap dirty where they commit.
-        // Checking the counters only on dirty safe points avoids scalar hot-path work.
-        pressure="";
+        // Pure Text profiles retain their existing collection policy.
+        // Graph/failure allocations mark dirty on commit, and in the graph
+        // profile a newly published Text record is also managed pressure.
+        pressure="    cmpq $0,.Ltext_new_since_gc(%rip)\n    je .Ltext_no_new_graph_text\n    movq $1,.Ltext_heap_dirty(%rip)\n.Ltext_no_new_graph_text:\n    ";
         clear="movq $0,.Lgraph_protected_value(%rip)\n    ";
         schedule="    # Reclaim in response to fresh managed allocations, not every scalar visit.\n    movq .Lgraph_since_gc(%rip),%rax\n    addq .Ltext_new_since_gc(%rip),%rax\n    jc .Ltext_safe_collect_due\n    movq .Lgraph_safe_budget(%rip),%rcx\n    cmpq $128,%rcx\n    jae .Ltext_safe_budget_ready\n    movl $128,%ecx\n.Ltext_safe_budget_ready:\n    cmpq %rcx,%rax\n    jae .Ltext_safe_collect_due\n    # A single large graph or Text allocation must also force a collection.\n    movq .Lgraph_alloc_since_gc(%rip),%rax\n    addq .Ltext_alloc_since_gc(%rip),%rax\n    jc .Ltext_safe_collect_due\n    cmpq $8388608,%rax\n    jae .Ltext_safe_collect_due\n    # Bound deferred reclaim after scope/unwind invalidates roots, even with\n    # no newly published managed allocations. Never remove explicit GC calls.\n    addq $1,.Lgraph_safe_since(%rip)\n    jc .Ltext_safe_collect_due\n    cmpq $1048576,.Lgraph_safe_since(%rip)\n    jb .Ltext_safe_return\n.Ltext_safe_collect_due:\n";
     }
