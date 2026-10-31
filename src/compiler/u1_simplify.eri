@@ -4,7 +4,8 @@ import compiler.u1_words as words;
 import compiler.u1_builder as build;
 import compiler.u1_promote as promote;
 import compiler.u1_verify as verify;
-import compiler.u1_execute as execute;\nimport compiler.u1_successors as succ;
+import compiler.u1_execute as execute;
+import compiler.u1_successors as succ;
 
 function fold(body identity build.Function,phase identity budget.Phase,
     known identity words.Words,bits identity words.Words,operands identity words.Words)
