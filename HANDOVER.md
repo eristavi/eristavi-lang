@@ -69,7 +69,7 @@ redundant indexing, unbounded caches or unnecessarily expensive CI.
 
 ## Start a new chat with this
 
-> Continue Eristavi Lang from HANDOVER.md **section 35** at current GitHub main.
+> Continue Eristavi Lang from HANDOVER.md **section 36 (active optimization-first PR #99)** and section 35 (last qualified baseline).
 > The latest qualified/merged U1a compiler batch is
 > [PR #98](https://github.com/eristavi/eristavi-lang/pull/98), merge
 > `b05bd1863181d2a70800586a0efa8f1469d5d8df`, exact tested head `6b2fadf7aca6a6249a4adbf57e38bab15cb916e0` and
@@ -89,8 +89,11 @@ redundant indexing, unbounded caches or unnecessarily expensive CI.
 > U3 #75, and managed Text/List/identity/GC roots to U2 #74; neither is
 > implemented by PR #98. U1b immutable aggregates (#73) remain unfinished.
 > The existing production compiler/ABI was preserved.
-> The owned-runtime performance investigation in section 32 is research only:
-> there is no authorized production runtime optimization patch.
+> The owned-runtime investigation in section 32 is research only;
+> **production runtime optimization is now actively implemented in draft PR #99**,
+> with 27/27 focused CI passing, not yet merged or fully qualified.
+> **Always prioritize measured compiler/runtime optimizations** after
+> correctness and safety per the standing policy at the top of this file.
 > Preserve the CI policy: focused incremental smoke and one exact-revision
 > final full/qualification batch when code changes. The experimental
 > full owned compiler self-build remains deliberately skipped.
@@ -107,7 +110,7 @@ redundant indexing, unbounded caches or unnecessarily expensive CI.
 | Completed-batch PR #98 qualification | [41193441428](https://github.com/eristavi/eristavi-lang/actions/runs/41193441428): **success** on three bootstrap jobs and owned integration |
 | PR #98 status | **MERGED**, exact tested/merged tree parity confirmed (`b05bd1863181d2a70800586a0efa8f1469d5d8df`) |
 | U1a scoped acceptance audit | #71/#72/#76 **CLOSED/completed**; #77 **OPEN** for scoped physical memory/resource attribution (see §35) |
-| Owned-runtime investigation | Completed in section 32; measured diagnostic prototypes only, no production optimization code merged |
+| Owned-runtime investigation | Section 32 documents diagnostic research; **production optimization implemented in draft PR #99**, focused smoke 27/27, final full CI/owned qualification pending. No production optimization merge yet |
 | Separate full owned compiler self-build | Intentionally skipped; NOT qualified |
 | U1a | Scalar/native f64/calls/imports/provenance and shared switch semantics implemented, full CI qualified, merged. **Not formally all-U1a-complete** until #77 U1a-owned physical backing/resource exit gates close |
 | U1b | Narrow i8/i16/i32 IR operations qualified through PR #87; narrow reference execution, immutable aggregates and core-wide acceptance remain incomplete |
@@ -1295,33 +1298,68 @@ the experimental owned full compiler self-build unless separately selected.
 
 ## 36. Active optimization-first owned runtime implementation — 2026-10-31
 
-**STATUS: DEVELOPMENT ONLY, NOT YET QUALIFIED OR MERGED.**
-Branch: `runtime/owned-gc-pressure-roots-scratch-20261031`, forked from main `4f876009c9786d4e47807d42fe91d922f147a2b4`.
-The full runtime investigation and disposable profiling evidence remain
-in docs/performance/OWNED_RUNTIME_INVESTIGATION_2026-10-31.md and
-docs/evidence/2026-10-31/owned-runtime-profile-evidence.md.
+**STATUS: IMPLEMENTED / FOCUSED SMOKE PASSED; NOT YET FULLY QUALIFIED OR MERGED.**
+[Draft PR #99](https://github.com/eristavi/eristavi-lang/pull/99),
+branch `runtime/owned-gc-pressure-roots-scratch-20261031`, forked from
+main `4f876009c9786d4e47807d42fe91d922f147a2b4`.
+[Production implementation/acceptance notes](docs/performance/OWNED_RUNTIME_OPTIMIZATION_IMPLEMENTATION_2026-10-31.md)
+and the original
+[performance investigation](docs/performance/OWNED_RUNTIME_INVESTIGATION_2026-10-31.md)
+must be read together. This batch implements the three **measured and scoped**
+runtime optimizations without replacing frontend, ABI or any original oracle.
 
-Authorized engineering targets: (1) allocation-pressure-driven and hard-limit
-bounded graph/text GC cadence (not the diagnostic fixed 16x multiplier),
-(2) exact-slot mark-root de-duplication retaining interior/foreign/
-protected/failure roots and conservative failure fallback, (3) capped
-reusable slot-index scratch, cleared before every use and released at
-deterministic final runtime boundary. No source grammar, UIR type system,
-frontend, ABI or default target change.
+1. **Allocation-pressure GC (implemented):** graph/committed Text/queued
+   failure counters and byte estimates saturate safely. The retained-heap
+   count budget is bounded [128,4096]; graph profile also collects at 8 MiB
+   fresh allocation pressure or after 1,048,576 dirty safe points. This
+   replaces excessive scalar-visit-driven collections, not their correctness
+   assertions. The diagnostic **16x fixed multiplier is not shipped**.
+   Text-only safe-point cadence, explicit forced GC and first-fault semantics
+   stay unchanged. **8 MiB is a pressure threshold, NOT a global live-heap
+   physical hard limit.**
+2. **Exact slot root filter (implemented):** non-owning static 64 KiB key
+   table for up to 4,096 slots; suppress redundant owner lookup for root
+   entries exactly equal to already-scanned slots. Genuine interiors,
+   protected values, failures, foreign words and >4,096-slot cases retain
+   the conservative original owner path. No root data is dereferenced on
+   untrusted input.
+3. **Bounded scratch reuse (implemented):** an additional shared 64 KiB
+   static cache, fully zeroed on checkout and never used by concurrent
+   owners; busy/large allocation requests use original dynamic reservation
+   and linear fallback if reserved memory is refused. Pruning and unwind
+   release the correct owner. Combined additional **128 KiB virtual BSS**
+   must be included in future physical memory reports.
+4. **Focused verification (PASSED):** [CI 41195818485](https://github.com/eristavi/eristavi-lang/actions/runs/41195818485)
+   passed 27/27 tests at code head `7d7719d84cb40a13d4e22692f3cc5d266f2a5138`.
+   The included new tests prove 200k-graph scaling, bounded GC counts/bytes,
+   exact slot vs interior root equivalence including >4,096 fallback,
+   forced memory refusal, scratch zeroing/nesting and exact existing UTF-8
+   root/unwind results; all original selected U1a independent oracles
+   were preserved. Prior intermediate failures were corrected without
+   relaxing the original mathematical/semantic assertions.
+5. **Performance evidence caveat:** 5.42x worker0 and 244.9→57.3 s
+   eight-worker figures belong only to *disposable diagnosis*, not
+   current committed production source. No fresh matched baseline/optimized
+   production runtime pairs have yet established a speedup. Measurements
+   on future same-host fresh-process code should include wall+CPU,
+   GC/owner/scratch counts, actual virtual BSS and attributable physical
+   RSS, with unmodified bounded inputs/watchdogs.
+6. **Qualification plan:** per CI_QUALIFICATION.md, this PR changes only
+   **owned x86-64 runtime** and its tests/docs. One final exact-head
+   **full four-platform CI + owned-integration qualification** is required;
+   select `owned-qualification` label once coherent. The experimental
+   owned full compiler self-build remains explicitly skipped, and the
+   extra three bootstrap self-builds are not required for this scope.
 
-Verification plan: first compile and focused runtime/ownership smoke; retain
-all native C/owned independent reference semantics, negative GC/root/
-allocation refusal/forced-low-memory/unwinding/cleanup cases, original
-120-second watchdogs, resource accounting and five paired serial
-run comparisons. Final exact-head four-platform CI + completed-batch
-qualification once after the integrated code and tests settle. The
-experimental full owned compiler self-build stays unselected.
-Do not claim the historical 5.42x local prototype ratio as production
-runtime or CI improvement before it is reproduced on accepted code.
+**Optimization-first directive for every future Eristavi project:** the
+standing policy near the start of this file is *not optional*: new compiler,
+runtime, UIR or tests should be cost-budgeted and optimized by default,
+but correctness, safety, precise diagnostics, explicit resource limits,
+the frozen language contract and deterministic cleanup are non-negotiable.
 
-**Next:** inspect assembler emitters, add bounded production safeguards and
-test hooks before changing GC cadence, then validate root filtering and
-scratch reuse independently, compare combined outcomes, update this section
-and keep the working handover authoritative. User preference: optimization
-is highest priority for all future Eristavi Lang development (after safety,
-correctness, compatibility).
+**Next action:** confirm final PR #99 exact head and successful full CI +
+owned-integration; if all mandatory gates pass, compare the qualified
+Git tree and merge without retesting unchanged code, then immediately
+update this handover on main. If any gate fails, remain draft, fix
+the smallest root cause, repeat only the required evidence on final head.
+If the user pauses work, preserve this section and PR unchanged.
