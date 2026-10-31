@@ -1,6 +1,7 @@
 # Eristavi compiler — current handover
 
 **Authoritative recovery checkpoint: 31 October 2026, Asia/Nicosia.** Start here.
+Section 38 records the active controlled performance and resource-accounting continuation (unqualified candidate).
 Section 37 is the authoritative **qualified, merged PR #99** owned-runtime optimization checkpoint.
 Section 36 preserves the earlier active optimization candidate and investigation history.
 Section 35 records the previous qualified compiler batch PR #98 and U1a issue status.
@@ -73,7 +74,7 @@ redundant indexing, unbounded caches or unnecessarily expensive CI.
 
 ## Start a new chat with this
 
-> Continue Eristavi Lang from **HANDOVER.md section 37** on GitHub main.
+> Continue Eristavi Lang from **HANDOVER.md section 38** for the active candidate work, and section 37 for the last qualified main baseline.
 > Runtime/compiler performance, peak and retained memory, predictable
 > compilation time and bounded work are the **highest engineering priorities**
 > after correctness, safety and the frozen language contract; see the standing
@@ -1471,3 +1472,52 @@ boxing/private-word-buffer optimization only with a reviewed ABI and
 resource-acceptance plan. The optimization-first policy at the start of this
 handover governs *all future work*. Do not run full CI for this documentation
 update; use exact tested/merged tree evidence above.
+
+
+## 38. Active all-milestones development — performance and resource verification first (2026-10-31)
+
+**Current state: implementation in progress, UNQUALIFIED; do not merge or
+close milestone issues solely from draft source.** Branch
+`milestone/paired-runtime-u1-acceptance-20261031` begins at main `30b9d3f11238d0164f3603cd8a06f1f2e83b6586`.
+PR #99 and full owned-runtime optimization CI remain the last qualified
+production code. All future design prioritizes measured execution speed,
+compile time, bounded memory/GC work, and predictable CI costs while
+preserving correctness, safety, ABI and frozen language semantics.
+
+**Authorized user goals (strict dependency order):**
+1. Paired baseline-vs-optimized *actual production* owned-runtime AB/BA,
+   independent output oracle and physical RSS/CPU measurements on the same
+   host. Do NOT claim the prior disposable-prototype gains are production.
+2. Investigate exact graph-registry growth and compiler/owned bottlenecks
+   with controlled evidence. #51 remains open without a verified change.
+3. Complete U1a #77 in-memory IR physical backing, retained owners,
+   allocation traffic, stress and cleanup attribution. A process RSS peak
+   or modeled charge alone is not sufficient; don't silently waive a gate.
+4. U1b #73: full i8/i16/i32 independent reference execution and immutable
+   aggregate metadata/build/get/set, by-value cycle rejection and faults.
+5. U2 #74: typed managed Text/List/identity, checked-failure continuations,
+   scoped exactly-once deterministic resources, root maps and deep conformance.
+6. U3 #75: frozen frontend→new UIR adapters, one end-to-end native target,
+   source/contract-linked artifacts, independent Stage-0 parity and rollback.
+7. U4: measured target legalization and machine lowering, additional targets,
+   artifact migration and all relevant contracts, independent qualification.
+
+**Completed within active candidate so far:** adds opt-in tooling at
+`tools/bench_owned_runtime_pairs.py` plus a dedicated PR-label workflow.
+It pins exact qualified pre-PR99 and post-PR99 runtime revisions; verifies the
+compiled source/fixture/frontend parity and unchanged native app assembly,
+then compares five serialized alternating AB/BA worker0 pairs using the
+original independent unbounded-integer result/fault oracle with 120-second
+watchdogs. Records wall/user/system CPU, per-child peak RSS, output and binary
+hashes, host/compiler identity and raw samples. It does not invoke full CI
+or experimental compiler self-build, and is not a claim that the benchmark
+has passed until its actual GitHub Actions result is inspected.
+
+**Next:** open a focused PR, run the explicitly selected
+`performance-validation` label job once, repair any failure without changing
+oracle/workload, archive its exact raw results in the repo, then advance
+U1a physical ownership measurement and U1b implementation through separate
+focused acceptance slices. U2/U3/U4 must NOT be described as complete until
+their actual source integration, independent reference tests and exact-head
+qualification pass. Keep these old and new milestones transparent in status
+and do not publish broad "all done" claims.
