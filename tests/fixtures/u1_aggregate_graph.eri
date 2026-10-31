@@ -15,7 +15,7 @@ function frozenBeforeVerify(reg identity aggregate.Registry,phase identity budge
         else error verify.InvalidGraph {
             try check(error.message == "aggregate verification requires frozen metadata and its owner",
                 "reject unsealed graph"); return true;
-        };
+        } else error budget.LimitError { fail error; };
     fail ProbeError { message="unfrozen aggregate was verified"; };
 }
 function wrongField(reg identity aggregate.Registry,phase identity budget.Phase,
@@ -43,7 +43,7 @@ function invalidCycle(reg identity aggregate.Registry,phase identity budget.Phas
             try check(error.message == "invalid, forward, or cyclic aggregate member",
                 "independent verifier rejects forward graph edge");
             return true;
-        };
+        } else error budget.LimitError { fail error; };
     fail ProbeError { message="cyclic by-value record was verified"; };
 }
 function invalidBucket(reg identity aggregate.Registry,phase identity budget.Phase)
@@ -52,7 +52,7 @@ function invalidBucket(reg identity aggregate.Registry,phase identity budget.Pha
         else error verify.InvalidGraph {
             try check(error.message == "wrong aggregate bucket head","detect forged hash bucket");
             return true;
-        };
+        } else error budget.LimitError { fail error; };
     fail ProbeError { message="forged bucket head was verified"; };
 }
 function invalidDuplicate(reg identity aggregate.Registry,phase identity budget.Phase)
@@ -62,7 +62,7 @@ function invalidDuplicate(reg identity aggregate.Registry,phase identity budget.
             try check(error.message == "duplicate noncanonical aggregate shape",
                 "independent verifier catches identical shape in canonical records");
             return true;
-        };
+        } else error budget.LimitError { fail error; };
     fail ProbeError { message="noncanonical duplicate was verified"; };
 }
 function normal() returns Bool fails budget.LimitError,verify.InvalidGraph,ProbeError {
