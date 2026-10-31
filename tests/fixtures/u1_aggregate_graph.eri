@@ -74,10 +74,12 @@ function normal() returns Bool fails budget.LimitError,verify.InvalidGraph,Probe
     let i8 be try aggregate.primitive(graph,meta.i8());
     let i64 be try aggregate.primitive(graph,meta.i64());
     let f64 be try aggregate.primitive(graph,meta.f64());
-    let i32 be try aggregate.primitive(graph,meta.i32());
+    let i16 be try aggregate.primitive(graph,meta.i16());
+    let pred be try aggregate.primitive(graph,meta.pred());
     try check(try frozenBeforeVerify(graph,phase),"frozen-only publication");
     let empty be try aggregate.aggregate(graph,phase,[]);
-    let collision be try aggregate.aggregate(graph,phase,[f64,i32,i8]);
+    // [] and [f64,i16,pred] deliberately hash into the same bucket (91).
+    let collision be try aggregate.aggregate(graph,phase,[f64,i16,pred]);
     try check(empty.index == 7 and collision.index == 8,"first and colliding aggregate identifiers");
     let emptyAgain be try aggregate.aggregate(graph,phase,[]);
     try check(emptyAgain.index == empty.index,"hash collision does not change empty canonical identity");
