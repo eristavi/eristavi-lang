@@ -1847,3 +1847,65 @@ those additions passed focused native tests. Final hosted smoke plus four-platfo
 full CI and completed-batch qualification remain required on the submitted head.
 The full owned compiler self-build is deliberately unselected. Until those gates
 are inspected and merge-tree equality is proved, #105 stays unqualified and #77 OPEN.
+
+### Hosted smoke found address-sensitive cache collisions — NOT QUALIFIED
+
+Submitted `c453e9db151bff9504422f05c25cf2badbf1c83e` preserved the checked tree
+`72b068e9bfd22fd8328d91bf9a9ddef5a52e417b`, but hosted smoke
+[41220371417](https://github.com/eristavi/eristavi-lang/actions/runs/41220371417)
+passed 34/35 and FAILED the physical peak gate: stress phase 9,725,616 B,
+515,478,752 B traffic and 1,035,287 allocations. Exact observed backing still
+matched and fully reclaimed; semantic/alias/allocator tests passed. Local passing
+addresses did not prove collision stability. No final full CI/qualification was
+started, no merge and no #77 closure.
+
+Active fix: retain the same 256-entry/4,104 B cache but use an eight-slot bounded
+probe window and search through deletion holes on lookup/invalidation. Full-window
+eviction remains conservative; no unbounded search or new cache allocation. Add
+a forced-initial-hash collision/invalidation-hole native regression. Refresh
+raw memory/performance evidence after focused and hosted smoke prove the fix;
+the earlier local report is development evidence, not current qualification.
+
+### Collision correction now passes adversarial full stress locally
+
+The probe now forces EVERY identity's initial cache hash to one bucket while
+leaving production probing/invalidation/eviction bounds intact. Eight and then
+sixteen probes alone exposed full-window victim thrash (75–77 MB traffic):
+always evicting the initial slot made hot records displace each other after
+cold entries filled the window. Final candidate uses sixteen bounded probes
+plus rotating full-window victims, still 256 entries; the one eight-byte victim
+cursor makes shared cache static state **4,112 B**, not the earlier 4,104 B.
+
+Seven focused ownership/allocator regressions now PASSED, including deliberate
+initial-hash collisions, deletion holes, full-window fallback, stale-body guard,
+snapshot reads/escaped references, bitmap bit 63/reset, and the entire 65,536-word
+all-colliding physical fixture. That adversarial run: 7,853,712 B phase peak,
+21,957,296 B phase traffic, 72,682 graph allocations; exact retained backing
+6,653,840 B / 16,938 objects, all reclaimed. Original 8 MiB / 64 MiB gates
+remain unchanged. Source schema pins and original C/owned output oracle pass.
+
+Refresh the submitted diagnostic source hashes/raw evidence, then inspect new
+hosted smoke before selecting the one final full CI + qualification gate. Old
+benchmark JSONs describe the pre-collision correction candidate; they are NOT
+performance qualification of the final runtime. No merge or #77 closure yet.
+
+### Final collision-stable submission preparation
+
+Local implementation checkpoint `9cf5b30` passes seven focused tests including
+the entire physical fixture with ALL initial identity hashes forced to one
+bucket. New per-owner raw data and the retained hosted failure are in
+`u1a-owner-physical-105.json` and `u1a-owner-105-hosted-collision.json`.
+Shared cache state is 4,112 B (256 entries, sixteen probes, rotating victim cursor).
+No qualification of the rejected direct-map candidate is being reused.
+
+Five refreshed final-code AB/BA worker0 pairs passed exact independent output/trace
+parity: median 8.135968 → 8.254257 s (0.9857×), roughly flat amid host variance
+(~1.5% higher wall time). **No final-code speedup or whole-compiler throughput
+claim.** Earlier 1.1276× and runtime-only control files are marked historical
+development evidence. The material result is bounded physical allocation and
+collision robustness; full compiler bottleneck profiling #51 remains unfinished.
+C-path 20/20 study remains independent and its C-relevant inputs are unchanged.
+
+Next submit this coherent revision, inspect hosted smoke, then request one final
+full four-platform CI plus completed-batch qualification. No full owned compiler
+self-build. Merge and #77 closure only after exact-head results/tree parity.

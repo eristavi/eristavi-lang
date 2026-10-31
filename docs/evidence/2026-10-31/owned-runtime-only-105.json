@@ -41,7 +41,7 @@
     "after": 8.962500710000313,
     "before": 9.408629457999723
   },
-  "qualification": "local benchmark only; exact-head hosted correctness/offline gates pending",
+  "qualification": "Historical development timing before the collision correction; does not qualify the final collision-stable runtime.",
   "reproduction": "Generate build_workers/source_for from tools/bench_owned_runtime_pairs.py; compare a6472b1 baseline against this implementation. Runtime-only uses one unchanged application assembly emitted with a6472b1 frontend against candidate U1 core inputs. Whole-candidate emits against each respective immutable core/frontend. Both independently check expected_lines(worker0) on all ten executions, alternate five AB/BA pairs, retain 120s watchdog, and use one GCC -O2 host. No performance instrumentation in timed executables; wait4 captures CPU/RSS; RSS may include fork-startup high-water and is not UIR backing.",
   "runtime_assembly_sha256": {
     "after": "9d0b2d020348aaa4e57955d9f76684ce39213f40374c07983c9b4b8c6c77690d",

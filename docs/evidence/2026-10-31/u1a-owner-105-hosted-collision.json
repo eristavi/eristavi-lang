@@ -1,0 +1,172 @@
+{
+  "status": "failed physical peak gate; retained backing and reclamation checks passed",
+  "run_id": 41220371417,
+  "job_id": 124593507296,
+  "head": "c453e9db151bff9504422f05c25cf2badbf1c83e",
+  "observation": {
+    "after_gc": {
+      "backing": {
+        "function": {
+          "live": 0,
+          "objects": 256,
+          "observed_bytes": 91856,
+          "reclaimed_bytes": 91856,
+          "reclaimed_objects": 256
+        },
+        "metadata": {
+          "live": 0,
+          "objects": 420,
+          "observed_bytes": 155152,
+          "reclaimed_bytes": 155152,
+          "reclaimed_objects": 420
+        },
+        "request": {
+          "live": 0,
+          "objects": 0,
+          "observed_bytes": 0,
+          "reclaimed_bytes": 0,
+          "reclaimed_objects": 0
+        },
+        "scratch": {
+          "live": 0,
+          "objects": 2668,
+          "observed_bytes": 1046752,
+          "reclaimed_bytes": 1046752,
+          "reclaimed_objects": 2668
+        },
+        "stress": {
+          "live": 0,
+          "objects": 16938,
+          "observed_bytes": 6649040,
+          "reclaimed_bytes": 6649040,
+          "reclaimed_objects": 16938
+        }
+      },
+      "error": 0,
+      "owners": {
+        "function": {
+          "allocations": 551,
+          "live": 0,
+          "peak": 99040,
+          "reclaimed_bytes": 147424,
+          "reclaimed_objects": 551,
+          "traffic": 147424
+        },
+        "metadata": {
+          "allocations": 12779,
+          "live": 0,
+          "peak": 374304,
+          "reclaimed_bytes": 4460224,
+          "reclaimed_objects": 12779,
+          "traffic": 4460224
+        },
+        "request": {
+          "allocations": 2,
+          "live": 0,
+          "peak": 640,
+          "reclaimed_bytes": 640,
+          "reclaimed_objects": 2,
+          "traffic": 640
+        },
+        "scratch": {
+          "allocations": 10409,
+          "live": 0,
+          "peak": 1287600,
+          "reclaimed_bytes": 3052592,
+          "reclaimed_objects": 10409,
+          "traffic": 3052592
+        },
+        "stress": {
+          "allocations": 1035287,
+          "live": 0,
+          "peak": 9725616,
+          "reclaimed_bytes": 515478752,
+          "reclaimed_objects": 1035287,
+          "traffic": 515478752
+        }
+      }
+    },
+    "before_gc": {
+      "backing": {
+        "function": {
+          "live": 91856,
+          "objects": 256,
+          "observed_bytes": 91856,
+          "reclaimed_bytes": 0,
+          "reclaimed_objects": 0
+        },
+        "metadata": {
+          "live": 155152,
+          "objects": 420,
+          "observed_bytes": 155152,
+          "reclaimed_bytes": 0,
+          "reclaimed_objects": 0
+        },
+        "request": {
+          "live": 0,
+          "objects": 0,
+          "observed_bytes": 0,
+          "reclaimed_bytes": 0,
+          "reclaimed_objects": 0
+        },
+        "scratch": {
+          "live": 1056,
+          "objects": 2668,
+          "observed_bytes": 1046752,
+          "reclaimed_bytes": 1045696,
+          "reclaimed_objects": 2664
+        },
+        "stress": {
+          "live": 6649040,
+          "objects": 16938,
+          "observed_bytes": 6649040,
+          "reclaimed_bytes": 0,
+          "reclaimed_objects": 0
+        }
+      },
+      "error": 0,
+      "owners": {
+        "function": {
+          "allocations": 551,
+          "live": 62160,
+          "peak": 99040,
+          "reclaimed_bytes": 85264,
+          "reclaimed_objects": 324,
+          "traffic": 147424
+        },
+        "metadata": {
+          "allocations": 12779,
+          "live": 281488,
+          "peak": 374304,
+          "reclaimed_bytes": 4178736,
+          "reclaimed_objects": 11747,
+          "traffic": 4460224
+        },
+        "request": {
+          "allocations": 2,
+          "live": 128,
+          "peak": 640,
+          "reclaimed_bytes": 512,
+          "reclaimed_objects": 1,
+          "traffic": 640
+        },
+        "scratch": {
+          "allocations": 10409,
+          "live": 2528,
+          "peak": 1287600,
+          "reclaimed_bytes": 3050064,
+          "reclaimed_objects": 10398,
+          "traffic": 3052592
+        },
+        "stress": {
+          "allocations": 1035287,
+          "live": 7739152,
+          "peak": 9725616,
+          "reclaimed_bytes": 507739600,
+          "reclaimed_objects": 1009867,
+          "traffic": 515478752
+        }
+      }
+    }
+  }
+}

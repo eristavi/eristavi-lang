@@ -599,3 +599,107 @@ _start:
     testq %rax,%rax
     je .Lcache_fail
 """ + FINISH)
+
+ def test_identity_cache_forced_hash_collisions_and_invalidation_holes(self):
+  # Force initial hashes to bucket zero without changing the bounded probe/wrap
+  # rules. A direct-mapped cache would re-clone on every alternating write.
+  runtime=self.runtime
+  lookup='    xorq %rcx,%r14\n    andq $255,%r14\n    movq %r14,8(%rsp)'
+  invalidation='    xorq %rdx,%rcx\n    andq $255,%rcx\n    leaq .Lidentity_private_keys'
+  self.assertEqual(runtime.count(lookup),1)
+  self.assertEqual(runtime.count(invalidation),1)
+  runtime=runtime.replace(lookup,'    xorq %r14,%r14\n    movq %r14,8(%rsp)',1)
+  runtime=runtime.replace(invalidation,'    xorq %rcx,%rcx\n    leaq .Lidentity_private_keys',1)
+  runtime=runtime.replace('erist_rt_graph_new_capacity:\n',
+      'erist_rt_graph_new_capacity:\n    incq .Lidentity_collision_allocations(%rip)\n',1)
+  self.probe('identity-collision-probes', r'''
+.text
+.Lcollision_new:
+    pushq %r12
+    movl $13,%edi
+    movl $1,%esi
+    call evn_object
+    movq %rax,%r12
+    movl $1,%edi
+    call evn_int
+    movq %r12,%rdi
+    xorl %esi,%esi
+    movq %rax,%rdx
+    call evn_init
+    movl $14,%edi
+    movq %r12,%rsi
+    call evn_wrap
+    popq %r12
+    ret
+.globl _start
+_start:
+    call evn_scope_enter
+    movq %rax,%rbx
+    call .Lcollision_new
+    movq %rax,%r12
+    call .Lcollision_new
+    movq %rax,%r13
+    movl $64,%r14d
+.Lcollision_loop:
+    movq %r12,%rdi
+    xorl %esi,%esi
+    call evn_member_ref
+    movq %r13,%rdi
+    xorl %esi,%esi
+    call evn_member_ref
+    movq %rax,%r15
+    decq %r14
+    jne .Lcollision_loop
+    cmpq $6,.Lidentity_collision_allocations(%rip)
+    jne .Lcache_fail
+    # Invalidating bucket 0 creates a hole before the second identity's key.
+    movq %r12,%rdi
+    call evn_get
+    movq %r13,%rdi
+    xorl %esi,%esi
+    call evn_member_ref
+    cmpq %r15,%rax
+    jne .Lcache_fail
+    cmpq $6,.Lidentity_collision_allocations(%rip)
+    jne .Lcache_fail
+    # Snapshot invalidation must also find the colliding key in bucket 1.
+    movq %r13,%rdi
+    call evn_get
+    movq %r13,%rdi
+    xorl %esi,%esi
+    call evn_member_ref
+    cmpq %r15,%rax
+    je .Lcache_fail
+    cmpq $7,.Lidentity_collision_allocations(%rip)
+    jne .Lcache_fail
+    # Exhaust all sixteen probes: evict conservatively, then reuse the new body.
+    leaq .Lidentity_private_keys(%rip),%rdi
+    movl $16,%ecx
+    movl $1,%eax
+    cld
+    rep stosq
+    movq %r13,%rdi
+    xorl %esi,%esi
+    call evn_member_ref
+    movq %rax,%r15
+    movq %r13,%rdi
+    xorl %esi,%esi
+    call evn_member_ref
+    cmpq %r15,%rax
+    jne .Lcache_fail
+    cmpq $8,.Lidentity_collision_allocations(%rip)
+    jne .Lcache_fail
+    # A stale cached body is compared, never dereferenced or trusted.
+    movq $1,.Lidentity_private_bodies(%rip)
+    movq %r13,%rdi
+    xorl %esi,%esi
+    call evn_member_ref
+    cmpq %r15,%rax
+    je .Lcache_fail
+    cmpq $9,.Lidentity_collision_allocations(%rip)
+    jne .Lcache_fail
+''' + FINISH + '''
+.bss
+.Lidentity_collision_allocations:
+.quad 0
+''',runtime=runtime)

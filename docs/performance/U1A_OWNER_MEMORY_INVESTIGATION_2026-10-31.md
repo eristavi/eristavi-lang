@@ -1,8 +1,24 @@
 # PR #105: physical U1 owner memory investigation
 
-**31 October 2026. Local correctness/resource gates passed; final hosted CI and
-completed-batch qualification pending. Issue #77 remains open until those pass.**
-Local implementation checkpoint: `85ab8cf`. The hosted submission/tested tree
+**31 October 2026. Active collision correction; NOT QUALIFIED.** Hosted smoke
+[41220371417](https://github.com/eristavi/eristavi-lang/actions/runs/41220371417)
+passed 34/35 but caught a direct-mapped-cache collision: 9,725,616 B peak,
+515,478,752 B traffic and 1,035,287 stress allocations under hosted placement.
+Initial local passes did not qualify the rejected direct-map candidate.
+The corrected cache searches a sixteen-slot bounded window, including
+invalidation through deletion holes, and rotates full-window victims. This
+prevents hot identities repeatedly displacing each other in the initial slot.
+The 256-entry table remains bounded; its victim cursor adds eight bytes, for
+**4,112 B total shared cache state**. The full physical diagnostic now forces
+ALL initial identity hashes to the same bucket. Seven focused regressions
+passed, including the adversarial 65,536-word fixture: 7,853,712 B phase peak,
+21,957,296 B traffic, 72,682 allocations; exact stress backing 6,653,840 B /
+16,938 objects, all reclaimed. Eight and sixteen probes without rotating
+victims failed the adversarial traffic gate; those prototypes were rejected.
+Hosted smoke and final release gates remain pending. Full-window eviction,
+stale-body checks and escaped-reference fallback retain conservative detachment.
+Issue #77 remains open; nothing has been merged.
+Local collision-stable implementation checkpoint: `9cf5b30`. The hosted submission/tested tree
 is recorded in HANDOVER; raw source hashes bind these measurements independently
 of commit metadata. No source-language, public value ABI,
 production backend selection or U1 budget limit changed.
@@ -36,12 +52,13 @@ hashes: [u1a-owner-physical-105.json](../evidence/2026-10-31/u1a-owner-physical-
    original mutable-place/COW path. Evaluation order is preserved.
 3. **Bounded identity backing reuse.** On x86-64, first field mutation detaches
    an identity's ordinary payload. A nonowning 256-entry key/body cache permits
-   subsequent writes to reuse that private body. Value snapshot reads invalidate
+   subsequent writes to reuse that private body. Sixteen probes and rotating victims avoid repeated direct-map
+   collision thrash; lookup/invalidation continue through deletion holes. Value snapshot reads invalidate
    the entry; graph mark and sweep clear keys before reclamation. Collisions
    re-clone; stale body matches are checked. Escaping a mutable identity payload
    reference permanently selects the original detach path for that runtime
    lifetime, since collection cannot revoke a reference. No new allocation is
-   needed for this cache; static cost is **4,104 B**, explicitly shared overhead.
+   needed for this cache; static cost is **4,112 B**, explicitly shared overhead.
 4. **Bounded allocator reuse.** Oversized free blocks split when their remainder
    can hold a block header plus a minimum 16-byte payload. The tail stays within
    the original verified region. A 64-class bitmap covers aligned sizes through
@@ -66,10 +83,10 @@ removed or relaxed to produce the pass.
 
 | Measure | Original candidate | Corrected candidate |
 | --- | ---: | ---: |
-| Stress construction-phase physical peak | 24,400,832 B | 7,833,216 B |
-| Stress construction-phase cumulative traffic | 1,533,455,872 B | 19,711,040 B |
-| Graph allocations in stress construction phase | 3,215,578 | 66,737 |
-| Exact observed retained stress backing | Not independently partitioned | 6,647,888 B / 16,938 wrapper-body objects |
+| Stress construction-phase physical peak | 24,400,832 B | 7,853,712 B (all initial hashes colliding) |
+| Stress construction-phase cumulative traffic | 1,533,455,872 B | 21,957,296 B |
+| Graph allocations in stress construction phase | 3,215,578 | 72,682 |
+| Exact observed retained stress backing | Not independently partitioned | 6,653,840 B / 16,938 wrapper-body objects |
 | Observed backing after final collection | Not independently partitioned | 0 B / all observed objects reclaimed |
 
 Actual allocator reuse and address placement can vary small raw values. The
@@ -87,8 +104,19 @@ exact head, including all later test/schema additions.
 
 ## Performance control and independent C evidence
 
-Five matched AB/BA pairs of the unchanged integer worker0 oracle compare the
-whole candidate compiler-core/lowering/runtime path with `a6472b1`: median
+**Final collision-stable implementation:** five AB/BA pairs independently pass
+worker0 output/trace parity. Median **8.135968 → 8.254257 s (0.9857×)** is roughly
+flat amid host variance, about 1.5% higher wall time. No speedup is claimed for
+the final implementation. This fixed workload does not measure complete compiler
+throughput. Program objects are reused only because their compiler/core inputs
+remain unchanged; the final runtime was independently regenerated. Exact samples,
+CPU/RSS caveats and source hashes:
+[owned-whole-final-105.json](../evidence/2026-10-31/owned-whole-final-105.json).
+
+
+**Historical development timing, before the collision correction:** five matched
+AB/BA pairs of the unchanged integer worker0 oracle compare the
+whole direct-map candidate compiler-core/lowering/runtime path with `a6472b1`: median
 **8.857851 → 7.855453 seconds (1.1276×)**. Every output matches the independent
 oracle. This is **one UIR workload, not full source-compiler throughput**. A
 separate same-assembly runtime-only control is near-flat, about 1.05× amid host

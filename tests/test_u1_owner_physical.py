@@ -100,8 +100,18 @@ def _decode_owner_records(raw):
     return snapshots
 
 
-def _instrument_owned_runtime(runtime, diagnostic_fd):
+def _instrument_owned_runtime(runtime, diagnostic_fd, *, force_identity_collisions=False):
     """Track actual graph allocator capacity by source-selected owner tag."""
+    if force_identity_collisions:
+        # Exercise the entire real stress fixture with every initial cache hash
+        # equal. Probe/invalidation/eviction bounds remain production code.
+        lookup = '    xorq %rcx,%r14\n    andq $255,%r14\n    movq %r14,8(%rsp)'
+        invalidation = ('    xorq %rdx,%rcx\n    andq $255,%rcx\n'
+                        '    leaq .Lidentity_private_keys')
+        assert runtime.count(lookup) == runtime.count(invalidation) == 1
+        runtime = runtime.replace(lookup, '    xorq %r14,%r14\n    movq %r14,8(%rsp)', 1)
+        runtime = runtime.replace(invalidation,
+                                  '    xorq %rcx,%rcx\n    leaq .Lidentity_private_keys', 1)
     graph_alloc = (
         '    addq $64,%rdi\n'
         '    call erist_rt_alloc\n'
@@ -541,7 +551,8 @@ class U1OwnerPhysicalTests(unittest.TestCase):
         with record_path.open('wb') as record:
             diagnostic = link_runtime(
                 'owner-physical-owned-diagnostic',
-                _instrument_owned_runtime(runtime.stdout, record.fileno()))
+                _instrument_owned_runtime(runtime.stdout, record.fileno(),
+                                          force_identity_collisions=True))
             diagnostic_physical, diagnostic_logical, _ = self._run(
                 diagnostic, pass_fds=(record.fileno(),))
         self.assertEqual(diagnostic_physical, owned_physical)
