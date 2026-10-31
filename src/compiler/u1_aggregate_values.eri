@@ -1,0 +1,213 @@
+// U1b opt-in immutable aggregate VALUE semantics for independent reference
+// execution. This is not a second source IR or the production runtime ABI.
+// Aggregate values are immutable; member slots reference only earlier values
+// in this owner. get shares a value; set copies the immediate field-index array.
+// No managed Text/List/identity is permitted in this U1 slice.
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+import compiler.u1_meta as meta;
+import compiler.u1_aggregate as aggregate;
+import compiler.u1_aggregate_verify as graphVerify;
+
+public type ValueId { owner identity meta.Key; index Int; }
+public type Engine {
+    key identity meta.Key; graph identity aggregate.Registry;
+    owner identity budget.Owner; phase identity budget.Phase;
+    graphPhase identity budget.Phase; state Int;
+    values identity words.Words; // [TypeId, kind (0 scalar, 1 aggregate), payload]
+    nodes identity words.Words;  // [TypeId, first member index, count]
+    members identity words.Words; // immutable ValueId indices
+    control maybe identity budget.Allocation;
+}
+
+function open(engine identity Engine) fails budget.LimitError {
+    try budget.poll(engine.owner);
+    if engine.state != 0 or engine.phase.owner != engine.owner or
+       engine.graph.state != 1 or engine.graph.owner.parent != engine.owner.parent {
+        try budget.reject("closed, foreign, or unverified U1b aggregate execution");
+    }
+}
+
+public function create(graph identity aggregate.Registry,owner identity budget.Owner,
+    phase identity budget.Phase) returns identity Engine
+    fails budget.LimitError,graphVerify.InvalidGraph {
+    try budget.poll(owner);
+    if graph.state != 1 or owner.kind != 2 or phase.owner != owner or
+       owner.parent == none or owner.parent != graph.owner.parent {
+        try budget.reject("U1b aggregate execution requires a frozen sibling graph");
+    }
+    // Independent graph validation is mandatory at executor ingress; no
+    // builder-provided 'verified' bit can authorize unsafe execution.
+    let graphPhase be try budget.verificationPhase(graph.owner);
+    let checked be graphVerify.verify(graph,graphPhase)
+        else error graphVerify.InvalidGraph {
+            try budget.finishPhase(graphPhase); fail error;
+        } else error budget.LimitError {
+            try budget.finishPhase(graphPhase); fail error;
+        };
+    let preflight be try budget.reserve(owner,8192);
+    try budget.cancelReservation(preflight);
+    let pending be try budget.reserve(owner,512);
+    let engine be identity Engine {
+        key=identity meta.Key { marker=0; }; graph=graph; owner=owner;
+        phase=phase; graphPhase=graphPhase; state=0;
+        values=try words.create(owner,3145728);
+        nodes=try words.create(owner,196608);
+        members=try words.create(owner,4194304);
+        control=none;
+    };
+    engine.control=try budget.commit(pending);
+    return engine;
+}
+
+function offset(engine identity Engine,value ValueId) returns Int fails budget.LimitError {
+    try open(engine);
+    if value.owner != engine.key or value.index < 1 or value.index > engine.values.length/3 {
+        try budget.reject("foreign or invalid U1b aggregate ValueId");
+    }
+    return (value.index-1)*3;
+}
+
+public function typeOf(engine identity Engine,value ValueId)
+    returns aggregate.TypeId fails budget.LimitError {
+    let base be try offset(engine,value);
+    return try aggregate.typeAt(engine.graph,try words.get(engine.values,engine.phase,base));
+}
+
+public function scalar(engine identity Engine,valueType aggregate.TypeId,bits Int)
+    returns ValueId fails budget.LimitError {
+    try open(engine); try aggregate.valid(engine.graph,valueType);
+    if valueType.index > 6 { try budget.reject("aggregate type is not a scalar"); }
+    if valueType.index == 1 and bits != 0 and bits != 1 {
+        try budget.reject("predicate must have exactly two bit values");
+    }
+    if (valueType.index == 4 and (bits < 0 or bits > 255)) or
+       (valueType.index == 5 and (bits < 0 or bits > 65535)) or
+       (valueType.index == 6 and (bits < 0 or bits > 4294967295)) {
+        try budget.reject("scalar bits exceed U1 declared width");
+    }
+    if engine.values.length/3 >= 1048576 { try budget.exceed(engine.owner,1,0); }
+    let value be ValueId { owner=engine.key; index=engine.values.length/3+1; };
+    let ignored be try words.push(engine.values,engine.phase,valueType.index);
+    ignored=try words.push(engine.values,engine.phase,0);
+    ignored=try words.push(engine.values,engine.phase,bits);
+    return value;
+}
+
+public function bits(engine identity Engine,value ValueId) returns Int fails budget.LimitError {
+    let base be try offset(engine,value);
+    if try words.get(engine.values,engine.phase,base+1) != 0 {
+        try budget.reject("cannot interpret aggregate as scalar bits");
+    }
+    return try words.get(engine.values,engine.phase,base+2);
+}
+
+function node(engine identity Engine,value ValueId)
+    returns Int fails budget.LimitError {
+    let base be try offset(engine,value);
+    if try words.get(engine.values,engine.phase,base+1) != 1 {
+        try budget.reject("scalar is not an aggregate");
+    }
+    let selected be try words.get(engine.values,engine.phase,base+2);
+    if selected < 1 or selected > engine.nodes.length/3 {
+        try budget.reject("invalid immutable aggregate node");
+    }
+    return (selected-1)*3;
+}
+
+function appendNode(engine identity Engine,typeIndex Int,first Int,count Int)
+    returns ValueId fails budget.LimitError {
+    if engine.nodes.length/3 >= 65536 or engine.values.length/3 >= 1048576 {
+        try budget.exceed(engine.owner,1,0);
+    }
+    let number be engine.nodes.length/3+1;
+    let ignored be try words.push(engine.nodes,engine.phase,typeIndex);
+    ignored=try words.push(engine.nodes,engine.phase,first);
+    ignored=try words.push(engine.nodes,engine.phase,count);
+    let value be ValueId { owner=engine.key; index=engine.values.length/3+1; };
+    ignored=try words.push(engine.values,engine.phase,typeIndex);
+    ignored=try words.push(engine.values,engine.phase,1);
+    ignored=try words.push(engine.values,engine.phase,number);
+    return value;
+}
+
+// U1 aggregate.make: exact declared types and arity, including empty tuples.
+public function make(engine identity Engine,aggregateType aggregate.TypeId,inputs)
+    returns ValueId fails budget.LimitError {
+    try open(engine);
+    let count be try aggregate.fieldCount(engine.graph,engine.graphPhase,aggregateType);
+    if inputs.count != count or count > engine.members.limit-engine.members.length {
+        try budget.reject("aggregate.make arity or member capacity mismatch");
+    }
+    let index be 0;
+    while index < count {
+        let actual be try typeOf(engine,inputs[index]);
+        let required be try aggregate.field(engine.graph,engine.graphPhase,aggregateType,index);
+        if actual.index != required.index { try budget.reject("aggregate.make field type mismatch"); }
+        try budget.work(engine.phase,1);
+        index=index+1;
+    }
+    // The values table only receives a node after all member types check.
+    // An allocation refusal invalidates this whole Engine attempt; no
+    // partially constructed value is made public by this operation.
+    let first be engine.members.length; index=0;
+    while index < count {
+        let ignored be try words.push(engine.members,engine.phase,inputs[index].index);
+        index=index+1;
+    }
+    return try appendNode(engine,aggregateType.index,first,count);
+}
+
+// U1 aggregate.get: static member ordinal and result TypeId are checked.
+public function get(engine identity Engine,source ValueId,index Int)
+    returns ValueId fails budget.LimitError {
+    let base be try node(engine,source);
+    let typeIndex be try words.get(engine.nodes,engine.phase,base);
+    let aggregateType be try aggregate.typeAt(engine.graph,typeIndex);
+    let expected be try aggregate.field(engine.graph,engine.graphPhase,aggregateType,index);
+    let first be try words.get(engine.nodes,engine.phase,base+1);
+    let member be try words.get(engine.members,engine.phase,first+index);
+    let value be ValueId { owner=engine.key; index=member; };
+    let actual be try typeOf(engine,value);
+    if actual.index != expected.index { try budget.reject("aggregate.get internal type mismatch"); }
+    return value;
+}
+
+// U1 aggregate.set: a NEW immutable value, original slots unchanged.
+// Full O(count) shallow copying is the intentionally simple reference model;
+// the native backend may scalarize or share layout while preserving semantics.
+public function set(engine identity Engine,source ValueId,index Int,replacement ValueId)
+    returns ValueId fails budget.LimitError {
+    let base be try node(engine,source);
+    let typeIndex be try words.get(engine.nodes,engine.phase,base);
+    let aggregateType be try aggregate.typeAt(engine.graph,typeIndex);
+    let required be try aggregate.field(engine.graph,engine.graphPhase,aggregateType,index);
+    let actual be try typeOf(engine,replacement);
+    if actual.index != required.index {
+        try budget.reject("aggregate.set replacement type mismatch");
+    }
+    let first be try words.get(engine.nodes,engine.phase,base+1);
+    let count be try words.get(engine.nodes,engine.phase,base+2);
+    if count > engine.members.limit-engine.members.length {
+        try budget.exceed(engine.owner,count,0);
+    }
+    let copyStart be engine.members.length; let item be 0;
+    while item < count {
+        try budget.work(engine.phase,1);
+        let chosen be replacement.index;
+        if item != index { chosen=try words.get(engine.members,engine.phase,first+item); }
+        let ignored be try words.push(engine.members,engine.phase,chosen);
+        item=item+1;
+    }
+    return try appendNode(engine,typeIndex,copyStart,count);
+}
+
+public function close(engine identity Engine) fails budget.LimitError {
+    if engine.state != 0 { try budget.reject("double-close U1b aggregate engine"); }
+    engine.state=1;
+    try words.close(engine.values); try words.close(engine.nodes);
+    try words.close(engine.members);
+    try budget.finishPhase(engine.graphPhase);
+    let control be engine.control; engine.control=none;
+    if control != none { try budget.release(control); }
+}

@@ -4,6 +4,8 @@ import compiler.u1_words as words;
 import compiler.u1_meta as meta;
 import compiler.u1_builder as build;
 import compiler.u1_ops as ops;
+import compiler.u1_aggregate as aggregate;
+import compiler.u1_aggregate_verify as aggregateVerify;
 import compiler.u1_dominance as dom;
 import compiler.u1_successors as succ;
 public error InvalidIR { message Text; category Text; stage Int; block Int; instruction Int; location Int; }
@@ -12,6 +14,7 @@ type Context {
     routine identity build.Function; phase identity budget.Phase; graph identity dom.Graph;
     stage Int; block Int; instruction Int; location Int; visits Int; scanLimit Int;
     positions Int; buckets Int; switchClaims Int; construction Bool;
+    registry maybe identity aggregate.Registry; // opt-in U1b schema, never a trust stamp
 }
 function invalid(context identity Context,message Text) fails InvalidIR {
     fail InvalidIR { message=message; category="invalid-ir"; stage=context.stage;
@@ -65,7 +68,16 @@ function bounds(context identity Context) fails budget.LimitError,InvalidIR {
     context.scanLimit=32*(records+1);
     try require(context,routine.signature.owner == data.key and routine.signature.index >= 1 and routine.signature.index <= data.signatures.length/6,"invalid function signature owner or index");
 }
-function typeIndex(context identity Context,index Int) fails InvalidIR { try require(context,index >= 1 and index <= 6,"unsupported U1 core type"); }
+function typeIndex(context identity Context,index Int) fails InvalidIR {
+    if index >= 1 and index <= 6 { return; }
+    let registry be context.registry;
+    if registry != none {
+        try require(context,index >= 7 and index <= 6+registry.records.length/4,
+            "unsupported or foreign U1b aggregate type");
+    } else {
+        try require(context,false,"unsupported U1 core type");
+    }
+}
 function sameSequence(context identity Context,table identity words.Words,first Int,second Int,count Int) returns Bool fails budget.LimitError {
     // Canonical collision comparisons have their own work, outside the linear scan.
     let index be 0;
@@ -286,6 +298,12 @@ function instruction(context identity Context,index Int,terminal Bool,position I
     try require(context,try scratch(context,context.positions,index) == 0,"duplicate or cyclic instruction list");
     try mark(context,context.positions,index,position);
     let op be try read(context,routine.instructions,offset); try require(context,ops.known(op),"unsupported foundation operation");
+    // The default U1a verifier rejects every aggregate opcode. Only the
+    // explicit graph-verified profile below may validate their type schema.
+    if ops.isAggregate(op) {
+        try require(context,context.registry != none,
+            "U1b aggregate opcode requires an independently verified type graph");
+    }
     let cellType be 0;
     if ops.isCell(op) {
         let cell be try read(context,routine.instructions,offset+7);
@@ -305,6 +323,29 @@ function instruction(context identity Context,index Int,terminal Bool,position I
         expected=try read(context,routine.metadata.signatures,(callSignature-1)*6+3);
     }
     if op == 8 { expected=try read(context,routine.metadata.signatures,(routine.signature.index-1)*6+5); }
+    let aggregateShape be 0; let aggregateFieldType be 0;
+    let selectedRegistry be context.registry;
+    if selectedRegistry != none {
+      if ops.isAggregate(op) {
+        aggregateShape=try read(context,routine.instructions,offset+8);
+        if op == 43 { aggregateShape=try read(context,routine.instructions,offset+7); }
+        try require(context,aggregateShape >= 7 and
+            aggregateShape <= 6+selectedRegistry.records.length/4,
+            "invalid U1b aggregate shape TypeId");
+        let shape be aggregate.TypeId { owner=selectedRegistry.key; index=aggregateShape; };
+        let size be try aggregate.fieldCount(selectedRegistry,context.phase,shape);
+        if op == 43 {
+            expected=size;
+            try require(context,try read(context,routine.instructions,offset+8) == 0,
+                "unexpected aggregate.make attribute");
+        } else {
+            let ordinal be try read(context,routine.instructions,offset+7);
+            try require(context,ordinal >= 0 and ordinal < size,
+                "aggregate static field index out of range");
+            aggregateFieldType=(try aggregate.field(selectedRegistry,context.phase,shape,ordinal)).index;
+        }
+      }
+    }
     try require(context,count == expected,"instruction operand arity mismatch"); let item be 0;
     while item < count {
         let actual be try valueType(context,try read(context,routine.operands,first+item)); let valueTypeIndex be ops.operandType(op,item);
@@ -315,6 +356,17 @@ function instruction(context identity Context,index Int,terminal Bool,position I
             valueTypeIndex=try read(context,routine.metadata.types,start+item);
         }
         if op >= 37 and op <= 42 { valueTypeIndex=try read(context,routine.instructions,offset+8); }
+        if selectedRegistry != none {
+          if ops.isAggregate(op) {
+            if op == 43 {
+                let shape be aggregate.TypeId { owner=selectedRegistry.key; index=aggregateShape; };
+                valueTypeIndex=(try aggregate.field(selectedRegistry,context.phase,shape,item)).index;
+            } else {
+                valueTypeIndex=aggregateShape;
+                if op == 45 and item == 1 { valueTypeIndex=aggregateFieldType; }
+            }
+          }
+        }
         try require(context,actual == valueTypeIndex,"instruction operand type mismatch"); item=item+1;
     }
     first=try read(context,routine.instructions,offset+4); count=try read(context,routine.instructions,offset+5);
@@ -331,6 +383,8 @@ function instruction(context identity Context,index Int,terminal Bool,position I
             resultType=try read(context,routine.metadata.types,start+item);
         }
         if op == 36 or op == 41 or op == 42 or ((op == 37 or op == 38 or op == 39) and item == 0) { resultType=try read(context,routine.instructions,offset+8); }
+        if op == 43 or op == 45 { resultType=aggregateShape; }
+        if op == 44 { resultType=aggregateFieldType; }
         try claimValue(context,first+item,resultType,1,index,item); item=item+1;
     }
     let payload be try read(context,routine.instructions,offset+7); let extra be try read(context,routine.instructions,offset+8);
@@ -364,7 +418,7 @@ function instruction(context identity Context,index Int,terminal Bool,position I
         try require(context,extra >= 4 and extra <= 6,"invalid narrow division TypeId");
         try require(context,payload >= 1 and payload <= 2,"invalid narrow division signedness");
     }
-    if op != 7 and op != 36 and (op < 37 or op > 42) {
+    if op != 7 and op != 36 and not ops.isAggregate(op) and (op < 37 or op > 42) {
         try require(context,extra == 0,"unsupported operation attribute");
     }
     if terminal { try require(context,try read(context,routine.instructions,offset+9) == 0,"terminator has a successor instruction"); }
@@ -512,12 +566,15 @@ function inspect(context identity Context) returns Report fails budget.LimitErro
     return Report { reachableBlocks=context.graph.reachable; structuralVisits=context.visits;
         dominanceVisits=context.graph.visits; work=context.phase.used; revision=context.routine.revision; };
 }
-function verifyMode(routine identity build.Function,phase identity budget.Phase,construction Bool) returns Report fails budget.LimitError,InvalidIR {
+function verifyMode(routine identity build.Function,phase identity budget.Phase,
+    construction Bool,registry maybe identity aggregate.Registry)
+    returns Report fails budget.LimitError,InvalidIR {
     try budget.poll(routine.owner);
     if phase.owner != routine.owner or phase.used != 0 or phase.prepaid != 0 or phase.state != 0 { try budget.reject("verification requires a fresh function phase"); }
     let graph be try dom.create(routine.owner,phase);
     let context be identity Context { routine=routine; phase=phase; graph=graph; stage=0; block=0; instruction=0; location=0;
-        visits=0; scanLimit=0; positions=0; buckets=0; switchClaims=0; construction=construction; };
+        visits=0; scanLimit=0; positions=0; buckets=0; switchClaims=0;
+        construction=construction; registry=registry; };
     let report be inspect(context) else error InvalidIR { try dom.close(graph); try budget.finishPhase(phase); fail error; }
     else error budget.LimitError {
         try dom.close(graph); try budget.finishPhase(phase);
@@ -527,8 +584,37 @@ function verifyMode(routine identity build.Function,phase identity budget.Phase,
     // Report has no executable/verified capability. Every call derives facts anew.
 }
 public function verify(routine identity build.Function,phase identity budget.Phase) returns Report fails budget.LimitError,InvalidIR {
-    return try verifyMode(routine,phase,false);
+    return try verifyMode(routine,phase,false,none);
 }
 public function construction(routine identity build.Function,phase identity budget.Phase) returns Report fails budget.LimitError,InvalidIR {
-    return try verifyMode(routine,phase,true);
+    return try verifyMode(routine,phase,true,none);
+}
+// Explicit U1b canonical typed SSA profile: independently validate the
+// program-owned frozen type graph EVERY time, even on unchanged revisions.
+// Do not turn a builder completion, cached flag, or previous report into trust.
+public function verifyAggregates(routine identity build.Function,
+    registry identity aggregate.Registry,phase identity budget.Phase)
+    returns Report fails budget.LimitError,InvalidIR {
+    try budget.poll(routine.owner);
+    if registry.owner != routine.metadata.owner or registry.state != 1 or
+       routine.owner.parent != registry.owner.parent {
+        try budget.reject("foreign or mutable U1b aggregate verification context");
+    }
+    if phase.owner != routine.owner or phase.used != 0 or
+       phase.prepaid != 0 or phase.state != 0 {
+        try budget.reject("aggregate verification requires a fresh function phase");
+    }
+    let graphPhase be try budget.verificationPhase(registry.owner);
+    let okay be aggregateVerify.verify(registry,graphPhase)
+        else error aggregateVerify.InvalidGraph {
+            try budget.finishPhase(graphPhase);
+            try budget.finishPhase(phase);
+            fail InvalidIR { message=error.message; category="invalid-ir";
+                stage=1; block=0; instruction=0; location=0; };
+        } else error budget.LimitError {
+            try budget.finishPhase(graphPhase); try budget.finishPhase(phase);
+            fail error;
+        };
+    try budget.finishPhase(graphPhase);
+    return try verifyMode(routine,phase,false,registry);
 }

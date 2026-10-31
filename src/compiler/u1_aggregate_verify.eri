@@ -1,0 +1,94 @@
+// Independent verification of U1b's opt-in structural aggregate type graph.
+// Never trusts the interner's hash/cache/builder flags as proof of validity.
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+import compiler.u1_aggregate as aggregate;
+
+public error InvalidGraph { message Text; index Int; }
+function require(okay Bool,index Int,message Text) fails InvalidGraph {
+    if not okay { fail InvalidGraph { message=message; index=index; }; }
+}
+function matching(reg identity aggregate.Registry,phase identity budget.Phase,
+    first Int,second Int,count Int) returns Bool fails budget.LimitError {
+    let i be 0;
+    while i < count {
+        if try words.get(reg.fields,phase,first+i) !=
+           try words.get(reg.fields,phase,second+i) { return false; }
+        i=i+1;
+    }
+    return true;
+}
+function inspect(reg identity aggregate.Registry,phase identity budget.Phase,
+    scratch identity words.Words) returns Bool fails budget.LimitError,InvalidGraph {
+    let bucket be 0;
+    while bucket < 256 {
+        let ignored be try words.push(scratch,phase,0); bucket=bucket+1;
+    }
+    let cursor be 0; let index be 1;
+    while index <= reg.records.length/4 {
+        let base be (index-1)*4;
+        let hash be try words.get(reg.records,phase,base);
+        let previous be try words.get(reg.records,phase,base+1);
+        let first be try words.get(reg.records,phase,base+2);
+        let count be try words.get(reg.records,phase,base+3);
+        try require(first == cursor and count >= 0 and count <= 4096 and
+            count <= reg.fields.length-first,index,"invalid or noncanonical aggregate field range");
+        let actual be 73; let item be 0;
+        while item < count {
+            let typeIndex be try words.get(reg.fields,phase,first+item);
+            // Every aggregate member must refer strictly to an EARLIER type,
+            // so even malformed unreachable or forged records cannot cycle.
+            try require(typeIndex >= 1 and typeIndex < 6+index,
+                index,"invalid, forward, or cyclic aggregate member");
+            try budget.work(phase,1);
+            actual=(actual*131+typeIndex)%2147483629;
+            item=item+1;
+        }
+        actual=(actual*131+count)%2147483629;
+        try require(hash == actual and hash >= 0,index,"invalid aggregate structural hash");
+        bucket=hash%256;
+        let oldHead be try words.get(scratch,phase,bucket);
+        try require(previous == oldHead,index,"invalid or cyclic aggregate hash chain");
+        let probe be previous;
+        while probe != 0 {
+            let priorBase be (probe-1)*4;
+            let priorHash be try words.get(reg.records,phase,priorBase);
+            let priorCount be try words.get(reg.records,phase,priorBase+3);
+            if priorHash == hash and priorCount == count {
+                let priorFirst be try words.get(reg.records,phase,priorBase+2);
+                let duplicate be try matching(reg,phase,first,priorFirst,count);
+                try require(not duplicate,index,"duplicate noncanonical aggregate shape");
+            }
+            probe=try words.get(reg.records,phase,priorBase+1);
+        }
+        try words.set(scratch,phase,bucket,index);
+        cursor=first+count; index=index+1;
+    }
+    try require(cursor == reg.fields.length,index,"orphan aggregate field words");
+    bucket=0;
+    while bucket < 256 {
+        try require(try words.get(reg.buckets,phase,bucket) ==
+            try words.get(scratch,phase,bucket),index,"wrong aggregate bucket head");
+        bucket=bucket+1;
+    }
+    return true;
+}
+public function verify(reg identity aggregate.Registry,phase identity budget.Phase)
+    returns Bool fails budget.LimitError,InvalidGraph {
+    try require(reg.state == 1 and reg.owner.kind == 1 and reg.owner == phase.owner,0,
+        "aggregate verification requires frozen metadata and its owner");
+    try require(not reg.records.closed and reg.records.frozen and reg.records.owner == reg.owner and
+        not reg.fields.closed and reg.fields.frozen and reg.fields.owner == reg.owner and
+        not reg.buckets.closed and reg.buckets.frozen and reg.buckets.owner == reg.owner,0,
+        "foreign, mutable or closed aggregate store");
+    try require(reg.records.length >= 0 and reg.records.length <= 262144 and
+        reg.records.length%4 == 0 and reg.records.limit == 262144 and
+        reg.fields.length >= 0 and reg.fields.length <= 524288 and reg.fields.limit == 524288 and
+        reg.buckets.length == 256 and reg.buckets.limit == 256,0,"invalid aggregate store dimensions");
+    let scratch be try words.create(reg.owner,256);
+    let okay be inspect(reg,phase,scratch)
+        else error InvalidGraph { try words.close(scratch); fail error; }
+        else error budget.LimitError { try words.close(scratch); fail error; };
+    try words.close(scratch);
+    return okay;
+}
