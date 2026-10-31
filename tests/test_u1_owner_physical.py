@@ -25,6 +25,12 @@ STRESS_OBJECTS = 8469
 TAG_NAMES = {101: 'request', 102: 'metadata', 103: 'function', 104: 'scratch', 105: 'stress'}
 STAT_FIELDS = ('live', 'peak', 'traffic', 'allocations', 'reclaimed_bytes', 'reclaimed_objects')
 RECORD_BYTES = 8 + len(TAG_NAMES) * len(STAT_FIELDS) * 8
+# Acceptance-only address map. It is deliberately much larger than the live U1
+# object set so allocation-history bookkeeping cannot become the limiting factor.
+# This BSS is diagnostic process overhead and is never charged as U1 owner memory.
+ATTRIBUTION_SLOTS = 262144
+ATTRIBUTION_MASK = ATTRIBUTION_SLOTS - 1
+ATTRIBUTION_BYTES = ATTRIBUTION_SLOTS * 8
 
 
 def _radix_counts(word_count):
@@ -153,11 +159,11 @@ def _instrument_owned_runtime(runtime, diagnostic_fd):
 .Ltest_owner_stats:
     .zero 240
 .Ltest_owner_keys:
-    .zero 262144
+    .zero {ATTRIBUTION_BYTES}
 .Ltest_owner_tags:
-    .zero 262144
+    .zero {ATTRIBUTION_BYTES}
 .Ltest_owner_sizes:
-    .zero 262144
+    .zero {ATTRIBUTION_BYTES}
 .text
 .type .Ltest_owner_alloc,@function
 .Ltest_owner_alloc:
@@ -169,10 +175,10 @@ def _instrument_owned_runtime(runtime, diagnostic_fd):
     movq %rdi,%r8
     movq %rdi,%r9
     shrq $4,%r9
-    andq $32767,%r9
+    andq ${ATTRIBUTION_MASK},%r9
     leaq .Ltest_owner_keys(%rip),%r10
     leaq .Ltest_owner_tags(%rip),%r11
-    movl $32768,%esi
+    movl ${ATTRIBUTION_SLOTS},%esi
 .Ltest_owner_alloc_probe:
     cmpq $0,(%r11,%r9,8)
     je .Ltest_owner_alloc_slot
@@ -180,7 +186,7 @@ def _instrument_owned_runtime(runtime, diagnostic_fd):
     cmpq %r8,%rcx
     je .Ltest_owner_alloc_slot
     incq %r9
-    andq $32767,%r9
+    andq ${ATTRIBUTION_MASK},%r9
     decq %rsi
     jne .Ltest_owner_alloc_probe
     movq $3,.Ltest_owner_error(%rip)
@@ -220,10 +226,10 @@ def _instrument_owned_runtime(runtime, diagnostic_fd):
     movq %rdi,%r8
     movq %rdi,%r9
     shrq $4,%r9
-    andq $32767,%r9
+    andq ${ATTRIBUTION_MASK},%r9
     leaq .Ltest_owner_keys(%rip),%r10
     leaq .Ltest_owner_tags(%rip),%r11
-    movl $32768,%esi
+    movl ${ATTRIBUTION_SLOTS},%esi
 .Ltest_owner_free_probe:
     movq (%r10,%r9,8),%rcx
     testq %rcx,%rcx
@@ -231,7 +237,7 @@ def _instrument_owned_runtime(runtime, diagnostic_fd):
     cmpq %r8,%rcx
     je .Ltest_owner_free_found
     incq %r9
-    andq $32767,%r9
+    andq ${ATTRIBUTION_MASK},%r9
     decq %rsi
     jne .Ltest_owner_free_probe
     movq $3,.Ltest_owner_error(%rip)
@@ -420,9 +426,6 @@ class U1OwnerPhysicalTests(unittest.TestCase):
             self.assertEqual(final['reclaimed_bytes'], final['traffic'], name)
             self.assertEqual(final['reclaimed_objects'], final['allocations'], name)
 
-        # The acceptance-scale function owner must fit the existing selected
-        # qualification gates even after counting allocator block headers and
-        # any oversized reused capacity.
         policy = json.loads((ROOT / 'UIR_U1A_BUDGETS.json').read_text())['memory']
         stress = before['owners']['stress']
         self.assertLessEqual(stress['peak'], policy['qualification_function_peak_capacity_bytes'])
