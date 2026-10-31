@@ -18,18 +18,20 @@ public function count(routine identity build.Function,phase identity budget.Phas
 }
 public function edge(routine identity build.Function,phase identity budget.Phase,
     instruction Int,ordinal Int) returns Int fails budget.LimitError {
-    let count be try count(routine,phase,instruction);
-    if ordinal < 0 or ordinal >= count { try budget.reject("invalid successor ordinal"); }
+    if instruction < 1 or instruction > routine.instructions.length/10 { try budget.reject("invalid successor instruction"); }
     let offset be (instruction-1)*10;
     let op be try words.get(routine.instructions,phase,offset);
     if op == 35 {
         let target be try words.get(routine.instructions,phase,offset+7);
+        if target < 1 or target > routine.switches.length/3 { try budget.reject("invalid switch header"); }
         let base be (target-1)*3;
         let cases be try words.get(routine.switches,phase,base+1);
+        if cases < 0 or cases > 65535 or ordinal < 0 or ordinal > cases { try budget.reject("invalid switch edge ordinal"); }
         if ordinal == cases { return try words.get(routine.switches,phase,base+2); }
         let first be try words.get(routine.switches,phase,base);
         return try words.get(routine.cases,phase,(first+ordinal)*2+1);
     }
+    if ordinal < 0 or ordinal >= ops.inlineEdges(op) { try budget.reject("invalid successor ordinal"); }
     return try words.get(routine.instructions,phase,offset+7+ordinal);
 }
 
@@ -49,15 +51,24 @@ public function caseBits(routine identity build.Function,phase identity budget.P
 }
 public function choose(routine identity build.Function,phase identity budget.Phase,
     instruction Int,selector Int) returns Int fails budget.LimitError {
-    let size be try count(routine,phase,instruction);
+    if instruction < 1 or instruction > routine.instructions.length/10 { try budget.reject("invalid successor instruction"); }
     let offset be (instruction-1)*10;
     if try words.get(routine.instructions,phase,offset) != 35 { try budget.reject("not a U1a switch"); }
-    let ordinal be 0;
-    while ordinal < size-1 {
-        if selector == try caseBits(routine,phase,instruction,ordinal) {
-            return try edge(routine,phase,instruction,ordinal);
-        }
-        ordinal=ordinal+1;
+    let header be try words.get(routine.instructions,phase,offset+7);
+    if header < 1 or header > routine.switches.length/3 { try budget.reject("invalid switch header"); }
+    let base be (header-1)*3;
+    let first be try words.get(routine.switches,phase,base);
+    let count be try words.get(routine.switches,phase,base+1);
+    if count < 0 or count > 65535 { try budget.reject("invalid switch case count"); }
+    // Cases are already verified and ordered by unsigned full-width bit pattern.
+    // Binary search preserves the original edge ID and does not allocate by span.
+    let low be 0; let high be count;
+    while low < high {
+        let middle be low+(high-low)/2;
+        let bits be try words.get(routine.cases,phase,(first+middle)*2);
+        if bits == selector { return try words.get(routine.cases,phase,(first+middle)*2+1); }
+        if ops.unsignedLess(bits,selector) { low=middle+1; }
+        else { high=middle; }
     }
-    return try edge(routine,phase,instruction,size-1);
+    return try words.get(routine.switches,phase,base+2);
 }
