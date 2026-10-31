@@ -50,6 +50,30 @@ _start:
     jne .Lcache_fail
     cmpq $128,.Lgraph_safe_budget(%rip)
     jne .Lcache_fail
+    # Bound an allocation cycle by committed backing bytes too.
+    movq .Ltext_collections(%rip),%r13
+    movq $1,.Ltext_heap_dirty(%rip)
+    movq $8388607,.Lgraph_alloc_since_gc(%rip)
+    xorl %edi,%edi
+    call erist_rt_text_safe_point
+    cmpq .Ltext_collections(%rip),%r13
+    jne .Lcache_fail
+    movq $8388608,.Lgraph_alloc_since_gc(%rip)
+    xorl %edi,%edi
+    call erist_rt_text_safe_point
+    incq %r13
+    cmpq .Ltext_collections(%rip),%r13
+    jne .Lcache_fail
+    cmpq $0,.Lgraph_alloc_since_gc(%rip)
+    jne .Lcache_fail
+    # Even after pure root invalidation, periodic polling is bounded.
+    movq $1,.Ltext_heap_dirty(%rip)
+    movq $1048575,.Lgraph_safe_since(%rip)
+    xorl %edi,%edi
+    call erist_rt_text_safe_point
+    incq %r13
+    cmpq .Ltext_collections(%rip),%r13
+    jne .Lcache_fail
     call erist_rt_allocator_release_all
     testq %rax,%rax
     jne .Lcache_fail
