@@ -1,12 +1,16 @@
 // Private U1a acceptance instrumentation for issue #77.
 //
 // This module does NOT change budgeting, GC policy, the frozen source language,
-// or the public 32-byte value ABI. It measures the concrete graph objects that
+// or the public 32-byte value ABI. It walks the concrete graph objects that
 // already back U1 data under the current owned x86-64 runtime. The owned graph
 // allocator requests a 64-byte graph header plus 32 bytes per graph cell; the
-// allocator adds its 32-byte block header. Shared allocator-region slack/header
-// is intentionally reported outside per-owner attribution because no individual
-// U1 owner uniquely owns it.
+// allocator adds its 32-byte block header. `blockBytes` is therefore the exact
+// requested graph-block footprint. Production free-list reuse is allowed to
+// return a larger existing block; the #77 owned-runtime acceptance test promotes
+// this requested footprint to an exact actual block-capacity result only after
+// separately proving that no measured graph allocation used oversized reuse.
+// Shared allocator-region slack/header is intentionally reported outside
+// per-owner attribution because no individual U1 owner uniquely owns it.
 import compiler.u1_budget as budget;
 import compiler.u1_words as words;
 import compiler.u1_meta as meta;
@@ -74,9 +78,9 @@ function pages(value maybe identity words.Node,depth Int) returns Int {
     return count;
 }
 
-// Exact current owned-runtime backing of one radix-16 word store. Counting the
-// actual reachable Node/Page objects, rather than inferring from budget charges,
-// makes malformed or unexpectedly sparse shapes visible to the acceptance gate.
+// Exact current structural backing request of one radix-16 word store. Counting
+// the actual reachable Node/Page objects, rather than inferring from budget
+// charges, makes malformed or unexpectedly sparse shapes visible to the gate.
 public function wordStore(store identity words.Words,owner identity budget.Owner)
     returns Backing fails budget.LimitError {
     if store.owner != owner or store.closed { try budget.reject("foreign or closed U1 physical word store"); }
