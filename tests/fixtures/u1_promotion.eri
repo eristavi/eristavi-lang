@@ -454,6 +454,138 @@ function floatNonContraction() fails budget.LimitError,verify.InvalidIR,ProbeErr
 }
 
 
+// Independent switch conformance: dense 32-arm, signed-wide sparse, two-entry SCC.
+function switchDense() fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let harness be try create([meta.i64()],[meta.i64()],true); let routine be harness.routine;
+    let entry be try build.block(routine,[meta.i64()]); let join be try build.block(routine,[meta.i64()]);
+    let selector be try build.parameter(routine,entry,0);
+    let v0 be try build.integer(routine,entry,1000,harness.location);
+    let e0 be try build.edge(routine,join,[v0]);
+    let v1 be try build.integer(routine,entry,1001,harness.location);
+    let e1 be try build.edge(routine,join,[v1]);
+    let v2 be try build.integer(routine,entry,1002,harness.location);
+    let e2 be try build.edge(routine,join,[v2]);
+    let v3 be try build.integer(routine,entry,1003,harness.location);
+    let e3 be try build.edge(routine,join,[v3]);
+    let v4 be try build.integer(routine,entry,1004,harness.location);
+    let e4 be try build.edge(routine,join,[v4]);
+    let v5 be try build.integer(routine,entry,1005,harness.location);
+    let e5 be try build.edge(routine,join,[v5]);
+    let v6 be try build.integer(routine,entry,1006,harness.location);
+    let e6 be try build.edge(routine,join,[v6]);
+    let v7 be try build.integer(routine,entry,1007,harness.location);
+    let e7 be try build.edge(routine,join,[v7]);
+    let v8 be try build.integer(routine,entry,1008,harness.location);
+    let e8 be try build.edge(routine,join,[v8]);
+    let v9 be try build.integer(routine,entry,1009,harness.location);
+    let e9 be try build.edge(routine,join,[v9]);
+    let v10 be try build.integer(routine,entry,1010,harness.location);
+    let e10 be try build.edge(routine,join,[v10]);
+    let v11 be try build.integer(routine,entry,1011,harness.location);
+    let e11 be try build.edge(routine,join,[v11]);
+    let v12 be try build.integer(routine,entry,1012,harness.location);
+    let e12 be try build.edge(routine,join,[v12]);
+    let v13 be try build.integer(routine,entry,1013,harness.location);
+    let e13 be try build.edge(routine,join,[v13]);
+    let v14 be try build.integer(routine,entry,1014,harness.location);
+    let e14 be try build.edge(routine,join,[v14]);
+    let v15 be try build.integer(routine,entry,1015,harness.location);
+    let e15 be try build.edge(routine,join,[v15]);
+    let v16 be try build.integer(routine,entry,1016,harness.location);
+    let e16 be try build.edge(routine,join,[v16]);
+    let v17 be try build.integer(routine,entry,1017,harness.location);
+    let e17 be try build.edge(routine,join,[v17]);
+    let v18 be try build.integer(routine,entry,1018,harness.location);
+    let e18 be try build.edge(routine,join,[v18]);
+    let v19 be try build.integer(routine,entry,1019,harness.location);
+    let e19 be try build.edge(routine,join,[v19]);
+    let v20 be try build.integer(routine,entry,1020,harness.location);
+    let e20 be try build.edge(routine,join,[v20]);
+    let v21 be try build.integer(routine,entry,1021,harness.location);
+    let e21 be try build.edge(routine,join,[v21]);
+    let v22 be try build.integer(routine,entry,1022,harness.location);
+    let e22 be try build.edge(routine,join,[v22]);
+    let v23 be try build.integer(routine,entry,1023,harness.location);
+    let e23 be try build.edge(routine,join,[v23]);
+    let v24 be try build.integer(routine,entry,1024,harness.location);
+    let e24 be try build.edge(routine,join,[v24]);
+    let v25 be try build.integer(routine,entry,1025,harness.location);
+    let e25 be try build.edge(routine,join,[v25]);
+    let v26 be try build.integer(routine,entry,1026,harness.location);
+    let e26 be try build.edge(routine,join,[v26]);
+    let v27 be try build.integer(routine,entry,1027,harness.location);
+    let e27 be try build.edge(routine,join,[v27]);
+    let v28 be try build.integer(routine,entry,1028,harness.location);
+    let e28 be try build.edge(routine,join,[v28]);
+    let v29 be try build.integer(routine,entry,1029,harness.location);
+    let e29 be try build.edge(routine,join,[v29]);
+    let v30 be try build.integer(routine,entry,1030,harness.location);
+    let e30 be try build.edge(routine,join,[v30]);
+    let v31 be try build.integer(routine,entry,1031,harness.location);
+    let e31 be try build.edge(routine,join,[v31]);
+    let fallbackValue be try build.integer(routine,entry,9000,harness.location);
+    let fallback be try build.edge(routine,join,[fallbackValue]);
+    try build.switchInteger(routine,entry,selector,[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31],
+        [e0,e1,e2,e3,e4,e5,e6,e7,e8,e9,e10,e11,e12,e13,e14,e15,e16,e17,e18,e19,e20,e21,e22,e23,e24,e25,e26,e27,e28,e29,e30,e31],fallback,harness.location);
+    try build.returnValues(routine,join,[try build.parameter(routine,join,0)],harness.location);
+    try build.complete(routine); try promoted(harness,"switch-dense",0,0);
+}
+function switchWideSparse() fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let harness be try create([meta.i64()],[meta.i64()],true); let routine be harness.routine;
+    let entry be try build.block(routine,[meta.i64()]); let join be try build.block(routine,[meta.i64()]);
+    let selector be try build.parameter(routine,entry,0);
+    let v0 be try build.integer(routine,entry,100,harness.location);
+    let e0 be try build.edge(routine,join,[v0]);
+    let v1 be try build.integer(routine,entry,101,harness.location);
+    let e1 be try build.edge(routine,join,[v1]);
+    let v2 be try build.integer(routine,entry,102,harness.location);
+    let e2 be try build.edge(routine,join,[v2]);
+    let v3 be try build.integer(routine,entry,103,harness.location);
+    let e3 be try build.edge(routine,join,[v3]);
+    let v4 be try build.integer(routine,entry,104,harness.location);
+    let e4 be try build.edge(routine,join,[v4]);
+    let v5 be try build.integer(routine,entry,105,harness.location);
+    let e5 be try build.edge(routine,join,[v5]);
+    let v6 be try build.integer(routine,entry,106,harness.location);
+    let e6 be try build.edge(routine,join,[v6]);
+    let fallbackValue be try build.integer(routine,entry,9000,harness.location);
+    let fallback be try build.edge(routine,join,[fallbackValue]);
+    try build.switchInteger(routine,entry,selector,[0,1,1024,9223372036854775807,-9223372036854775807-1,-4096,-1],
+        [e0,e1,e2,e3,e4,e5,e6],fallback,harness.location);
+    try build.returnValues(routine,join,[try build.parameter(routine,join,0)],harness.location);
+    try build.complete(routine); try promoted(harness,"switch-sparse-wide",0,0);
+}
+function switchIrreducible() fails budget.LimitError,verify.InvalidIR,ProbeError {
+    // Both cycle members have independent entry edges: this is an irreducible SCC.
+    let harness be try create([meta.i64(),meta.i64()],[meta.i64()],true);
+    let routine be harness.routine;
+    let entry be try build.block(routine,[meta.i64(),meta.i64()]);
+    let left be try build.block(routine,[meta.i64(),meta.i64()]);
+    let right be try build.block(routine,[meta.i64(),meta.i64()]);
+    let exit be try build.block(routine,[meta.i64()]);
+    let selector be try build.parameter(routine,entry,0);
+    let iterations be try build.parameter(routine,entry,1);
+    let toLeft be try build.edge(routine,left,[selector,iterations]);
+    let toRight be try build.edge(routine,right,[selector,iterations]);
+    let fallback be try build.edge(routine,left,[selector,iterations]);
+    try build.switchInteger(routine,entry,selector,[0,9223372036854775807],
+        [toLeft,toRight],fallback,harness.location);
+    let leftValue be try build.parameter(routine,left,0); let leftCount be try build.parameter(routine,left,1);
+    let leftZero be try build.integer(routine,left,0,harness.location);
+    let leftOne be try build.integer(routine,left,1,harness.location);
+    let leftDone be try build.compareInteger(routine,left,leftCount,leftZero,1,harness.location);
+    let leftNext be try build.wrapSubtract(routine,left,leftCount,leftOne,harness.location);
+    try build.branch(routine,left,leftDone,exit,[leftValue],right,[leftValue,leftNext],harness.location);
+    let rightValue be try build.parameter(routine,right,0); let rightCount be try build.parameter(routine,right,1);
+    let rightZero be try build.integer(routine,right,0,harness.location);
+    let rightOne be try build.integer(routine,right,1,harness.location);
+    let rightDone be try build.compareInteger(routine,right,rightCount,rightZero,1,harness.location);
+    let rightNext be try build.wrapSubtract(routine,right,rightCount,rightOne,harness.location);
+    try build.branch(routine,right,rightDone,exit,[rightValue],left,[rightValue,rightNext],harness.location);
+    try build.returnValues(routine,exit,[try build.parameter(routine,exit,0)],harness.location);
+    try build.complete(routine); try promoted(harness,"switch-irreducible",0,0);
+}
+
 function switchFlow() fails budget.LimitError,verify.InvalidIR,ProbeError {
     let harness be try create([meta.i64()],[meta.i64()],true); let routine be harness.routine;
     let entry be try build.block(routine,[meta.i64()]);
