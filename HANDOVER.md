@@ -64,7 +64,7 @@ project task, not a separate task that waits for the user to request it.**
 | Qualified PR #94 / merge tree, before later documentation-only commits | `5567a40a9a710fa3d1008da121e38f5e4b10d5f4` |
 | Four-platform PR #94 CI | [41183090972](https://github.com/eristavi/eristavi-lang/actions/runs/41183090972), success: 448 tests discovered per platform, platform skips retained |
 | Completed-batch PR #94 qualification | [41183091353](https://github.com/eristavi/eristavi-lang/actions/runs/41183091353), success: three repeatable C/D bootstrap/offline jobs and owned integration |
-| Active integration candidate | `compiler/u1a-native-trust-publication`, section 30; native Float/import/source/simplification implementation, NOT qualified or merged |
+| Active integration candidate | Draft [PR #96](https://github.com/eristavi/eristavi-lang/pull/96), `compiler/u1a-native-trust-publication`, section 30; native Float/import/source/simplification implementation, NOT qualified or merged |
 | Separate full owned compiler self-build | Intentionally skipped; NOT qualified |
 | U1a | Integer/predicate reference execution, recursion/effects, selected test imports, switches, verification and promotion qualified/merged; native strict f64, production imports, full source/publication revisions, simplification and broader resource/conformance gates remain |
 | U1b | Narrow i8/i16/i32 IR operations qualified through PR #87; narrow reference execution, immutable aggregates and core-wide acceptance remain incomplete |
@@ -944,3 +944,18 @@ Local final implementation evidence: `tools/run_ci_tests.py --profile smoke`
 passed all 20 tests in 30.85 seconds; report retained in
 `docs/evidence/2026-10-31/u1-native-smoke.json`. `compileall` and `git diff --check`
 passed. These are local development checks, not hosted qualification.
+
+Hosted submission checkpoint:
+
+- Draft [PR #96](https://github.com/eristavi/eristavi-lang/pull/96) is open on
+  `compiler/u1a-native-trust-publication`; it is NOT qualified or merged.
+- Uploaded implementation commit: `a8776075a8121cd2aa29b5b7dc15970fbf3b97c4`;
+  exact implementation tree `fa7c2341b717fd220d6baa5f3c479d67092f2419` matches
+  the locally checked Git tree. This final checkpoint adds only documentation.
+- Four-platform full CI and full completed-batch qualification are requested
+  once by applying `qualification` AFTER this checkpoint is the PR head. That
+  event selects the exact final PR head for both workflows. The label is the
+  launch marker; no run status/result is inspected during this session.
+- Per the user's instruction, stop monitoring after requesting those runs.
+  Wait for the user to ask to inspect results. No merge or issue closure is
+  authorized by an uninspected run; no owned compiler self-build is selected.
