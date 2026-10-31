@@ -2,6 +2,10 @@
 
 **Authoritative recovery checkpoint: 31 October 2026, Asia/Nicosia.** Start here. Older numbered sections are retained as historical evidence; their draft statuses are *not* current instructions. Section 28 records the latest qualified U1a merge and next gates; section 25 records the current intentional CI policy.
 
+**Active branch candidate:** section 29 records the integer-execution batch on
+`compiler/u1a-integer-execution-parity`. Its qualification is separate from
+section 28's previously merged evidence. Do not infer a merge or U1a completion.
+
 ## Start a new chat with this
 
 > Continue development of Eristavi Lang from HANDOVER.md section 28 and the
@@ -775,3 +779,48 @@ This section records **unmerged development**, not a new qualified production re
 ### Next safe implementation gate
 
 Issue [#71](https://github.com/eristavi/eristavi-lang/issues/71) remains **open** for full U1a opcode/strict-f64/native adapter execution, independently proven first-fault/effect ordering at larger scale, selected production imported-effect trust, and full revision-bound source publication; see also separate U1a issues #76/#77. U1b immutable aggregates (#73), U2 managed values, checked failures and resources (#74), and U3 AST/semantic-facts → new typed UIR/native parity integration (#75) remain independently staged. Preserve the working compiler, mandatory cell promotion and existing ABI. Follow the change-aware CI policy in section 25: fast smoke during work; one final four-platform CI and completed-batch qualification per coherent compiler-code revision; docs-only handovers use patch checks only.
+
+## 29. U1a integer execution parity batch — candidate 2026-10-31
+
+Baseline main: `007aa4ac897a4d618b00955b7808db19792b2404` (docs PR #93).
+PR #92's final full CI and completed-batch qualification were independently
+checked successful before extending its evaluator. No other open PR is included.
+
+- Implements all six i64 signed/unsigned overflow pairs and unsigned div/rem
+  in the independent Eristavi-written evaluator. Preserves exact wrapped bits,
+  overflow predicates, zero-divisor and signed MIN/-1 traps, callee origins,
+  first-effect order and explicit rejection of strict f64/U1b operations.
+- Fixes existing wrapping-helper intermediate overflows at `MIN+MIN` and
+  `MAX-MIN`, found by the new independent integer boundary grid.
+- Fixes partial call-frame initialization cleanup on quota/work failure.
+  Arithmetic loops are bounded and charged through existing work/cancellation
+  accounting. The quota tests additionally exposed stale abandoned-slot roots
+  after checked unwinding. Both native-C and owned runtime unwind paths now
+  clear those exact roots before free/reuse; caller cells, normal results,
+  other root classes and the ABI layout remain intact. This common runtime
+  correction is included in final compiler/runtime qualification.
+- `U1A_INTEGER_EXECUTION.md` gives scope and acceptance. New tests compare
+  8,190 arithmetic/predicate observations against unbounded mathematical
+  expectations, 600 recursive/switch/loop/promotion/fault-trace cases, and
+  focused native-C/owned runtime parity. Quota/cancellation, effect bounds,
+  stale accepted-report rejection and monotonic resource charges are covered.
+  Direct C/owned unwind-root regressions also check the owned scratch-refusal
+  fallback. Local lifetime/heap-GC tests passed with ASan/UBSan; only local
+  LeakSanitizer task inspection is disabled due the container's `/proc` access.
+  Hosted CI sanitizer defaults are unchanged. Initial oversized single-worker
+  native parity timed out; the same cases use independent bounded workers,
+  and the earlier timeout is not a completed performance measurement.
+- At candidate creation, focused bootstrap integer and combined-flow tests
+  passed. Native parity and final exact-revision smoke/full four-platform CI
+  plus completed-batch qualification must be inspected on the final PR head;
+  this paragraph is not a claim that those pending gates passed or it merged.
+- Follow section 25: incremental smoke; one final four-platform full CI plus
+  `qualification` on the completed compiler revision; experimental
+  `owned-self-build` remains unselected. Preserve the tested tree and report
+  any subsequent implementation changes as requiring fresh qualification.
+
+Next after this batch: strict native binary64 (#76), selected production
+native import trust and broader #71 conformance, full source/revision
+publication plus bounded simplification (#77), then the independently staged
+U1b/U2/U3 gates. Keep issue #71 open. Full physical heap/GC accounting, larger
+matched stress and complete owned compiler self-hosting remain unqualified.

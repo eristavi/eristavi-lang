@@ -111,8 +111,10 @@ function wrapAdd(a Int,b Int) returns Int {
         return bottom+(rest-1);
     }
     if b < 0 and a < bottom-b {
-        let rest be (bottom-b)-a;
-        return top-(rest-1);
+        // Subtract one before taking the distance: MIN+MIN would otherwise
+        // create the unrepresentable positive intermediate 2^63.
+        let distance be (bottom-b-1)-a;
+        return top-distance;
     }
     return a+b;
 }
@@ -124,14 +126,15 @@ function wrapSub(a Int,b Int) returns Int {
         return top-(rest-1);
     }
     if b < 0 and a > top+b {
-        let rest be a-(top+b);
-        return bottom+(rest-1);
+        let distance be (a-1)-(top+b);
+        return bottom+distance;
     }
     return a-b;
 }
-function wrapMul(a Int,b Int) returns Int {
+function wrapMul(a Int,b Int,phase identity budget.Phase) returns Int fails budget.LimitError {
     let result be 0; let item be b; let power be a;
     while item != 0 {
+        try budget.work(phase,1);
         let odd be item%2;
         if odd > 0 { result=wrapAdd(result,power); }
         if odd < 0 { result=wrapSub(result,power); }
@@ -139,6 +142,62 @@ function wrapMul(a Int,b Int) returns Int {
         power=wrapAdd(power,power);
     }
     return result;
+}
+type Division { quotient Int; remainder Int; }
+// Restoring unsigned division, at most 64 charged rounds. All words use
+// signed Int containers; neither Float nor overflowing signed division is used.
+// The caller has already checked b != 0. The high remainder bit records the
+// carry out of doubling, so comparison remains valid even across bit 63.
+function unsignedDivision(a Int,b Int,phase identity budget.Phase)
+    returns Division fails budget.LimitError {
+    if a >= 0 and b > 0 {
+        return Division { quotient=a/b; remainder=a%b; };
+    }
+    if b < 0 {
+        if unsignedLess(a,b) { return Division { quotient=0; remainder=a; }; }
+        return Division { quotient=1; remainder=wrapSub(a,b); };
+    }
+    let quotient be 0; let remainder be 0; let bits be a; let index be 0;
+    while index < 64 {
+        try budget.work(phase,1);
+        let bit be 0; if bits < 0 { bit=1; }
+        bits=wrapAdd(bits,bits);
+        let carry be remainder < 0;
+        remainder=wrapAdd(wrapAdd(remainder,remainder),bit);
+        quotient=wrapAdd(quotient,quotient);
+        if carry or not unsignedLess(remainder,b) {
+            remainder=wrapSub(remainder,b); quotient=wrapAdd(quotient,1);
+        }
+        index=index+1;
+    }
+    return Division { quotient=quotient; remainder=remainder; };
+}
+function multiplicationOverflow(a Int,b Int,unsigned Bool,phase identity budget.Phase)
+    returns Bool fails budget.LimitError {
+    if a == 0 or b == 0 { return false; }
+    if unsigned {
+        let ceiling be try unsignedDivision(-1,b,phase);
+        return unsignedLess(ceiling.quotient,a);
+    }
+    let top be 9223372036854775807; let bottom be -9223372036854775807-1;
+    // Divisors below are nonzero and never form MIN/-1. Negative quotients
+    // truncate toward zero, giving the exact signed multiplication boundary.
+    if a > 0 {
+        if b > 0 { return a > top/b; }
+        return b < bottom/a;
+    }
+    if b > 0 { return a < bottom/b; }
+    return a < top/b;
+}
+function integerOverflow(op Int,a Int,b Int,result Int,phase identity budget.Phase)
+    returns Bool fails budget.LimitError {
+    if op == 3 { return (a >= 0 and b >= 0 and result < 0) or
+        (a < 0 and b < 0 and result >= 0); }
+    if op == 19 { return (a >= 0 and b < 0 and result < 0) or
+        (a < 0 and b >= 0 and result >= 0); }
+    if op == 21 { return unsignedLess(result,a); }
+    if op == 22 { return unsignedLess(a,b); }
+    return try multiplicationOverflow(a,b,op == 23,phase);
 }
 function selected(program identity link.Program,policy identity imports.Policy,
     target meta.FunctionId,values maybe identity Slot,count Int,state identity Machine)
@@ -168,19 +227,26 @@ function invoke(program identity link.Program,policy identity imports.Policy,
     if depth > state.depthLimit { return outcome(2,0,site,none,0); }
     let routine be try link.resolve(program,target);
     let phase be try budget.verificationPhase(routine.owner);
-    let values be try words.create(routine.owner,1048576);
+    let values be words.create(routine.owner,1048576)
+        else error budget.LimitError { try budget.finishPhase(phase); fail error; };
+    let frame be identity Frame { routine=routine; phase=phase; values=values; };
+    let finished be enter(program,policy,frame,inputs,count,state,depth)
+        else error budget.LimitError {
+            try words.close(frame.values); try budget.finishPhase(frame.phase); fail error;
+        };
+    try words.close(frame.values); try budget.finishPhase(frame.phase);
+    return finished;
+}
+function enter(program identity link.Program,policy identity imports.Policy,
+    frame identity Frame,inputs maybe identity Slot,count Int,state identity Machine,
+    depth Int) returns identity Outcome fails budget.LimitError {
+    let routine be frame.routine;
     let total be routine.values.length/4; let item be 0;
     while item < total {
-        let ignored be try words.push(values,phase,0);
+        let ignored be try words.push(frame.values,frame.phase,0);
         item=item+1;
     }
-    let frame be identity Frame { routine=routine; phase=phase; values=values; };
-    let finished be walk(program,policy,frame,inputs,count,state,depth)
-        else error budget.LimitError {
-            try words.close(values); try budget.finishPhase(phase); fail error;
-        };
-    try words.close(values); try budget.finishPhase(phase);
-    return finished;
+    return try walk(program,policy,frame,inputs,count,state,depth);
 }
 function walk(program identity link.Program,policy identity imports.Policy,
     frame identity Frame,inputs maybe identity Slot,count Int,state identity Machine,
@@ -226,21 +292,33 @@ function walk(program identity link.Program,policy identity imports.Policy,
                    (op == 14 and (a != 0 or b != 0)) { answer=1; }
                 try put(frame,resultStart,answer);
             }
-            if op == 15 or op == 16 or op == 17 {
+            if op == 3 or (op >= 15 and op <= 17) or (op >= 19 and op <= 23) {
                 let answer be wrapAdd(a,b);
-                if op == 16 { answer=wrapSub(a,b); }
-                if op == 17 { answer=wrapMul(a,b); }
+                if op == 16 or op == 19 or op == 22 { answer=wrapSub(a,b); }
+                if op == 17 or op == 20 or op == 23 { answer=try wrapMul(a,b,frame.phase); }
                 try put(frame,resultStart,answer);
+                if resultCount == 2 {
+                    let flag be 0;
+                    if try integerOverflow(op,a,b,answer,frame.phase) { flag=1; }
+                    try put(frame,resultStart+1,flag);
+                }
             }
             if op == 18 {
                 try put(frame,resultStart,cmp(a,b,payload));
             }
-            if op == 24 or op == 25 {
+            if op >= 24 and op <= 27 {
                 if b == 0 { return outcome(1,2,loc,none,0); }
                 let bottom be -9223372036854775807-1;
-                if a == bottom and b == -1 { return outcome(1,1,loc,none,0); }
-                let answer be a/b;
-                if op == 25 { answer=a%b; }
+                let answer be 0;
+                if op == 24 or op == 25 {
+                    if a == bottom and b == -1 { return outcome(1,1,loc,none,0); }
+                    answer=a/b;
+                    if op == 25 { answer=a%b; }
+                } else {
+                    let divided be try unsignedDivision(a,b,frame.phase);
+                    answer=divided.quotient;
+                    if op == 27 { answer=divided.remainder; }
+                }
                 try put(frame,resultStart,answer);
             }
             if op == 5 {
@@ -288,12 +366,11 @@ function walk(program identity link.Program,policy identity imports.Policy,
                 block=try jump(frame,edge);
                 instruction=0; terminator=0;
             }
-            if op != 1 and op != 2 and op != 4 and op != 13 and op != 14 and
-               op != 15 and op != 16 and op != 17 and op != 18 and
-               op != 24 and op != 25 and op != 5 and op != 34 and
+            if op != 1 and op != 2 and op != 3 and op != 4 and op != 13 and op != 14 and
+               (op < 15 or op > 27) and op != 5 and op != 34 and
                op != 8 and op != 6 and op != 7 and op != 35 {
-                // Never guess strict f64, narrow widths, checked-overflow
-                // or future managed/checked continuation semantics.
+                // Never guess strict f64, narrow widths or future
+                // managed/checked continuation semantics.
                 return outcome(3,op,loc,none,0);
             }
         }

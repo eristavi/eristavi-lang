@@ -125,12 +125,41 @@ static void collected_slots(void) {
     assert(ev_next_slot_gc==ERIST_SLOT_GC_INTERVAL && live_allocations==0);
 }
 
+static void unwound_roots(void) {
+    ev_scope *scope=ev_scope_enter();
+    uintptr_t roots[4]={0};const unsigned char classes[]={1,1,2,1};
+    evn_bind_roots(scope,roots,classes,4);
+    ev_value *caller=evn_int(7);roots[0]=(uintptr_t)caller;
+    size_t baseline=live_allocations;
+    eri_handler_frame *frame=evn_frame();
+    if(setjmp(frame->env)==0){
+        roots[1]=(uintptr_t)evn_int(9);
+        roots[2]=roots[1]; /* Same bits, but not a value root. */
+        roots[3]=roots[1]; /* Duplicate exact slot root. */
+        eri_raise("Expected",NULL,(eri_text){0,NULL});
+        abort();
+    }
+    evn_pop(frame);
+    assert(roots[0]==(uintptr_t)caller && caller->i==7);
+    assert(roots[1]==0 && roots[3]==0 && roots[2]!=0);
+    assert(live_allocations==baseline && ev_scopes==scope && !eri_handler_top);
+    /* A normally completed protected expression keeps its new value roots. */
+    frame=evn_frame();
+    if(setjmp(frame->env)!=0)abort();
+    roots[1]=(uintptr_t)evn_int(42);
+    evn_pop(frame);
+    assert(((ev_value*)roots[1])->i==42);
+    ev_scope_leave(scope,ev_void());
+    assert(live_allocations==0);
+}
+
 int main(int argc,char **argv) {
     assert(argc==2);
     if(strcmp(argv[1],"normal")==0)normal_frames();
     else if(strcmp(argv[1],"failure")==0)failed_calls();
     else if(strcmp(argv[1],"resource")==0)resource_unwind();
     else if(strcmp(argv[1],"collection")==0)collected_slots();
+    else if(strcmp(argv[1],"unwind-roots")==0)unwound_roots();
     else abort();
     return 0;
 }

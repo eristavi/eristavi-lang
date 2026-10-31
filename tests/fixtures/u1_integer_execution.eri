@@ -1,0 +1,308 @@
+// Direct UIR execution probes. Python supplies independent unbounded-integer
+// expectations; no production source lowering is used to compute an answer.
+import std.process;
+import compiler.format as format;
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+import compiler.u1_meta as meta;
+import compiler.u1_builder as build;
+import compiler.u1_promote as promote;
+import compiler.u1_verify as verify;
+import compiler.u1_module as link;
+import compiler.u1_imports as imports;
+import compiler.u1_effects as effects;
+import compiler.u1_execute as exec;
+
+error ProbeError { message Text; }
+type Harness {
+    root identity budget.Owner; shared identity budget.Owner; data identity meta.Metadata;
+    owner identity budget.Owner; core identity build.Function;
+    recursion maybe identity build.Function; relay maybe identity build.Function;
+    original maybe identity build.Function;
+    program identity link.Program; policy identity imports.Policy;
+    target meta.FunctionId; coreId meta.FunctionId; location meta.LocId;
+}
+function check(ok Bool,message Text) fails ProbeError {
+    if not ok { fail ProbeError { message=message; }; }
+}
+// Modes are fixture recipes, never new UIR opcodes or language semantics.
+function operation(routine identity build.Function,block build.BlockId,
+    a build.ValueId,b build.ValueId,mode Int,loc meta.LocId)
+    returns build.Pair fails budget.LimitError {
+    let zero be try build.integer(routine,block,0,loc);
+    let no be try build.predicate(routine,block,false,loc);
+    let answer be build.Pair { value=zero; overflow=no; };
+    let op be mode;
+    if mode >= 200 { op=mode-200; }
+    if mode >= 124 and mode <= 127 { op=mode-100; }
+    if op == 3 { answer=try build.addOverflow(routine,block,a,b,loc); }
+    if op == 15 { answer.value=try build.wrapAdd(routine,block,a,b,loc); }
+    if op == 16 { answer.value=try build.wrapSubtract(routine,block,a,b,loc); }
+    if op == 17 { answer.value=try build.wrapMultiply(routine,block,a,b,loc); }
+    if op == 19 { answer=try build.subtractOverflow(routine,block,a,b,loc); }
+    if op == 20 { answer=try build.multiplyOverflow(routine,block,a,b,loc); }
+    if op == 21 { answer=try build.unsignedAddOverflow(routine,block,a,b,loc); }
+    if op == 22 { answer=try build.unsignedSubtractOverflow(routine,block,a,b,loc); }
+    if op == 23 { answer=try build.unsignedMultiplyOverflow(routine,block,a,b,loc); }
+    if op == 24 { answer.value=try build.divideSigned(routine,block,a,b,loc); }
+    if op == 25 { answer.value=try build.remainderSigned(routine,block,a,b,loc); }
+    if op == 26 { answer.value=try build.divideUnsigned(routine,block,a,b,loc); }
+    if op == 27 { answer.value=try build.remainderUnsigned(routine,block,a,b,loc); }
+    if mode >= 101 and mode <= 110 {
+        answer.overflow=try build.compareInteger(routine,block,a,b,mode-100,loc);
+    }
+    if mode >= 111 and mode <= 113 {
+        let first be try build.compareInteger(routine,block,a,zero,1,loc);
+        let second be try build.compareInteger(routine,block,b,zero,1,loc);
+        if mode == 111 { answer.overflow=try build.negatePredicate(routine,block,first,loc); }
+        if mode == 112 { answer.overflow=try build.andPredicate(routine,block,first,second,loc); }
+        if mode == 113 { answer.overflow=try build.orPredicate(routine,block,first,second,loc); }
+    }
+    if mode >= 200 {
+        let safe be try build.negatePredicate(routine,block,answer.overflow,loc);
+        try build.guard(routine,block,safe,1,loc);
+    }
+    if mode >= 124 and mode <= 127 {
+        // Keep the division/remainder above even though its value is unused.
+        answer.value=a;
+        let blocked be try build.predicate(routine,block,false,loc);
+        try build.guard(routine,block,blocked,3,loc);
+    }
+    return answer;
+}
+function create(mode Int,nested Bool,flow Int)
+    returns identity Harness fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let root be try budget.developmentRequest();
+    let shared be try budget.metadataOwner(root); let phase be try budget.constructionPhase(shared);
+    let data be try meta.create(shared,phase);
+    let signature be try meta.signature(data,phase,[meta.i64(),meta.i64()],[meta.i64(),meta.pred()]);
+    let recSig be try meta.signature(data,phase,[meta.i64(),meta.i64(),meta.i64()],[meta.i64(),meta.pred()]);
+    let traceSig be try meta.signature(data,phase,[meta.i64()],[]);
+    let coreId be try meta.declaration(data,phase,signature,"integer.core",1,48,0);
+    let recurId be meta.FunctionId { owner=data.key; index=0; };
+    let relayId be recurId; let traceId be recurId;
+    if nested {
+        recurId=try meta.declaration(data,phase,recSig,"integer.recursion",1,48,0);
+        relayId=try meta.declaration(data,phase,signature,"integer.relay",1,52,0);
+        traceId=try meta.declaration(data,phase,traceSig,"u1.test.trace",2,4,1);
+    }
+    let source be try meta.source(data,phase,"integer-execution",
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",64);
+    let site be try meta.location(data,phase,source,0,8,0,1,1);
+    let loc be try meta.location(data,phase,source,8,16,8,2,1);
+    try meta.freeze(data); try budget.finishPhase(phase);
+    let owner be try budget.functionOwner(root,false);
+    let core be try build.create(data,signature,owner,try budget.constructionPhase(owner));
+    let entry be try build.block(core,[meta.i64(),meta.i64()]);
+    let a be try build.parameter(core,entry,0); let b be try build.parameter(core,entry,1);
+    let compute be entry; let value be a;
+    if flow != 0 {
+        // Same logical recipe, built once with explicit SSA and once with a
+        // private mutable cell then mandatory promotion. Sparse case bits
+        // span the complete unsigned word without span-sized allocation.
+        let left be try build.block(core,[meta.i64()]); let right be try build.block(core,[]);
+        let loop be try build.block(core,[meta.i64(),meta.i64()]);
+        let body be try build.block(core,[]); compute=try build.block(core,[]);
+        let zero be try build.integer(core,entry,0,site);
+        let local be build.CellId { owner=core.key; index=0; };
+        if flow == 2 {
+            local=try build.cell(core,meta.i64()); try build.initialize(core,entry,local,a,site);
+        }
+        let e0 be try build.edge(core,left,[b]); let eMax be try build.edge(core,left,[a]);
+        let eMin be try build.edge(core,left,[b]); let eOnes be try build.edge(core,left,[b]);
+        let fallback be try build.edge(core,right,[]);
+        try build.switchInteger(core,entry,a,[0,9223372036854775807,-9223372036854775807-1,-1],
+            [e0,eMax,eMin,eOnes],fallback,site);
+        let selected be try build.parameter(core,left,0);
+        if flow == 2 { try build.writeCell(core,left,local,selected,site); }
+        try build.jump(core,left,loop,[selected,zero],site);
+        if flow == 2 { try build.writeCell(core,right,local,a,site); }
+        try build.jump(core,right,loop,[a,zero],site);
+        value=try build.parameter(core,loop,0);
+        if flow == 2 { value=try build.readCell(core,loop,local,site); }
+        let index be try build.parameter(core,loop,1);
+        let limit be try build.integer(core,loop,3,site);
+        let again be try build.compareInteger(core,loop,index,limit,3,site);
+        try build.branch(core,loop,again,body,[],compute,[],site);
+        let one be try build.integer(core,body,1,site);
+        let next be try build.wrapAdd(core,body,value,one,site);
+        let nextIndex be try build.wrapAdd(core,body,index,one,site);
+        if flow == 2 { try build.writeCell(core,body,local,next,site); }
+        try build.jump(core,body,loop,[next,nextIndex],site);
+    }
+    let selectedMode be mode;
+    if mode >= 400 {
+        // Unused, well-typed values make frame initialization span pages.
+        let padding be 0;
+        while padding < 40 {
+            let unused be try build.integer(core,compute,padding,site); padding=padding+1;
+        }
+        selectedMode=mode-400;
+    }
+    let answer be try operation(core,compute,value,b,selectedMode,loc);
+    try build.returnValues(core,compute,[answer.value,answer.overflow],site);
+    try build.complete(core); try budget.finishPhase(core.phase);
+    let original maybe identity build.Function be none;
+    if flow == 2 {
+        original=core;
+        let result be try promote.promote(core,try budget.promotionPhase(owner));
+        core=result.routine;
+        try check(core.cells.length == 0,"integer publication retained cells");
+    }
+    let recursion maybe identity build.Function be none;
+    let relay maybe identity build.Function be none;
+    if nested {
+        let recOwner be try budget.functionOwner(root,false);
+        let rec be try build.create(data,recSig,recOwner,try budget.constructionPhase(recOwner));
+        let start be try build.block(rec,[meta.i64(),meta.i64(),meta.i64()]);
+        let base be try build.block(rec,[]); let more be try build.block(rec,[]);
+        let n be try build.parameter(rec,start,0);
+        let x be try build.parameter(rec,start,1); let y be try build.parameter(rec,start,2);
+        let zero be try build.integer(rec,start,0,site);
+        let ready be try build.compareInteger(rec,start,n,zero,1,site);
+        try build.branch(rec,start,ready,base,[],more,[],site);
+        let result be try build.call(rec,base,coreId,[x,y],site);
+        try build.returnValues(rec,base,[try build.result(rec,result,0),try build.result(rec,result,1)],site);
+        let one be try build.integer(rec,more,1,site);
+        let previous be try build.wrapSubtract(rec,more,n,one,site);
+        let child be try build.call(rec,more,recurId,[previous,x,y],site);
+        try build.returnValues(rec,more,[try build.result(rec,child,0),try build.result(rec,child,1)],site);
+        try build.complete(rec); try budget.finishPhase(rec.phase); recursion=rec;
+        let relayOwner be try budget.functionOwner(root,false);
+        let wrapper be try build.create(data,signature,relayOwner,try budget.constructionPhase(relayOwner));
+        let startWrapper be try build.block(wrapper,[meta.i64(),meta.i64()]);
+        let xArg be try build.parameter(wrapper,startWrapper,0); let yArg be try build.parameter(wrapper,startWrapper,1);
+        let before be try build.call(wrapper,startWrapper,traceId,[xArg],site);
+        let three be try build.integer(wrapper,startWrapper,3,site);
+        let called be try build.call(wrapper,startWrapper,recurId,[three,xArg,yArg],site);
+        let after be try build.call(wrapper,startWrapper,traceId,[yArg],site);
+        try build.returnValues(wrapper,startWrapper,[try build.result(wrapper,called,0),try build.result(wrapper,called,1)],site);
+        try build.complete(wrapper); try budget.finishPhase(wrapper.phase); relay=wrapper;
+    }
+    let program be try link.create(data); let bound be try link.bind(program,coreId,core);
+    let rec be recursion; if rec != none { bound=try link.bind(program,recurId,rec); }
+    let wrapper be relay; if wrapper != none { bound=try link.bind(program,relayId,wrapper); }
+    let sealed be try link.seal(program); let policy be try imports.create(program);
+    if nested { let chosen be try imports.select(policy,traceId,1); }
+    let frozen be try imports.freeze(policy); let target be coreId; if nested { target=relayId; }
+    let summary be try effects.inspect(program,policy); let mask be 0;
+    if (selectedMode >= 24 and selectedMode <= 27) or selectedMode >= 200 or
+       (selectedMode >= 124 and selectedMode <= 127) { mask=16; }
+    if flow != 0 { mask=mask+32; }
+    try check(try effects.mask(summary,coreId) == mask,"wrong integer core effect classification");
+    if nested {
+        if flow == 0 { mask=mask+32; }
+        try check(try effects.mask(summary,recurId) == mask,"wrong recursive integer effects");
+        try check(try effects.mask(summary,relayId) == mask+4,"wrong transitive trace/fault effects");
+    }
+    try effects.close(summary);
+    return identity Harness { root=root; shared=shared; data=data; owner=owner; core=core;
+        recursion=recursion; relay=relay; original=original; program=program; policy=policy;
+        target=target; coreId=coreId; location=loc; };
+}
+function close(h identity Harness) fails budget.LimitError,ProbeError {
+    try imports.close(h.policy); try link.close(h.program);
+    let rec be h.recursion; if rec != none { try build.close(rec); try budget.close(rec.owner); }
+    let relay be h.relay; if relay != none { try build.close(relay); try budget.close(relay.owner); }
+    let original be h.original; if original != none { try build.close(original); }
+    try build.close(h.core); try meta.close(h.data);
+    try check(h.root.live == 0 and h.root.pending == 0,"integer execution backing leak");
+    try budget.close(h.owner); try budget.close(h.shared); try budget.close(h.root);
+}
+function cases(mode Int,first,second,nested Bool,flow Int)
+    fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let h be try create(mode,nested,flow); let index be 0;
+    while index < first.count {
+        let live be h.root.live; let traffic be h.root.traffic; let work be h.root.work;
+        let result be try exec.run(h.program,h.policy,h.target,[first[index],second[index]],1000,32);
+        let record be format.integer(mode)+":"+format.integer(index)+":"+
+            format.integer(result.kind)+":"+format.integer(result.code)+":"+
+            format.integer(result.location)+":"+format.integer(result.count);
+        let item be 0;
+        while item < result.count {
+            record=record+":"+format.integer(try exec.value(result,item)); item=item+1;
+        }
+        output(record+":"+result.trace);
+        try check(h.root.live == live and h.root.pending == 0,"execution scratch escaped");
+        try check(h.root.traffic >= traffic and h.root.work > work,"execution erased resource charges");
+        index=index+1;
+    }
+    try close(h);
+}
+
+function limits() fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let h be try create(23,true,2);
+    let live be h.root.live;
+    let result be try exec.run(h.program,h.policy,h.target,[-1,-1],1,32);
+    try check(result.kind == 2 and h.root.live == live,"fuel exhaustion leaked frames");
+    result=try exec.run(h.program,h.policy,h.target,[-1,-1],1000,2);
+    try check(result.kind == 2 and result.trace == "trace:-1;" and h.root.live == live,
+        "depth exhaustion lost trace or frames");
+    output("execution-limits:ok");
+    try budget.cancel(h.root);
+    let rejected be exec.run(h.program,h.policy,h.target,[-1,-1],1000,32)
+        else error budget.LimitError {
+            try check(error.category == "cancelled" and h.root.live == live and h.root.pending == 0,
+                "cancelled execution leaked scratch");
+            output("execution-cancelled:ok");
+            try close(h); return;
+        } else error verify.InvalidIR { fail error; };
+    fail ProbeError { message="executed cancelled request"; };
+}
+
+function frameLimit() fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let h be try create(423,false,0);
+    // Measure verification traffic independently; cap execution after its
+    // first frame page. Admission must fail during partial initialization,
+    // not by skipping independent verification or growing the profile.
+    let traffic be h.owner.traffic;
+    let summary be try effects.inspect(h.program,h.policy); try effects.close(summary);
+    let verificationTraffic be h.owner.traffic-traffic;
+    let probeOwner be try budget.functionOwner(h.root,false);
+    let phase be try budget.constructionPhase(probeOwner);
+    let store be try words.create(probeOwner,1048576); let item be 0;
+    while item < 16 { let ignored be try words.push(store,phase,0); item=item+1; }
+    let firstPage be probeOwner.traffic;
+    try words.close(store); try budget.finishPhase(phase); try budget.close(probeOwner);
+    h.owner.trafficLimit=h.owner.traffic+verificationTraffic+firstPage;
+    let live be h.root.live; let before be h.root.traffic;
+    let rejected be exec.run(h.program,h.policy,h.target,[-1,-1],1000,32)
+        else error budget.LimitError {
+            try check(error.category == "resource-limit" and h.root.live == live and
+                h.root.pending == 0 and h.root.traffic > before,
+                "partial frame initialization leaked or erased traffic");
+            try check(h.owner.traffic == h.owner.trafficLimit,
+                "quota did not reach the independently measured first frame page");
+            output("partial-frame-quota:ok"); try close(h); return;
+        } else error verify.InvalidIR { fail error; };
+    fail ProbeError { message="ignored frame allocation quota"; };
+}
+function executionWorkLimit() fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let h be try create(23,true,0); let before be h.owner.work;
+    let result be try exec.run(h.program,h.policy,h.target,[-1,-1],1000,32);
+    let required be h.owner.work-before;
+    h.owner.workLimit=h.owner.work+required-20;
+    let live be h.root.live; let traffic be h.root.traffic; before=h.root.work;
+    let rejected be exec.run(h.program,h.policy,h.target,[-1,-1],1000,32)
+        else error budget.LimitError {
+            try check(error.category == "resource-limit" and h.root.live == live and
+                h.root.pending == 0 and h.root.traffic > traffic and h.root.work > before,
+                "nested work-limit failure leaked frames or erased work");
+            output("execution-work-quota:ok"); try close(h); return;
+        } else error verify.InvalidIR { fail error; };
+    fail ProbeError { message="ignored integer execution work quota"; };
+}
+function malformedExecution() fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let h be try create(23,true,0); let phase be try budget.constructionPhase(h.owner);
+    // Corrupt the overflow predicate's declared result type without incrementing
+    // the body revision: a previous accepted report must not authorize execution.
+    let slot be h.core.values.length-4;
+    h.core.values.frozen=false; try words.set(h.core.values,phase,slot,2); h.core.values.frozen=true;
+    try budget.finishPhase(phase); let live be h.root.live;
+    let rejected be exec.run(h.program,h.policy,h.target,[-1,-1],1000,32)
+        else error verify.InvalidIR {
+            try check(h.root.live == live and h.root.pending == 0,"malformed execution leaked scratch");
+            output("fresh-integer-verification:ok"); try close(h); return;
+        } else error budget.LimitError { fail error; };
+    fail ProbeError { message="executed malformed overflow result without revision change"; };
+}
