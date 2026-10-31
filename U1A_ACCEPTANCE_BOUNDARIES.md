@@ -1,11 +1,12 @@
 # U1a #72/#77 conformance boundaries and evidence
 
-Checkpoint: 2026-10-31. This is an **integration candidate**, not a declaration
-that U1a or its remaining GitHub issues have passed final qualification.
-The existing production compiler, language semantics, ABI and independent Python
-oracles must remain unchanged. The baseline qualified implementation is
-[PR #96](https://github.com/eristavi/eristavi-lang/pull/96), tested at
-`eec1dfee100be8c0f9b88a71a98b4866f36fab66`.
+Checkpoint: 2026-10-31. [PR #98](https://github.com/eristavi/eristavi-lang/pull/98)
+is **QUALIFIED and MERGED** on main, merge `b05bd1863181d2a70800586a0efa8f1469d5d8df`;
+tested head `6b2fadf7aca6a6249a4adbf57e38bab15cb916e0`, identical tested/merged tree `de5e72f4d03a370f53356a70497d3dd9eae1ec67`.
+The existing production compiler, language semantics, ABI and independent
+Python oracles remain unchanged. #72 is closed as completed; #77 remains
+open for specifically attributable physical U1a-owned IR resource evidence.
+The prior qualified baseline was [PR #96](https://github.com/eristavi/eristavi-lang/pull/96).
 
 ## #72: shared successor contract
 
@@ -68,18 +69,21 @@ The 128-arm fixture's modeled UIR owner peak was 720,704 bytes, under the
 unchanged 8 MiB development qualification ceiling. This is not an inferred
 physical UIR heap size or a managed runtime GC acceptance claim.
 
-The **final four-platform CI/completed-batch qualification** remains a separate
-explicit gate on the exact final PR head. Only after it passes can #72 be
-considered for closure. #77 still requires explicit recognition of the
-private U1a physical-owner limits and the deferred U2/U3 boundaries; no
-out-of-scope artifact/GC feature is claimed implemented.
+[Four-platform CI 41193441427](https://github.com/eristavi/eristavi-lang/actions/runs/41193441427)
+and [completed-batch qualification 41193441428](https://github.com/eristavi/eristavi-lang/actions/runs/41193441428)
+both **passed** on the exact tested/merged tree. Issue #72 was formally
+closed as completed. Issue #77 remains **OPEN** specifically because
+process RSS plus modeled UIR owner counters do not prove that in-memory
+UIR private backing/allocator/GC physical attribution and larger stress
+gates are satisfied. Durable artifacts and managed GC remain U3 and U2
+respectively, not something silently qualified by this U1a batch.
 
 ## Release policy
 
-Use local/static checks and focused Linux smoke on incremental candidate
-revisions. After the final coherent compiler-code revision, run **one**
-four-platform full CI and required completed-batch qualification on the same
-exact head. Compare the final tested Git tree against the merge tree.
-Do not automatically run the experimental owned full compiler self-build,
-do not dilute prior budget gates and do not merge or close #72/#77 based solely
-on candidate code or historical green runs.
+PR #98 met its coherent-revision release criteria and was merged without
+changing the qualified code tree. Issue #72 is closed; issue #77 remains
+open pending real private UIR physical owner/budget attribution. Do not
+rerun expensive CI for docs-only corrections, widen resource limits,
+or automatically run experimental full owned compiler self-build. For any
+future substantive changes, use focused smoke and one exact-head final
+four-platform CI/completed-batch qualification before merging.
