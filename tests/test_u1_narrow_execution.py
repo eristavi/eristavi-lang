@@ -75,10 +75,15 @@ def cases_for(width):
     )
 
 
-def generate():
+def generate(selected_width: int):
+    # One independent UIR request per width. The request's selected traffic
+    # ceiling is not a global multi-program benchmark quota: it must be
+    # re-created, verified, released and closed for each independent program.
     declarations, bodies, bindings, requests, closures = [], [], [], [], []
     index = 0
     for width, type_name in WIDTHS:
+        if width != selected_width:
+            continue
         ty = f"meta.{type_name}()"
         for op, mode in OPERATIONS:
             suffix = str(index)
@@ -210,23 +215,29 @@ class U1NarrowExecutionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             (root / "compiler").symlink_to(ROOT / "src/compiler", target_is_directory=True)
-            source = root / "narrow.eri"
-            source.write_text(generate(), encoding="utf-8")
-            binary = root / "narrow"
-            self.assertEqual(build_native(source, binary, root), 0)
-            process = subprocess.run(
-                [str(binary)], capture_output=True, text=True, timeout=120
-            )
-            expected = []
+            total = 0
             for width, _ in WIDTHS:
+                source = root / f"narrow-{width}.eri"
+                source.write_text(generate(width), encoding="utf-8")
+                binary = root / f"narrow-{width}"
+                self.assertEqual(build_native(source, binary, root), 0)
+                process = subprocess.run(
+                    [str(binary)], capture_output=True, text=True, timeout=120
+                )
+                expected = []
                 for opcode, mode in OPERATIONS:
                     for a, b in cases_for(width):
                         result = arithmetic_oracle(width, opcode, mode, a, b)
                         expected.append(f"{width}:{opcode}:{mode}:{a}:{b}:"
                                         + ":".join(map(str, result)))
-            self.assertEqual((process.returncode, process.stderr), (0, ""), process.stdout[-1000:])
-            self.assertEqual(process.stdout.splitlines(), expected)
-            self.assertEqual(len(expected), 210)
+                self.assertEqual(
+                    (process.returncode, process.stderr), (0, ""),
+                    f"width {width} failed: {process.stdout[-1000:]}"
+                )
+                self.assertEqual(process.stdout.splitlines(), expected)
+                self.assertEqual(len(expected), 70)
+                total += len(expected)
+            self.assertEqual(total, 210)
 
 
 if __name__ == "__main__":
