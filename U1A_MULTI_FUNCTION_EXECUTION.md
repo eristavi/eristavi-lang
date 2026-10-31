@@ -37,13 +37,16 @@ sections 2, 4, 6–9, 13 and [issue #71](https://github.com/eristavi/eristavi-la
   changed, forged or incomplete imported contracts fail closed. Arbitrary
   optimizer-supplied effect claims or native callbacks are never trusted.
 
-The executable scalar subset currently covers pred/i64 literals, pred.not,
-pred.and/pred.or, wrapping i64 add/sub/mul, signed/unsigned i64 comparisons, signed i64
+The executable scalar subset covers pred/i64 literals, pred.not,
+pred.and/pred.or, wrapping i64 add/sub/mul, all six signed/unsigned i64
+overflow pairs, all ten integer comparisons, signed/unsigned i64
 division/remainder with first-fault codes, guards, jump/branch/sparse-switch,
-direct calls and returns. Unsupported instructions have a distinct explicit
-outcome (kind 3), **never** guessed host semantics. In particular, strict
-binary64 (including native rounding environment), unsigned division,
-checked-overflow multiresult primitives, U1b narrow integer execution,
+direct calls and returns. The integer-coverage extension is described in
+[U1A_INTEGER_EXECUTION.md](U1A_INTEGER_EXECUTION.md); its final qualification
+must be checked separately from PR #92's historical evidence below.
+Unsupported instructions have a distinct explicit outcome (kind 3), **never**
+guessed host semantics. In particular, strict binary64 (including native
+rounding environment), U1b narrow integer execution,
 managed U2 values, fallible-call continuations and resource cleanup semantics
 are **not implemented** by this reference evaluator.
 
@@ -77,9 +80,10 @@ continues to reject malformed unreachable calls and invalid body bindings.
 ## Remaining issue #71 gates
 
 Do not declare all U1a or all imported effects ready merely because this
-independent reference profile passes. Extend independent execution/oracles
-to every admitted U1a scalar operation including strict f64, full trap origin
-and mixed control-flow stress. Version-bound **production** import trust
+independent reference profile passes. Integer execution coverage is extended
+by the separately qualified integer batch; strict f64, complete source
+publication revisions and broader physical-resource gates remain pending.
+Version-bound **production** import trust
 requires a reviewed native runtime/FFI adapter; these two exact test adapters
 cannot authorize arbitrary foreign functions. Verify physical-resource work
 at scale, monotonic release contracts, cancellation, SSA promotion after

@@ -5246,6 +5246,38 @@ static bool ev_root_contains(const uintptr_t *table,size_t mask,uintptr_t key){
     while(table[index]){if(table[index]==key)return true;index=(index+1)&mask;}
     return false;
 }
+static void ev_clear_unwound_roots(ev_slot_node *mark,ev_scope *surviving){
+    /* Checked jumps abandon expression slots, but surviving native root maps
+       still contain their old addresses. Clear exact abandoned-slot roots
+       BEFORE free/reuse: otherwise a stale slot reused as Text can be traced
+       as an ev_value by the next heap collection. Source cells predating the
+       boundary and member/index references are not abandoned slots. */
+    size_t count=0,capacity=16;
+    for(ev_slot_node *slot=ev_slots;slot!=mark;slot=slot->next){
+        if(!slot||count==SIZE_MAX)eri_fault("invalid native unwind slots");
+        count++;
+    }
+    if(!count)return;
+    if(count>SIZE_MAX/2)eri_fault("native unwind table too large");
+    while(capacity<count*2){if(capacity>SIZE_MAX/2)eri_fault("native unwind table too large");capacity*=2;}
+    if(capacity>SIZE_MAX/sizeof(uintptr_t))eri_fault("native unwind table too large");
+    uintptr_t *table=eri_alloc_kind(capacity*sizeof(*table),ERI_HEAP_ROOT_TABLE);
+    memset(table,0,capacity*sizeof(*table));size_t mask=capacity-1;
+    for(ev_slot_node *slot=ev_slots;slot!=mark;slot=slot->next)
+        ev_root_insert(table,mask,(uintptr_t)slot);
+    for(ev_scope *scope=surviving;scope;scope=scope->previous){
+        if(!scope->roots||!scope->classes)continue;
+        for(size_t index=0;index<scope->root_count;index++)if(scope->classes[index]==1){
+            uintptr_t key;memcpy(&key,scope->roots+index*sizeof(key),sizeof(key));
+            if(key&&ev_root_contains(table,mask,key)){
+                uintptr_t zero=0;
+                /* All native producers bind writable stack register arrays. */
+                memcpy((void*)(scope->roots+index*sizeof(key)),&zero,sizeof(zero));
+            }
+        }
+    }
+    eri_free_kind(table,ERI_HEAP_ROOT_TABLE);
+}
 static void ev_collect_slots(void){
     /* C embedders without registered frames retain the legacy arena behavior.
        Never inspect a stack frame whose root map has not been installed. */
@@ -5336,7 +5368,7 @@ void evn_pop(eri_handler_frame *frame){
     /* Normal completion still needs its expression result. On a checked jump,
        only caller locals predating the boundary survive; failure payloads and
        ordinary value buffers have separate ownership, outside these slots. */
-    if(raised){ev_restore_slots(slots);ev_restore_scopes(scopes);}
+    if(raised){ev_clear_unwound_roots(slots,scopes);ev_restore_slots(slots);ev_restore_scopes(scopes);}
 }
 eri_failure_value *evn_saved(void){eri_failure_value *value=eri_alloc_kind(sizeof(*value),ERI_HEAP_FAILURE);*value=eri_failure;return value;}
 int64_t evn_match(eri_failure_value *failure,int type){return strcmp(failure->type,ev_types[type].name)==0;}
