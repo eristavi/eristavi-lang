@@ -1144,10 +1144,13 @@ verifier/oracle probes are pending. No performance code is committed.
   route the Eristavi reference evaluator and optimizer edge selection/case
   rebuilding through it. Preserve independent *Python* switch decoding as
   a differential oracle, rather than coupling every oracle to the same helper.
-- #72 tests added (not yet qualified): 32-arm dense switch, unsigned-sorted
+- #72 tests added (not yet qualified): dense switch fixtures at 8, 32 and 128 arms, unsigned-sorted
   bit patterns spanning min/max and sparse gaps, and finite irreducible SCC
   with two independent entries. The original 52 promotion snapshot fixtures
-  become 55; count/traffic/work owner gates remain unchanged. Existing negative
+  become 57; count/traffic/work owner gates remain unchanged.
+  Five fresh-process standalone native switch observations check exact output
+  and record physical process RSS separately from owned budget peak/traffic/work.
+  This is not a full managed runtime GC heap attribution. Existing negative
   switch verifier, control-flow and native tests remain mandatory.
 - #77 acceptance split recorded in [U1A_ACCEPTANCE_BOUNDARIES.md](U1A_ACCEPTANCE_BOUNDARIES.md):
   U1a must retain private exact publication, provenance, source-map decode,
@@ -1162,7 +1165,7 @@ verifier/oracle probes are pending. No performance code is committed.
   full CI and completed-batch qualification *once* at the coherent release
   boundary. The historical owned compiler full self-build stays skipped.
 
-Current next action: open an integrated PR, inspect focused smoke, correct any
+Current next action: inspect draft PR #98 focused smoke, correct any
 failures without raising limits or weakening the verifier/oracle, then decide
 which additional direct-UIR stress and physical-resource evidence can qualify.
 Update this handover as results and issue/PR states change.
