@@ -24,6 +24,19 @@ NATIVE_NAMES = (
     "mutual_recursion",
     "list_value_semantics",
     "checked_handler",
+    # Pin additional U2-managed/checked/source boundaries before promoting
+    # the redesigned UIR in U3. Stage-0 and compiled native are independent
+    # executable paths; the new UIR is not falsely treated as integrated.
+    "list_equality",
+    "list_parameter_value",
+    "identity_alias",
+    "identity_distinct",
+    "maybe_identity_assignment_compare",
+    "checked_try_ok",
+    "three_text_views",
+    "module_checked",
+    "generic_nested_list_0",
+    "generic_replace",
 )
 DIRECT_NAMES = frozenset(("hello", "function_infer"))
 DIRECT_HOST = platform.system() == "Linux" and platform.machine().lower() in ("x86_64", "amd64")
