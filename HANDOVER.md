@@ -4,8 +4,9 @@
 PR #105 is **QUALIFIED AND MERGED**. U1a's scoped physical acceptance gate passed;
 issue #77 is CLOSED/completed. Sections 1–43 preserve
 historical evidence and rejected prototypes; their pending/keep-open statements
-are superseded by section 44. U1b aggregates #73, U2 #74, U3 #75 and U4 #102 remain
-OPEN and unimplemented/unfinished as specified below.
+are superseded by section 44. U1b aggregates #73 remain OPEN: type graph and independent make/get/set
+reference behavior are FOCUSED TESTED, but canonical UIR integration and
+full acceptance are not complete. U2 #74, U3 #75 and U4 #102 remain OPEN.
 
 ## Mandatory philosophy-first engineering discipline — standing user instruction
 
@@ -117,7 +118,7 @@ redundant indexing, unbounded caches or unnecessarily expensive CI.
 | Current independent C evidence | Refreshed 20/20 whole C-managed samples passed; source-hashed C inputs unchanged during later owned-only collision tuning. Not per-owner C allocation attribution |
 | Performance | Five final-code AB/BA worker0 pairs: 8.135968 → 8.254257 s (0.9857×), roughly flat amid host variance. **No whole-compiler speedup claim**; #51 full compiler phase profiling remains open |
 | U1a | Scalar/SSA/calls/recursion/effects/switches/strict native f64/provenance/bounded simplification plus scoped physical acceptance **COMPLETE within the adopted U1a boundary** |
-| U1b #73 | Narrow i8/i16/i32 reference slice qualified/merged (#101, 210 independent results). **Draft #106 opt-in aggregate type graph and independent verifier: FOCUSED TESTED (37/37, run 41234799166, exact code head `539d9d6`), NOT full qualified or merged**. Canonical UIR `make/get/set`, reference execution and physical acceptance remain pending |
+| U1b #73 | Narrow i8/i16/i32 already qualified/merged (#101). **Draft #106 opt-in aggregate type graph and immutable reference `make/get/set` COPY behavior: FOCUSED TESTED (38/38, run 41235680069, exact code head `9ff2e11`)**. Canonical UIR instruction integration, independently verified dead/unreachable UIR, large/deep resource/physical acceptance and final four-platform qualification **NOT DONE**. PR remains draft and unmerged |
 | U2 #74 | New UIR managed Text/List/identity, checked failures, root maps and deterministic cleanup **NOT IMPLEMENTED** |
 | U3 #75 | Direct frozen frontend → new UIR → production native target/artifact/cache integration **NOT IMPLEMENTED**. Existing adapter is isolated; #104 is test-only reference parity |
 | U4 #102 | Redesigned UIR machine/legalization/artifact migration **NOT IMPLEMENTED / NOT QUALIFIED** |
@@ -2008,13 +2009,15 @@ checkpoint. It changes no compiler/runtime files, qualification inputs,
 accepted U1a results, issue or PR statuses. Use documentation-only patch
 checking; do not rerun costly CI or experimental self-build for this update.
 
-## 45. Active U1b immutable aggregate type-graph foundation — 2026-10-31
+## 45. Active U1b immutable aggregate type graph and reference operations — 2026-10-31
 
 **Branch:** `compiler/u1b-owned-aggregate-graph-20261031`, forked from main
 `ccfe726ad80212c9a10ee16d5f3cf17e52db160a`.
-**Status: SOURCE + FOCUSED SMOKE TESTED (37/37); final U1b qualification PENDING,
+**Status: SOURCE + FOCUSED SMOKE TESTED (38/38); full U1b qualification PENDING,
 NOT merged, NOT full U1b completion.** Draft [PR #106](https://github.com/eristavi/eristavi-lang/pull/106),
-exact focused-passed code head `539d9d6b4589759d47e2c53d5941d1ac8dc7fdbc`.
+exact latest focused-passed code head `9ff2e11322f0b42154cfb7effa0ebd25414e0366`.
+The previous tested graph-only head `539d9d6` also passed (37/37); the
+current value-execution slice is additive and has a newer independent test.
 Last qualified release remains U1a §44.
 The source review also read `DESIGN_PHILOSOPHY.md`, `LANGUAGE_SEMANTICS.md`,
 the approved U1 operation contract §§2–4, independent verifier/resource rules
@@ -2048,8 +2051,27 @@ handover is still binding.
 - Existing `u1_meta.Metadata` and `u1_builder.Function` physical layouts,
   scalar opcode registry and production frontend/backend remain unchanged to
   preserve the already-qualified #105 physical fixture and 32-byte public ABI.
-  This is a deliberately isolated metadata sidecar, **not** U1b operations or
-  integration. Existing U1a tests also passed in the focused hosted batch.
+  The aggregate type graph remains an opt-in sidecar, **not** canonical
+  UIR instruction integration. Existing U1a tests also passed in the
+  newest focused hosted batch.
+
+- `src/compiler/u1_aggregate_values.eri`: **new opt-in reference value
+  engine** implementing semantically defined `aggregate.make/get/set`
+  through a checked immutable value graph. A field read shares an immutable
+  earlier value; replacement copies the immediate member-index sequence into
+  a NEW node without mutating the original. Nested updates maintain value
+  snapshots. Both value IDs and aggregate type IDs carry distinct owner
+  identity, and execution validates the frozen type graph independently.
+  This is a reference model, **not** the authoritative canonical UIR op
+  implementation or source/native runtime representation; the O(n) shallow
+  update copy must be evaluated against the native scalarization/path-copy
+  alternatives before production promotion.
+- `tests/test_u1_aggregate_values.py`: 3-size (2, 9, 32 fields) independent
+  Python tuple-copy oracle plus an empty value and nested aggregate case.
+  Rejects wrong arity, wrong field/type, wrong replacement, foreign ValueId;
+  checks old/new alias isolation and full owner/budget close. The test
+  compiles and executes a real Eristavi-written private reference engine;
+  it does NOT substitute for independent canonical UIR verifier/oracle tests.
 
 ### Performance-first constraints and remaining acceptance
 
@@ -2071,17 +2093,26 @@ handover is still binding.
   Corrective fixture commits `1f810ee` and `539d9d6` resolved both without
   any changes to the existing U1a metadata/runtime implementation.
   These are historical failed test candidates, not current regressions.
-  Existing smoke cases passed in all three runs; last run is green.
+  Existing smoke cases passed in all three runs; last graph-only run was green.
+  **Latest additive value-execution code gate**:
+  [41235680069](https://github.com/eristavi/eristavi-lang/actions/runs/41235680069)
+  **PASSED 38/38 tests** in 134.525 s, exact code head
+  `9ff2e11322f0b42154cfb7effa0ebd25414e0366`;
+  new `test_u1_aggregate_values` and old U1a owner-physical smoke passed.
+  The four-platform full test matrix job was **skipped by design**.
+  No final U1b/owned self-build qualification is implied.
   This environment's container had no GitHub-resolvable repository checkout;
   GitHub-hosted smoke provides test evidence, not full owned self-build certification.
-- **Before claiming full U1b:** connect the aggregate type graph to the
-  existing program-owned metadata/TypeId semantics with explicit schema/
-  contract validation; add `aggregate.make/get/set` to the builder, closed
-  registry, independent verifier, SSA promotion/copy and truly independent
-  reference executor/oracle. Exercise scalar and nested value-copy/alias
-  behavior, static field types, malformed *unreachable* instructions, cycles,
-  cancellation, owner reclamation, large/deep resource stress and observed
-  physical backing. Preserve original source failure/LocId and pure operations.
+- **Before claiming full U1b:** connect the tested aggregate type graph and
+  reference value semantics to the **canonical** program-owned metadata/
+  TypeId model and the single approved UIR operation registry. Implement
+  real instruction builder/closed registry/independent V0–V5 verifier,
+  copy-preserving SSA promotion and actual canonical UIR reference execution
+  with a separate Python oracle. The isolated value-copy/alias checks above
+  cover only the reference model, **not** the canonical instruction path.
+  Still require static field types, malformed *unreachable* instructions,
+  cycles, cancellation, owner reclamation, large/deep resource stress and
+  measured per-owner physical backing. Preserve original source failure/LocId and pure operations.
   Keep runtime-managed Text/List/identity out of U1b.
 - After all such code passes focused validation, select **one coherent final
   four-platform full CI and completed-batch qualification**, compare the exact
@@ -2091,13 +2122,16 @@ handover is still binding.
   production runtime/ABI/source behavior unchanged. U2 #74, U3 #75 and
   U4 #102 remain strictly downstream, not green from this candidate.
 
-**Next action:** PR #106 is already open as DRAFT and focused smoke is green.
-Proceed with deliberate program-owned TypeId/schema integration and
-`aggregate.make/get/set` + true independent value-copy execution and negative
-verification in further focused code slices. Retain the isolated graph as
-unpromoted, measure high-collision/large/deep physical backing and owner
-lifetimes, and run the expensive full matrix/qualification once only after a
-coherent final code batch. Do not merge this PR or close #73 from a green smoke.
+**Next action:** PR #106 is DRAFT and latest focused smoke is green at
+`9ff2e11`. Integrate type graph and independently tested value semantics into
+the **canonical UIR**, without altering already-qualified U1a metadata/Function
+physical object layout or public ABI unless independently budgeted and
+requalified. Carefully extend the operation registry and independent verifier
+for `aggregate.make/get/set`, including *unreachable* instructions, SSA copy
+semantics, effects/LocId and cancellation. Benchmark candidate work/physical
+memory and analyze scalarization against the intentionally simple O(n)
+reference copy. Run full four-platform CI/qualification **only once** after the
+coherent final U1b batch. Do not merge this PR or close #73 from a green smoke.
 The handover-only status reconciliation after `539d9d6` changes no tested
 compiler/runtime inputs and requires only lightweight documentation checking.
 
@@ -2107,3 +2141,36 @@ compiler/runtime inputs and requires only lightweight documentation checking.
 - **Exact-head smoke:** [run 41234799166](https://github.com/eristavi/eristavi-lang/actions/runs/41234799166) — 37/37 passed, 101.65 seconds, including the new U1b aggregate type graph test and existing U1a physical-ownership checks. Full matrix and owned compiler qualification intentionally **not requested**.
 - **No milestone promotion:** U1b still open. Full aggregate operations, independent execution/conformance, malformed UIR, budget/cancellation and owner physical acceptance not delivered. U2–U4 untouched.
 - **Next stage:** integrate type owner references and canonical aggregate `make/get/set` with independently verified exact value-copy semantics. Keep ABI/source/production behavior unchanged and optimize measured work/memory from design, not at the end.
+
+### Tested immutable reference value checkpoint — 2026-10-31
+
+**Source now exists and focused tests have passed, but the canonical UIR
+aggregate acceptance remains unimplemented.** On draft PR #106,
+code commit `9ff2e11322f0b42154cfb7effa0ebd25414e0366` is the EXACT
+revision exercised by [focused hosted run 41235680069](https://github.com/eristavi/eristavi-lang/actions/runs/41235680069).
+The Linux Clang smoke finished **success, 38/38 tests in 134.525 seconds**;
+`test_u1_aggregate_graph`, `test_u1_aggregate_values` and the existing
+owner-physical regression suite all passed. The native-value test covers
+2/9/32 fields, empty, nested, nonmutating replacement/alias isolation,
+static type/index failure and cross-owner value rejection versus a standalone
+Python immutable-tuple oracle. No source language syntax, ABI, U1a physical
+record layout or default compiler path changed. Full matrix/qualification
+skipped intentionally; experimental full owned self-build not run.
+
+The representation intentionally uses shallow member-vector copy on set:
+**O(number of fields) work and added member words**, with immutable child
+value sharing. This is sufficient as an independent semantic reference but
+is **NOT** evidence that the eventual machine lowering or managed runtime
+should use that representation. Before selecting a production path, compare
+scalar field replacement, stack/register lowering and persistent structures
+with real work, allocation traffic, owner backing, RSS and same-host timings.
+Any change must retain the first-observable-fault/LocId and verified
+immutable value semantics.
+
+**Resume after this document-only update:** the tested code revision is
+`9ff2e11`; newer HANDOVER-only commits must not be described as a tested code
+revision. Next implement the canonical program-owned aggregate typed SSA
+instruction schema, independent verifier and executable oracle, including
+malformed dead blocks and cancellation, then targeted deep/large/physical
+stress; keep #73 open and PR #106 unmerged until final exact-head qualification.
+Continue the permanent philosophy-first policy at the opening of this file.
