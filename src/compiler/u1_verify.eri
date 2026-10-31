@@ -71,12 +71,12 @@ function bounds(context identity Context) fails budget.LimitError,InvalidIR {
 function typeIndex(context identity Context,index Int) fails InvalidIR {
     if index >= 1 and index <= 6 { return; }
     let registry be context.registry;
-    if registry == none {
+    if registry != none {
+        try require(context,index >= 7 and index <= 6+registry.records.length/4,
+            "unsupported or foreign U1b aggregate type");
+    } else {
         try require(context,false,"unsupported U1 core type");
-        return;
     }
-    try require(context,index >= 7 and index <= 6+registry.records.length/4,
-        "unsupported or foreign U1b aggregate type");
 }
 function sameSequence(context identity Context,table identity words.Words,first Int,second Int,count Int) returns Bool fails budget.LimitError {
     // Canonical collision comparisons have their own work, outside the linear scan.
@@ -325,7 +325,8 @@ function instruction(context identity Context,index Int,terminal Bool,position I
     if op == 8 { expected=try read(context,routine.metadata.signatures,(routine.signature.index-1)*6+5); }
     let aggregateShape be 0; let aggregateFieldType be 0;
     let selectedRegistry be context.registry;
-    if ops.isAggregate(op) and selectedRegistry != none {
+    if selectedRegistry != none {
+      if ops.isAggregate(op) {
         aggregateShape=try read(context,routine.instructions,offset+8);
         if op == 43 { aggregateShape=try read(context,routine.instructions,offset+7); }
         try require(context,aggregateShape >= 7 and
@@ -343,6 +344,7 @@ function instruction(context identity Context,index Int,terminal Bool,position I
                 "aggregate static field index out of range");
             aggregateFieldType=(try aggregate.field(selectedRegistry,context.phase,shape,ordinal)).index;
         }
+      }
     }
     try require(context,count == expected,"instruction operand arity mismatch"); let item be 0;
     while item < count {
@@ -354,7 +356,8 @@ function instruction(context identity Context,index Int,terminal Bool,position I
             valueTypeIndex=try read(context,routine.metadata.types,start+item);
         }
         if op >= 37 and op <= 42 { valueTypeIndex=try read(context,routine.instructions,offset+8); }
-        if ops.isAggregate(op) and selectedRegistry != none {
+        if selectedRegistry != none {
+          if ops.isAggregate(op) {
             if op == 43 {
                 let shape be aggregate.TypeId { owner=selectedRegistry.key; index=aggregateShape; };
                 valueTypeIndex=(try aggregate.field(selectedRegistry,context.phase,shape,item)).index;
@@ -362,6 +365,7 @@ function instruction(context identity Context,index Int,terminal Bool,position I
                 valueTypeIndex=aggregateShape;
                 if op == 45 and item == 1 { valueTypeIndex=aggregateFieldType; }
             }
+          }
         }
         try require(context,actual == valueTypeIndex,"instruction operand type mismatch"); item=item+1;
     }
