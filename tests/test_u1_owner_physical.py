@@ -174,9 +174,9 @@ def _instrument_owned_runtime(runtime, diagnostic_fd):
     leaq .Ltest_owner_tags(%rip),%r11
     movl $32768,%esi
 .Ltest_owner_alloc_probe:
-    movq (%r10,%r9,8),%rcx
-    testq %rcx,%rcx
+    cmpq $0,(%r11,%r9,8)
     je .Ltest_owner_alloc_slot
+    movq (%r10,%r9,8),%rcx
     cmpq %r8,%rcx
     je .Ltest_owner_alloc_slot
     incq %r9
@@ -343,8 +343,8 @@ class U1OwnerPhysicalTests(unittest.TestCase):
         self.assertLessEqual(live, peak)
         self.assertLessEqual(peak, limit)
         self.assertLessEqual(traffic, traffic_limit)
-        self.assertEqual(limit, policy['function_peak_capacity_bytes'])
-        self.assertEqual(traffic_limit, policy['function_allocation_traffic_bytes'])
+        self.assertEqual(limit, policy['qualification_function_peak_capacity_bytes'])
+        self.assertEqual(traffic_limit, policy['qualification_function_allocation_traffic_bytes'])
 
     def test_prior_c_heap_evidence_remains_independent_not_a_multiplier(self):
         evidence = json.loads((ROOT / 'docs/evidence/2026-10-31/u1a-c-physical-heap-samples.json').read_text())
@@ -420,16 +420,14 @@ class U1OwnerPhysicalTests(unittest.TestCase):
             self.assertEqual(final['reclaimed_bytes'], final['traffic'], name)
             self.assertEqual(final['reclaimed_objects'], final['allocations'], name)
 
-        # The acceptance-scale function owners must also fit the existing physical
-        # interpretation of the selected 8 MiB peak / 64 MiB traffic gates. This
-        # includes allocator block headers and any oversized reused capacity.
+        # The acceptance-scale function owner must fit the existing selected
+        # qualification gates even after counting allocator block headers and
+        # any oversized reused capacity.
         policy = json.loads((ROOT / 'UIR_U1A_BUDGETS.json').read_text())['memory']
         stress = before['owners']['stress']
-        self.assertLessEqual(stress['peak'], policy['function_peak_capacity_bytes'])
-        self.assertLessEqual(stress['traffic'], policy['function_allocation_traffic_bytes'])
+        self.assertLessEqual(stress['peak'], policy['qualification_function_peak_capacity_bytes'])
+        self.assertLessEqual(stress['traffic'], policy['qualification_function_allocation_traffic_bytes'])
         self.assertGreaterEqual(stress['traffic'], physical_requested := owned_physical['stress'][3])
-        # Oversized reuse is expected to be represented honestly when present;
-        # never force the actual allocator number down to the structural request.
         self.assertGreaterEqual(stress['peak'], min(stress['traffic'], physical_requested))
 
         print('U1A_OWNER_ACTUAL=' + json.dumps({'before_gc': before, 'after_gc': after}, sort_keys=True))
