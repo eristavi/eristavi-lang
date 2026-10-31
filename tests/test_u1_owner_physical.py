@@ -1,19 +1,4 @@
-"""Issue #77: exact U1a owner-specific owned-runtime backing acceptance.
-
-The structural observer is intentionally separate from logical budget charges.
-It walks the concrete U1 graph objects, while this test independently predicts
-radix backing and pins the owned allocator/header contract. Existing PR #103
-C-runtime physical samples remain a separate allocator/GC observation rather
-than being converted into a guessed per-owner multiplier.
-
-For the owned runtime, a private diagnostic build also proves that no graph
-allocation in the measured process receives an oversized free-list block. That
-turns the independently derived graph request + allocator-header totals into
-actual block capacities for this acceptance run. After the fixture releases its
-U1 owners, the diagnostic forces collection and requires at least the complete
-65,536-word stress store's 8,469 graph objects to disappear before process
-teardown. The production runtime source and resource policy are unchanged.
-"""
+"""Issue #77: exact U1a owner-specific owned-runtime backing acceptance."""
 from pathlib import Path
 import json
 import platform
@@ -33,7 +18,6 @@ def _radix_counts(word_count):
     pages = (word_count + 15) // 16
     if not pages:
         return 0, 0
-    # Root plus every distinct 1..6-hex-digit prefix of sequential page IDs.
     nodes = 1
     for prefix in range(1, 7):
         divisor = 16 ** (6 - prefix)
@@ -54,7 +38,6 @@ def _word_backing(word_count):
 
 
 def _scratch_backing(blocks, edges):
-    # u1_dominance.prepare: block rows + edge rows + traversal stack.
     words = (blocks + 1) * 11 + (edges + 1) * 4 + (blocks + 1)
     graph = _block(12)
     store = _word_backing(words)
@@ -62,9 +45,7 @@ def _scratch_backing(blocks, edges):
 
 
 def _parse(text):
-    physical = {}
-    logical = {}
-    cleanup = False
+    physical, logical, cleanup = {}, {}, False
     for line in text.splitlines():
         parts = line.split(':')
         if parts[0] == 'physical' and len(parts) == 6:
@@ -77,7 +58,12 @@ def _parse(text):
 
 
 def _instrument_owned_runtime(runtime):
-    """Acceptance-only proof of exact graph capacity and post-close GC progress."""
+    """Acceptance-only exact-capacity and post-close GC diagnostic.
+
+    Exit 77 = a measured graph allocation reused a larger-capacity free block.
+    Exit 78 = forced GC after logical cleanup reclaimed fewer than the complete
+    65,536-word stress store's graph objects. Neither threshold is relaxed.
+    """
     state = '.Lalloc_regions:\n.quad 0\n'
     assert runtime.count(state) == 1
     runtime = runtime.replace(
@@ -120,15 +106,13 @@ def _instrument_owned_runtime(runtime):
         1,
     )
 
-    # The full owned runtime enters through erist_rt_process_start rather than
-    # the minimal scalar template. Existing resource tests use this same anchor.
     startup = '    call erist_entry\n    movq .Lprocess_exit_code'
     assert runtime.count(startup) == 1
     runtime = runtime.replace(
         startup,
         '    call erist_entry\n'
         '    cmpq $0,.Ltest_oversized_graph_reuse(%rip)\n'
-        '    jne .Ltest_u1_physical_fail\n'
+        '    jne .Ltest_u1_physical_reuse_fail\n'
         '    call erist_rt_graph_live_objects\n'
         '    movq %rax,.Ltest_graph_before(%rip)\n'
         '    call erist_rt_text_collect\n'
@@ -136,10 +120,13 @@ def _instrument_owned_runtime(runtime):
         '    movq .Ltest_graph_before(%rip),%rcx\n'
         '    subq %rax,%rcx\n'
         f'    cmpq ${STRESS_OBJECTS},%rcx\n'
-        '    jb .Ltest_u1_physical_fail\n'
+        '    jb .Ltest_u1_physical_gc_fail\n'
         '    jmp .Ltest_u1_physical_done\n'
-        '.Ltest_u1_physical_fail:\n'
+        '.Ltest_u1_physical_reuse_fail:\n'
         '    movl $77,%edi\n'
+        '    jmp erist_rt_exit\n'
+        '.Ltest_u1_physical_gc_fail:\n'
+        '    movl $78,%edi\n'
         '    jmp erist_rt_exit\n'
         '.Ltest_u1_physical_done:\n'
         '    movq .Lprocess_exit_code',
@@ -163,7 +150,10 @@ class U1OwnerPhysicalTests(unittest.TestCase):
 
     def _run(self, executable, timeout=180):
         completed = subprocess.run([str(executable)], capture_output=True, text=True, timeout=timeout)
-        self.assertEqual((completed.returncode, completed.stderr), (0, ''), completed.stdout[-2000:])
+        self.assertEqual(
+            (completed.returncode, completed.stderr), (0, ''),
+            f'exit={completed.returncode}; 77=oversized graph reuse, 78=insufficient GC reclamation\n'
+            + completed.stdout[-2000:])
         physical, logical, cleanup = _parse(completed.stdout)
         self.assertTrue(cleanup, completed.stdout[-2000:])
         self.assertEqual(set(physical), {
@@ -187,9 +177,6 @@ class U1OwnerPhysicalTests(unittest.TestCase):
         self.assertIn('call erist_rt_alloc', graph)
         self.assertIn('public function blockHeaderSize() returns Int { return 32; }', memory)
         self.assertIn('public function regionHeaderSize() returns Int { return 48; }', memory)
-        # Oversized reuse is possible in production, so the owned acceptance run
-        # below must explicitly prove it did not occur before calling the structural
-        # totals exact actual block capacities.
         self.assertIn('cmpq %r12,%rax', allocator)
         self.assertIn('.Lfreelist_reuse:', allocator)
 
@@ -197,18 +184,17 @@ class U1OwnerPhysicalTests(unittest.TestCase):
         self.assertEqual(physical['stress'], _word_backing(65536))
         self.assertEqual(physical['stress'][0], STRESS_OBJECTS)
         self.assertEqual(physical['scratch'], _scratch_backing(513, 1024))
-        # Publication copies are partitioned by the source table's exact owner.
         self.assertGreater(physical['publication-metadata'][3], physical['module'][3])
         self.assertGreater(physical['publication-function'][3], physical['function'][3])
 
         policy = json.loads((ROOT / 'UIR_U1A_BUDGETS.json').read_text())['memory']
-        stress_live, stress_peak, stress_traffic, stress_limit, stress_traffic_limit = logical['stress']
-        self.assertGreater(stress_live, 0)
-        self.assertLessEqual(stress_live, stress_peak)
-        self.assertLessEqual(stress_peak, stress_limit)
-        self.assertLessEqual(stress_traffic, stress_traffic_limit)
-        self.assertEqual(stress_limit, policy['function_peak_capacity_bytes'])
-        self.assertEqual(stress_traffic_limit, policy['function_allocation_traffic_bytes'])
+        live, peak, traffic, limit, traffic_limit = logical['stress']
+        self.assertGreater(live, 0)
+        self.assertLessEqual(live, peak)
+        self.assertLessEqual(peak, limit)
+        self.assertLessEqual(traffic, traffic_limit)
+        self.assertEqual(limit, policy['function_peak_capacity_bytes'])
+        self.assertEqual(traffic_limit, policy['function_allocation_traffic_bytes'])
 
     def test_prior_c_heap_evidence_remains_independent_not_a_multiplier(self):
         evidence = json.loads((ROOT / 'docs/evidence/2026-10-31/u1a-c-physical-heap-samples.json').read_text())
@@ -230,19 +216,21 @@ class U1OwnerPhysicalTests(unittest.TestCase):
             if not shutil.which(tool):
                 self.skipTest(f'{tool} unavailable')
         frontend, generator = shared_u1_compilers()
-        emitted = subprocess.run([str(frontend), 'emit-asm', str(self.source), '--source-root', str(self.root),
-                                  '--target', 'x86_64-linux'], capture_output=True, text=True, timeout=180)
+        emitted = subprocess.run(
+            [str(frontend), 'emit-asm', str(self.source), '--source-root', str(self.root), '--target', 'x86_64-linux'],
+            capture_output=True, text=True, timeout=180)
         self.assertEqual((emitted.returncode, emitted.stderr), (0, ''))
-        assembly = self.root / 'owner-physical.s'; assembly.write_text(emitted.stdout)
+        assembly = self.root / 'owner-physical.s'
+        assembly.write_text(emitted.stdout)
         runtime = subprocess.run([str(generator)], capture_output=True, text=True, timeout=90)
         self.assertEqual((runtime.returncode, runtime.stderr), (0, ''))
 
         obj = self.root / 'owner-physical.o'
-        subprocess.run(['as', '--64', str(assembly), '-o', str(obj)], check=True,
-                       capture_output=True, timeout=30)
+        subprocess.run(['as', '--64', str(assembly), '-o', str(obj)], check=True, capture_output=True, timeout=30)
 
         def link_runtime(name, source_text):
-            source = self.root / f'{name}.s'; source.write_text(source_text)
+            source = self.root / f'{name}.s'
+            source.write_text(source_text)
             runtime_obj = self.root / f'{name}.o'
             subprocess.run(['as', '--64', str(source), '-o', str(runtime_obj)], check=True,
                            capture_output=True, timeout=30)
@@ -257,10 +245,6 @@ class U1OwnerPhysicalTests(unittest.TestCase):
         owned_physical, owned_logical = self._run(owned)
         self.assertEqual(owned_physical, c_physical)
         self.assertEqual(owned_logical, c_logical)
-        # A zero exit from the diagnostic proves both conditions encoded in the
-        # private runtime: no graph allocation reused an oversized block, and a
-        # forced collection after logical owner cleanup reclaimed at least every
-        # graph object in the 65,536-word stress store.
         diagnostic_physical, diagnostic_logical = self._run(diagnostic)
         self.assertEqual(diagnostic_physical, owned_physical)
         self.assertEqual(diagnostic_logical, owned_logical)
