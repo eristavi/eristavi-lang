@@ -1,5 +1,6 @@
 // Selected, versioned U1a import adapters. This is an intentionally
-// closed *test* trust catalog, not arbitrary native/foreign execution.
+// closed trust catalog. Production adapters 3/4 are implemented by
+// runtime/u1_native.h; arbitrary native callbacks are never accepted.
 // No per-call effect claims or unchecked callbacks may be supplied.
 import compiler.u1_budget as budget;
 import compiler.u1_words as words;
@@ -47,7 +48,7 @@ function contract(policy identity Policy,target meta.FunctionId,adapter Int)
     fails budget.LimitError {
     let data be policy.program.metadata;
     if target.owner != data.key or target.index < 1 or
-       target.index > data.declarations.length/6 or (adapter != 1 and adapter != 2) {
+       target.index > data.declarations.length/6 or (adapter < 1 or adapter > 4) {
         try budget.reject("untrusted U1a imported FunctionId");
     }
     let phase be try budget.verificationPhase(data.owner);
@@ -61,6 +62,8 @@ function contract(policy identity Policy,target meta.FunctionId,adapter Int)
     if adapter == 2 {
         name="u1.test.identity"; expectedEffects=0; expectedResults=1;
     }
+    if adapter == 3 { name="erist.u1.i64.identity"; expectedEffects=0; expectedResults=1; }
+    if adapter == 4 { name="erist.u1.i64.write"; expectedEffects=20; expectedResults=0; }
     let okay be kind == 2 and version == 1 and effects == expectedEffects and
         try matches(data,phase,target.index,name) and
         (try meta.parameterCount(data,phase,signature)) == 1 and
@@ -114,6 +117,7 @@ public function adapter(policy identity Policy,target meta.FunctionId)
     let cursor be policy.selected;
     while cursor != none {
         if cursor.target.index == target.index {
+            if cursor.revision != 1 { try budget.reject("stale selected adapter revision"); }
             try contract(policy,target,cursor.adapter);
             return cursor.adapter;
         }

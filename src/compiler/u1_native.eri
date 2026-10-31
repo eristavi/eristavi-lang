@@ -1,0 +1,142 @@
+// Private bootstrap native adapter. Does not replace the production frontend.
+// Tables are emitted ONLY after current independent verification and exact
+// publication validation. Generated C is an internal tool, not a UIR artifact.
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+import compiler.u1_meta as meta;
+import compiler.u1_module as link;
+import compiler.u1_imports as imports;
+import compiler.u1_publication as publication;
+import compiler.u1_verify as verify;
+import compiler.format as format;
+
+public error Unsupported { message Text; operation Int; location Int; }
+function number(value Int) returns Text {
+    if value == -9223372036854775807-1 { return "(-INT64_C(9223372036854775807)-1)"; }
+    return "INT64_C("+format.integer(value)+")";
+}
+function table(name Text,values identity words.Words) fails budget.LimitError {
+    let phase be try budget.verificationPhase(values.owner);
+    output("static const int64_t "+name+"[]={");
+    let index be 0;
+    while index < values.length {
+        output(number(try words.get(values,phase,index))+","); index=index+1;
+    }
+    if index == 0 { output("0,"); }
+    output("};"); try budget.finishPhase(phase);
+}
+function declaration(program identity link.Program,index Int) returns Text { return "u1_f"+format.integer(index); }
+function check(stamp identity publication.Publication) fails budget.LimitError,Unsupported {
+    let program be stamp.program; let phase be try budget.verificationPhase(program.metadata.owner);
+    let count be program.metadata.declarations.length/6; let index be 1;
+    while index <= count {
+        let signature be try meta.functionSignature(program.metadata,phase,
+            meta.FunctionId { owner=program.metadata.key; index=index; });
+        let params be try meta.parameterCount(program.metadata,phase,signature);
+        let results be try meta.resultCount(program.metadata,phase,signature);
+        let item be 0;
+        while item < params {
+            if (try meta.parameterType(program.metadata,phase,signature,item)).index > 3 {
+                fail Unsupported { message="native U1a parameter type unavailable"; operation=0; location=0; };
+            }
+            item=item+1;
+        }
+        item=0;
+        while item < results {
+            if (try meta.resultType(program.metadata,phase,signature,item)).index > 3 {
+                fail Unsupported { message="native U1a result type unavailable"; operation=0; location=0; };
+            }
+            item=item+1;
+        }
+        let kind be try words.get(program.metadata.declarations,phase,(index-1)*6+3);
+        if kind == 2 {
+            let adapter be try imports.adapter(stamp.policy,meta.FunctionId { owner=program.metadata.key; index=index; });
+            if adapter != 3 and adapter != 4 {
+                fail Unsupported { message="test imports cannot authorize native production calls"; operation=34; location=0; };
+            }
+        }
+        index=index+1;
+    }
+    try budget.finishPhase(phase);
+}
+public function emit(stamp identity publication.Publication) fails budget.LimitError,verify.InvalidIR,Unsupported {
+    try publication.validate(stamp); try check(stamp);
+    let program be stamp.program; let data be program.metadata;
+    output("#include \"u1_native.h\"");
+    output("_Static_assert(ERIST_U1_NATIVE_CONTRACT == 1, \"stale native import contract\");");
+    try table("u1_types",data.types); try table("u1_locations",data.locations);
+    try table("u1_origins",data.originLinks); try table("u1_sources",data.sources);
+    try table("u1_source_bytes",data.bytes);
+    let cursor be program.head;
+    while cursor != none {
+        let name be declaration(program,cursor.target.index); let body be cursor.body;
+        try table(name+"_blocks",body.blocks); try table(name+"_instructions",body.instructions);
+        try table(name+"_operands",body.operands); try table(name+"_edges",body.edges);
+        try table(name+"_arguments",body.arguments); try table(name+"_switches",body.switches);
+        try table(name+"_cases",body.cases); cursor=cursor.next;
+    }
+    output("static const u1_function u1_functions[]={");
+    let phase be try budget.verificationPhase(data.owner); let index be 1;
+    while index <= data.declarations.length/6 {
+        let target be meta.FunctionId { owner=data.key; index=index; };
+        let signature be try meta.functionSignature(data,phase,target);
+        let base be (signature.index-1)*6;
+        let start be try words.get(data.signatures,phase,base+2);
+        let params be try meta.parameterCount(data,phase,signature);
+        let results be try meta.resultCount(data,phase,signature);
+        let prefix be "{.parameters=u1_types+"+format.integer(start)+
+            ",.parameter_count="+format.integer(params)+",.result_count="+format.integer(results);
+        let kind be try words.get(data.declarations,phase,(index-1)*6+3);
+        if kind == 2 {
+            output(prefix+",.adapter="+format.integer(try imports.adapter(stamp.policy,target))+"},");
+        } else {
+            let body be try link.resolve(program,target); let bodyPhase be try budget.verificationPhase(body.owner);
+            let scratch be params; if results > scratch { scratch=results; }
+            let item be 0;
+            while item < body.instructions.length/10 {
+                let n be try words.get(body.instructions,bodyPhase,item*10+3);
+                if n > scratch { scratch=n; }
+                n=try words.get(body.instructions,bodyPhase,item*10+5);
+                if n > scratch { scratch=n; }
+                item=item+1;
+            }
+            item=0;
+            while item < body.edges.length/3 {
+                let n be try words.get(body.edges,bodyPhase,item*3+2);
+                if n > scratch { scratch=n; }
+                item=item+1;
+            }
+            try budget.finishPhase(bodyPhase);
+            let name be declaration(program,index);
+            output(prefix+",.values="+format.integer(body.values.length/4)+",.scratch="+format.integer(scratch)+
+                ",.blocks="+name+"_blocks,.instructions="+name+"_instructions,.operands="+name+"_operands,"+
+                ".edges="+name+"_edges,.arguments="+name+"_arguments,.switches="+name+"_switches,.cases="+name+"_cases},");
+        }
+        index=index+1;
+    }
+    output("};");
+    output("static const u1_program u1_image={.functions=u1_functions,.count="+format.integer(index-1)+
+        ",.locations=u1_locations,.location_count="+format.integer(data.locations.length/7)+
+        ",.origins=u1_origins,.origin_count="+format.integer(data.originLinks.length/3)+
+        ",.sources=u1_sources,.source_bytes=u1_source_bytes,.source_count="+format.integer(data.sources.length/4)+"};");
+    try budget.finishPhase(phase);
+}
+// Private diagnostic-map transport only, not serialized executable UIR.
+function jsonTable(name Text,values identity words.Words,last Bool) fails budget.LimitError {
+    output("\""+name+"\":["); let phase be try budget.verificationPhase(values.owner);
+    let index be 0;
+    while index < values.length {
+        let suffix be ","; if index+1 == values.length { suffix=""; }
+        output(format.integer(try words.get(values,phase,index))+suffix); index=index+1;
+    }
+    let suffix be ","; if last { suffix=""; }
+    output("]"+suffix); try budget.finishPhase(phase);
+}
+public function sourceMap(stamp identity publication.Publication) fails budget.LimitError,verify.InvalidIR {
+    try publication.validate(stamp);
+    output("{\"schema\":1,\"native_contract\":1,");
+    let data be stamp.program.metadata;
+    try jsonTable("sources",data.sources,false); try jsonTable("bytes",data.bytes,false);
+    try jsonTable("locations",data.locations,false); try jsonTable("origins",data.originLinks,true);
+    output("}");
+}

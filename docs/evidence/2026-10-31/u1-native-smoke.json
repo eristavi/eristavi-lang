@@ -1,0 +1,60 @@
+{
+  "profile": "smoke",
+  "status": "success",
+  "discovered_tests": 20,
+  "tests_run": 20,
+  "passed": 20,
+  "unsuccessful_tests": 0,
+  "failure_records": 0,
+  "skipped": [],
+  "failures": [],
+  "errors": [],
+  "expected_failures": [],
+  "unexpected_successes": [],
+  "seconds": 30.85210542899995,
+  "slowest_tests": [
+    {
+      "test": "test_u1_promotion.U1PromotionTests.test_differential_execution_shapes_and_failure_cleanup",
+      "seconds": 8.853
+    },
+    {
+      "test": "test_u1_integer_execution.U1IntegerExecutionTests.test_integer_recursion_switch_promotion_and_fault_traces",
+      "seconds": 5.485
+    },
+    {
+      "test": "test_u3_stage0_parity_baseline.U3Stage0ParityBaseline.test_frozen_successful_programs_match_existing_native_compilers",
+      "seconds": 2.45
+    },
+    {
+      "test": "test_u1_execution.U1CallExecutionTests.test_recursive_frames_effects_and_versioned_imports",
+      "seconds": 1.842
+    },
+    {
+      "test": "test_u1_module.U1ModuleBindingTests.test_declarations_bind_exact_verified_bodies",
+      "seconds": 1.363
+    },
+    {
+      "test": "test_u1_calls.U1CallContracts.test_direct_call_declarations_and_verifier",
+      "seconds": 1.315
+    },
+    {
+      "test": "test_native_runtime_lifetimes.NativeRuntimeLifetimeTests.test_native_handler_and_abandoned_call_allocations_are_reclaimed",
+      "seconds": 0.719
+    },
+    {
+      "test": "test_u1_native.U1NativeTests.test_native_recursion_and_independent_simplification",
+      "seconds": 0.275
+    },
+    {
+      "test": "test_u1_native.U1NativeTests.test_changed_foreign_floating_environment_is_rejected_and_restored",
+      "seconds": 0.188
+    },
+    {
+      "test": "test_u1_native.U1NativeTests.test_publication_invalidation_and_transactional_simplification",
+      "seconds": 0.145
+    }
+  ],
+  "platform": "Linux-6.18.57-x86_64-with-glibc2.39",
+  "python": "3.12.14",
+  "cc": null
+}

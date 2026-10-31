@@ -12,6 +12,7 @@ public type Metadata {
     signatures identity words.Words; types identity words.Words; buckets identity words.Words;
     sources identity words.Words; bytes identity words.Words; locations identity words.Words;
     declarations identity words.Words; symbolBytes identity words.Words;
+    originLinks identity words.Words; // ordered (child, parent, role) supplemental origins
 }
 public function typeAt(index Int) returns TypeId fails budget.LimitError {
     if index < 1 or index > 6 { try budget.reject("unsupported U1 core type"); }
@@ -40,7 +41,7 @@ public function create(owner identity budget.Owner,phase identity budget.Phase) 
         signatures=try words.create(owner,6291456); types=try words.create(owner,8388608);
         buckets=try words.create(owner,64); sources=try words.create(owner,524288);
         bytes=try words.create(owner,8388608); locations=try words.create(owner,7340032);
-        declarations=try words.create(owner,393216); symbolBytes=try words.create(owner,16777216); };
+        declarations=try words.create(owner,393216); symbolBytes=try words.create(owner,16777216); originLinks=try words.create(owner,3145728); };
     let index be 0; while index < 64 { let ignored be try words.push(meta.buckets,phase,0); index=index+1; }
     meta.control=try budget.commit(pending); return meta;
 }
@@ -219,6 +220,36 @@ public function synthetic(meta identity Metadata,phase identity budget.Phase,par
     return value;
 }
 
+// Ordered additional origins: role 1 shared computation, 2 call site,
+// 3 resource declaration, 4 resource exit. No pass implementing U2 is implied.
+// Child uses its original diagnostic anchor; parents may be in other sources.
+public function origin(meta identity Metadata,phase identity budget.Phase,
+    child LocId,parent LocId,role Int) fails budget.LimitError {
+    try mutable(meta,phase); try validLocation(meta,child); try validLocation(meta,parent);
+    if parent.index >= child.index or role < 1 or role > 4 {
+        try budget.reject("cyclic or invalid additional U1 origin");
+    }
+    let count be meta.originLinks.length/3;
+    if count > 0 {
+        let previous be try words.get(meta.originLinks,phase,(count-1)*3);
+        if child.index < previous { try budget.reject("unordered U1 origin set"); }
+    }
+    let cursor be count-1;
+    while cursor >= 0 {
+        if try words.get(meta.originLinks,phase,cursor*3) != child.index { cursor=-1; }
+        else {
+            if try words.get(meta.originLinks,phase,cursor*3+1) == parent.index and
+               try words.get(meta.originLinks,phase,cursor*3+2) == role {
+                try budget.reject("duplicate U1 origin link");
+            }
+            cursor=cursor-1;
+        }
+    }
+    let ignored be try words.push(meta.originLinks,phase,child.index);
+    ignored=try words.push(meta.originLinks,phase,parent.index);
+    ignored=try words.push(meta.originLinks,phase,role);
+}
+
 public function validLocation(meta identity Metadata,value LocId) fails budget.LimitError {
     if meta.closed or value.owner != meta.key or value.index < 1 or value.index > meta.locations.length/7 { try budget.reject("foreign or invalid U1a LocId"); }
 }
@@ -226,12 +257,12 @@ public function freeze(meta identity Metadata) fails budget.LimitError {
     try budget.poll(meta.owner); if meta.closed { try budget.reject("closed U1a metadata"); }
     try words.freeze(meta.signatures); try words.freeze(meta.types); try words.freeze(meta.buckets);
     try words.freeze(meta.sources); try words.freeze(meta.bytes); try words.freeze(meta.locations);
-    try words.freeze(meta.declarations); try words.freeze(meta.symbolBytes); meta.frozen=true;
+    try words.freeze(meta.originLinks); try words.freeze(meta.declarations); try words.freeze(meta.symbolBytes); meta.frozen=true;
 }
 public function close(meta identity Metadata) fails budget.LimitError {
     if meta.closed { try budget.reject("double close of U1a metadata"); } meta.closed=true;
     try words.close(meta.signatures); try words.close(meta.types); try words.close(meta.buckets);
     try words.close(meta.sources); try words.close(meta.bytes); try words.close(meta.locations);
-    try words.close(meta.declarations); try words.close(meta.symbolBytes);
+    try words.close(meta.originLinks); try words.close(meta.declarations); try words.close(meta.symbolBytes);
     let control be meta.control; meta.control=none; if control != none { try budget.release(control); }
 }
