@@ -102,7 +102,7 @@ redundant indexing, unbounded caches or unnecessarily expensive CI.
 | U3 #75 | Direct frozen frontend → new UIR → production native target/artifact/cache integration **NOT IMPLEMENTED**. Existing adapter is isolated; #104 is test-only reference parity |
 | U4 #102 | Redesigned UIR machine/legalization/artifact migration **NOT IMPLEMENTED / NOT QUALIFIED** |
 | Production | Existing source language and default compiler pipeline retained; no new-UIR backend promotion |
-| Environment | Local execution workspace unavailable; all implementation, evidence and current checkpoint are durable in the repository |
+| Environment / next-stage blocker | Local execution workspace unavailable; #105 release/qualification is complete through GitHub. U1b aggregate implementation has not started and awaits an execution workspace for focused compiler development/tests. All implementation/evidence/checkpoints are preserved in the repository |
 
 **Reading rule:** section 44 is authoritative. Earlier keep-open and pending
 statements describe their historical revisions. U1a acceptance does not certify
@@ -1930,3 +1930,5 @@ during this checkpoint. A documentation-only patch check validates this
 reconciliation; the tested implementation is unchanged.
 
 **Administrative closure verified:** issue #77 was closed as completed on 31 October 2026 after the qualified merge and acceptance documentation were recorded. U1a is complete within its adopted boundary. U1b aggregates, U2, U3 and U4 remain open. This status-only reconciliation changes no tested implementation.
+
+**Next-stage blocker:** the execution server disconnected and the environment reports unavailable. #105/#77 release work is complete and preserved. U1b aggregate implementation, U2, U3 and U4 have not been performed; resume the already-authorized sequence when an execution workspace is available, without requesting authorization again. Do not substitute an untested broad compiler rewrite for the missing development/test workspace.
