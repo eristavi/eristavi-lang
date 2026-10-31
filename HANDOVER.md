@@ -5,6 +5,28 @@ Section 29 records the latest qualified and merged compiler/runtime batch.
 Sections 1–28 retain historical evidence; their draft statuses and next steps
 are not current instructions. Section 25 retains the intentional CI policy.
 
+## Mandatory handover maintenance — standing user instruction
+
+**HANDOVER.md must stay current at all times. Updating it is part of every
+project task, not a separate task that waits for the user to request it.**
+
+- Read the current handover before continuing work. Update it immediately after
+  each material implementation change, architectural decision, validation result,
+  PR status change, merge, blocker or change to the next step.
+- While work is in progress, record the active branch and what is pending.
+  Distinguish implemented, tested, qualified and merged states. Never leave
+  merged work labelled as a candidate or completed checks labelled pending.
+- Keep the opening recovery instructions, current-status table and latest
+  checkpoint consistent, with exact relevant commits, test evidence, limitations
+  and next actions. Preserve older evidence as clearly superseded history.
+- Include the handover update in the working batch and reconcile its final
+  merge/qualification status promptly afterward. Before every final user reply
+  about project work or session handoff, verify the checkpoint reflects the
+  actual state; do not declare the task complete with a stale handover.
+- Status-only documentation updates need a lightweight patch check. Reuse valid
+  qualification evidence for unchanged implementation; do not rerun expensive
+  compiler/runtime tests merely to keep this file current.
+
 ## Start a new chat with this
 
 > Continue Eristavi Lang from HANDOVER.md section 29 and current GitHub main.
