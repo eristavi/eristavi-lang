@@ -1,0 +1,173 @@
+// Private U1a acceptance instrumentation for issue #77.
+//
+// This module does NOT change budgeting, GC policy, the frozen source language,
+// or the public 32-byte value ABI. It measures the concrete graph objects that
+// already back U1 data under the current owned x86-64 runtime. The owned graph
+// allocator requests a 64-byte graph header plus 32 bytes per graph cell; the
+// allocator adds its 32-byte block header. Shared allocator-region slack/header
+// is intentionally reported outside per-owner attribution because no individual
+// U1 owner uniquely owns it.
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+import compiler.u1_meta as meta;
+import compiler.u1_builder as build;
+import compiler.u1_dominance as dom;
+import compiler.u1_module as link;
+import compiler.u1_imports as imports;
+import compiler.u1_publication as publication;
+
+public type Backing {
+    objects Int;
+    graphPayloadBytes Int;
+    allocatorHeaderBytes Int;
+    blockBytes Int;
+}
+
+function zero() returns Backing {
+    return Backing { objects=0; graphPayloadBytes=0; allocatorHeaderBytes=0; blockBytes=0; };
+}
+function block(cells Int) returns Backing {
+    let payload be 64+cells*32;
+    return Backing { objects=1; graphPayloadBytes=payload; allocatorHeaderBytes=32; blockBytes=payload+32; };
+}
+function blocks(count Int,cells Int) returns Backing {
+    if count <= 0 { return zero(); }
+    let payload be count*(64+cells*32);
+    let headers be count*32;
+    return Backing { objects=count; graphPayloadBytes=payload; allocatorHeaderBytes=headers; blockBytes=payload+headers; };
+}
+function plus(first Backing,second Backing) returns Backing {
+    return Backing {
+        objects=first.objects+second.objects;
+        graphPayloadBytes=first.graphPayloadBytes+second.graphPayloadBytes;
+        allocatorHeaderBytes=first.allocatorHeaderBytes+second.allocatorHeaderBytes;
+        blockBytes=first.blockBytes+second.blockBytes;
+    };
+}
+
+function nodes(value maybe identity words.Node,depth Int) returns Int {
+    if value == none { return 0; }
+    let count be 1;
+    if depth <= 0 { return count; }
+    count=count+nodes(value.c0,depth-1); count=count+nodes(value.c1,depth-1);
+    count=count+nodes(value.c2,depth-1); count=count+nodes(value.c3,depth-1);
+    count=count+nodes(value.c4,depth-1); count=count+nodes(value.c5,depth-1);
+    count=count+nodes(value.c6,depth-1); count=count+nodes(value.c7,depth-1);
+    count=count+nodes(value.c8,depth-1); count=count+nodes(value.c9,depth-1);
+    count=count+nodes(value.c10,depth-1); count=count+nodes(value.c11,depth-1);
+    count=count+nodes(value.c12,depth-1); count=count+nodes(value.c13,depth-1);
+    count=count+nodes(value.c14,depth-1); count=count+nodes(value.c15,depth-1);
+    return count;
+}
+function pages(value maybe identity words.Node,depth Int) returns Int {
+    if value == none { return 0; }
+    let count be 0; if value.page != none { count=1; }
+    if depth <= 0 { return count; }
+    count=count+pages(value.c0,depth-1); count=count+pages(value.c1,depth-1);
+    count=count+pages(value.c2,depth-1); count=count+pages(value.c3,depth-1);
+    count=count+pages(value.c4,depth-1); count=count+pages(value.c5,depth-1);
+    count=count+pages(value.c6,depth-1); count=count+pages(value.c7,depth-1);
+    count=count+pages(value.c8,depth-1); count=count+pages(value.c9,depth-1);
+    count=count+pages(value.c10,depth-1); count=count+pages(value.c11,depth-1);
+    count=count+pages(value.c12,depth-1); count=count+pages(value.c13,depth-1);
+    count=count+pages(value.c14,depth-1); count=count+pages(value.c15,depth-1);
+    return count;
+}
+
+// Exact current owned-runtime backing of one radix-16 word store. Counting the
+// actual reachable Node/Page objects, rather than inferring from budget charges,
+// makes malformed or unexpectedly sparse shapes visible to the acceptance gate.
+public function wordStore(store identity words.Words,owner identity budget.Owner)
+    returns Backing fails budget.LimitError {
+    if store.owner != owner or store.closed { try budget.reject("foreign or closed U1 physical word store"); }
+    let nodeCount be nodes(store.root,6); let pageCount be pages(store.root,6);
+    let result be block(7); // Words: owner/root/length/limit/closed/frozen/control.
+    result=plus(result,blocks(nodeCount,18)); // Node: 16 children + page + charge.
+    result=plus(result,blocks(pageCount,17)); // Page: 16 words + charge.
+    return result;
+}
+
+public function metadata(data identity meta.Metadata,owner identity budget.Owner)
+    returns Backing fails budget.LimitError {
+    if data.owner != owner or data.closed { try budget.reject("foreign or closed U1 physical metadata"); }
+    let result be block(14);
+    result=plus(result,try wordStore(data.signatures,owner));
+    result=plus(result,try wordStore(data.types,owner));
+    result=plus(result,try wordStore(data.buckets,owner));
+    result=plus(result,try wordStore(data.sources,owner));
+    result=plus(result,try wordStore(data.bytes,owner));
+    result=plus(result,try wordStore(data.locations,owner));
+    result=plus(result,try wordStore(data.declarations,owner));
+    result=plus(result,try wordStore(data.symbolBytes,owner));
+    result=plus(result,try wordStore(data.originLinks,owner));
+    return result;
+}
+
+public function functionBody(routine identity build.Function,owner identity budget.Owner)
+    returns Backing fails budget.LimitError {
+    if routine.owner != owner or routine.state == 2 { try budget.reject("foreign or closed U1 physical function"); }
+    let result be block(17);
+    result=plus(result,try wordStore(routine.blocks,owner));
+    result=plus(result,try wordStore(routine.values,owner));
+    result=plus(result,try wordStore(routine.instructions,owner));
+    result=plus(result,try wordStore(routine.operands,owner));
+    result=plus(result,try wordStore(routine.edges,owner));
+    result=plus(result,try wordStore(routine.arguments,owner));
+    result=plus(result,try wordStore(routine.cells,owner));
+    result=plus(result,try wordStore(routine.switches,owner));
+    result=plus(result,try wordStore(routine.cases,owner));
+    return result;
+}
+
+// Acceptance-only live scratch snapshot. Graph itself is 12 graph cells and
+// its radix store belongs to the supplied function owner.
+public function dominanceScratch(graph identity dom.Graph,owner identity budget.Owner)
+    returns Backing fails budget.LimitError {
+    if graph.phase.owner != owner { try budget.reject("foreign U1 physical dominance scratch"); }
+    return plus(block(12),try wordStore(graph.data,owner));
+}
+
+public function moduleRegistry(program identity link.Program,owner identity budget.Owner)
+    returns Backing fails budget.LimitError {
+    if program.metadata.owner != owner or program.closed { try budget.reject("foreign or closed U1 physical module registry"); }
+    let count be 0; let cursor be program.head;
+    while cursor != none { count=count+1; cursor=cursor.next; }
+    return plus(block(6),blocks(count,5));
+}
+
+public function importRegistry(policy identity imports.Policy,owner identity budget.Owner)
+    returns Backing fails budget.LimitError {
+    if policy.program.metadata.owner != owner or policy.closed { try budget.reject("foreign or closed U1 physical import registry"); }
+    let count be 0; let cursor be policy.selected;
+    while cursor != none { count=count+1; cursor=cursor.next; }
+    return plus(block(5),blocks(count,5));
+}
+
+// Publication copies are charged to the owner of their source table. This
+// routine therefore partitions a single Publication exactly by budget.Owner.
+public function publicationBacking(stamp identity publication.Publication,owner identity budget.Owner)
+    returns Backing fails budget.LimitError {
+    if stamp.closed { try budget.reject("closed U1 physical publication"); }
+    let result be zero();
+    if stamp.program.metadata.owner == owner {
+        result=plus(result,block(9));
+        result=plus(result,try wordStore(stamp.versions,owner));
+    }
+    let cursor be stamp.tables;
+    while cursor != none {
+        if cursor.source.owner == owner {
+            result=plus(result,block(4));
+            result=plus(result,try wordStore(cursor.copy,owner));
+        }
+        cursor=cursor.next;
+    }
+    return result;
+}
+
+// Fixed shared allocator metadata cannot honestly be assigned to one U1 owner.
+// Keep it explicit so evidence never silently equates per-owner block backing
+// with whole-process RSS or mmap-region reservation.
+public function sharedRegionHeaderBytes() returns Int { return 48; }
+public function graphHeaderBytes() returns Int { return 64; }
+public function allocatorBlockHeaderBytes() returns Int { return 32; }
+public function graphCellBytes() returns Int { return 32; }
