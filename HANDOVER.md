@@ -1502,6 +1502,24 @@ preserving correctness, safety, ABI and frozen language semantics.
 7. U4: measured target legalization and machine lowering, additional targets,
    artifact migration and all relevant contracts, independent qualification.
 
+**Controlled performance benchmark SUCCESS**: the opt-in
+[run 41198570405](https://github.com/eristavi/eristavi-lang/actions/runs/41198570405)
+produced five AB/BA *same-host paired* measurements at exact harness head
+`e846f06d12fcb5d802ce9b34804d1bf7d1906366`. Median actual pre-PR99
+owned runtime worker0 = **21.869176 s**; qualified post-PR99 =
+**4.019040 s**, a measured **5.4414x** speedup on that workload only.
+All 10 worker outputs matched the independent unbounded-integer oracle and
+each other's digest. Five pairs and child CPU/RSS samples, pinned toolchain
+and exact hashes are preserved in the raw
+[artifact 13040469945](https://github.com/eristavi/eristavi-lang/actions/runs/41198570405/artifacts/13040469945).
+Per-process peak RSS was **127628 KiB** in both variants, not a
+UIR-owned physical-memory attribution. Interpretation and raw
+per-pair wall/user CPU values are also checked in at
+`docs/evidence/2026-10-31/owned-runtime-production-paired.md`.
+The CI-runner result must not be extrapolated to whole compiler,
+all U1a/U1b programs or GC/allocator size. The exact U1a resource gate
+issue #77 remains open.
+
 **Completed within active candidate so far:** adds opt-in tooling at
 `tools/bench_owned_runtime_pairs.py` plus a dedicated PR-label workflow.
 It pins exact qualified pre-PR99 and post-PR99 runtime revisions; verifies the
@@ -1509,15 +1527,14 @@ compiled source/fixture/frontend parity and unchanged native app assembly,
 then compares five serialized alternating AB/BA worker0 pairs using the
 original independent unbounded-integer result/fault oracle with 120-second
 watchdogs. Records wall/user/system CPU, per-child peak RSS, output and binary
-hashes, host/compiler identity and raw samples. It does not invoke full CI
-or experimental compiler self-build, and is not a claim that the benchmark
-has passed until its actual GitHub Actions result is inspected.
+hashes, host/compiler identity and raw samples. It did not invoke full CI or experimental compiler self-build.
+The AB/BA run passed and its exact raw results were independently inspected.
 
-**Next:** open a focused PR, run the explicitly selected
-`performance-validation` label job once, repair any failure without changing
-oracle/workload, archive its exact raw results in the repo, then advance
-U1a physical ownership measurement and U1b implementation through separate
-focused acceptance slices. U2/U3/U4 must NOT be described as complete until
+**Next:** merge the measurement-only PR after lightweight CI/patch check
+(no compiler-code full qualification, no repeated performance job);
+investigate U1a #77 physical owned backing with real allocator attribution
+and larger stress; progress the separate U1b narrow reference executor
+in PR #101. The independent U2/U3/U4 gates are not certified by this work. U2/U3/U4 must NOT be described as complete until
 their actual source integration, independent reference tests and exact-head
 qualification pass. Keep these old and new milestones transparent in status
 and do not publish broad "all done" claims.
