@@ -2,7 +2,7 @@
 
 **Authoritative recovery checkpoint: 31 October 2026, Asia/Nicosia. Read section 44.**
 PR #105 is **QUALIFIED AND MERGED**. U1a's scoped physical acceptance gate passed;
-issue #77 administrative closure follows this checkpoint. Sections 1–43 preserve
+issue #77 is CLOSED/completed. Sections 1–43 preserve
 historical evidence and rejected prototypes; their pending/keep-open statements
 are superseded by section 44. U1b aggregates #73, U2 #74, U3 #75 and U4 #102 remain
 OPEN and unimplemented/unfinished as specified below.
@@ -69,7 +69,7 @@ redundant indexing, unbounded caches or unnecessarily expensive CI.
 > retained. Three bootstrap jobs completed C/D, repeatability and offline audit
 > with unchanged sources; owned integration passed its offline audit but is NOT
 > full owned compiler self-build certification. That experimental gate was skipped.
-> U1a physical owner backing is accepted; reconcile #77 administrative closure.
+> U1a physical owner backing is accepted; #77 is CLOSED/completed.
 > Next implement **U1b immutable aggregates #73**, then **U2 #74 → U3 #75 → U4 #102**,
 > with measured compiler performance/memory work throughout. Existing source
 > semantics, public 32-byte ABI and default production backend remain.
@@ -91,7 +91,7 @@ redundant indexing, unbounded caches or unnecessarily expensive CI.
 | Four-platform full CI | [41222506854](https://github.com/eristavi/eristavi-lang/actions/runs/41222506854): **SUCCESS**, 469 discovered each. Linux GCC/Clang: 4 skips; ARM64: 112; macOS: 121 |
 | Completed-batch qualification | [41222506873](https://github.com/eristavi/eristavi-lang/actions/runs/41222506873): three bootstrap C/D builds, repeatable=true, offline audit and unchanged source snapshots; owned static/offline integration passed with repeatable=false |
 | Experimental full owned compiler self-build | Intentionally skipped; **NOT CERTIFIED** |
-| U1a #77 physical acceptance | **QUALIFIED / MERGED**. Administrative issue closure follows this checkpoint; original 8 MiB / 64 MiB gates preserved |
+| U1a #77 physical acceptance | **QUALIFIED / MERGED**. #77 **CLOSED/completed**; original 8 MiB / 64 MiB gates preserved |
 | Actual adversarial owned stress | 65,536 words / 4,096 pages, all initial identity hashes collide: **7,853,712 B phase peak**, **21,957,296 B traffic**, 72,682 graph allocations. Exact retained stress backing **6,653,840 B / 16,938 wrapper-body objects**, all reclaimed |
 | Physical scope | Actual per-structure semantic-owner backing plus separate temporary/bookkeeping phase history. Shared region slack, diagnostic maps and shared caches are not attributed to arbitrary U1 owners; this is not process RSS or a global heap cap |
 | Current independent C evidence | Refreshed 20/20 whole C-managed samples passed; source-hashed C inputs unchanged during later owned-only collision tuning. Not per-owner C allocation attribution |
@@ -1884,8 +1884,7 @@ self-build. Merge and #77 closure only after exact-head results/tree parity.
 `0d8bf1f4a58f66a15bb9a89bd42f596091ed9c36` tested at head `f1fba11ff5e11791ad8c5d635fbf90873c686fa9`.
 Base main stayed `79a9a0fcaedd638c5bc81a5b599e7cb9e23aa0b0`; both parents are retained.
 GitHub reports #105 merged. No implementation changed after the final gates.
-Issue #77's scoped acceptance is evidenced; administrative closure follows this
-documentation checkpoint.
+Issue #77's scoped acceptance is evidenced; issue #77 is CLOSED/completed.
 
 ### Evidence and rejected alternatives
 
@@ -1929,3 +1928,5 @@ raw evidence. GitHub remains available; hosted qualification completed and the
 verified merge is preserved. Do not claim any later milestone was implemented
 during this checkpoint. A documentation-only patch check validates this
 reconciliation; the tested implementation is unchanged.
+
+**Administrative closure verified:** issue #77 was closed as completed on 31 October 2026 after the qualified merge and acceptance documentation were recorded. U1a is complete within its adopted boundary. U1b aggregates, U2, U3 and U4 remain open. This status-only reconciliation changes no tested implementation.

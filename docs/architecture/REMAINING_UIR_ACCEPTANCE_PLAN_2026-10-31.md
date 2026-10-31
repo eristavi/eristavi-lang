@@ -15,7 +15,7 @@
 
 ## A. U1a #77 — physical attribution ACCEPTED through qualified PR #105
 
-Final full CI 41222506854 and qualification 41222506873 passed; tested/merged tree 0d8bf1f4a58f66a15bb9a89bd42f596091ed9c36. The adversarial 65,536-word case passed unchanged peak/traffic gates with actual semantic backing and complete reclamation. HANDOVER section 44 and the final investigation define scope and retained deferrals. Administrative issue closure follows this checkpoint.
+Final full CI 41222506854 and qualification 41222506873 passed; tested/merged tree 0d8bf1f4a58f66a15bb9a89bd42f596091ed9c36. The adversarial 65,536-word case passed unchanged peak/traffic gates with actual semantic backing and complete reclamation. HANDOVER section 44 and the final investigation define scope and retained deferrals. Issue #77 is CLOSED/completed.
 
 ### Original acceptance plan (now evidenced)
 
@@ -61,4 +61,4 @@ Lower one complete Linux x86-64 UIR profile to the actual native target, preserv
 - Focused tests and change-specific independent oracle while developing. **One** final exact-head full matrix/qualification when compiler/IR/runtime code changes; docs-only changes need patch check. Do not automatically run experimental owned full compiler self-build.
 - Keep HANDOVER.md recovery/table/latest sections consistent after every qualified implementation, issue state change or merge. Never report U2/U3/U4 completion from isolated reference tests or older Stage-0/Universal IR native routes.
 
-**Dependency truth:** U1a physical acceptance is qualified and merged through #105, with #77 administrative closure following the checkpoint. U1b #73 remains partially implemented; U2 #74, U3 #75 and U4 #102 remain open. No safe shortcut can substitute a functioning, verified implementation for a milestone checkbox.
+**Dependency truth:** U1a physical acceptance is qualified and merged through #105, and #77 is CLOSED/completed. U1b #73 remains partially implemented; U2 #74, U3 #75 and U4 #102 remain open. No safe shortcut can substitute a functioning, verified implementation for a milestone checkbox.

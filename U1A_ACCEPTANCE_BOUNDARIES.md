@@ -1,8 +1,7 @@
 # U1a #72/#77 conformance boundaries and evidence
 
 **Current: PR #105 QUALIFIED AND MERGED (`8c625b1ece6a229844def93e2bf9563c14e9e273`).** Its tested/merged
-tree `0d8bf1f4a58f66a15bb9a89bd42f596091ed9c36` matches. U1a physical acceptance is evidenced; #77 administrative
-closure follows this checkpoint. The older open/pending paragraphs below are
+tree `0d8bf1f4a58f66a15bb9a89bd42f596091ed9c36` matches. U1a physical acceptance is evidenced; #77 is CLOSED/completed. The older open/pending paragraphs below are
 historical and superseded by the final section. Durable U3 artifacts and U2
 managed semantics remain separately unfinished.
 
@@ -117,4 +116,4 @@ not per-owner C attribution. See the source-hashed raw qualified record and repo
 This meets the outstanding U1a-owned physical/resource gate. Existing qualified
 source/revision/diagnostic and bounded-transform gates remain. General U2 managed
 heap/root/cleanup and U3 persistent artifact/source/frontend integration are not
-waived or declared complete. #77 administrative closure follows this checkpoint.
+waived or declared complete. #77 is CLOSED/completed.

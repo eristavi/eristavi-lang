@@ -3,8 +3,7 @@
 **31 October 2026. PR #105 QUALIFIED AND MERGED** at `8c625b1ece6a229844def93e2bf9563c14e9e273`,
 tested head `f1fba11ff5e11791ad8c5d635fbf90873c686fa9`, identical tested/merged tree `0d8bf1f4a58f66a15bb9a89bd42f596091ed9c36`.
 Full CI 41222506854 and completed-batch qualification 41222506873 passed;
-469 discovered tests per configuration with scoped skips. #77 closure follows
-this checkpoint. Earlier candidate-stage statuses below are historical.
+469 discovered tests per configuration with scoped skips. #77 is CLOSED/completed. Earlier candidate-stage statuses below are historical.
 
 **Rejected prototype history.** Hosted smoke
 [41220371417](https://github.com/eristavi/eristavi-lang/actions/runs/41220371417)
@@ -23,7 +22,7 @@ passed, including the adversarial 65,536-word fixture: 7,853,712 B phase peak,
 victims failed the adversarial traffic gate; those prototypes were rejected.
 Final hosted smoke 41222208171 passed 36/36, and both full release gates passed. Full-window eviction,
 stale-body checks and escaped-reference fallback retain conservative detachment.
-U1a physical acceptance is complete; #77 administrative closure follows this checkpoint.
+U1a physical acceptance is complete; #77 is CLOSED/completed.
 Local collision-stable implementation checkpoint: `9cf5b30`. The hosted submission/tested tree
 is recorded in HANDOVER; raw source hashes bind these measurements independently
 of commit metadata. No source-language, public value ABI,
@@ -145,7 +144,7 @@ Final four-platform CI and completed-batch qualification PASSED and the exact
 tested/merged tree was verified before merging. Experimental owned compiler full
 self-build stayed skipped. No implementation changed after qualification; this
 post-merge documentation reconciliation uses a lightweight patch check. U1a's
-scoped acceptance is met; #77 administrative closure follows this checkpoint.
+scoped acceptance is met; #77 is CLOSED/completed.
 
 Then implement U1b immutable aggregates, followed by U2 managed semantics,
 U3 production frontend integration and U4 machine/toolchain migration. Profile
