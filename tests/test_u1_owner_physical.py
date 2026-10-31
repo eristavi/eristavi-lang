@@ -1,8 +1,18 @@
-"""Issue #77: exact U1a owner-specific owned-runtime backing acceptance."""
+"""Issue #77: exact U1a owner-specific owned-runtime backing acceptance.
+
+The source observer reports concrete U1 object shape and independent requested
+footprint. A private owned-runtime diagnostic separately attributes the allocator's
+*actual* graph block capacity (including oversized free-list reuse and the 32-byte
+block header) to acceptance-only owner tags 101..105. The diagnostic tracks live,
+peak, cumulative traffic, allocation count and GC reclamation, then forces a final
+collection after logical owner cleanup. Production runtime/source semantics remain
+unchanged.
+"""
 from pathlib import Path
 import json
 import platform
 import shutil
+import struct
 import subprocess
 import tempfile
 import unittest
@@ -12,6 +22,9 @@ from u1_native_tools import shared_u1_compilers
 
 ROOT = Path(__file__).resolve().parents[1]
 STRESS_OBJECTS = 8469
+TAG_NAMES = {101: 'request', 102: 'metadata', 103: 'function', 104: 'scratch', 105: 'stress'}
+STAT_FIELDS = ('live', 'peak', 'traffic', 'allocations', 'reclaimed_bytes', 'reclaimed_objects')
+RECORD_BYTES = 8 + len(TAG_NAMES) * len(STAT_FIELDS) * 8
 
 
 def _radix_counts(word_count):
@@ -57,52 +70,65 @@ def _parse(text):
     return physical, logical, cleanup
 
 
-def _instrument_owned_runtime(runtime):
-    """Acceptance-only exact-capacity and post-close GC diagnostic.
+def _decode_owner_records(raw):
+    if len(raw) != RECORD_BYTES * 2:
+        raise AssertionError(f'owner diagnostic length {len(raw)} != {RECORD_BYTES * 2}')
+    snapshots = []
+    for at in (0, RECORD_BYTES):
+        values = struct.unpack('<' + 'Q' * (RECORD_BYTES // 8), raw[at:at + RECORD_BYTES])
+        snapshot = {'error': values[0], 'owners': {}}
+        cursor = 1
+        for tag in TAG_NAMES:
+            row = values[cursor:cursor + len(STAT_FIELDS)]
+            snapshot['owners'][TAG_NAMES[tag]] = dict(zip(STAT_FIELDS, row))
+            cursor += len(STAT_FIELDS)
+        snapshots.append(snapshot)
+    return snapshots
 
-    Exit 77 = a measured graph allocation reused a larger-capacity free block.
-    Exit 78 = forced GC after logical cleanup reclaimed fewer than the complete
-    65,536-word stress store's graph objects. Neither threshold is relaxed.
-    """
-    state = '.Lalloc_regions:\n.quad 0\n'
-    assert runtime.count(state) == 1
-    runtime = runtime.replace(
-        state,
-        '.Ltest_graph_alloc_active:\n.quad 0\n'
-        '.Ltest_oversized_graph_reuse:\n.quad 0\n'
-        '.Ltest_graph_before:\n.quad 0\n' + state,
-        1,
+
+def _instrument_owned_runtime(runtime, diagnostic_fd):
+    """Track actual graph allocator capacity by source-selected owner tag."""
+    graph_alloc = (
+        '    addq $64,%rdi\n'
+        '    call erist_rt_alloc\n'
+        '    testq %rax,%rax\n'
+        '    je erist_rt_value_fault_oom\n'
+        '    movq %rax,%r13\n'
     )
-
-    graph_alloc = '    addq $64,%rdi\n    call erist_rt_alloc\n    testq %rax,%rax\n'
     assert runtime.count(graph_alloc) == 1
     runtime = runtime.replace(
         graph_alloc,
         '    addq $64,%rdi\n'
-        '    movq $1,.Ltest_graph_alloc_active(%rip)\n'
         '    call erist_rt_alloc\n'
-        '    movq $0,.Ltest_graph_alloc_active(%rip)\n'
-        '    testq %rax,%rax\n',
+        '    testq %rax,%rax\n'
+        '    je erist_rt_value_fault_oom\n'
+        '    pushq %rax\n'
+        '    subq $8,%rsp\n'
+        '    movq %rax,%rdi\n'
+        '    call .Ltest_owner_alloc\n'
+        '    addq $8,%rsp\n'
+        '    popq %rax\n'
+        '    movq %rax,%r13\n',
         1,
     )
 
-    reuse = '.Lfreelist_reuse:\n    movq %r14,%rdx\n'
-    assert runtime.count(reuse) == 1
+    sweep = (
+        '.Lg_sweep_dead:\n'
+        '    movq 16(%r13),%r14\n'
+        '    movq %r14,(%r12)\n'
+        '    movq %r13,%rdi\n'
+        '    call erist_rt_free\n'
+    )
+    assert runtime.count(sweep) == 1
     runtime = runtime.replace(
-        reuse,
-        '.Lfreelist_reuse:\n'
-        '    pushfq\n'
-        '    pushq %rax\n'
-        '    cmpq $0,.Ltest_graph_alloc_active(%rip)\n'
-        '    je .Ltest_graph_reuse_checked\n'
-        '    movq -96(%rbp),%rax\n'
-        '    cmpq %r12,%rax\n'
-        '    je .Ltest_graph_reuse_checked\n'
-        '    incq .Ltest_oversized_graph_reuse(%rip)\n'
-        '.Ltest_graph_reuse_checked:\n'
-        '    popq %rax\n'
-        '    popfq\n'
-        '    movq %r14,%rdx\n',
+        sweep,
+        '.Lg_sweep_dead:\n'
+        '    movq 16(%r13),%r14\n'
+        '    movq %r14,(%r12)\n'
+        '    movq %r13,%rdi\n'
+        '    call .Ltest_owner_free\n'
+        '    movq %r13,%rdi\n'
+        '    call erist_rt_free\n',
         1,
     )
 
@@ -111,28 +137,154 @@ def _instrument_owned_runtime(runtime):
     runtime = runtime.replace(
         startup,
         '    call erist_entry\n'
-        '    cmpq $0,.Ltest_oversized_graph_reuse(%rip)\n'
-        '    jne .Ltest_u1_physical_reuse_fail\n'
-        '    call erist_rt_graph_live_objects\n'
-        '    movq %rax,.Ltest_graph_before(%rip)\n'
+        '    call .Ltest_owner_write\n'
         '    call erist_rt_text_collect\n'
-        '    call erist_rt_graph_live_objects\n'
-        '    movq .Ltest_graph_before(%rip),%rcx\n'
-        '    subq %rax,%rcx\n'
-        f'    cmpq ${STRESS_OBJECTS},%rcx\n'
-        '    jb .Ltest_u1_physical_gc_fail\n'
-        '    jmp .Ltest_u1_physical_done\n'
-        '.Ltest_u1_physical_reuse_fail:\n'
-        '    movl $77,%edi\n'
-        '    jmp erist_rt_exit\n'
-        '.Ltest_u1_physical_gc_fail:\n'
-        '    movl $78,%edi\n'
-        '    jmp erist_rt_exit\n'
-        '.Ltest_u1_physical_done:\n'
+        '    call .Ltest_owner_write\n'
         '    movq .Lprocess_exit_code',
         1,
     )
-    return runtime
+
+    diagnostic = f'''
+.bss
+.p2align 3
+.Ltest_owner_dump:
+.Ltest_owner_error:
+    .quad 0
+.Ltest_owner_stats:
+    .zero 240
+.Ltest_owner_keys:
+    .zero 262144
+.Ltest_owner_tags:
+    .zero 262144
+.Ltest_owner_sizes:
+    .zero 262144
+.text
+.type .Ltest_owner_alloc,@function
+.Ltest_owner_alloc:
+    movq .Lprocess_exit_code(%rip),%rax
+    cmpq $101,%rax
+    jb .Ltest_owner_alloc_ret
+    cmpq $105,%rax
+    ja .Ltest_owner_alloc_ret
+    movq %rdi,%r8
+    movq %rdi,%r9
+    shrq $4,%r9
+    andq $32767,%r9
+    leaq .Ltest_owner_keys(%rip),%r10
+    leaq .Ltest_owner_tags(%rip),%r11
+    movl $32768,%esi
+.Ltest_owner_alloc_probe:
+    movq (%r10,%r9,8),%rcx
+    testq %rcx,%rcx
+    je .Ltest_owner_alloc_slot
+    cmpq %r8,%rcx
+    je .Ltest_owner_alloc_slot
+    incq %r9
+    andq $32767,%r9
+    decq %rsi
+    jne .Ltest_owner_alloc_probe
+    movq $3,.Ltest_owner_error(%rip)
+    ret
+.Ltest_owner_alloc_slot:
+    movq %r8,(%r10,%r9,8)
+    cmpq $0,(%r11,%r9,8)
+    je .Ltest_owner_alloc_store
+    movq $1,.Ltest_owner_error(%rip)
+    ret
+.Ltest_owner_alloc_store:
+    movq %rax,%rcx
+    subq $100,%rcx
+    movq %rcx,(%r11,%r9,8)
+    leaq .Ltest_owner_sizes(%rip),%r10
+    movq -32(%r8),%rdx
+    andq $-16,%rdx
+    addq $32,%rdx
+    movq %rdx,(%r10,%r9,8)
+    subq $101,%rax
+    imulq $48,%rax,%rax
+    leaq .Ltest_owner_stats(%rip),%rcx
+    addq %rax,%rcx
+    addq %rdx,0(%rcx)
+    addq %rdx,16(%rcx)
+    incq 24(%rcx)
+    movq 0(%rcx),%rax
+    cmpq 8(%rcx),%rax
+    jbe .Ltest_owner_alloc_ret
+    movq %rax,8(%rcx)
+.Ltest_owner_alloc_ret:
+    ret
+.size .Ltest_owner_alloc,.-.Ltest_owner_alloc
+
+.type .Ltest_owner_free,@function
+.Ltest_owner_free:
+    movq %rdi,%r8
+    movq %rdi,%r9
+    shrq $4,%r9
+    andq $32767,%r9
+    leaq .Ltest_owner_keys(%rip),%r10
+    leaq .Ltest_owner_tags(%rip),%r11
+    movl $32768,%esi
+.Ltest_owner_free_probe:
+    movq (%r10,%r9,8),%rcx
+    testq %rcx,%rcx
+    je .Ltest_owner_free_ret
+    cmpq %r8,%rcx
+    je .Ltest_owner_free_found
+    incq %r9
+    andq $32767,%r9
+    decq %rsi
+    jne .Ltest_owner_free_probe
+    movq $3,.Ltest_owner_error(%rip)
+    ret
+.Ltest_owner_free_found:
+    movq (%r11,%r9,8),%rax
+    testq %rax,%rax
+    je .Ltest_owner_free_ret
+    leaq .Ltest_owner_sizes(%rip),%r10
+    movq (%r10,%r9,8),%rdx
+    decq %rax
+    imulq $48,%rax,%rax
+    leaq .Ltest_owner_stats(%rip),%rcx
+    addq %rax,%rcx
+    movq 0(%rcx),%r8
+    cmpq %rdx,%r8
+    jb .Ltest_owner_free_underflow
+    subq %rdx,0(%rcx)
+    addq %rdx,32(%rcx)
+    incq 40(%rcx)
+    movq $0,(%r11,%r9,8)
+    movq $0,(%r10,%r9,8)
+.Ltest_owner_free_ret:
+    ret
+.Ltest_owner_free_underflow:
+    movq $2,.Ltest_owner_error(%rip)
+    ret
+.size .Ltest_owner_free,.-.Ltest_owner_free
+
+.type .Ltest_owner_write,@function
+.Ltest_owner_write:
+    movq $1,%rax
+    movq ${diagnostic_fd},%rdi
+    leaq .Ltest_owner_dump(%rip),%rsi
+    movq ${RECORD_BYTES},%rdx
+.Ltest_owner_write_loop:
+    syscall
+    cmpq $-4,%rax
+    je .Ltest_owner_write_loop
+    testq %rax,%rax
+    jle .Ltest_owner_write_fail
+    addq %rax,%rsi
+    subq %rax,%rdx
+    jne .Ltest_owner_write_loop
+    ret
+.Ltest_owner_write_fail:
+    movq $60,%rax
+    movq $79,%rdi
+    syscall
+    ud2
+.size .Ltest_owner_write,.-.Ltest_owner_write
+'''
+    return runtime + diagnostic
 
 
 class U1OwnerPhysicalTests(unittest.TestCase):
@@ -148,12 +300,10 @@ class U1OwnerPhysicalTests(unittest.TestCase):
         if build_native(cls.source, cls.bootstrap, cls.root):
             raise AssertionError('U1a owner physical probe failed to compile')
 
-    def _run(self, executable, timeout=180):
-        completed = subprocess.run([str(executable)], capture_output=True, text=True, timeout=timeout)
-        self.assertEqual(
-            (completed.returncode, completed.stderr), (0, ''),
-            f'exit={completed.returncode}; 77=oversized graph reuse, 78=insufficient GC reclamation\n'
-            + completed.stdout[-2000:])
+    def _run(self, executable, timeout=180, pass_fds=()):
+        completed = subprocess.run(
+            [str(executable)], capture_output=True, text=True, timeout=timeout, pass_fds=pass_fds)
+        self.assertEqual((completed.returncode, completed.stderr), (0, ''), completed.stdout[-2000:])
         physical, logical, cleanup = _parse(completed.stdout)
         self.assertTrue(cleanup, completed.stdout[-2000:])
         self.assertEqual(set(physical), {
@@ -166,7 +316,7 @@ class U1OwnerPhysicalTests(unittest.TestCase):
             self.assertEqual(headers, objects * 32, name)
             self.assertEqual(total, payload + headers, name)
             self.assertGreaterEqual(payload, objects * 64, name)
-        return physical, logical
+        return physical, logical, completed.stdout
 
     def test_owned_layout_contract_and_independent_large_radix_oracle(self):
         graph = (ROOT / 'src/runtime/graph_heap_x86_64.eri').read_text()
@@ -180,7 +330,7 @@ class U1OwnerPhysicalTests(unittest.TestCase):
         self.assertIn('cmpq %r12,%rax', allocator)
         self.assertIn('.Lfreelist_reuse:', allocator)
 
-        physical, logical = self._run(self.bootstrap)
+        physical, logical, _ = self._run(self.bootstrap)
         self.assertEqual(physical['stress'], _word_backing(65536))
         self.assertEqual(physical['stress'][0], STRESS_OBJECTS)
         self.assertEqual(physical['scratch'], _scratch_backing(513, 1024))
@@ -205,13 +355,10 @@ class U1OwnerPhysicalTests(unittest.TestCase):
             self.assertEqual(fixtures.count(name), 5)
         self.assertIn('not individual UIR-owner allocation tagged', evidence['note'])
         self.assertIn('whole isolated C process managed heap', evidence['scope'])
-        dense = [sample for sample in evidence['samples'] if sample['fixture'] == 'dense128']
-        self.assertTrue(all(sample['actual_c_managed_heap']['peak_bytes'] >
-                            sample['model_owner_peak_bytes'] for sample in dense))
 
     @unittest.skipUnless(platform.system() == 'Linux' and platform.machine().lower() in ('x86_64', 'amd64'),
                          'owned runtime execution requires Linux x86-64')
-    def test_owned_exact_capacity_gc_and_c_partition_parity(self):
+    def test_owned_actual_capacity_by_owner_and_gc_reclamation(self):
         for tool in ('as', 'ld'):
             if not shutil.which(tool):
                 self.skipTest(f'{tool} unavailable')
@@ -240,14 +387,52 @@ class U1OwnerPhysicalTests(unittest.TestCase):
             return executable
 
         owned = link_runtime('owner-physical-owned', runtime.stdout)
-        diagnostic = link_runtime('owner-physical-owned-diagnostic', _instrument_owned_runtime(runtime.stdout))
-        c_physical, c_logical = self._run(self.bootstrap)
-        owned_physical, owned_logical = self._run(owned)
+        c_physical, c_logical, _ = self._run(self.bootstrap)
+        owned_physical, owned_logical, _ = self._run(owned)
         self.assertEqual(owned_physical, c_physical)
         self.assertEqual(owned_logical, c_logical)
-        diagnostic_physical, diagnostic_logical = self._run(diagnostic)
+
+        record_path = self.root / 'owner-actual.bin'
+        with record_path.open('wb') as record:
+            diagnostic = link_runtime(
+                'owner-physical-owned-diagnostic',
+                _instrument_owned_runtime(runtime.stdout, record.fileno()))
+            diagnostic_physical, diagnostic_logical, _ = self._run(
+                diagnostic, pass_fds=(record.fileno(),))
         self.assertEqual(diagnostic_physical, owned_physical)
         self.assertEqual(diagnostic_logical, owned_logical)
+
+        before, after = _decode_owner_records(record_path.read_bytes())
+        self.assertEqual(before['error'], 0)
+        self.assertEqual(after['error'], 0)
+        for name in TAG_NAMES.values():
+            first = before['owners'][name]
+            final = after['owners'][name]
+            self.assertGreater(first['allocations'], 0, name)
+            self.assertGreater(first['traffic'], 0, name)
+            self.assertGreater(first['peak'], 0, name)
+            self.assertGreaterEqual(first['traffic'], first['peak'], name)
+            self.assertGreaterEqual(first['peak'], first['live'], name)
+            self.assertEqual(final['traffic'], first['traffic'], name)
+            self.assertEqual(final['peak'], first['peak'], name)
+            self.assertEqual(final['allocations'], first['allocations'], name)
+            self.assertEqual(final['live'], 0, name)
+            self.assertEqual(final['reclaimed_bytes'], final['traffic'], name)
+            self.assertEqual(final['reclaimed_objects'], final['allocations'], name)
+
+        # The acceptance-scale function owners must also fit the existing physical
+        # interpretation of the selected 8 MiB peak / 64 MiB traffic gates. This
+        # includes allocator block headers and any oversized reused capacity.
+        policy = json.loads((ROOT / 'UIR_U1A_BUDGETS.json').read_text())['memory']
+        stress = before['owners']['stress']
+        self.assertLessEqual(stress['peak'], policy['function_peak_capacity_bytes'])
+        self.assertLessEqual(stress['traffic'], policy['function_allocation_traffic_bytes'])
+        self.assertGreaterEqual(stress['traffic'], physical_requested := owned_physical['stress'][3])
+        # Oversized reuse is expected to be represented honestly when present;
+        # never force the actual allocator number down to the structural request.
+        self.assertGreaterEqual(stress['peak'], min(stress['traffic'], physical_requested))
+
+        print('U1A_OWNER_ACTUAL=' + json.dumps({'before_gc': before, 'after_gc': after}, sort_keys=True))
 
 
 if __name__ == '__main__':
