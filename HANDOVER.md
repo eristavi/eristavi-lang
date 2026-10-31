@@ -1165,7 +1165,35 @@ verifier/oracle probes are pending. No performance code is committed.
   full CI and completed-batch qualification *once* at the coherent release
   boundary. The historical owned compiler full self-build stays skipped.
 
-Current next action: inspect draft PR #98 focused smoke, correct any
+Focused acceptance checkpoint:
+- [smoke CI 41193213024](https://github.com/eristavi/eristavi-lang/actions/runs/41193213024)
+  **passed** 21/21 tests at exact implementation head
+  `33897f21b1a38d9c3b819d50acdd978b910489fe`. Test fixtures
+  include dense sizes 8/32/128, wide sparse bit values and irreducible flow.
+  Shared successor helper now binary-searches signed-full-width bit cases
+  in canonical unsigned order without case-span allocation. Python remains
+  independent and all before/after promotion outputs agree.
+- Five fresh C-native process samples passed with identical output;
+  raw measurements recorded in
+  `docs/evidence/2026-10-31/u1-switch-acceptance.json`: 128-arm
+  modeled UIR owner peak 720,704 bytes, fresh allocation traffic 1,741,536
+  bytes and work 138,775 visits; actual process peak RSS was observed as
+  125,048 KiB in the hosted sample, **not** attributed solely to UIR
+  storage or treated as a 0.7 MiB physical heap.
+- This new implementation has only focused smoke qualification so far.
+  Final four-platform/full completed-batch code qualification is NOT passed
+  or merged as of this update. Preserve PR #96 qualification separately.
+- #72 and #77 are still open pending exact-head final qualification and
+  owner-scope acceptance review. The full owned compiler self-build remains
+  deliberately skipped.
+
+Current next action: request one final exact-head four-platform CI plus
+completed-batch qualification with the PR's `qualification` label.
+Do not follow or rerun the expensive workflows without the user's subsequent
+instruction. Keep this candidate draft and do not merge until the exact results
+and tested/merged Git trees have been independently checked.
+
+Previous plan superseded: inspect draft PR #98 focused smoke, correct any
 failures without raising limits or weakening the verifier/oracle, then decide
 which additional direct-UIR stress and physical-resource evidence can qualify.
 Update this handover as results and issue/PR states change.
