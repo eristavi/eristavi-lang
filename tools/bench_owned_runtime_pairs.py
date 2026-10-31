@@ -76,7 +76,7 @@ def build_workers():
 
 
 def make_executables(workdir: Path, compiler: str):
-    baseline_dir = workdir / "before"
+    baseline_dir = workdir / "baseline-source"
     # The worktree uses only the pre-PR99 runtime, never an unrelated PR.
     checked(["git", "worktree", "add", "--detach", baseline_dir, BASE], cwd=ROOT)
     try:
