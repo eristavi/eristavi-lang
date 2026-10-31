@@ -1,6 +1,7 @@
 # Eristavi compiler — current handover
 
 **Authoritative recovery checkpoint: 31 October 2026, Asia/Nicosia.** Start here.
+Section 41 is an active U2/U3 source-behavior acceptance baseline candidate (NOT new UIR implementation).
 Section 38 records the QUALIFIED, MERGED controlled owned-runtime benchmark; #77 physical attribution remains open.
 Section 37 is the authoritative **qualified, merged PR #99** owned-runtime optimization checkpoint.
 Section 36 preserves the earlier active optimization candidate and investigation history.
@@ -74,7 +75,7 @@ redundant indexing, unbounded caches or unnecessarily expensive CI.
 
 ## Start a new chat with this
 
-> Continue Eristavi Lang from **HANDOVER.md section 38** for the measured runtime result and section 37 for qualified production code. Future U1b #73, U2 #74, U3 #75 and U4 work remains incomplete.
+> Continue Eristavi Lang from **HANDOVER.md section 41** for the active U2/U3 parity baseline candidate; section 38 documents the qualified benchmark. U2/U3/U4 redesigned implementation is still unfinished.
 > Runtime/compiler performance, peak and retained memory, predictable
 > compilation time and bounded work are the **highest engineering priorities**
 > after correctness, safety and the frozen language contract; see the standing
@@ -1548,3 +1549,41 @@ The AB/BA run passed and its exact raw results were independently inspected.
 their actual source integration, independent reference tests and exact-head
 qualification pass. Keep these old and new milestones transparent in status
 and do not publish broad "all done" claims.
+
+## 41. Active independent U2/U3 Stage0 parity expansion — 2026-10-31
+
+**STATUS: TEST-ONLY CANDIDATE; UNQUALIFIED.** Branch
+`milestone/u2-u3-parity-baseline-20261031`, forked from last documentation main
+`1784f846ef2c54c6e1c7b79db73e63c14a0c1176`.
+This is a **real executable reference baseline** needed by U2/U3 migration,
+but no redesigned UIR Text/List/identity/checked/resource operations or
+frontend→new-UIR lowering are implemented by these tests.
+
+- Extend existing `tests/test_u3_stage0_parity_baseline.py` with ten
+  frozen successful source programs from the project's authoritative
+  175-case semantic corpus. The added cases cover List structural equality
+  and value parameters, alias vs distinct identity, maybe-identity,
+  checked try propagation, Unicode Text views, imported checked failures,
+  nested inferred generic lists and generic replacement.
+- For each case execute **independently** through Stage-0 reference source
+  runner and existing C-native compiler, checking exact output/stderr
+  parity, success, and original unchanged source files. The existing direct
+  native targets are only asserted where previously qualified; do not
+  silently route the redesigned UIR through the old path and call it U3.
+- Run focused CI with full existing native resource/semantic regressions;
+  if mismatches occur, investigate as real compatibility gaps rather than
+  removing test vectors. No public ABI, Unicode17, language grammar,
+  source semantics or default backend modifications.
+- U2 #74 still requires explicit new UIR-managed value/copy/identity ops,
+  checked continuations, exact cleanup and GC root maps. U3 #75 still
+  requires construction from frozen AST+semantic facts, actual native output,
+  origin-preserving artifacts/cache ingress and old/new differential
+  acceptance. U4 issue #102 holds later machine lowering.
+- U1a physical #77 and U1b aggregate #73 remain independent gating
+  milestones. **Do not mark U2/U3/U4 completed from baseline parity.**
+
+**Next:** inspect actual focused smoke, preserve all authoritative case
+outputs, then reconcile updated milestone status with current main. For
+implementation, begin U2 with a reviewed versioned managed/checked/resource
+extension profile and a separate function-level owned reference adapter;
+only then attempt U3 source bridge or U4 machine legalization.
