@@ -120,12 +120,9 @@ def _instrument_owned_runtime(runtime):
         1,
     )
 
-    startup = (
-        '    call erist_entry\n'
-        '    call erist_rt_allocator_release_all\n'
-        '    testq %rax,%rax\n'
-        '    jne .Lscalar_app_fail\n'
-    )
+    # The full owned runtime enters through erist_rt_process_start rather than
+    # the minimal scalar template. Existing resource tests use this same anchor.
+    startup = '    call erist_entry\n    movq .Lprocess_exit_code'
     assert runtime.count(startup) == 1
     runtime = runtime.replace(
         startup,
@@ -140,14 +137,12 @@ def _instrument_owned_runtime(runtime):
         '    subq %rax,%rcx\n'
         f'    cmpq ${STRESS_OBJECTS},%rcx\n'
         '    jb .Ltest_u1_physical_fail\n'
-        '    call erist_rt_allocator_release_all\n'
-        '    testq %rax,%rax\n'
-        '    jne .Lscalar_app_fail\n'
         '    jmp .Ltest_u1_physical_done\n'
         '.Ltest_u1_physical_fail:\n'
         '    movl $77,%edi\n'
         '    jmp erist_rt_exit\n'
-        '.Ltest_u1_physical_done:\n',
+        '.Ltest_u1_physical_done:\n'
+        '    movq .Lprocess_exit_code',
         1,
     )
     return runtime
