@@ -86,6 +86,21 @@ public function commit(reservation identity Reservation) returns identity Alloca
     reservation.state=1;
     return identity Allocation { owner=owner; bytes=reservation.bytes; state=0; };
 }
+// Commit another backing reservation into one existing store-owned lease.
+// Validate every capability and both ledgers before publishing any mutation.
+// This avoids one managed Allocation object per radix node/page; successful
+// capacity and traffic charges are identical to separate commit() calls.
+public function commitInto(reservation identity Reservation,allocation identity Allocation) fails LimitError {
+    let owner be reservation.owner; try active(owner);
+    if reservation.state != 0 or allocation.state != 0 or allocation.owner != owner { try invalid(); }
+    let amount be reservation.bytes; let parent be owner.parent;
+    if amount < 0 or allocation.bytes < 0 or allocation.bytes > owner.live { try invalid(); }
+    if amount > owner.pending or amount > owner.pendingTraffic { try invalid(); }
+    if amount > owner.limit-allocation.bytes { try invalid(); }
+    if parent != none { if amount > parent.pending or amount > parent.pendingTraffic { try invalid(); } }
+    commitAt(owner,amount); if parent != none { commitAt(parent,amount); }
+    allocation.bytes=allocation.bytes+amount; reservation.state=1;
+}
 function cancelAt(owner identity Owner,amount Int) { owner.pending=owner.pending-amount; owner.pendingTraffic=owner.pendingTraffic-amount; }
 public function cancelReservation(reservation identity Reservation) fails LimitError {
     if reservation.state != 0 or reservation.owner.state == 3 { try invalid(); }

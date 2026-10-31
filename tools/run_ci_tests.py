@@ -25,10 +25,16 @@ SMOKE_TESTS=(
     'test_u1_native.U1NativeTests',
     'test_u1_integer_execution.U1IntegerExecutionTests.test_integer_recursion_switch_promotion_and_fault_traces',
     'test_u1_narrow_execution.U1NarrowExecutionTests.test_independent_canonical_narrow_execution_and_faults',
+    # U1a #77 acceptance: exact owner-partition backing under both the C bootstrap
+    # and freestanding owned runtime, independently predicted large radix/scratch
+    # shapes, and the retained PR #103 C-heap evidence boundary.
+    'test_u1_owner_physical.U1OwnerPhysicalTests',
     'test_native_runtime_lifetimes.NativeRuntimeLifetimeTests.test_native_handler_and_abandoned_call_allocations_are_reclaimed',
     # Owned runtime GC optimization conformance: real graph, interior/slot roots,
     # bounded static scratch, forced pressure, and allocation-refusal fallbacks.
     'test_heap_scaled_collection.HeapScaledCollectionTests.test_large_heap_interval_and_empty_heap_reset',
+    'test_runtime_lookup_caches.IdentityBackingCacheTests',
+    'test_freestanding_graph_values.FreestandingGraphValueTests.test_optional_identity_updates_preserve_aliases_rebinding_and_nested_snapshots',
     'test_runtime_lookup_caches.RuntimeLookupCacheTests.test_owned_graph_exact_slot_roots_preserve_interior_and_fallback',
     'test_runtime_lookup_caches.RuntimeLookupCacheTests.test_owned_slot_scratch_reuse_zeroing_nesting_and_refusal',
     'test_freestanding_text_roots.FreestandingTextRootTests.test_registered_roots_bound_loop_slots_and_preserve_pending_results',

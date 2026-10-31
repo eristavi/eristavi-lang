@@ -1,0 +1,144 @@
+{
+  "application_assembly_sha256": "35093b5bff390cfb107151e2abb7beb0ff55f908c20e870ee91b8bd9b114a1c7",
+  "baseline_runtime_source": "a6472b11c407c7766cee47a894f623ff8254ff39",
+  "candidate_implementation_commit": "85ab8cf20806580cc1148364d242984cfb9ee24f",
+  "candidate_source_hashes": {
+    "src/compiler/u1_budget.eri": "d605fd9abbaf54e932b005bd6827a721acbfe838686b11ea0bacdd6db2027744",
+    "src/compiler/u1_words.eri": "03c78439e65b902da8c08ca3a6d38928a38acc6a9a08ec0c4ffbb39c7788a7df",
+    "src/compiler/universal_lower.eri": "a1ae0efaa6fb0416c177ab4e8af841403b5517ccc5b182249e81432de93b3180",
+    "src/runtime/allocator_x86_64.eri": "dcad25c9a09100695d9ea59bf00090512ad5637792958f1b1a1c0963381c6e23",
+    "src/runtime/float_decimal_x86_64.eri": "b3ccf7396a521bb6e6edbc3f01fd987e2cd73ea1c7ff0c40edfe308c976dfa66",
+    "src/runtime/float_format_x86_64.eri": "49ca2cbefb8c7cc691885779a9f0423d0b5eedb726f69f34f30eea7f04b76313",
+    "src/runtime/float_parse_x86_64.eri": "96713eddc56a65f5f250cb41fa7f6e60186dbad63ad40fafff5562f45ad63018",
+    "src/runtime/float_x86_64.eri": "e1b73f77ac16ffcc50f19e99364ae8e301c8b84c1c3b477209ffc65a1e5adaa4",
+    "src/runtime/graph_failure_x86_64.eri": "ae87fa9a15b6da297ee1434887554dc59e192ab93502eaa09683476fd64bef62",
+    "src/runtime/graph_heap_x86_64.eri": "23db06c709d6647aebc118d5b4e06c227dfedd524c55b47ce0f4e4fc98c5c5db",
+    "src/runtime/graph_values_x86_64.eri": "5fc275e9057c5a96357e8509ee2dc44ef880ea6868c3f89740e0f93c2924bcb6",
+    "src/runtime/linux_x86_64.eri": "5090ef00393563b2afbdbcd958d80ca0214e5f24d26b25c60ecb9bbdb21fa6c7",
+    "src/runtime/resource_x86_64.eri": "b33ec065453dec5593b83bb9fc1c29b83be987b0302a506166f89ad076e6813a",
+    "src/runtime/scalar_fault_x86_64.eri": "e4119cb1f2ca9c8e8e4a1410761d594488eaf5270740a406fcbcd37caa164f84",
+    "src/runtime/scalar_x86_64.eri": "8cb8fb5cb457ab13f076e7246f8079be0649555b987c6764c195af5d3dc1ceaa",
+    "src/runtime/slot_index_x86_64.eri": "f9be839b0a137254e54b2620b91eea331945d40b6cfd0b98195e6904ed21692f",
+    "src/runtime/text_buffer_x86_64.eri": "463876bddbe74445e76bcb6cdf3d8acbfba2b184a8258e1f8d2053e31e7206c4",
+    "src/runtime/text_ops_x86_64.eri": "a660e0d1a261d8d1a9d379b36685d9193d8b2a8cb03d77a6053c8f7d59310ee3",
+    "src/runtime/text_pool_x86_64.eri": "45211a4f6ccd8df15f8628bde24cdf4f1ed613a702b6613b3a0961f2eb3ef924",
+    "src/runtime/text_registry_x86_64.eri": "b4ba2b9b4d5eb9fd7a538b12400950ba838debb64b359da5985d56aa0a811f2c",
+    "src/runtime/unicode_grapheme_x86_64.eri": "5ce30a1b212f9abfe0aa2eb6a4d8b9a93ae4f00b0efd726bcb9f26c4e4d4ad9e",
+    "src/runtime/unicode_library_x86_64.eri": "0347e00e2969e6aab5a1fc758d467eea549b8cc417c64a6d1542867b68ec99c0",
+    "src/runtime/unicode_nfc_tables_x86_64.eri": "993cfa2bdb5be04267dcc8adaf0fab39fa9ab89988f78d596f11842851d3cbc3",
+    "src/runtime/unicode_nfc_x86_64.eri": "d28c65f38745ddd65a4a94d065893e4a98356a551c5c221f094baa6be1d4b472",
+    "src/runtime/unicode_tables_x86_64.eri": "433a2d296b8d48a3408d80b115614d718c16e6972a905837ba21c0cfced8d171",
+    "src/runtime/value_float_x86_64.eri": "e0bd7e929ac85d11c5ab358da6f117c1336cfc4d832902c3f7eef84041091962",
+    "src/runtime/value_output_x86_64.eri": "860a21aa933ac60964dd20c3804df0fec5537b7e27d5b5d53454a83d42acc01d",
+    "src/runtime/value_roots_x86_64.eri": "9c7e38320b9263af7bbbc1899a579defbc18b4f2ca1dc64a3e230dd545839859",
+    "src/runtime/value_scalar_x86_64.eri": "cd81fc63ccec14e1c0e7f3138ab3707d0a0c14573b975aa176af71cd12516268",
+    "src/runtime/value_scope_x86_64.eri": "92519fe4653243901dab8cc8d6e2cd9f5a9ec9eed286281c47ab46c0218dce1b",
+    "src/runtime/value_text_x86_64.eri": "55be2a140b66f7405cf2b5d6ee68f4ef450761187f41b673f6b0996b7393dcbd",
+    "src/runtime/value_view_x86_64.eri": "9e3ffa775edd5c7355e80a5c3407e7a6a987858d16286e8df565e0a90576fd2d"
+  },
+  "frontend_source": "a6472b11c407c7766cee47a894f623ff8254ff39",
+  "medians": {
+    "after": 8.962500710000313,
+    "before": 9.408629457999723
+  },
+  "qualification": "Historical development timing before the collision correction; does not qualify the final collision-stable runtime.",
+  "reproduction": "Generate build_workers/source_for from tools/bench_owned_runtime_pairs.py; compare a6472b1 baseline against this implementation. Runtime-only uses one unchanged application assembly emitted with a6472b1 frontend against candidate U1 core inputs. Whole-candidate emits against each respective immutable core/frontend. Both independently check expected_lines(worker0) on all ten executions, alternate five AB/BA pairs, retain 120s watchdog, and use one GCC -O2 host. No performance instrumentation in timed executables; wait4 captures CPU/RSS; RSS may include fork-startup high-water and is not UIR backing.",
+  "runtime_assembly_sha256": {
+    "after": "9d0b2d020348aaa4e57955d9f76684ce39213f40374c07983c9b4b8c6c77690d",
+    "before": "01c1ff0b7e1364c3042f1e01c3f0ce61eff06c0852938c23001328c35a7d8588"
+  },
+  "samples": [
+    {
+      "output_sha256": "500b6a0b0baa51d7840a139181c102bbb60b742ccbb6648a56b9365279ed3b6e",
+      "pair": 1,
+      "peak_rss_KiB": 100804,
+      "runtime": "before",
+      "system_cpu_seconds": 0.6168899999999999,
+      "user_cpu_seconds": 6.943824,
+      "wall_seconds": 7.572994365999875
+    },
+    {
+      "output_sha256": "500b6a0b0baa51d7840a139181c102bbb60b742ccbb6648a56b9365279ed3b6e",
+      "pair": 1,
+      "peak_rss_KiB": 100804,
+      "runtime": "after",
+      "system_cpu_seconds": 0.7370709999999999,
+      "user_cpu_seconds": 7.699689,
+      "wall_seconds": 8.447939744999985
+    },
+    {
+      "output_sha256": "500b6a0b0baa51d7840a139181c102bbb60b742ccbb6648a56b9365279ed3b6e",
+      "pair": 2,
+      "peak_rss_KiB": 100804,
+      "runtime": "after",
+      "system_cpu_seconds": 0.882995,
+      "user_cpu_seconds": 8.728967,
+      "wall_seconds": 9.622464120000132
+    },
+    {
+      "output_sha256": "500b6a0b0baa51d7840a139181c102bbb60b742ccbb6648a56b9365279ed3b6e",
+      "pair": 2,
+      "peak_rss_KiB": 100804,
+      "runtime": "before",
+      "system_cpu_seconds": 0.788627,
+      "user_cpu_seconds": 8.613848,
+      "wall_seconds": 9.408629457999723
+    },
+    {
+      "output_sha256": "500b6a0b0baa51d7840a139181c102bbb60b742ccbb6648a56b9365279ed3b6e",
+      "pair": 3,
+      "peak_rss_KiB": 100804,
+      "runtime": "before",
+      "system_cpu_seconds": 0.82023,
+      "user_cpu_seconds": 8.919487,
+      "wall_seconds": 9.748017592999986
+    },
+    {
+      "output_sha256": "500b6a0b0baa51d7840a139181c102bbb60b742ccbb6648a56b9365279ed3b6e",
+      "pair": 3,
+      "peak_rss_KiB": 100804,
+      "runtime": "after",
+      "system_cpu_seconds": 0.9223349999999999,
+      "user_cpu_seconds": 8.033093,
+      "wall_seconds": 8.962500710000313
+    },
+    {
+      "output_sha256": "500b6a0b0baa51d7840a139181c102bbb60b742ccbb6648a56b9365279ed3b6e",
+      "pair": 4,
+      "peak_rss_KiB": 100804,
+      "runtime": "after",
+      "system_cpu_seconds": 0.838877,
+      "user_cpu_seconds": 8.002511,
+      "wall_seconds": 8.851552989000083
+    },
+    {
+      "output_sha256": "500b6a0b0baa51d7840a139181c102bbb60b742ccbb6648a56b9365279ed3b6e",
+      "pair": 4,
+      "peak_rss_KiB": 100804,
+      "runtime": "before",
+      "system_cpu_seconds": 0.715093,
+      "user_cpu_seconds": 7.419663,
+      "wall_seconds": 8.153876547999971
+    },
+    {
+      "output_sha256": "500b6a0b0baa51d7840a139181c102bbb60b742ccbb6648a56b9365279ed3b6e",
+      "pair": 5,
+      "peak_rss_KiB": 100804,
+      "runtime": "before",
+      "system_cpu_seconds": 1.268708,
+      "user_cpu_seconds": 14.249396,
+      "wall_seconds": 15.530657678000352
+    },
+    {
+      "output_sha256": "500b6a0b0baa51d7840a139181c102bbb60b742ccbb6648a56b9365279ed3b6e",
+      "pair": 5,
+      "peak_rss_KiB": 100804,
+      "runtime": "after",
+      "system_cpu_seconds": 1.179052,
+      "user_cpu_seconds": 10.860564,
+      "wall_seconds": 12.047067126999991
+    }
+  ],
+  "scope": "same unchanged assembly worker0, runtime-only comparison; candidate core source and original a6472b1 frontend; no whole-compiler speed claim",
+  "speedup": 1.0497772622212036
+}

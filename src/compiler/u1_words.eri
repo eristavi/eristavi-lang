@@ -2,6 +2,8 @@
 // 16-word pages, fixed maximum depth 6. No List field/copy-on-write dependency.
 // These are safe ordinary Eristavi objects, not packed machine buffers.
 // Charges are conservative adapter capacities; allocator/GC overhead is separate.
+// One store-owned lease covers all nodes/pages. The legacy charge fields remain
+// empty; they are not separate managed Allocation records per backing object.
 import compiler.u1_budget as budget;
 public type Page { w0 Int; w1 Int; w2 Int; w3 Int; w4 Int; w5 Int; w6 Int; w7 Int; w8 Int; w9 Int; w10 Int; w11 Int; w12 Int; w13 Int; w14 Int; w15 Int; charge maybe identity budget.Allocation; }
 public type Node { c0 maybe identity Node; c1 maybe identity Node; c2 maybe identity Node; c3 maybe identity Node; c4 maybe identity Node; c5 maybe identity Node; c6 maybe identity Node; c7 maybe identity Node; c8 maybe identity Node; c9 maybe identity Node; c10 maybe identity Node; c11 maybe identity Node; c12 maybe identity Node; c13 maybe identity Node; c14 maybe identity Node; c15 maybe identity Node; page maybe identity Page; charge maybe identity budget.Allocation; }
@@ -18,15 +20,15 @@ public function create(owner identity budget.Owner,limit Int) returns identity W
     let words be identity Words { owner=owner; root=none; length=0; limit=limit; closed=false; frozen=false; control=try budget.commit(pending); };
     return words;
 }
-function newNode(owner identity budget.Owner,phase identity budget.Phase) returns identity Node fails budget.LimitError {
-    try budget.work(phase,18); let pending be try budget.reserve(owner,800);
+function newNode(store identity Words,phase identity budget.Phase) returns identity Node fails budget.LimitError {
+    let owner be store.owner; try budget.work(phase,18); let pending be try budget.reserve(owner,800);
     let node be identity Node { c0=none; c1=none; c2=none; c3=none; c4=none; c5=none; c6=none; c7=none; c8=none; c9=none; c10=none; c11=none; c12=none; c13=none; c14=none; c15=none; page=none; charge=none; };
-    node.charge=try budget.commit(pending); return node;
+    try budget.commitInto(pending,store.control); return node;
 }
-function newPage(owner identity budget.Owner,phase identity budget.Phase) returns identity Page fails budget.LimitError {
-    try budget.work(phase,17); let pending be try budget.reserve(owner,768);
+function newPage(store identity Words,phase identity budget.Phase) returns identity Page fails budget.LimitError {
+    let owner be store.owner; try budget.work(phase,17); let pending be try budget.reserve(owner,768);
     let page be identity Page { w0=0; w1=0; w2=0; w3=0; w4=0; w5=0; w6=0; w7=0; w8=0; w9=0; w10=0; w11=0; w12=0; w13=0; w14=0; w15=0; charge=none; };
-    page.charge=try budget.commit(pending); return page;
+    try budget.commitInto(pending,store.control); return page;
 }
 function needNode(node maybe identity Node) returns identity Node fails budget.LimitError {
     if node != none { return node; }
@@ -42,14 +44,14 @@ function readChild(node identity Node,offset Int) returns maybe identity Node { 
 function writeChild(node identity Node,offset Int,value identity Node) { if offset < 8 { if offset < 4 { if offset < 2 { if offset < 1 { node.c0=value; return; } else { node.c1=value; return; } } else { if offset < 3 { node.c2=value; return; } else { node.c3=value; return; } } } else { if offset < 6 { if offset < 5 { node.c4=value; return; } else { node.c5=value; return; } } else { if offset < 7 { node.c6=value; return; } else { node.c7=value; return; } } } } else { if offset < 12 { if offset < 10 { if offset < 9 { node.c8=value; return; } else { node.c9=value; return; } } else { if offset < 11 { node.c10=value; return; } else { node.c11=value; return; } } } else { if offset < 14 { if offset < 13 { node.c12=value; return; } else { node.c13=value; return; } } else { if offset < 15 { node.c14=value; return; } else { node.c15=value; return; } } } } }
 
 function pageAt(words identity Words,phase identity budget.Phase,index Int,create Bool) returns identity Page fails budget.LimitError {
-    if create and words.root == none { words.root=try newNode(words.owner,phase); }
+    if create and words.root == none { words.root=try newNode(words,phase); }
     let node be try needNode(words.root); let divisor be 1048576; let pageIndex be index/16;
     while divisor >= 1 {
         try budget.work(phase,1); let offset be pageIndex/divisor%16; let next be readChild(node,offset);
-        if next == none and create { let fresh be try newNode(words.owner,phase); writeChild(node,offset,fresh); next=fresh; }
+        if next == none and create { let fresh be try newNode(words,phase); writeChild(node,offset,fresh); next=fresh; }
         node=try needNode(next); divisor=divisor/16;
     }
-    if create and node.page == none { node.page=try newPage(words.owner,phase); }
+    if create and node.page == none { node.page=try newPage(words,phase); }
     return try needPage(node.page);
 }
 public function get(words identity Words,phase identity budget.Phase,index Int) returns Int fails budget.LimitError {
@@ -69,18 +71,11 @@ public function push(words identity Words,phase identity budget.Phase,value Int)
 public function freeze(words identity Words) fails budget.LimitError {
     try budget.poll(words.owner); if words.closed { try budget.reject("closed U1a word store"); } words.frozen=true;
 }
-function closeNode(node identity Node,depth Int) fails budget.LimitError {
-    // Storage depth is fixed at six; this is not recursion over a program CFG.
-    let offset be 0;
-    if depth > 0 { while offset < 16 { let child be readChild(node,offset); if child != none { try closeNode(child,depth-1); } offset=offset+1; } }
-    let page be node.page; node.page=none;
-    if page != none { let allocation be page.charge; page.charge=none; if allocation != none { try budget.release(allocation); } }
-    let allocation be node.charge; node.charge=none; if allocation != none { try budget.release(allocation); }
-}
 public function close(words identity Words) fails budget.LimitError {
     if words.closed { try budget.reject("double close of U1a word store"); }
-    words.closed=true; let root be words.root; words.root=none; words.length=0;
-    if root != none { try closeNode(root,6); } try budget.release(words.control);
-    // No further use of backing is possible through this store. Managed garbage
-    // may remain until the runtime collects it; this is not a physical-free API.
+    words.closed=true; words.root=none; words.length=0;
+    // All successfully committed backing belongs to this single store lease.
+    // Revoke access before releasing the charge; managed garbage is reclaimed
+    // by the runtime, as before. No per-node lease walk/allocation is needed.
+    try budget.release(words.control);
 }

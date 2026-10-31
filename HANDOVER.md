@@ -1,7 +1,8 @@
 # Eristavi compiler — current handover
 
 **Authoritative recovery checkpoint: 31 October 2026, Asia/Nicosia.** Start here.
-Section 42 is the authoritative COMPLETE WORK-SESSION CHECKPOINT: benchmark, U1b narrow, U1a physical study, U2/U3 parity, and remaining U1b/U2/U3/U4 gates.
+Section 43 records active PR #105 investigation; #77 remains OPEN and unqualified.
+Section 42 is the last merged COMPLETE WORK-SESSION CHECKPOINT: benchmark, U1b narrow, U1a physical study, U2/U3 parity, and remaining U1b/U2/U3/U4 gates.
 Section 41 records the MERGED PR #104 frozen source/native behavior parity baseline (test-only; redesigned UIR U2/U3 NOT implemented).
 Section 40 records the QUALIFIED and MERGED PR #103 C-managed physical heap study; exact UIR per-owner attribution #77 still OPEN.
 Section 39 records the QUALIFIED and MERGED U1b narrow execution slice (PR #101); immutable aggregates remain pending.
@@ -78,7 +79,7 @@ redundant indexing, unbounded caches or unnecessarily expensive CI.
 
 ## Start a new chat with this
 
-> Continue Eristavi Lang from **HANDOVER.md section 42** (latest all-milestones checkpoint). Sections 38–41 contain qualified PRs #100/#101/#103/#104 and exact evidence. **Optimization is highest priority after correctness and safety**. Full U1a physical owner attribution #77, U1b immutable aggregates #73, U2 #74, U3 #75 and U4 #102 remain OPEN.
+> Continue Eristavi Lang from **HANDOVER.md section 43** (active #105; section 42 is last merged baseline) (latest all-milestones checkpoint). Sections 38–41 contain qualified PRs #100/#101/#103/#104 and exact evidence. **Optimization is highest priority after correctness and safety**. Full U1a physical owner attribution #77, U1b immutable aggregates #73, U2 #74, U3 #75 and U4 #102 remain OPEN.
 > Runtime/compiler performance, peak and retained memory, predictable
 > compilation time and bounded work are the **highest engineering priorities**
 > after correctness, safety and the frozen language contract; see the standing
@@ -1756,3 +1757,155 @@ It did **not** implement the entire remaining U1b/U2/U3/U4 compiler rewrite
 or complete #77's per-owner physical accounting. Never mark those milestones
 green until their actual source, independent oracles and qualification
 prove it. Handover recovery MUST remain explicit about these gaps.
+
+## 43. Active PR #105 memory investigation — 2026-10-31
+
+**IN PROGRESS / NOT QUALIFIED / NOT MERGED.** User authorized investigation,
+correction, documentation reconciliation and exact-head qualification before
+merging #105 or closing #77, followed by U1b aggregates → U2 → U3 → U4 with
+performance work throughout. Local branch `codex/u1a-105-investigation` starts
+from PR head `a6472b11c407c7766cee47a894f623ff8254ff39`; remote PR branch is
+`milestone/u1a-owner-physical-attribution-20261031`. Main remains
+`79a9a0fcaedd638c5bc81a5b599e7cb9e23aa0b0`.
+
+Latest hosted smoke [41216287986](https://github.com/eristavi/eristavi-lang/actions/runs/41216287986)
+passed 30/31 tests. Owner physical diagnostic failed at actual stress-phase
+peak **24,400,832 bytes**, above unchanged **8,388,608 bytes**. The structural
+radix oracle and retained C-heap evidence checks passed. The new probe tags
+allocations by active construction phase, including temporary and bookkeeping
+objects; exact semantic ownership must not be assumed from those tags alone.
+The older PR body describes superseded no-oversized-reuse instrumentation.
+Current diagnostic measures actual block capacity, cumulative allocation
+traffic and collection, including oversized free-list reuse.
+
+Pending: reproduce with raw diagnostics, identify retained/backing/temporary
+and allocator-reuse costs, fix the demonstrated cause without raising budgets
+or weakening assertions, reconcile PR/body/evidence, then focused checks and
+one final exact-head four-platform CI plus completed-batch qualification.
+Do not run experimental owned compiler full self-build. Do not close #77 or
+mark U1a accepted until all scoped physical/resource gates are evidenced.
+
+### Section 43 investigation update — local candidate, NOT yet hosted-qualified
+
+Original stress allocations: 3,215,578 graph allocations, 1,533,455,872 bytes
+cumulative actual block traffic, 24,400,832-byte phase peak. The fixture
+remains 65,536 words / 4,096 pages; original 8 MiB / 64 MiB gates stay unchanged.
+
+Implemented locally:
+- One `Words.control` lease aggregates successful page/node reservations through
+  checked `budget.commitInto`; unchanged capacity/traffic/work admission, foreign/
+  repeated/released-lease rejection and aggregate release. No per-page Allocation
+  identity; `Words.close` revokes access and releases the one lease.
+- Read a narrowed optional identity handle when lowering a member write; do not
+  detach its ordinary optional wrapper unless replacing that payload.
+- Bounded 256-entry nonowning x86 identity backing cache (4,104 B static). A first
+  write detaches, value snapshot reads invalidate, graph mark/sweep clears keys,
+  collisions re-clone. Escaping mutable identity-payload references permanently
+  select the original safe detach path for that runtime lifetime.
+- Allocator splits reusable oversized blocks; 64 exact small size classes through
+  1,024 B with a bitmap avoid linear scans through unrelated small free blocks.
+  Region-aware links, checked metadata, no-allocation operation, alignment,
+  free validation and release-all reset remain. Added static allocator state: 1,544 B.
+- Diagnostic distinguishes construction-phase history (including temporary and
+  bookkeeping allocations) from exact retained semantic-owner wrapper/body
+  observations. It records real allocator capacities and independently checks
+  structural/radix layout, all observed-object GC reclamation, and exact publication
+  function ownership even when publication was built in the metadata phase.
+
+Latest local six-test ownership/allocator gate passed. Stress phase peak
+7,833,216 B, traffic 19,711,040 B, 66,737 graph allocations. Exact retained stress
+backing: 16,938 wrapper/body objects, 6,647,888 B, all reclaimed. Source schema
+pins ensure changing an owning record layout requires observer reconciliation.
+A real selected production identity import now exercises registry/publication
+ownership. New focused tests cover value snapshots, aliases, mutable-payload
+escape fallback, nested ordinary values, optional rebinding, allocator splitting,
+high bitmap bit, multiple same-class heads, release reset and lease atomicity.
+
+Earlier broader local smoke: 31/31 passed; new focused classes separately passed.
+A refreshed opt-in current-code C-managed study also passed 20/20 samples; it
+remains whole C-process heap evidence, separate from owned per-buffer attribution.
+Full hosted four-platform CI and completed-batch qualification are NOT yet run.
+Paired runtime-only worker0 measurements are in progress; do not infer any
+whole-compiler speedup. No merge or #77 closure has occurred. Next reconcile final
+raw evidence/PR description, qualify one coherent final head, inspect exact results
+and tree equivalence, then proceed to U1b aggregates → U2 → U3 → U4.
+
+### Final local submission evidence for #105
+
+Implementation checkpoint `85ab8cf` passed the six-test ownership/allocator gate
+with real selected import and complete observed backing reclamation. Final source
+schema pins exclude comments before counting fields. Raw current source-hashed
+evidence and the refreshed 20-sample C study are checked into `docs/evidence/
+2026-10-31/`; see `docs/performance/U1A_OWNER_MEMORY_INVESTIGATION_2026-10-31.md`.
+Five AB/BA whole-candidate worker0 pairs passed the independent oracle: medians
+8.857851 → 7.855453 s (**1.1276× for that workload only**). Runtime-only same-assembly
+control is near-flat (~1.05×) amid host variance. Neither proves whole-compiler
+throughput; do not multiply these by PR #100's earlier 5.4414× number.
+
+Local broader smoke passed 31/31 before later targeted allocator/observer additions;
+those additions passed focused native tests. Final hosted smoke plus four-platform
+full CI and completed-batch qualification remain required on the submitted head.
+The full owned compiler self-build is deliberately unselected. Until those gates
+are inspected and merge-tree equality is proved, #105 stays unqualified and #77 OPEN.
+
+### Hosted smoke found address-sensitive cache collisions — NOT QUALIFIED
+
+Submitted `c453e9db151bff9504422f05c25cf2badbf1c83e` preserved the checked tree
+`72b068e9bfd22fd8328d91bf9a9ddef5a52e417b`, but hosted smoke
+[41220371417](https://github.com/eristavi/eristavi-lang/actions/runs/41220371417)
+passed 34/35 and FAILED the physical peak gate: stress phase 9,725,616 B,
+515,478,752 B traffic and 1,035,287 allocations. Exact observed backing still
+matched and fully reclaimed; semantic/alias/allocator tests passed. Local passing
+addresses did not prove collision stability. No final full CI/qualification was
+started, no merge and no #77 closure.
+
+Active fix: retain the same 256-entry/4,104 B cache but use an eight-slot bounded
+probe window and search through deletion holes on lookup/invalidation. Full-window
+eviction remains conservative; no unbounded search or new cache allocation. Add
+a forced-initial-hash collision/invalidation-hole native regression. Refresh
+raw memory/performance evidence after focused and hosted smoke prove the fix;
+the earlier local report is development evidence, not current qualification.
+
+### Collision correction now passes adversarial full stress locally
+
+The probe now forces EVERY identity's initial cache hash to one bucket while
+leaving production probing/invalidation/eviction bounds intact. Eight and then
+sixteen probes alone exposed full-window victim thrash (75–77 MB traffic):
+always evicting the initial slot made hot records displace each other after
+cold entries filled the window. Final candidate uses sixteen bounded probes
+plus rotating full-window victims, still 256 entries; the one eight-byte victim
+cursor makes shared cache static state **4,112 B**, not the earlier 4,104 B.
+
+Seven focused ownership/allocator regressions now PASSED, including deliberate
+initial-hash collisions, deletion holes, full-window fallback, stale-body guard,
+snapshot reads/escaped references, bitmap bit 63/reset, and the entire 65,536-word
+all-colliding physical fixture. That adversarial run: 7,853,712 B phase peak,
+21,957,296 B phase traffic, 72,682 graph allocations; exact retained backing
+6,653,840 B / 16,938 objects, all reclaimed. Original 8 MiB / 64 MiB gates
+remain unchanged. Source schema pins and original C/owned output oracle pass.
+
+Refresh the submitted diagnostic source hashes/raw evidence, then inspect new
+hosted smoke before selecting the one final full CI + qualification gate. Old
+benchmark JSONs describe the pre-collision correction candidate; they are NOT
+performance qualification of the final runtime. No merge or #77 closure yet.
+
+### Final collision-stable submission preparation
+
+Local implementation checkpoint `9cf5b30` passes seven focused tests including
+the entire physical fixture with ALL initial identity hashes forced to one
+bucket. New per-owner raw data and the retained hosted failure are in
+`u1a-owner-physical-105.json` and `u1a-owner-105-hosted-collision.json`.
+Shared cache state is 4,112 B (256 entries, sixteen probes, rotating victim cursor).
+No qualification of the rejected direct-map candidate is being reused.
+
+Five refreshed final-code AB/BA worker0 pairs passed exact independent output/trace
+parity: median 8.135968 → 8.254257 s (0.9857×), roughly flat amid host variance
+(~1.5% higher wall time). **No final-code speedup or whole-compiler throughput
+claim.** Earlier 1.1276× and runtime-only control files are marked historical
+development evidence. The material result is bounded physical allocation and
+collision robustness; full compiler bottleneck profiling #51 remains unfinished.
+C-path 20/20 study remains independent and its C-relevant inputs are unchanged.
+
+Next submit this coherent revision, inspect hosted smoke, then request one final
+full four-platform CI plus completed-batch qualification. No full owned compiler
+self-build. Merge and #77 closure only after exact-head results/tree parity.

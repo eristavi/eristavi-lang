@@ -16,7 +16,14 @@ function required(value maybe identity ir.Node) returns identity ir.Node { if va
 function binary(op Text) returns Int { if op == "+" { return 0; } if op == "-" { return 1; } if op == "*" { return 2; } if op == "/" { return 3; } if op == "%" { return 4; } if op == "==" { return 5; } if op == "!=" { return 6; } if op == "<" { return 7; } if op == "<=" { return 8; } if op == ">" { return 9; } return 10; }
 function place(e identity State,node identity ir.Node) returns Int {
     if node.kind == 2 { return local(e,node.index); }
-    let base be place(e,required(node.first));
+    let first be required(node.first);
+    // Mutating a member of a narrowed optional identity does not replace the
+    // optional's payload. Read its shared identity handle; requesting a mutable
+    // optional payload would needlessly detach the ordinary optional wrapper.
+    let base be -1;
+    if node.kind == 22 and first.kind == 29 and ir.kind(e.builder.program.types,first.valueType) == 9 {
+        base=expression(e,first);
+    } else { base=place(e,first); }
     if node.kind == 29 { return call(e,"get_ref",[base]); }
     if node.kind == 22 { let field be immediate(e,node.index); return call(e,"member_ref",[base,field]); }
     let indexValue be expression(e,required(node.second)); let index be call(e,"truth",[indexValue]); return call(e,"index_ref",[base,index]);

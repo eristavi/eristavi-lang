@@ -1,0 +1,195 @@
+// Private U1a acceptance instrumentation for issue #77.
+//
+// This acceptance-only module does not change budgeting, GC scheduling, source
+// semantics or the public ABI. Structural counts independently predict requested
+// body backing. Self-equality observation events let the PRIVATE test runtime
+// identify each traversed identity wrapper and current body by real allocator
+// address, attribute retained capacity to the supplied semantic budget.Owner,
+// and verify its eventual GC reclamation. Actual capacity includes allocator
+// reuse; it is never inferred from a request or multiplied from process RSS.
+// Per-construction-phase peak/traffic includes temporary bookkeeping and is
+// reported separately as a conservative stress allocation envelope.
+import std.process;
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+import compiler.u1_meta as meta;
+import compiler.u1_builder as build;
+import compiler.u1_dominance as dom;
+import compiler.u1_module as link;
+import compiler.u1_imports as imports;
+import compiler.u1_publication as publication;
+
+public type Backing {
+    objects Int;
+    graphPayloadBytes Int;
+    allocatorHeaderBytes Int;
+    blockBytes Int;
+}
+
+// Acceptance-only identity event. Ordinary runtimes perform equality normally;
+// the private diagnostic records the real wrapper and current body allocation.
+// Tags are selected by the caller for the exact budget.Owner being traversed.
+function observe(value,tag Int) {
+    process.setExitCode(tag);
+    let same be value == value;
+    process.setExitCode(0);
+    if not same { process.setExitCode(1); }
+}
+
+function zero() returns Backing {
+    return Backing { objects=0; graphPayloadBytes=0; allocatorHeaderBytes=0; blockBytes=0; };
+}
+function block(cells Int) returns Backing {
+    let payload be 64+cells*32;
+    return Backing { objects=1; graphPayloadBytes=payload; allocatorHeaderBytes=32; blockBytes=payload+32; };
+}
+function blocks(count Int,cells Int) returns Backing {
+    if count <= 0 { return zero(); }
+    let payload be count*(64+cells*32);
+    let headers be count*32;
+    return Backing { objects=count; graphPayloadBytes=payload; allocatorHeaderBytes=headers; blockBytes=payload+headers; };
+}
+function plus(first Backing,second Backing) returns Backing {
+    return Backing {
+        objects=first.objects+second.objects;
+        graphPayloadBytes=first.graphPayloadBytes+second.graphPayloadBytes;
+        allocatorHeaderBytes=first.allocatorHeaderBytes+second.allocatorHeaderBytes;
+        blockBytes=first.blockBytes+second.blockBytes;
+    };
+}
+
+function nodes(value maybe identity words.Node,depth Int,tag Int) returns Int {
+    if value == none { return 0; }
+    observe(value,tag);
+    let count be 1;
+    if depth <= 0 { return count; }
+    count=count+nodes(value.c0,depth-1,tag); count=count+nodes(value.c1,depth-1,tag);
+    count=count+nodes(value.c2,depth-1,tag); count=count+nodes(value.c3,depth-1,tag);
+    count=count+nodes(value.c4,depth-1,tag); count=count+nodes(value.c5,depth-1,tag);
+    count=count+nodes(value.c6,depth-1,tag); count=count+nodes(value.c7,depth-1,tag);
+    count=count+nodes(value.c8,depth-1,tag); count=count+nodes(value.c9,depth-1,tag);
+    count=count+nodes(value.c10,depth-1,tag); count=count+nodes(value.c11,depth-1,tag);
+    count=count+nodes(value.c12,depth-1,tag); count=count+nodes(value.c13,depth-1,tag);
+    count=count+nodes(value.c14,depth-1,tag); count=count+nodes(value.c15,depth-1,tag);
+    return count;
+}
+function pages(value maybe identity words.Node,depth Int,tag Int) returns Int {
+    if value == none { return 0; }
+    let count be 0; let page be value.page; if page != none { observe(page,tag); count=1; }
+    if depth <= 0 { return count; }
+    count=count+pages(value.c0,depth-1,tag); count=count+pages(value.c1,depth-1,tag);
+    count=count+pages(value.c2,depth-1,tag); count=count+pages(value.c3,depth-1,tag);
+    count=count+pages(value.c4,depth-1,tag); count=count+pages(value.c5,depth-1,tag);
+    count=count+pages(value.c6,depth-1,tag); count=count+pages(value.c7,depth-1,tag);
+    count=count+pages(value.c8,depth-1,tag); count=count+pages(value.c9,depth-1,tag);
+    count=count+pages(value.c10,depth-1,tag); count=count+pages(value.c11,depth-1,tag);
+    count=count+pages(value.c12,depth-1,tag); count=count+pages(value.c13,depth-1,tag);
+    count=count+pages(value.c14,depth-1,tag); count=count+pages(value.c15,depth-1,tag);
+    return count;
+}
+
+// Exact current structural backing request of one radix-16 word store. Counting
+// the actual reachable Node/Page objects, rather than inferring from budget
+// charges, makes malformed or unexpectedly sparse shapes visible to the gate.
+public function wordStore(store identity words.Words,owner identity budget.Owner,tag Int)
+    returns Backing fails budget.LimitError {
+    if store.owner != owner or store.closed { try budget.reject("foreign or closed U1 physical word store"); }
+    observe(store,tag);
+    let nodeCount be nodes(store.root,6,tag); let pageCount be pages(store.root,6,tag);
+    let result be block(7); // Words: owner/root/length/limit/closed/frozen/control.
+    result=plus(result,blocks(nodeCount,18)); // Node: 16 children + page + charge.
+    result=plus(result,blocks(pageCount,17)); // Page: 16 words + charge.
+    return result;
+}
+
+public function metadata(data identity meta.Metadata,owner identity budget.Owner,tag Int)
+    returns Backing fails budget.LimitError {
+    if data.owner != owner or data.closed { try budget.reject("foreign or closed U1 physical metadata"); }
+    observe(data,tag);
+    let result be block(14);
+    result=plus(result,try wordStore(data.signatures,owner,tag));
+    result=plus(result,try wordStore(data.types,owner,tag));
+    result=plus(result,try wordStore(data.buckets,owner,tag));
+    result=plus(result,try wordStore(data.sources,owner,tag));
+    result=plus(result,try wordStore(data.bytes,owner,tag));
+    result=plus(result,try wordStore(data.locations,owner,tag));
+    result=plus(result,try wordStore(data.declarations,owner,tag));
+    result=plus(result,try wordStore(data.symbolBytes,owner,tag));
+    result=plus(result,try wordStore(data.originLinks,owner,tag));
+    return result;
+}
+
+public function functionBody(routine identity build.Function,owner identity budget.Owner,tag Int)
+    returns Backing fails budget.LimitError {
+    if routine.owner != owner or routine.state == 2 { try budget.reject("foreign or closed U1 physical function"); }
+    observe(routine,tag);
+    let result be block(17);
+    result=plus(result,try wordStore(routine.blocks,owner,tag));
+    result=plus(result,try wordStore(routine.values,owner,tag));
+    result=plus(result,try wordStore(routine.instructions,owner,tag));
+    result=plus(result,try wordStore(routine.operands,owner,tag));
+    result=plus(result,try wordStore(routine.edges,owner,tag));
+    result=plus(result,try wordStore(routine.arguments,owner,tag));
+    result=plus(result,try wordStore(routine.cells,owner,tag));
+    result=plus(result,try wordStore(routine.switches,owner,tag));
+    result=plus(result,try wordStore(routine.cases,owner,tag));
+    return result;
+}
+
+// Acceptance-only live scratch snapshot. Graph itself is 12 graph cells and
+// its radix store belongs to the supplied function owner.
+public function dominanceScratch(graph identity dom.Graph,owner identity budget.Owner,tag Int)
+    returns Backing fails budget.LimitError {
+    if graph.phase.owner != owner { try budget.reject("foreign U1 physical dominance scratch"); }
+    observe(graph,tag);
+    return plus(block(12),try wordStore(graph.data,owner,tag));
+}
+
+public function moduleRegistry(program identity link.Program,owner identity budget.Owner,tag Int)
+    returns Backing fails budget.LimitError {
+    if program.metadata.owner != owner or program.closed { try budget.reject("foreign or closed U1 physical module registry"); }
+    observe(program,tag);
+    let count be 0; let cursor be program.head;
+    while cursor != none { observe(cursor,tag); count=count+1; cursor=cursor.next; }
+    return plus(block(6),blocks(count,5));
+}
+
+public function importRegistry(policy identity imports.Policy,owner identity budget.Owner,tag Int)
+    returns Backing fails budget.LimitError {
+    if policy.program.metadata.owner != owner or policy.closed { try budget.reject("foreign or closed U1 physical import registry"); }
+    observe(policy,tag);
+    let count be 0; let cursor be policy.selected;
+    while cursor != none { observe(cursor,tag); count=count+1; cursor=cursor.next; }
+    return plus(block(5),blocks(count,5));
+}
+
+// Publication copies are charged to the owner of their source table. This
+// routine therefore partitions a single Publication exactly by budget.Owner.
+public function publicationBacking(stamp identity publication.Publication,owner identity budget.Owner,tag Int)
+    returns Backing fails budget.LimitError {
+    if stamp.closed { try budget.reject("closed U1 physical publication"); }
+    let result be zero();
+    if stamp.program.metadata.owner == owner {
+        observe(stamp,tag);
+        result=plus(result,block(9));
+        result=plus(result,try wordStore(stamp.versions,owner,tag));
+    }
+    let cursor be stamp.tables;
+    while cursor != none {
+        if cursor.source.owner == owner {
+            observe(cursor,tag);
+            result=plus(result,block(4));
+            result=plus(result,try wordStore(cursor.copy,owner,tag));
+        }
+        cursor=cursor.next;
+    }
+    return result;
+}
+
+// Fixed shared allocator metadata cannot honestly be assigned to one U1 owner.
+// Keep it explicit so evidence never silently equates per-owner block backing
+// with whole-process RSS or mmap-region reservation.
+public function sharedRegionHeaderBytes() returns Int { return 48; }
+public function graphHeaderBytes() returns Int { return 64; }
+public function allocatorBlockHeaderBytes() returns Int { return 32; }
+public function graphCellBytes() returns Int { return 32; }

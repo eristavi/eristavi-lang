@@ -15,7 +15,8 @@ ROOT=Path(__file__).resolve().parents[1]
 def descriptors():
     rows=[(i,0,'',[]) for i in range(6)]+[
         (6,0,'Box',[4]),(7,1,'List',[]),(8,9,'MaybeNode',[]),
-        (9,10,'IdentityNode',[]),(6,0,'Node',[8]),(6,0,'Problem',[1,4]),(11,0,'error',[4])]
+        (9,10,'IdentityNode',[]),(6,0,'Node',[8]),(6,0,'Problem',[1,4]),(11,0,'error',[4]),
+        (6,0,'CacheCounter',[1]),(9,13,'CacheCounterIdentity',[])]
     text='.section .data.rel.ro\n.p2align 3\n.globl ev_types\nev_types:\n'
     for i,(kind,inner,name,fields) in enumerate(rows):
         text+=f'.long {kind},{inner}\n.quad .Lkind_name{i},{len(fields)},'+(f'.Lkind_fields{i}' if fields else '0')+'\n'
@@ -120,6 +121,54 @@ _start:
         result=self.run_probe('geometric-list-growth',app+starter+FINISH,runtime=runtime,types=False)
         self.assertEqual((result.returncode,result.stdout,result.stderr),
                          (0,b'10000\n2000\n0\n2001\n-9\n42\n12000\n2000\n',b''))
+
+    def test_optional_identity_updates_preserve_aliases_rebinding_and_nested_snapshots(self):
+        source=self.directory/'optional-identity-writes.eri'
+        source.write_text("""
+        type Inner { value Int; }
+        type Counter { value Int; inner Inner; }
+        function advance(value maybe identity Counter) {
+            if value != none { value.value=value.value+1; }
+        }
+        let original be Counter { value=0; inner=Inner { value=7; }; };
+        let shared be identity original;
+        let alias be shared;
+        let selected maybe identity Counter be shared;
+        let copied be selected;
+        let index be 0;
+        while index < 2000 { advance(selected); index=index+1; }
+        let snapshot be shared.inner;
+        shared.inner.value=9;
+        let other be identity Counter { value=123; inner=Inner { value=4; }; };
+        if selected != none { selected=other; }
+        output(original.value); output(original.inner.value);
+        output(alias.value); output(alias == shared);
+        output(snapshot.value); output(shared.inner.value);
+        if selected != none { output(selected.value); }
+        if copied != none { output(copied.value); output(copied == shared); }
+        """)
+        expected=b'0\n7\n2000\ntrue\n7\n9\n123\n2000\ntrue\n'
+        reference=self.directory/'optional-identity-c'
+        self.assertEqual(build_native(source,reference,self.directory),0)
+        c_result=subprocess.run([str(reference)],capture_output=True,timeout=30)
+        self.assertEqual((c_result.returncode,c_result.stdout,c_result.stderr),(0,expected,b''))
+        app=self.compile_application(source)
+        runtime=self.runtime.replace('erist_rt_graph_new_capacity:\n',
+            'erist_rt_graph_new_capacity:\n    incq .Lidentity_test_allocations(%rip)\n',1)
+        starter="""
+.text
+.globl _start
+_start:
+    call erist_entry
+    cmpq $256,.Lidentity_test_allocations(%rip)
+    ja .Lgraph_test_fail
+    jmp .Lgraph_finish
+.bss
+.Lidentity_test_allocations:
+.quad 0
+"""
+        owned=self.run_probe('optional-identity-writes',app+starter+FINISH,runtime=runtime,types=False)
+        self.assertEqual((owned.returncode,owned.stdout,owned.stderr),(0,expected,b''))
 
     def test_real_aggregate_alias_cycle_and_checked_failure_application(self):
         fixture=ROOT/'examples/freestanding_graph_values.eri'
