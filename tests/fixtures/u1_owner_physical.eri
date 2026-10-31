@@ -27,7 +27,14 @@ function logical(name Text,owner identity budget.Owner) {
         format.integer(owner.limit)+":"+format.integer(owner.trafficLimit));
 }
 function run() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError {
+    // Acceptance-only tags. The owned diagnostic runtime reads the ordinary
+    // process exit-code cell while graph allocations occur. Normal execution
+    // resets it to zero before observable completion, so language/runtime
+    // semantics and production allocator code are unchanged.
+    process.setExitCode(101);
     let root be try budget.developmentRequest();
+
+    process.setExitCode(102);
     let shared be try budget.metadataOwner(root);
     let phase be try budget.constructionPhase(shared);
     let data be try meta.create(shared,phase);
@@ -38,6 +45,7 @@ function run() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError 
     let location be try meta.location(data,phase,source,0,8,0,1,1);
     try meta.freeze(data); try budget.finishPhase(phase);
 
+    process.setExitCode(103);
     let owner be try budget.functionOwner(root,false);
     let construct be try budget.constructionPhase(owner);
     let routine be try build.create(data,signature,owner,construct);
@@ -48,12 +56,15 @@ function run() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError 
     try build.returnValues(routine,exit,[try build.parameter(routine,exit,0)],location);
     try build.complete(routine); try budget.finishPhase(construct);
 
+    process.setExitCode(102);
     let program be try link.create(data); let count be try link.bind(program,target,routine);
     count=try link.seal(program);
     let policy be try imports.create(program); let frozen be try imports.freeze(policy);
     let stamp be try publication.publish(program,policy);
     try publication.validate(stamp);
 
+    // Reporting must not be attributed to a U1 owner.
+    process.setExitCode(0);
     show("metadata",try physical.metadata(data,shared));
     show("function",try physical.functionBody(routine,owner));
     show("module",try physical.moduleRegistry(program,shared));
@@ -62,25 +73,24 @@ function run() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError 
     show("publication-function",try physical.publicationBacking(stamp,owner));
     logical("metadata",shared); logical("function",owner);
 
-    // Live verifier/dominance-style scratch at a larger graph scale. The graph
-    // is deliberately prepared but not semantically executed: this gate measures
-    // its concrete owned backing, while existing verifier/promotion tests retain
-    // semantic and malformed-IR coverage.
+    process.setExitCode(104);
     let scratchOwner be try budget.functionOwner(root,false);
     let scratchPhase be try budget.verificationPhase(scratchOwner);
     let graph be try dom.create(scratchOwner,scratchPhase);
     try dom.prepare(graph,513,1024);
+    process.setExitCode(0);
     show("scratch",try physical.dominanceScratch(graph,scratchOwner));
     logical("scratch",scratchOwner);
+    process.setExitCode(104);
     try dom.close(graph); try budget.finishPhase(scratchPhase);
     try check(scratchOwner.live == 0 and scratchOwner.pending == 0,"scratch backing ledger leak");
     try budget.close(scratchOwner);
 
     // 65,536 concrete U1 words = 4,096 radix pages. This exceeds the earlier
-    // 8/32/128 switch samples in backing-object scale and crosses multiple radix
-    // levels while remaining inside the original 8 MiB peak / 64 MiB traffic
-    // policy. Python independently predicts the exact Node/Page count.
-    let stressOwner be try budget.functionOwner(root,false);
+    // 8/32/128 switch samples and stays inside the unchanged qualification
+    // policy: 8 MiB peak and 64 MiB successful allocation traffic.
+    process.setExitCode(105);
+    let stressOwner be try budget.functionOwner(root,true);
     let stressPhase be try budget.constructionPhase(stressOwner);
     let stress be try words.create(stressOwner,131072);
     let index be 0;
@@ -88,19 +98,25 @@ function run() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError 
         let ignored be try words.push(stress,stressPhase,index);
         index=index+1;
     }
+    process.setExitCode(0);
     show("stress",try physical.wordStore(stress,stressOwner));
     logical("stress",stressOwner);
     try check(stressOwner.peak <= stressOwner.limit and
         stressOwner.traffic <= stressOwner.trafficLimit,"stress exceeded original U1 limits");
+    process.setExitCode(105);
     try words.close(stress); try budget.finishPhase(stressPhase);
     try check(stressOwner.live == 0 and stressOwner.pending == 0,"stress backing ledger leak");
     try budget.close(stressOwner);
 
-    try publication.close(stamp); try imports.close(policy); try link.close(program);
+    process.setExitCode(103);
     try build.close(routine); try budget.close(owner);
+    process.setExitCode(102);
+    try publication.close(stamp); try imports.close(policy); try link.close(program);
     try meta.close(data); try budget.close(shared);
+    process.setExitCode(101);
     try check(root.live == 0 and root.pending == 0,"U1 owner physical probe ledger leak");
     try budget.close(root);
+    process.setExitCode(0);
     output("physical-owner-cleanup:ok");
     return true;
 }
