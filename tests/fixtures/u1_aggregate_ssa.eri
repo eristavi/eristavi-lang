@@ -140,7 +140,7 @@ function run() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError 
     let actualField be try words.get(routine.instructions,edit,(deadGetInstruction-1)*10+7);
     try change(routine.instructions,edit,(deadGetInstruction-1)*10+7,999);
     try check(try rejected(routine,graph,owner,2,"dead-aggregate-field"),
-        "reject malformed dead get"); 
+        "reject malformed dead get");
     try change(routine.instructions,edit,(deadGetInstruction-1)*10+7,actualField);
     try check(try accepted(routine,graph,owner,1,"dead-field-restored"),
         "restored dead field");
