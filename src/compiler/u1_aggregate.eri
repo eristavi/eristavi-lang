@@ -1,0 +1,154 @@
+// U1b opt-in aggregate type graph. Isolated from the qualified U1a metadata
+// layout until the aggregate operation and independent verifier gates are ready.
+// These are logical, owner-scoped structural types, not native object layouts.
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+import compiler.u1_meta as meta;
+
+public type TypeId { owner identity meta.Key; index Int; }
+public type Registry {
+    key identity meta.Key; owner identity budget.Owner; state Int;
+    records identity words.Words; // [hash, previous in bucket, first field, count]
+    fields identity words.Words;  // owner-scoped TypeId indices (no pointers)
+    buckets identity words.Words; // 256 heads, newest first
+    control maybe identity budget.Allocation;
+}
+
+function mutable(reg identity Registry,phase identity budget.Phase) fails budget.LimitError {
+    try budget.poll(reg.owner);
+    if reg.state != 0 or reg.owner != phase.owner { try budget.reject("immutable or foreign U1b aggregate graph"); }
+}
+
+public function create(owner identity budget.Owner,phase identity budget.Phase)
+    returns identity Registry fails budget.LimitError {
+    try budget.poll(owner);
+    if owner.kind != 1 or owner != phase.owner { try budget.reject("aggregate graph requires a shared metadata owner"); }
+    // Preflight before creating any graph storage. Ordinary U1a builders do not
+    // allocate this optional sidecar or alter their qualified physical layout.
+    let preflight be try budget.reserve(owner,16384);
+    try budget.cancelReservation(preflight);
+    let pending be try budget.reserve(owner,512);
+    let reg be identity Registry {
+        key=identity meta.Key { marker=0; }; owner=owner; state=0;
+        records=try words.create(owner,262144);
+        fields=try words.create(owner,524288);
+        buckets=try words.create(owner,256);
+        control=none;
+    };
+    let index be 0;
+    while index < 256 {
+        let ignored be try words.push(reg.buckets,phase,0);
+        index=index+1;
+    }
+    reg.control=try budget.commit(pending);
+    return reg;
+}
+
+public function primitive(reg identity Registry,value meta.TypeId)
+    returns TypeId fails budget.LimitError {
+    if reg.state == 2 { try budget.reject("closed U1b aggregate graph"); }
+    try budget.poll(reg.owner); try meta.validType(value);
+    return TypeId { owner=reg.key; index=value.index; };
+}
+
+public function valid(reg identity Registry,value TypeId) fails budget.LimitError {
+    try budget.poll(reg.owner);
+    if reg.state == 2 or value.owner != reg.key or value.index < 1 or
+       value.index > 6+reg.records.length/4 {
+        try budget.reject("foreign or invalid U1b aggregate TypeId");
+    }
+}
+
+public function typeAt(reg identity Registry,index Int)
+    returns TypeId fails budget.LimitError {
+    try budget.poll(reg.owner);
+    if reg.state == 2 or index < 1 or index > 6+reg.records.length/4 {
+        try budget.reject("invalid U1b aggregate type index");
+    }
+    return TypeId { owner=reg.key; index=index; };
+}
+
+public function fieldCount(reg identity Registry,phase identity budget.Phase,value TypeId)
+    returns Int fails budget.LimitError {
+    try valid(reg,value);
+    if value.index <= 6 { try budget.reject("primitive has no aggregate fields"); }
+    if reg.owner != phase.owner { try budget.reject("foreign aggregate phase"); }
+    return try words.get(reg.records,phase,(value.index-7)*4+3);
+}
+
+public function field(reg identity Registry,phase identity budget.Phase,value TypeId,index Int)
+    returns TypeId fails budget.LimitError {
+    let count be try fieldCount(reg,phase,value);
+    if index < 0 or index >= count { try budget.reject("aggregate field index out of range"); }
+    let offset be (value.index-7)*4;
+    let first be try words.get(reg.records,phase,offset+2);
+    return try typeAt(reg,try words.get(reg.fields,phase,first+index));
+}
+
+// Structural canonical interning. A field can refer only to a primitive or
+// an already-defined aggregate; no forward/cyclic by-value declarations exist.
+// Compare complete field sequences on every hash collision, never just hashes.
+public function aggregate(reg identity Registry,phase identity budget.Phase,components)
+    returns TypeId fails budget.LimitError {
+    try mutable(reg,phase);
+    if components.count > 4096 or components.count > reg.fields.limit-reg.fields.length or
+       reg.records.length/4 >= 65536 {
+        try budget.exceed(reg.owner,components.count,0);
+    }
+    let hash be 73; let index be 0;
+    while index < components.count {
+        let fieldType be components[index];
+        try valid(reg,fieldType);
+        try budget.work(phase,1);
+        hash=(hash*131+fieldType.index)%2147483629;
+        index=index+1;
+    }
+    hash=(hash*131+components.count)%2147483629;
+    let bucket be hash%256;
+    let cursor be try words.get(reg.buckets,phase,bucket);
+    while cursor != 0 {
+        let offset be (cursor-1)*4;
+        if try words.get(reg.records,phase,offset) == hash and
+           try words.get(reg.records,phase,offset+3) == components.count {
+            let start be try words.get(reg.records,phase,offset+2);
+            let same be true; index=0;
+            while index < components.count {
+                let current be components[index];
+                if try words.get(reg.fields,phase,start+index) != current.index { same=false; }
+                index=index+1;
+            }
+            if same { return TypeId { owner=reg.key; index=6+cursor; }; }
+        }
+        cursor=try words.get(reg.records,phase,offset+1);
+    }
+    // The new record is published into its bucket only after all components
+    // and all four record words have been successfully written.
+    let start be reg.fields.length; index=0;
+    while index < components.count {
+        let current be components[index];
+        let ignored be try words.push(reg.fields,phase,current.index); index=index+1;
+    }
+    let record be reg.records.length/4+1;
+    let ignored be try words.push(reg.records,phase,hash);
+    ignored=try words.push(reg.records,phase,cursor);
+    ignored=try words.push(reg.records,phase,start);
+    ignored=try words.push(reg.records,phase,components.count);
+    try words.set(reg.buckets,phase,bucket,record);
+    return TypeId { owner=reg.key; index=6+record; };
+}
+
+public function freeze(reg identity Registry) fails budget.LimitError {
+    try budget.poll(reg.owner);
+    if reg.state != 0 { try budget.reject("aggregate graph already frozen or closed"); }
+    try words.freeze(reg.records); try words.freeze(reg.fields); try words.freeze(reg.buckets);
+    reg.state=1;
+    // Frozen construction is NOT verified publication.
+}
+
+public function close(reg identity Registry) fails budget.LimitError {
+    if reg.state == 2 { try budget.reject("aggregate graph already closed"); }
+    reg.state=2;
+    try words.close(reg.records); try words.close(reg.fields); try words.close(reg.buckets);
+    let control be reg.control; reg.control=none;
+    if control != none { try budget.release(control); }
+}
