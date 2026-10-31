@@ -1,0 +1,43 @@
+name: U1a C-native physical heap study (opt-in)
+
+on:
+  pull_request:
+    types: [labeled]
+
+permissions:
+  contents: read
+
+jobs:
+  direct-uir-heap-observations:
+    if: >-
+      github.event.label.name == 'uir-physical-evidence' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      PYTHONPATH: .
+      CC: clang
+      CFLAGS: -O2
+      LANG: C
+      LC_ALL: C
+      TZ: UTC
+      ERISTAVI_UIR_C_HEAP_REPORT: u1a-c-heap.json
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install pinned Eristavi reference dependencies
+        run: python -m pip install -e .
+      - name: Explicitly measure C managed heap / RSS on unchanged U1a workloads
+        run: python tools/probes/u1_c_heap_physical.py -v
+      - name: Archive physical allocation and per-process evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: u1a-physical-c-managed-${{ github.run_id }}
+          path: u1a-c-heap.json
+          if-no-files-found: warn
+          retention-days: 30

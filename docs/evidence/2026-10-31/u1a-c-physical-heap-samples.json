@@ -1,0 +1,372 @@
+{
+  "source": "successfully completed targeted smoke CI (before movement to opt-in)",
+  "ci_run_id": 41199687957,
+  "ci_url": "https://github.com/eristavi/eristavi-lang/actions/runs/41199687957",
+  "exact_qualified_test_head": "38c5ffe4737ed0dadee52a9262f9f5ed99d3d11f",
+  "pass": true,
+  "note": "5 fresh Linux x86-64 native C processes per control/dense8/dense32/dense128; whole C managed collector measured; not individual UIR-owner allocation tagged; full process RSS not IR heap",
+  "scope": "whole isolated C process managed heap",
+  "attribution": "C-managed heap includes UIR and bootstrap; UIR owner-only allocation site attribution is NOT established",
+  "samples": [
+    {
+      "actual_c_managed_heap": {
+        "collections": 0,
+        "live_blocks": 0,
+        "live_bytes": 0,
+        "peak_bytes": 0,
+        "reclaimed_blocks": 0,
+        "reclaimed_bytes": 0
+      },
+      "actual_process_rss_KiB": 125032,
+      "fixture": "control",
+      "model_owner_peak_bytes": null,
+      "model_owner_traffic_bytes": null,
+      "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "owner_work_visits": null,
+      "trial": 1,
+      "wall_seconds": 0.010448
+    },
+    {
+      "actual_c_managed_heap": {
+        "collections": 0,
+        "live_blocks": 0,
+        "live_bytes": 0,
+        "peak_bytes": 0,
+        "reclaimed_blocks": 0,
+        "reclaimed_bytes": 0
+      },
+      "actual_process_rss_KiB": 125032,
+      "fixture": "control",
+      "model_owner_peak_bytes": null,
+      "model_owner_traffic_bytes": null,
+      "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "owner_work_visits": null,
+      "trial": 2,
+      "wall_seconds": 0.010344
+    },
+    {
+      "actual_c_managed_heap": {
+        "collections": 0,
+        "live_blocks": 0,
+        "live_bytes": 0,
+        "peak_bytes": 0,
+        "reclaimed_blocks": 0,
+        "reclaimed_bytes": 0
+      },
+      "actual_process_rss_KiB": 125032,
+      "fixture": "control",
+      "model_owner_peak_bytes": null,
+      "model_owner_traffic_bytes": null,
+      "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "owner_work_visits": null,
+      "trial": 3,
+      "wall_seconds": 0.010305
+    },
+    {
+      "actual_c_managed_heap": {
+        "collections": 0,
+        "live_blocks": 0,
+        "live_bytes": 0,
+        "peak_bytes": 0,
+        "reclaimed_blocks": 0,
+        "reclaimed_bytes": 0
+      },
+      "actual_process_rss_KiB": 125032,
+      "fixture": "control",
+      "model_owner_peak_bytes": null,
+      "model_owner_traffic_bytes": null,
+      "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "owner_work_visits": null,
+      "trial": 4,
+      "wall_seconds": 0.010294
+    },
+    {
+      "actual_c_managed_heap": {
+        "collections": 0,
+        "live_blocks": 0,
+        "live_bytes": 0,
+        "peak_bytes": 0,
+        "reclaimed_blocks": 0,
+        "reclaimed_bytes": 0
+      },
+      "actual_process_rss_KiB": 125032,
+      "fixture": "control",
+      "model_owner_peak_bytes": null,
+      "model_owner_traffic_bytes": null,
+      "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "owner_work_visits": null,
+      "trial": 5,
+      "wall_seconds": 0.010322
+    },
+    {
+      "actual_c_managed_heap": {
+        "collections": 22,
+        "live_blocks": 21433,
+        "live_bytes": 2571379,
+        "peak_bytes": 8423198,
+        "reclaimed_blocks": 1438686,
+        "reclaimed_bytes": 176012755
+      },
+      "actual_process_rss_KiB": 125032,
+      "fixture": "dense8",
+      "model_owner_peak_bytes": 162368,
+      "model_owner_traffic_bytes": 400160,
+      "output_sha256": "379a634ba2a5f52e3b752cc29528a63aeb587967caabc1ea1e9046bdd00bb6eb",
+      "owner_work_visits": 13676,
+      "trial": 1,
+      "wall_seconds": 1.102377
+    },
+    {
+      "actual_c_managed_heap": {
+        "collections": 22,
+        "live_blocks": 21433,
+        "live_bytes": 2571379,
+        "peak_bytes": 8423198,
+        "reclaimed_blocks": 1438686,
+        "reclaimed_bytes": 176012755
+      },
+      "actual_process_rss_KiB": 125032,
+      "fixture": "dense8",
+      "model_owner_peak_bytes": 162368,
+      "model_owner_traffic_bytes": 400160,
+      "output_sha256": "379a634ba2a5f52e3b752cc29528a63aeb587967caabc1ea1e9046bdd00bb6eb",
+      "owner_work_visits": 13676,
+      "trial": 2,
+      "wall_seconds": 1.113291
+    },
+    {
+      "actual_c_managed_heap": {
+        "collections": 22,
+        "live_blocks": 21433,
+        "live_bytes": 2571379,
+        "peak_bytes": 8423198,
+        "reclaimed_blocks": 1438686,
+        "reclaimed_bytes": 176012755
+      },
+      "actual_process_rss_KiB": 125032,
+      "fixture": "dense8",
+      "model_owner_peak_bytes": 162368,
+      "model_owner_traffic_bytes": 400160,
+      "output_sha256": "379a634ba2a5f52e3b752cc29528a63aeb587967caabc1ea1e9046bdd00bb6eb",
+      "owner_work_visits": 13676,
+      "trial": 3,
+      "wall_seconds": 1.081385
+    },
+    {
+      "actual_c_managed_heap": {
+        "collections": 22,
+        "live_blocks": 21433,
+        "live_bytes": 2571379,
+        "peak_bytes": 8423198,
+        "reclaimed_blocks": 1438686,
+        "reclaimed_bytes": 176012755
+      },
+      "actual_process_rss_KiB": 125032,
+      "fixture": "dense8",
+      "model_owner_peak_bytes": 162368,
+      "model_owner_traffic_bytes": 400160,
+      "output_sha256": "379a634ba2a5f52e3b752cc29528a63aeb587967caabc1ea1e9046bdd00bb6eb",
+      "owner_work_visits": 13676,
+      "trial": 4,
+      "wall_seconds": 1.0699
+    },
+    {
+      "actual_c_managed_heap": {
+        "collections": 22,
+        "live_blocks": 21433,
+        "live_bytes": 2571379,
+        "peak_bytes": 8423198,
+        "reclaimed_blocks": 1438686,
+        "reclaimed_bytes": 176012755
+      },
+      "actual_process_rss_KiB": 125032,
+      "fixture": "dense8",
+      "model_owner_peak_bytes": 162368,
+      "model_owner_traffic_bytes": 400160,
+      "output_sha256": "379a634ba2a5f52e3b752cc29528a63aeb587967caabc1ea1e9046bdd00bb6eb",
+      "owner_work_visits": 13676,
+      "trial": 5,
+      "wall_seconds": 1.041068
+    },
+    {
+      "actual_c_managed_heap": {
+        "collections": 59,
+        "live_blocks": 28129,
+        "live_bytes": 3355569,
+        "peak_bytes": 8476364,
+        "reclaimed_blocks": 3861902,
+        "reclaimed_bytes": 470406275
+      },
+      "actual_process_rss_KiB": 125032,
+      "fixture": "dense32",
+      "model_owner_peak_bytes": 274528,
+      "model_owner_traffic_bytes": 681056,
+      "output_sha256": "1556e2f2f18d6a7428b32360f39ca5dd0635dfaf10be54237808b967a3b7e7eb",
+      "owner_work_visits": 38713,
+      "trial": 1,
+      "wall_seconds": 2.871237
+    },
+    {
+      "actual_c_managed_heap": {
+        "collections": 59,
+        "live_blocks": 28129,
+        "live_bytes": 3355569,
+        "peak_bytes": 8476364,
+        "reclaimed_blocks": 3861902,
+        "reclaimed_bytes": 470406275
+      },
+      "actual_process_rss_KiB": 125032,
+      "fixture": "dense32",
+      "model_owner_peak_bytes": 274528,
+      "model_owner_traffic_bytes": 681056,
+      "output_sha256": "1556e2f2f18d6a7428b32360f39ca5dd0635dfaf10be54237808b967a3b7e7eb",
+      "owner_work_visits": 38713,
+      "trial": 2,
+      "wall_seconds": 2.893167
+    },
+    {
+      "actual_c_managed_heap": {
+        "collections": 59,
+        "live_blocks": 28129,
+        "live_bytes": 3355569,
+        "peak_bytes": 8476364,
+        "reclaimed_blocks": 3861902,
+        "reclaimed_bytes": 470406275
+      },
+      "actual_process_rss_KiB": 125032,
+      "fixture": "dense32",
+      "model_owner_peak_bytes": 274528,
+      "model_owner_traffic_bytes": 681056,
+      "output_sha256": "1556e2f2f18d6a7428b32360f39ca5dd0635dfaf10be54237808b967a3b7e7eb",
+      "owner_work_visits": 38713,
+      "trial": 3,
+      "wall_seconds": 2.90201
+    },
+    {
+      "actual_c_managed_heap": {
+        "collections": 59,
+        "live_blocks": 28129,
+        "live_bytes": 3355569,
+        "peak_bytes": 8476364,
+        "reclaimed_blocks": 3861902,
+        "reclaimed_bytes": 470406275
+      },
+      "actual_process_rss_KiB": 125032,
+      "fixture": "dense32",
+      "model_owner_peak_bytes": 274528,
+      "model_owner_traffic_bytes": 681056,
+      "output_sha256": "1556e2f2f18d6a7428b32360f39ca5dd0635dfaf10be54237808b967a3b7e7eb",
+      "owner_work_visits": 38713,
+      "trial": 4,
+      "wall_seconds": 2.941254
+    },
+    {
+      "actual_c_managed_heap": {
+        "collections": 59,
+        "live_blocks": 28129,
+        "live_bytes": 3355569,
+        "peak_bytes": 8476364,
+        "reclaimed_blocks": 3861902,
+        "reclaimed_bytes": 470406275
+      },
+      "actual_process_rss_KiB": 125032,
+      "fixture": "dense32",
+      "model_owner_peak_bytes": 274528,
+      "model_owner_traffic_bytes": 681056,
+      "output_sha256": "1556e2f2f18d6a7428b32360f39ca5dd0635dfaf10be54237808b967a3b7e7eb",
+      "owner_work_visits": 38713,
+      "trial": 5,
+      "wall_seconds": 2.890838
+    },
+    {
+      "actual_c_managed_heap": {
+        "collections": 207,
+        "live_blocks": 49103,
+        "live_bytes": 5793989,
+        "peak_bytes": 9172962,
+        "reclaimed_blocks": 13554840,
+        "reclaimed_bytes": 1647792499
+      },
+      "actual_process_rss_KiB": 125032,
+      "fixture": "dense128",
+      "model_owner_peak_bytes": 720704,
+      "model_owner_traffic_bytes": 1741536,
+      "output_sha256": "16e79f43e1428d75d26dfea76ee1323b260932420ef30e7fd91ed31d71f94164",
+      "owner_work_visits": 138775,
+      "trial": 1,
+      "wall_seconds": 10.858518
+    },
+    {
+      "actual_c_managed_heap": {
+        "collections": 207,
+        "live_blocks": 49103,
+        "live_bytes": 5793989,
+        "peak_bytes": 9172962,
+        "reclaimed_blocks": 13554840,
+        "reclaimed_bytes": 1647792499
+      },
+      "actual_process_rss_KiB": 125032,
+      "fixture": "dense128",
+      "model_owner_peak_bytes": 720704,
+      "model_owner_traffic_bytes": 1741536,
+      "output_sha256": "16e79f43e1428d75d26dfea76ee1323b260932420ef30e7fd91ed31d71f94164",
+      "owner_work_visits": 138775,
+      "trial": 2,
+      "wall_seconds": 10.908767
+    },
+    {
+      "actual_c_managed_heap": {
+        "collections": 207,
+        "live_blocks": 49103,
+        "live_bytes": 5793989,
+        "peak_bytes": 9172962,
+        "reclaimed_blocks": 13554840,
+        "reclaimed_bytes": 1647792499
+      },
+      "actual_process_rss_KiB": 125032,
+      "fixture": "dense128",
+      "model_owner_peak_bytes": 720704,
+      "model_owner_traffic_bytes": 1741536,
+      "output_sha256": "16e79f43e1428d75d26dfea76ee1323b260932420ef30e7fd91ed31d71f94164",
+      "owner_work_visits": 138775,
+      "trial": 3,
+      "wall_seconds": 11.027227
+    },
+    {
+      "actual_c_managed_heap": {
+        "collections": 207,
+        "live_blocks": 49103,
+        "live_bytes": 5793989,
+        "peak_bytes": 9172962,
+        "reclaimed_blocks": 13554840,
+        "reclaimed_bytes": 1647792499
+      },
+      "actual_process_rss_KiB": 125032,
+      "fixture": "dense128",
+      "model_owner_peak_bytes": 720704,
+      "model_owner_traffic_bytes": 1741536,
+      "output_sha256": "16e79f43e1428d75d26dfea76ee1323b260932420ef30e7fd91ed31d71f94164",
+      "owner_work_visits": 138775,
+      "trial": 4,
+      "wall_seconds": 11.237685
+    },
+    {
+      "actual_c_managed_heap": {
+        "collections": 207,
+        "live_blocks": 49103,
+        "live_bytes": 5793989,
+        "peak_bytes": 9172962,
+        "reclaimed_blocks": 13554840,
+        "reclaimed_bytes": 1647792499
+      },
+      "actual_process_rss_KiB": 125032,
+      "fixture": "dense128",
+      "model_owner_peak_bytes": 720704,
+      "model_owner_traffic_bytes": 1741536,
+      "output_sha256": "16e79f43e1428d75d26dfea76ee1323b260932420ef30e7fd91ed31d71f94164",
+      "owner_work_visits": 138775,
+      "trial": 5,
+      "wall_seconds": 11.035146
+    }
+  ]
+}
