@@ -19,6 +19,29 @@ Checkpoint: 2026-10-31. [PR #99](https://github.com/eristavi/eristavi-lang/pull/
 
 The baseline research appendix [owned-runtime-profile-evidence.md](../evidence/2026-10-31/owned-runtime-profile-evidence.md) showed 244.9 s → 57.3 s for eight workers, and five-pair worker0 37.617 s → 6.943 s, **on a disposable assembly prototype**, not on this patch. It is evidence of possible benefit, *not* a qualified speedup or a future CI duration guarantee. The checked-in policy eliminates repeated GC caused solely by scalar safe points; the exact-root and scratch tests check redundant work and correct storage ownership. Fresh same-host before/after **production-patch timing, CPU, collection count, allocator mapping activity and attributable physical RSS** must be measured before advertising a speedup. A target-specific CI timing report alone must not be divided against the baseline research host's timings.
 
+## Full-CI acceptance adjustment
+
+First full CI [41196060338](https://github.com/eristavi/eristavi-lang/actions/runs/41196060338)
+on preliminary final head `5224cfbb464a399d0fb2c8881462d7ce2e1c6b3c` exposed
+a stale instruction-level test expectation in the **original integer-owned
+checked-unwind fallback fixture**. It asserted a direct
+`call erist_rt_reserve` at `.Lunwind_index_allocate`, whereas the new
+bounded scratch checkout intentionally provides `call .Lslots_scratch_acquire`.
+The fixture was updated to force a failed checkout through that new
+wrapper (zero pointer and size), retaining all original checked-unwind
+success, failure, slot/lifetime and native C-versus-owned output oracles.
+No runtime code or watchdog was changed to address this test failure.
+The first full run **did not qualify** PR #99, despite other successful
+jobs. After the final docs/test commit, repeat the complete four-platform
+matrix and owned integration **once on the same exact new head**; the
+experimental owned self-build remains excluded.
+
+The first Clang full run's owned integer test elapsed 59.879 s vs
+257.767 s in the previous PR #98 CI job, while the verifier/oracle test
+elapsed 38.588 s vs 133.107 s. These are comparable test names and
+runner/compiler *classes* but **not** controlled, same-host paired executions.
+They are *indicative regression signals*, not a peer-reviewed speedup claim.
+
 ## Known limits and follow-up gates
 
 - The static exact-root cap forces conservative fallback with large live slot sets. Resource ceilings and cancellation remain unchanged.
