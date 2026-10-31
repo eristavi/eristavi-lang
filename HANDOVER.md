@@ -7,6 +7,18 @@ historical evidence and rejected prototypes; their pending/keep-open statements
 are superseded by section 44. U1b aggregates #73, U2 #74, U3 #75 and U4 #102 remain
 OPEN and unimplemented/unfinished as specified below.
 
+## Mandatory philosophy-first engineering discipline — standing user instruction
+
+**At the beginning of every new Eristavi chat, and before any material design, implementation, optimization or milestone decision, read and FOLLOW the actual governing project documents. Do not rely on the handover summary, old conversation memory or a milestone checklist as a substitute. This is a permanent user requirement; the user must not need to repeat it.**
+
+1. **Read current sources first:** current `HANDOVER.md` (latest authoritative checkpoint and historical supersession), the **complete `DESIGN_PHILOSOPHY.md`**, `LANGUAGE_SEMANTICS.md`, applicable locked semantics and the relevant current architecture/IR contracts, then `CI_QUALIFICATION.md`. For a status-only request, verify current GitHub/CI/issue facts and describe the extent of the documents actually reviewed; never claim to have read something that was not inspected.
+2. **Use the non-negotiable design order:** **Philosophy → Semantics → Architecture → Implementation**. Specify the intended meaning and review architectural consequences *before* choosing an implementation. Implementation convenience cannot weaken or silently redefine frozen semantics.
+3. **Preserve the design constitution:** small stable language vocabulary; one obvious, readable, precise way to express fundamental concepts; strong static guarantees with sensible inference; rich libraries instead of unnecessary syntax; automatic safe memory and deterministic scoped cleanup for external resources; explicit low-level danger; excellent diagnostics; and universal portability. **Complexity belongs in the compiler/runtime, not in the programmer's code.** A feature must justify its permanent conceptual cost.
+4. **Optimization-first, but never correctness-last:** correctness, safety and locked semantics are absolute gates. After them, execution and compilation speed, bounded physical memory, allocation/GC pressure, predictable work/cancellation and efficient CI are the **highest engineering priorities from initial design onward**. Define representation, algorithmic complexity, ownership/peak/traffic budgets and before/after measurements. Distinguish per-owner physical backing, total allocator traffic and process RSS. Never advertise a microbenchmark or rejected prototype as whole-compiler speedup.
+5. **Keep the architecture and compatibility intact:** source-neutral typed Universal IR and independently verified publication; no extra mandatory source-close executable Typed IR; machine- and OS-independent semantics; C/Python as bootstrap tools rather than permanent target dependencies. Preserve the frozen Eristavi source behavior, the existing 32-byte public ABI, fault/source-location and exactly-once cleanup semantics, independent reference oracles, rollback and the default production compiler until the redesigned path passes its own U2/U3/U4 acceptance gates. Avoid speculative whole-compiler rewrites or unapproved new syntax/ABI/artifact formats.
+6. **Qualify proportionately:** focused tests, independent positive/negative/oracle checks and resource/fault probes while developing; full four-platform CI and required completed-batch qualification **once per coherent final implementation batch**, never after every helper. Documentation-only changes require a lightweight patch check; never initiate experimental owned full compiler self-build without explicit user authorization. Report `planned`, `implemented`, `tested`, `qualified`, `merged` and `deferred` distinctly.
+7. **Carry the rule into every future handover automatically:** each work session must reconcile current decisions and evidence in this document; keep opening instructions, current status and newest recovery checkpoint consistent, including philosophy, locked semantics, performance/CI rules and next actions. If a future handover is edited, **retain this section and propagate its requirements**. Do not make the user remind us to follow the project's philosophy.
+
 ## Mandatory handover maintenance — standing user instruction
 
 **HANDOVER.md must stay current at all times. Updating it is part of every
@@ -61,6 +73,14 @@ redundant indexing, unbounded caches or unnecessarily expensive CI.
 
 ## Start a new chat with this
 
+> **MANDATORY BEFORE ANY WORK:** Read the complete `DESIGN_PHILOSOPHY.md`,
+> `LANGUAGE_SEMANTICS.md`, applicable locked contracts and current architecture,
+> alongside this handover and `CI_QUALIFICATION.md`. Always follow
+> **Philosophy → Semantics → Architecture → Implementation**. Preserve small,
+> safe source semantics and universal architecture; optimize performance and
+> memory from design under correctness and safety gates. The permanent rule above
+> must be preserved in every future handover, without prompting from the user.
+>
 > Continue from **HANDOVER.md section 44**. PR #105 is qualified and merged at
 > `8c625b1ece6a229844def93e2bf9563c14e9e273`, tested head `f1fba11ff5e11791ad8c5d635fbf90873c686fa9`,
 > identical tested/merged tree `0d8bf1f4a58f66a15bb9a89bd42f596091ed9c36`.
@@ -74,10 +94,9 @@ redundant indexing, unbounded caches or unnecessarily expensive CI.
 > with measured compiler performance/memory work throughout. Existing source
 > semantics, public 32-byte ABI and default production backend remain.
 > Do not mark later milestones green from the Stage-0/old-native parity baseline.
-> The local execution workspace became unavailable after all candidate code,
-> investigation and raw evidence were preserved on GitHub. Hosted qualification
-> completed successfully through the connected GitHub tools. Do not assume
-> an execution workspace or local worktree is currently available.
+> The latest recovery checkpoint reports a restored, clean execution workspace.
+> Verify the actual current worktree, branch and HEAD before code changes;
+> preserve the qualified investigation branch and evidence.
 
 ## Current verified status — read before historical sections
 
@@ -102,7 +121,7 @@ redundant indexing, unbounded caches or unnecessarily expensive CI.
 | U3 #75 | Direct frozen frontend → new UIR → production native target/artifact/cache integration **NOT IMPLEMENTED**. Existing adapter is isolated; #104 is test-only reference parity |
 | U4 #102 | Redesigned UIR machine/legalization/artifact migration **NOT IMPLEMENTED / NOT QUALIFIED** |
 | Production | Existing source language and default compiler pipeline retained; no new-UIR backend promotion |
-| Environment / next-stage blocker | Local execution workspace unavailable; #105 release/qualification is complete through GitHub. U1b aggregate implementation has not started and awaits an execution workspace for focused compiler development/tests. All implementation/evidence/checkpoints are preserved in the repository |
+| Environment / next stage | Latest recovery checkpoint reports workspace restored with a clean worktree; reverify current branch, HEAD and execution environment before development. U1b aggregate implementation has not started. All prior implementation, qualification evidence and checkpoints are preserved in GitHub |
 
 **Reading rule:** section 44 is authoritative. Earlier keep-open and pending
 statements describe their historical revisions. U1a acceptance does not certify
@@ -1968,3 +1987,22 @@ original 8 MiB / 64 MiB gates unchanged. Exact retained backing is **6,653,840 B
 16,938 objects**, all reclaimed. Final worker0 timing remains roughly flat:
 8.135968 → 8.254257 s median (0.9857×); this is no whole-compiler speedup claim.
 The experimental owned compiler full self-build remains unqualified.
+
+### Permanent philosophy mandate recorded — documentation-only checkpoint (2026-10-31)
+
+The user's standing instruction is now explicit in the opening **Mandatory
+philosophy-first engineering discipline** section and in the new-chat recovery
+prompt. Every future session and implementation/optimization decision must read
+the complete governing `DESIGN_PHILOSOPHY.md`, locked semantics, applicable
+architecture and CI policy; apply **Philosophy → Semantics → Architecture →
+Implementation**; design for correctness/safety first and measured performance,
+memory and predictable CI immediately afterward. Keep the language small and
+readable, preserve the source semantics/current production pipeline and report
+only independently qualified milestone progress. This requirement carries into
+all later handovers automatically; do not await another user reminder.
+
+This is a HANDOVER.md-only documentation update, including a reconciliation of
+the previously stale workspace warning with the latest restored-workspace
+checkpoint. It changes no compiler/runtime files, qualification inputs,
+accepted U1a results, issue or PR statuses. Use documentation-only patch
+checking; do not rerun costly CI or experimental self-build for this update.
