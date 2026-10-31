@@ -1,50 +1,55 @@
 # Eristavi compiler — current handover
 
-**Authoritative recovery checkpoint: 31 October 2026, Asia/Nicosia.** Start here. Older numbered sections are retained as historical evidence; their draft statuses are *not* current instructions. Section 28 records the latest qualified U1a merge and next gates; section 25 records the current intentional CI policy.
-
-**Active branch candidate:** section 29 records the integer-execution batch on
-`compiler/u1a-integer-execution-parity`. Its qualification is separate from
-section 28's previously merged evidence. Do not infer a merge or U1a completion.
+**Authoritative recovery checkpoint: 31 October 2026, Asia/Nicosia.** Start here.
+Section 29 records the latest qualified and merged compiler/runtime batch.
+Sections 1–28 retain historical evidence; their draft statuses and next steps
+are not current instructions. Section 25 retains the intentional CI policy.
 
 ## Start a new chat with this
 
-> Continue development of Eristavi Lang from HANDOVER.md section 28 and the
-> current GitHub main, verifying new commits/PRs and CI before changing code.
-> U1a typed Universal IR foundation, direct-call declarations, sparse switches,
-> strict scalar f64 operations and synthetic provenance are implemented as
-> **isolated UIR**; i8/i16/i32 integer types, constants, wrap/overflow/comparisons
-> and division/remainder are now qualified and merged through PR #87.
-> The redesigned UIR is **NOT** yet the production compiler. Preserve frozen
-> Eristavi source semantics, current working toolchain, existing ABI and
-> mandatory transactional cell promotion. Qualified PR #92 adds bounded
-> executable recursive U1a calls, six-bit SCC effect propagation and closed,
-> versioned **test-only** imported adapters; this is NOT a production native
-> import ABI or complete f64 execution. Continue strict native f64, full
-> admitted-opcode and publication/provenance gates; then immutable U1b aggregates, U2 managed
-> failures/resources, and U3 shadow frontend/native integration. PR #85 is now a merged, four-platform-tested Stage-0/native parity baseline;
-> it does NOT implement new-UIR frontend lowering or a new native compiler. Keep each slice small, independently verified, and require
-> final four-platform CI plus completed-batch qualification for compiler changes;
-> routine source edits use focused smoke checks and documentation edits use a patch check.
-> Never auto-run the separate experimental 900-second owned self-build.
+> Continue Eristavi Lang from HANDOVER.md section 29 and current GitHub main.
+> PR #94 is qualified and merged as
+> `4b4a7f62af98bb91bc3a7c4cb218817b02298fce`.
+> All admitted U1a i64/pred operations now execute in the independent reference
+> evaluator, including six overflow pairs and signed/unsigned division/remainder,
+> alongside recursive calls, switches, effects and mandatory cell promotion.
+> The batch also fixes wrapping intermediates, partial frame cleanup and stale
+> native root addresses after checked unwinding in both native runtimes.
+> Four-platform full CI and completed-batch qualification passed on the exact
+> final head; the merged tree equals the qualified tree. Do not repeat those
+> expensive gates merely to merge or document this unchanged implementation.
+> The redesigned UIR remains isolated from the production frontend.
+> Next recommendation: strict native binary64 execution under issue #76, first
+> reading its exit gates and the frozen Float contract. Production import trust
+> and broader #71 conformance, source/publication revisions and bounded
+> simplification (#77), then U1b aggregates, U2 and U3 remain separate.
+> Preserve source semantics, the working compiler/ABI and mandatory promotion.
+> Use focused smoke during edits and one final four-platform CI plus required
+> completed-batch qualification per coherent compiler revision; documentation
+> changes need only a patch check. Never auto-run the experimental 900-second
+> owned compiler self-build.
 
 ## Current verified status — read before historical sections
 
 | Scope | Current status |
 | --- | --- |
 | Repository | https://github.com/eristavi/eristavi-lang |
-| Last qualified compiler-code merge | `e59ef7e6401990da5498b24f357077cc46e41e51` (PR #92) |
-| GitHub main at this checkpoint (includes PR #92) | `e59ef7e6401990da5498b24f357077cc46e41e51` |
-| Exact qualified / merged implementation tree | `0d85a50abbf1390e741ec7ff0705254ec5fc2c1a` |
-| Four-platform PR #92 CI | [41138028053](https://github.com/eristavi/eristavi-lang/actions/runs/41138028053), success |
-| Completed-batch PR #92 qualification | [41138028110](https://github.com/eristavi/eristavi-lang/actions/runs/41138028110), success: three bootstrap/offline Linux jobs and owned integration |
+| Last qualified compiler/runtime merge | `4b4a7f62af98bb91bc3a7c4cb218817b02298fce` ([PR #94](https://github.com/eristavi/eristavi-lang/pull/94)) |
+| Exact tested PR head | `bb2f1ba81bfa4ae039f61ed0e812299a8ab4b872` |
+| Qualified PR #94 / merge tree, before later documentation-only commits | `5567a40a9a710fa3d1008da121e38f5e4b10d5f4` |
+| Four-platform PR #94 CI | [41183090972](https://github.com/eristavi/eristavi-lang/actions/runs/41183090972), success: 448 tests discovered per platform, platform skips retained |
+| Completed-batch PR #94 qualification | [41183091353](https://github.com/eristavi/eristavi-lang/actions/runs/41183091353), success: three repeatable C/D bootstrap/offline jobs and owned integration |
 | Separate full owned compiler self-build | Intentionally skipped; NOT qualified |
-| U1a | Independent bounded recursive call execution, SCC effect closure and exact selected versioned test imports qualified/merged; full strict f64/native import adapter, admitted-opcode parity and source publication revisions still incomplete |
-| U1b | Narrow i8/i16/i32 operations qualified and merged; immutable aggregates and core-wide acceptance still incomplete |
+| U1a | Integer/predicate reference execution, recursion/effects, selected test imports, switches, verification and promotion qualified/merged; native strict f64, production imports, full source/publication revisions, simplification and broader resource/conformance gates remain |
+| U1b | Narrow i8/i16/i32 IR operations qualified through PR #87; narrow reference execution, immutable aggregates and core-wide acceptance remain incomplete |
 | U2 | Managed Text/List/identity, checked failures, deterministic cleanup and root maps NOT implemented in redesigned UIR |
 | U3 | No direct AST/semantic-facts → redesigned UIR production path or new verified native target; PR #85 is a merged test-only parity baseline |
-| Production compiler | Still runs existing pipeline and must remain intact until explicit U2/U3 compatibility and native conformance gates |
+| Production compiler | Existing frontend/native pipeline retained; PR #94 corrects native checked-unwind root cleanup without changing the ABI layout or frozen language semantics |
 
-**Reading rule:** Sections 1–27 are historical checkpoints, including section 27's once-pending PR #92 draft status. Section 28 below contains the authoritative current merge evidence; section 25 retains the intentional CI policy. Do not treat earlier historical drafts as outstanding merge requests.
+**Reading rule:** Section 29 supersedes earlier candidate/pending descriptions.
+The last qualified implementation is PR #94; later documentation-only commits
+do not imply a different tested compiler revision. Keep issue #71 open.
+PR #94's merge launched no new workflow runs and reused its passed evidence.
 
 ## 1. Verified repository checkpoint
 
@@ -780,11 +785,15 @@ This section records **unmerged development**, not a new qualified production re
 
 Issue [#71](https://github.com/eristavi/eristavi-lang/issues/71) remains **open** for full U1a opcode/strict-f64/native adapter execution, independently proven first-fault/effect ordering at larger scale, selected production imported-effect trust, and full revision-bound source publication; see also separate U1a issues #76/#77. U1b immutable aggregates (#73), U2 managed values, checked failures and resources (#74), and U3 AST/semantic-facts → new typed UIR/native parity integration (#75) remain independently staged. Preserve the working compiler, mandatory cell promotion and existing ABI. Follow the change-aware CI policy in section 25: fast smoke during work; one final four-platform CI and completed-batch qualification per coherent compiler-code revision; docs-only handovers use patch checks only.
 
-## 29. U1a integer execution parity batch — candidate 2026-10-31
+## 29. Qualified and merged U1a integer execution parity — 2026-10-31
 
 Baseline main: `007aa4ac897a4d618b00955b7808db19792b2404` (docs PR #93).
 PR #92's final full CI and completed-batch qualification were independently
 checked successful before extending its evaluator. No other open PR is included.
+
+[PR #94](https://github.com/eristavi/eristavi-lang/pull/94) is **merged** as
+`4b4a7f62af98bb91bc3a7c4cb218817b02298fce`, following the user's explicit merge
+instruction. This supersedes this section's earlier candidate/pending status.
 
 - Implements all six i64 signed/unsigned overflow pairs and unsigned div/rem
   in the independent Eristavi-written evaluator. Preserves exact wrapped bits,
@@ -810,14 +819,27 @@ checked successful before extending its evaluator. No other open PR is included.
   Hosted CI sanitizer defaults are unchanged. Initial oversized single-worker
   native parity timed out; the same cases use independent bounded workers,
   and the earlier timeout is not a completed performance measurement.
-- At candidate creation, focused bootstrap integer and combined-flow tests
-  passed. Native parity and final exact-revision smoke/full four-platform CI
-  plus completed-batch qualification must be inspected on the final PR head;
-  this paragraph is not a claim that those pending gates passed or it merged.
-- Follow section 25: incremental smoke; one final four-platform full CI plus
-  `qualification` on the completed compiler revision; experimental
-  `owned-self-build` remains unselected. Preserve the tested tree and report
-  any subsequent implementation changes as requiring fresh qualification.
+- **Final four-platform full CI passed:** [41183090972](https://github.com/eristavi/eristavi-lang/actions/runs/41183090972),
+  on exact head `bb2f1ba81bfa4ae039f61ed0e812299a8ab4b872`: Linux x86-64
+  GCC/Clang, Linux ARM64 Clang and macOS Clang. Each discovered 448 tests;
+  existing platform skips remain visible. Both x86-64 configurations passed
+  every native worker and deterministic owned unwind-root/fallback checks.
+- **Completed-batch qualification passed:** [41183091353](https://github.com/eristavi/eristavi-lang/actions/runs/41183091353),
+  on the same head. All three Linux bootstrap jobs report repeatable=true,
+  completed C/D compilers, offline_audit_completed=true and unchanged sources.
+  Owned integration reports repeatable=false, no C/D compiler self-build,
+  successful offline audit and unchanged sources. The separate experimental
+  `owned-self-build` job was intentionally skipped and remains unqualified.
+- **Exact merge parity:** tested head tree == merged PR #94 tree ==
+  `5567a40a9a710fa3d1008da121e38f5e4b10d5f4`. The merge commit is
+  `4b4a7f62af98bb91bc3a7c4cb218817b02298fce`; no implementation changed
+  after qualification. Because draft→ready would trigger another full matrix,
+  the user-authorized merge used an ordinary two-parent merge commit and a
+  non-forced, expected-head update of main. GitHub marked PR #94 merged.
+  The merge itself launched **zero** workflow runs; no expensive tests repeated.
+- Follow section 25 for future changes. Documentation-only checkpoint updates
+  use patch checks; preserve the qualified implementation and do not relabel
+  documentation commits as newly qualified compiler code.
 
 Next after this batch: strict native binary64 (#76), selected production
 native import trust and broader #71 conformance, full source/revision
