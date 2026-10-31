@@ -25,6 +25,13 @@ SMOKE_TESTS=(
     'test_u1_native.U1NativeTests',
     'test_u1_integer_execution.U1IntegerExecutionTests.test_integer_recursion_switch_promotion_and_fault_traces',
     'test_native_runtime_lifetimes.NativeRuntimeLifetimeTests.test_native_handler_and_abandoned_call_allocations_are_reclaimed',
+    # Owned runtime GC optimization conformance: real graph, interior/slot roots,
+    # bounded static scratch, forced pressure, and allocation-refusal fallbacks.
+    'test_heap_scaled_collection.HeapScaledCollectionTests.test_large_heap_interval_and_empty_heap_reset',
+    'test_runtime_lookup_caches.RuntimeLookupCacheTests.test_owned_graph_exact_slot_roots_preserve_interior_and_fallback',
+    'test_freestanding_text_roots.FreestandingTextRootTests.test_registered_roots_bound_loop_slots_and_preserve_pending_results',
+    'test_freestanding_graph_values.FreestandingGraphValueTests.test_interior_and_saved_failure_roots_are_validated_and_collected',
+
     'test_u1_verifier.U1VerifierTests.test_malformed_ir_and_budget_protocol',
     'test_u1_promotion.U1PromotionTests.test_differential_execution_shapes_and_failure_cleanup',
     'test_u1_promotion.U1PromotionTests.test_switch_physical_samples',
