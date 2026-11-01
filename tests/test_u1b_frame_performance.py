@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import platform
 import statistics
 import struct
 import subprocess
@@ -159,6 +160,8 @@ def parse_frame_markers(output):
 
 class U1BLinkedFramePerformanceTests(unittest.TestCase):
     def test_dynamic_frame_allocation_and_paired_native_performance(self):
+        if platform.system() != "Linux" or platform.machine().lower() not in ("x86_64", "amd64"):
+            self.skipTest("freestanding x86-64 assembly and linker require Linux x86-64")
         if os.environ.get("ERISTAVI_U1B_FRAME_PROBE") != "1":
             self.skipTest("expensive U1b frame probe is opt-in only")
         for executable in ("as", "ld"):
