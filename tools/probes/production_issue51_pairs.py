@@ -3,7 +3,7 @@
 
 Five paired, uninstrumented same-host runs. Real production owned compiler B
 compiled by the C bootstrap, plus independent C and owned validator corpus.
-The only candidate change is universal_verify.intersect's local snapshot.
+The only candidate change is semantic_model.at's immutable ordinal snapshot.
 Never invoke an owned frontend to build frontend. Exact output and errors win
 over timing; no assertion that an optimization must be faster.
 """
@@ -53,7 +53,7 @@ def overlay(root, baseline_source):
     # Frozen Eristavi source resolution canonicalizes symlinks, so a
     # linked entry escapes its source root. Use private byte-for-byte copies.
     shutil.copytree(ROOT/"src",root,symlinks=False)
-    (root/"compiler/universal_verify.eri").write_bytes(baseline_source)
+    (root/"compiler/semantic_model.eri").write_bytes(baseline_source)
     return root
 
 
@@ -150,16 +150,16 @@ def main():
         raise RuntimeError("Linux x86-64 benchmark only")
     output=args.output.resolve()
     output.mkdir(parents=True,exist_ok=True)
-    source=ROOT/"src/compiler/universal_verify.eri"
+    source=ROOT/"src/compiler/semantic_model.eri"
     original_sha=sha(source)
-    old=subprocess.run(["git","show","HEAD^1:src/compiler/universal_verify.eri"],
+    old=subprocess.run(["git","show","HEAD^1:src/compiler/semantic_model.eri"],
                        capture_output=True,check=True).stdout
     old_sha=hashlib.sha256(old).hexdigest()
     if old_sha==original_sha:
         raise AssertionError("candidate source unexpectedly identical to baseline")
-    summary={"scope":"issue #51 current production old Universal verifier, single local hoist; "
+    summary={"scope":"issue #51 current production semantic location lookup, immutable-key hoist; "
                      "five uninstrumented paired Linux Clang trials; not full compiler self-build",
-             "baseline_verifier_sha256":old_sha,"candidate_verifier_sha256":original_sha,
+             "baseline_source_sha256":old_sha,"candidate_source_sha256":original_sha,
              "compiler_owned_self_build":False,"benchmarks":{}}
     with tempfile.TemporaryDirectory(prefix="issue51-paired-") as d:
         work=Path(d)
