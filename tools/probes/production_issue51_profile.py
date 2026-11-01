@@ -164,7 +164,7 @@ def scoped_source(assembly, symbol, name):
     stop = assembly.index(end, start)
     body = assembly[start:stop]
     prologue = re.search(r"(?m)^subq \$(\d+), %rsp$", body)
-    if not prologue or "pushq %rbp\nmovq %rsp,%rbp\n" not in body[:prologue.start()]:
+    if not prologue or "pushq %rbp\nmovq %rsp, %rbp\n" not in body[:prologue.start()]:
         raise AssertionError("unexpected compiler frame: " + symbol)
     old_size = int(prologue.group(1))
     entry = ["subq $" + str(old_size + 48) + ", %rsp"]
