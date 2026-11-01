@@ -3381,3 +3381,22 @@ owned integration at the final head. Do not mark Ready as a second trigger.
 Experimental owned full compiler self-build is excluded. A requested/queued run
 is not passing; inspect exact source SHA/job outcomes before merge and record
 the final evidence. No repeated full matrix is needed for documentation alone.
+
+### §76 hosted workflow validation correction before final qualification
+
+The first final selection on `bb36c1042e085a9f7998290e831400b52af1e8de`
+queued CI 41313497674 and qualification 41313497672. GitHub separately rejected
+the manual profiler workflow definition (41313490071, no jobs) because its new
+job-level env used runner.temp. GitHub's context availability table excludes
+runner from jobs.<job_id>.env (https://docs.github.com/en/actions/reference/workflows-and-actions/contexts).
+This is a workflow configuration mistake introduced while retaining artifacts,
+not a failed compiler/runtime semantic or benchmark check.
+
+Corrected the manual profile output and artifact paths to matching literal
+relative `u1b-hotspot-data` paths. One-off static checks and git diff --check
+pass; no source/test/budget/runtime changes. The stale qualification label was
+removed; select the corrected final head once after this two-file repair.
+Existing concurrency groups supersede the earlier in-flight gate instead of
+letting duplicate old and new runs complete. Do not claim the earlier queued
+runs qualified this newer workflow revision. All local measured/physical
+evidence remains valid for unchanged implementation inputs.
