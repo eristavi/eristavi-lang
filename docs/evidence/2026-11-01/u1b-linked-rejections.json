@@ -1,0 +1,13 @@
+{
+  "status": "success",
+  "aggregate_tests": 12,
+  "seconds": 26.089,
+  "final_rejection_test_seconds": 2.143,
+  "rejections": 6,
+  "control": "previous implementation accepted changed callee signature",
+  "scope": "local focused aggregate suite plus final expanded six-case rejection fixture; full qualification pending",
+  "source_sha256": {
+    "src/compiler/u1_aggregate_calls.eri": "7896c2435c3afa715481e77157ab8dc7f3ddda878f90e73a757334b1be34c27d",
+    "tests/test_u1_aggregate_linked_rejections.py": "1e8546e20ec5db4a7de4c5e23e8d8277f90ec623271457fcebdf29e45889cf92"
+  }
+}

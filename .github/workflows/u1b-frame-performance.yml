@@ -1,0 +1,38 @@
+name: U1b dynamic-frame physical and performance (opt-in)
+
+# One x86-64 focused run only. Not part of routine full/production CI.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: u1b-frame-performance-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frame-performance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CC: clang
+      CFLAGS: -O2
+      ERISTAVI_U1B_FRAME_PROBE: '1'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: python -m pip install -e .
+      - name: Focused dynamic-frame attribution and paired execution
+        run: |
+          set -o pipefail
+          PYTHONPATH=tests python -u -m unittest -v test_u1b_frame_performance 2>&1 | tee u1b-frame-performance.log
+      - name: Preserve focused evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: frame-performance-${{ github.run_attempt }}
+          retention-days: 14
+          path: u1b-frame-performance.log

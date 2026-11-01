@@ -1,0 +1,66 @@
+{
+  "profile": "smoke",
+  "status": "success",
+  "discovered_tests": 45,
+  "tests_run": 45,
+  "passed": 45,
+  "unsuccessful_tests": 0,
+  "failure_records": 0,
+  "skipped": [],
+  "failures": [],
+  "errors": [],
+  "expected_failures": [],
+  "unexpected_successes": [],
+  "seconds": 108.47096499700001,
+  "slowest_tests": [
+    {
+      "test": "test_u1_owner_physical.U1OwnerPhysicalTests.test_owned_actual_capacity_by_owner_and_gc_reclamation",
+      "seconds": 20.075
+    },
+    {
+      "test": "test_u1_narrow_execution.U1NarrowExecutionTests.test_independent_canonical_narrow_execution_and_faults",
+      "seconds": 12.07
+    },
+    {
+      "test": "test_u1_promotion.U1PromotionTests.test_differential_execution_shapes_and_failure_cleanup",
+      "seconds": 10.013
+    },
+    {
+      "test": "test_u1b_actual_physical.U1BAggregatePhysicalTests.test_actual_aggregate_owner_backing_and_gc_reclamation",
+      "seconds": 10.007
+    },
+    {
+      "test": "test_u3_stage0_parity_baseline.U3Stage0ParityBaseline.test_frozen_successful_programs_match_existing_native_compilers",
+      "seconds": 5.986
+    },
+    {
+      "test": "test_u1_integer_execution.U1IntegerExecutionTests.test_integer_recursion_switch_promotion_and_fault_traces",
+      "seconds": 5.884
+    },
+    {
+      "test": "test_freestanding_text_roots.FreestandingTextRootTests.test_registered_roots_bound_loop_slots_and_preserve_pending_results",
+      "seconds": 3.518
+    },
+    {
+      "test": "test_u1_promotion.U1PromotionTests.test_switch_physical_samples",
+      "seconds": 3.306
+    },
+    {
+      "test": "test_u1_execution.U1CallExecutionTests.test_recursive_frames_effects_and_versioned_imports",
+      "seconds": 1.754
+    },
+    {
+      "test": "test_u1_aggregate_signatures.U1AggregateSignatureTests.test_canonical_aggregate_signature_cfg_and_promotion",
+      "seconds": 1.736
+    }
+  ],
+  "platform": "Linux-6.18.57-x86_64-with-glibc2.39",
+  "python": "3.12.14",
+  "cc": null,
+  "scope": "Local smoke, plus separate strengthened fuel-boundary call test. Full qualification pending.",
+  "source_sha256": {
+    "src/compiler/u1_aggregate_calls.eri": "7d02f45834857ca86c7740d103d68915e72c75b46392aa28e2aaaff762544814",
+    "tests/fixtures/u1_aggregate_calls.eri": "5341bf72a63352c50ac240b1e0b2268d34c68eaae09c746bd8ef2a08390e604d",
+    "tests/test_u1_aggregate_calls.py": "88e513a7aaa3c029e133d63ab01eedc8b1f8af9fde60b7924a3e1ede97dc6118"
+  }
+}

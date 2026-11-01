@@ -1,0 +1,63 @@
+// Optional U1b structural/physical observer. This is a private qualification
+// aid, never an executable UIR operation or a source/runtime dependency.
+// Traverses ACTUAL reachable radix Nodes/Pages; reports requested backing from
+// concrete object counts, separate from ledger charge or full-process RSS.
+// A private tagged allocator observer must still confirm real allocated sizes,
+// retained wrapper capacity and GC reclamation before U1b physical acceptance.
+import std.process;
+import compiler.u1_budget as budget;
+import compiler.u1_aggregate as aggregate;
+import compiler.u1_aggregate_values as values;
+import compiler.u1_physical as physical;
+
+function plus(a physical.Backing,b physical.Backing) returns physical.Backing {
+    return physical.Backing {
+        objects=a.objects+b.objects;
+        graphPayloadBytes=a.graphPayloadBytes+b.graphPayloadBytes;
+        allocatorHeaderBytes=a.allocatorHeaderBytes+b.allocatorHeaderBytes;
+        blockBytes=a.blockBytes+b.blockBytes;
+    };
+}
+function header(cells Int) returns physical.Backing {
+    let payload be 64+cells*32;
+    return physical.Backing {
+        objects=1; graphPayloadBytes=payload;
+        allocatorHeaderBytes=32; blockBytes=payload+32;
+    };
+}
+function observe(value,tag Int) {
+    process.setExitCode(tag);
+    let same be value == value;
+    process.setExitCode(0);
+    if not same { process.setExitCode(1); }
+}
+// Registry has 7 identity/reference/scalar fields; all three stores are
+// independently counted. Never count shared type graph in each Engine.
+public function typeGraph(graph identity aggregate.Registry,
+    owner identity budget.Owner,tag Int)
+    returns physical.Backing fails budget.LimitError {
+    if graph.owner != owner or graph.state == 2 {
+        try budget.reject("foreign/closed U1b graph physical owner");
+    }
+    observe(graph,tag);
+    let total be header(7);
+    total=plus(total,try physical.wordStore(graph.records,owner,tag));
+    total=plus(total,try physical.wordStore(graph.fields,owner,tag));
+    total=plus(total,try physical.wordStore(graph.buckets,owner,tag));
+    return total;
+}
+// Engine has 10 references/scalars. Values, nodes and member vector are
+// separately owned by function owner; type graph remains metadata-owned.
+public function valueEngine(engine identity values.Engine,
+    owner identity budget.Owner,tag Int)
+    returns physical.Backing fails budget.LimitError {
+    if engine.owner != owner or engine.state != 0 {
+        try budget.reject("foreign/closed U1b engine physical owner");
+    }
+    observe(engine,tag);
+    let total be header(10);
+    total=plus(total,try physical.wordStore(engine.values,owner,tag));
+    total=plus(total,try physical.wordStore(engine.nodes,owner,tag));
+    total=plus(total,try physical.wordStore(engine.members,owner,tag));
+    return total;
+}

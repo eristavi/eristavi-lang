@@ -1,0 +1,66 @@
+{
+  "profile": "smoke",
+  "status": "success",
+  "discovered_tests": 45,
+  "tests_run": 45,
+  "passed": 45,
+  "unsuccessful_tests": 0,
+  "failure_records": 0,
+  "skipped": [],
+  "failures": [],
+  "errors": [],
+  "expected_failures": [],
+  "unexpected_successes": [],
+  "seconds": 110.47224148800001,
+  "slowest_tests": [
+    {
+      "test": "test_u1_owner_physical.U1OwnerPhysicalTests.test_owned_actual_capacity_by_owner_and_gc_reclamation",
+      "seconds": 20.108
+    },
+    {
+      "test": "test_u1_narrow_execution.U1NarrowExecutionTests.test_independent_canonical_narrow_execution_and_faults",
+      "seconds": 11.703
+    },
+    {
+      "test": "test_u1_promotion.U1PromotionTests.test_differential_execution_shapes_and_failure_cleanup",
+      "seconds": 10.262
+    },
+    {
+      "test": "test_u1b_actual_physical.U1BAggregatePhysicalTests.test_actual_aggregate_owner_backing_and_gc_reclamation",
+      "seconds": 9.961
+    },
+    {
+      "test": "test_u3_stage0_parity_baseline.U3Stage0ParityBaseline.test_frozen_successful_programs_match_existing_native_compilers",
+      "seconds": 6.172
+    },
+    {
+      "test": "test_u1_integer_execution.U1IntegerExecutionTests.test_integer_recursion_switch_promotion_and_fault_traces",
+      "seconds": 5.801
+    },
+    {
+      "test": "test_freestanding_text_roots.FreestandingTextRootTests.test_registered_roots_bound_loop_slots_and_preserve_pending_results",
+      "seconds": 3.859
+    },
+    {
+      "test": "test_u1_promotion.U1PromotionTests.test_switch_physical_samples",
+      "seconds": 3.356
+    },
+    {
+      "test": "test_u1_aggregate_calls.U1AggregateCallTests.test_linked_canonical_aggregate_calls_and_first_fault",
+      "seconds": 2.015
+    },
+    {
+      "test": "test_u1_execution.U1CallExecutionTests.test_recursive_frames_effects_and_versioned_imports",
+      "seconds": 1.884
+    }
+  ],
+  "platform": "Linux-6.18.57-x86_64-with-glibc2.39",
+  "python": "3.12.14",
+  "cc": null,
+  "scope": "Local 45-test smoke with six traffic allowances; final seven-allowance fixture separately passed (1.940s). Compiler implementation identical in both.",
+  "regression_control": "Expanded refusal test fails against previous implementation: entry or nested refusal leaked backing or rolled back traffic.",
+  "source_sha256": {
+    "src/compiler/u1_aggregate_calls.eri": "2d65f96b1a651a562a5415ecf6dbea23c077aef03067869993250e37d5184118",
+    "tests/fixtures/u1_aggregate_calls.eri": "03d58d9423a7fb20983fa9e19b785d137b6a80a00f5543b117c1c80d8929e03a"
+  }
+}

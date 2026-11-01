@@ -1,0 +1,19 @@
+{
+  "status": "success",
+  "test_methods": 2,
+  "subcases": 6,
+  "seconds": 8.488,
+  "cancellation_steps": [
+    1,
+    8,
+    20
+  ],
+  "bootstrap_allocation_refusals": [
+    1,
+    32,
+    128
+  ],
+  "scope": "temporary synchronous cancellation hook and generated-bootstrap-C allocator NULL injection; no owned-runtime or OS OOM recovery claim",
+  "test_sha256": "f9b0cf69a9001fc3687b377fab03c9b39e96b908fd25621c4d69c33450e1526e",
+  "implementation_base": "0ffc84d5398197b7b3cc93b557eb1dac2910abd8"
+}

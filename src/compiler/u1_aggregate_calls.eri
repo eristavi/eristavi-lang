@@ -1,0 +1,544 @@
+// U1b opt-in bounded multi-function canonical UIR reference execution.
+// This is a linked FUNCTION table, not another instruction language.
+// Each body is independently verified against the SAME frozen graph and
+// revision, including malformed dead blocks. No imports, managed U2,
+// external effects, new source syntax or public ABI are admitted.
+// Executable slice: CFG branches/switches, loops, scalar/aggregate constants,
+// make/get/set, direct calls, guard/trap and scalar root returns.
+// Recursive calls share one bounded fuel counter and depth limit.
+// All aggregate values use ONE immutable reference Engine; every frame owns
+// its own SSA slot map and checked read phase. No aggregate host ABI boxing.
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+import compiler.u1_meta as meta;
+import compiler.u1_builder as build;
+import compiler.u1_aggregate as aggregate;
+import compiler.u1_aggregate_values as av;
+import compiler.u1_aggregate_verify as graphVerify;
+import compiler.u1_verify as verify;
+import compiler.u1_successors as successors;
+
+public type Entry {
+    target meta.FunctionId; body identity build.Function; revision Int;
+    lease identity budget.Allocation; next maybe identity Entry;
+}
+public type Program {
+    metadata identity meta.Metadata; graph identity aggregate.Registry;
+    head maybe identity Entry; count Int; sealed Bool; closed Bool;
+    lease identity budget.Allocation;
+}
+public type Token { index Int; next maybe identity Token; }
+public type Scalar { bits Int; next maybe identity Scalar; }
+public type Outcome {
+    kind Int; code Int; location Int; steps Int;
+    first maybe identity Scalar; count Int;
+}
+type CallResult {
+    kind Int; code Int; location Int;
+    first maybe identity Token; count Int;
+}
+type Machine {
+    engine identity av.Engine; phase identity budget.Phase;
+    owner identity budget.Owner; fuel Int; steps Int; depthLimit Int;
+}
+type Frame {
+    routine identity build.Function; readPhase identity budget.Phase;
+    slots identity words.Words; scratch identity words.Words; machine identity Machine;
+}
+function failResult(kind Int,code Int,location Int)
+    returns identity CallResult {
+    return identity CallResult { kind=kind; code=code; location=location;
+        first=none; count=0; };
+}
+function active(program identity Program) fails budget.LimitError {
+    try budget.poll(program.metadata.owner);
+    if program.closed or program.metadata.closed or not program.metadata.frozen or
+       program.graph.state != 1 or
+       program.graph.owner != program.metadata.owner {
+        try budget.reject("inactive U1b linked aggregate program");
+    }
+}
+public function create(data identity meta.Metadata,graph identity aggregate.Registry)
+    returns identity Program fails budget.LimitError {
+    if data.owner.kind != 1 or data.owner != graph.owner or
+       not data.frozen or data.closed or graph.state != 1 {
+        try budget.reject("U1b call program requires frozen shared graph and metadata");
+    }
+    let pending be try budget.reserve(data.owner,192);
+    return identity Program { metadata=data; graph=graph; head=none;
+        count=0; sealed=false; closed=false; lease=try budget.commit(pending); };
+}
+function find(program identity Program,target meta.FunctionId)
+    returns identity build.Function fails budget.LimitError {
+    try active(program);
+    if not program.sealed or target.owner != program.metadata.key {
+        try budget.reject("unsealed or foreign U1b function");
+    }
+    let item be program.head;
+    while item != none {
+        if item.target.index == target.index and item.target.owner == target.owner {
+            if item.body.state != 1 or item.body.revision != item.revision {
+                try budget.reject("stale U1b function body");
+            }
+            return item.body;
+        }
+        item=item.next;
+    }
+    fail budget.LimitError { message="unbound U1b function definition";
+        category="invalid-state"; requested=0; remaining=0; };
+}
+public function bind(program identity Program,target meta.FunctionId,
+    routine identity build.Function) returns Int
+    fails budget.LimitError,verify.InvalidIR {
+    try active(program);
+    if program.sealed or program.count >= 32 or
+       routine.metadata != program.metadata or routine.state != 1 or
+       routine.cells.length != 0 or routine.owner.kind != 2 or
+       routine.owner.parent != program.metadata.owner.parent {
+        try budget.reject("invalid U1b canonical function binding");
+    }
+    let cursor be program.head;
+    while cursor != none {
+        if cursor.target.index == target.index and cursor.target.owner == target.owner {
+            try budget.reject("duplicate U1b declaration binding");
+        }
+        if cursor.body == routine { try budget.reject("U1b body reused by two declarations"); }
+        cursor=cursor.next;
+    }
+    let phase be try budget.verificationPhase(routine.owner);
+    let signature be try meta.functionSignature(program.metadata,phase,target);
+    let kind be try words.get(program.metadata.declarations,phase,(target.index-1)*6+3);
+    try budget.finishPhase(phase);
+    if kind != 1 or signature != routine.signature {
+        try budget.reject("U1b call signature or definition kind mismatch");
+    }
+    let report be try verify.verifyAggregates(routine,program.graph,
+        try budget.verificationPhase(routine.owner));
+    if report.revision != routine.revision { try budget.reject("stale U1b verification"); }
+    let pending be try budget.reserve(program.metadata.owner,128);
+    let entry be identity Entry {
+        target=target; body=routine; revision=routine.revision;
+        lease=try budget.commit(pending); next=program.head;
+    };
+    program.head=entry; program.count=program.count+1;
+    return program.count;
+}
+public function seal(program identity Program) returns Int
+    fails budget.LimitError,verify.InvalidIR {
+    try active(program);
+    if program.sealed { try budget.reject("U1b program already sealed"); }
+    let phase be try budget.verificationPhase(program.metadata.owner);
+    let total be program.metadata.declarations.length/6;
+    if total != program.count or total < 1 or total > 32 {
+        try budget.finishPhase(phase);
+        try budget.reject("U1b linked program requires exactly all defined declarations");
+    }
+    let i be 1;
+    while i <= total {
+        let kind be try words.get(program.metadata.declarations,phase,(i-1)*6+3);
+        if kind != 1 {
+            try budget.finishPhase(phase);
+            try budget.reject("U1b linked reference imports are unsupported");
+        }
+        let found be false;
+        let cursor be program.head;
+        while cursor != none {
+            if cursor.target.owner == program.metadata.key and
+               cursor.target.index == i { found=true; }
+            cursor=cursor.next;
+        }
+        if not found {
+            try budget.finishPhase(phase);
+            try budget.reject("missing defined U1b function");
+        }
+        i=i+1;
+    }
+    try budget.finishPhase(phase);
+    let cursor be program.head;
+    while cursor != none {
+        if cursor.body.state != 1 or cursor.body.revision != cursor.revision {
+            try budget.reject("stale U1b bound function");
+        }
+        let report be try verify.verifyAggregates(cursor.body,program.graph,
+            try budget.verificationPhase(cursor.body.owner));
+        if report.revision != cursor.revision {
+            try budget.reject("U1b sealed revision mismatch");
+        }
+        cursor=cursor.next;
+    }
+    program.sealed=true;
+    return total;
+}
+function record(frame identity Frame,store identity words.Words,index Int)
+    returns Int fails budget.LimitError {
+    return try words.get(store,frame.readPhase,index);
+}
+function get(frame identity Frame,index Int) returns av.ValueId
+    fails budget.LimitError {
+    if index < 1 or index > frame.slots.length {
+        try budget.reject("invalid U1b call SSA operand");
+    }
+    let token be try words.get(frame.slots,frame.machine.phase,index-1);
+    if token < 1 { try budget.reject("undefined U1b call SSA value"); }
+    return av.ValueId { owner=frame.machine.engine.key; index=token; };
+}
+function put(frame identity Frame,index Int,token av.ValueId)
+    fails budget.LimitError {
+    if index < 1 or index > frame.slots.length {
+        try budget.reject("invalid U1b call SSA result");
+    }
+    let actual be try av.typeOf(frame.machine.engine,token);
+    let required be try record(frame,frame.routine.values,(index-1)*4);
+    if actual.index != required {
+        try budget.reject("U1b call SSA result TypeId mismatch");
+    }
+    try words.set(frame.slots,frame.machine.phase,index-1,token.index);
+}
+function step(machine identity Machine,location Int) returns Bool
+    fails budget.LimitError {
+    if machine.steps >= machine.fuel { return false; }
+    try budget.work(machine.phase,1);
+    machine.steps=machine.steps+1;
+    return true;
+}
+function invoke(program identity Program,machine identity Machine,
+    target meta.FunctionId,inputs maybe identity Token,count Int,
+    depth Int,site Int) returns identity CallResult fails budget.LimitError {
+    if depth > machine.depthLimit { return failResult(2,0,site); }
+    let routine be try find(program,target);
+    let rp be try budget.verificationPhase(routine.owner);
+    let slots be words.create(machine.owner,1048576)
+        else error budget.LimitError {
+            try budget.finishPhase(rp); fail error;
+        };
+    let scratch be words.create(machine.owner,1048576)
+        else error budget.LimitError {
+            try words.close(slots); try budget.finishPhase(rp); fail error;
+        };
+    let frame be identity Frame { routine=routine; readPhase=rp;
+        slots=slots; scratch=scratch; machine=machine; };
+    let finished be enter(program,frame,inputs,count,depth)
+        else error budget.LimitError {
+            try words.close(scratch); try words.close(slots); try budget.finishPhase(rp); fail error;
+        };
+    try words.close(scratch); try words.close(slots); try budget.finishPhase(rp);
+    return finished;
+}
+function enter(program identity Program,frame identity Frame,
+    inputs maybe identity Token,count Int,depth Int)
+    returns identity CallResult fails budget.LimitError {
+    let routine be frame.routine; let machine be frame.machine;
+    let length be routine.values.length/4;
+    let i be 0;
+    while i < length {
+        let ignored be try words.push(frame.slots,machine.phase,0);
+        i=i+1;
+    }
+    let paramCount be try record(frame,routine.blocks,1);
+    let paramFirst be try record(frame,routine.blocks,0);
+    if count != paramCount or count > 16 {
+        try budget.reject("U1b call argument arity exceeds reference profile");
+    }
+    let cursor be inputs; i=0;
+    while i < count {
+        if cursor != none {
+            let token be av.ValueId { owner=machine.engine.key; index=cursor.index; };
+            try put(frame,paramFirst+i,token);
+            cursor=cursor.next;
+        } else { try budget.reject("missing U1b call input"); }
+        i=i+1;
+    }
+    if cursor != none { try budget.reject("excess U1b call input"); }
+    return try walk(program,frame,depth);
+}
+function walk(program identity Program,frame identity Frame,depth Int)
+    returns identity CallResult fails budget.LimitError {
+    let machine be frame.machine; let routine be frame.routine;
+    let current be try record(frame,routine.blocks,2);
+    let terminal be try record(frame,routine.blocks,4);
+    while true {
+        if current == 0 { current=terminal; }
+        if current < 1 { try budget.reject("missing canonical U1b call terminator"); }
+        let offset be (current-1)*10;
+        let op be try record(frame,routine.instructions,offset);
+        let loc be try record(frame,routine.instructions,offset+6);
+        if not (try step(machine,loc)) { return failResult(2,0,loc); }
+        let first be try record(frame,routine.instructions,offset+2);
+        let count be try record(frame,routine.instructions,offset+3);
+        let resultStart be try record(frame,routine.instructions,offset+4);
+        let payload be try record(frame,routine.instructions,offset+7);
+        if op == 1 or op == 2 or op == 36 {
+            let ty be try aggregate.typeAt(program.graph,
+                try record(frame,routine.values,(resultStart-1)*4));
+            try put(frame,resultStart,try av.scalar(machine.engine,ty,payload));
+        }
+        if op == 43 {
+            let args be []; let i be 0;
+            while i < count {
+                let value be try record(frame,routine.operands,first+i);
+                args.add(try get(frame,value)); i=i+1;
+                try budget.work(machine.phase,1);
+            }
+            let shape be try aggregate.typeAt(program.graph,payload);
+            try put(frame,resultStart,try av.make(machine.engine,shape,args));
+        }
+        if op == 44 or op == 45 {
+            let source be try record(frame,routine.operands,first);
+            let base be try get(frame,source);
+            if op == 44 {
+                try put(frame,resultStart,try av.get(machine.engine,base,payload));
+            } else {
+                let replacement be try record(frame,routine.operands,first+1);
+                try put(frame,resultStart,try av.set(machine.engine,base,payload,
+                    try get(frame,replacement)));
+            }
+        }
+        if op == 5 {
+            let source be try record(frame,routine.operands,first);
+            if (try av.bits(machine.engine,try get(frame,source))) == 0 {
+                return failResult(1,payload,loc);
+            }
+        }
+        if op == 34 {
+            let target be meta.FunctionId { owner=program.metadata.key;
+                index=payload; };
+            let args maybe identity Token be none;
+            let tail maybe identity Token be none;
+            let i be 0;
+            while i < count {
+                let source be try record(frame,routine.operands,first+i);
+                let token be try get(frame,source);
+                let item be identity Token { index=token.index; next=none; };
+                if tail == none { args=item; } else { tail.next=item; }
+                tail=item; i=i+1; try budget.work(machine.phase,1);
+            }
+            let result be try invoke(program,machine,target,args,count,depth+1,loc);
+            if result.kind != 0 { return result; }
+            let expected be try record(frame,routine.instructions,offset+5);
+            if result.count != expected { try budget.reject("U1b call result arity mismatch"); }
+            let cursor be result.first; i=0;
+            while i < expected {
+                if cursor != none {
+                    let token be av.ValueId { owner=machine.engine.key; index=cursor.index; };
+                    try put(frame,resultStart+i,token);
+                    cursor=cursor.next;
+                } else { try budget.reject("missing U1b call output"); }
+                i=i+1;
+            }
+            if cursor != none { try budget.reject("excess U1b call output"); }
+        }
+        if op == 8 {
+            if count > 16 { try budget.reject("U1b call return exceeds 16 results"); }
+            let head maybe identity Token be none; let tail maybe identity Token be none;
+            let i be 0;
+            while i < count {
+                let source be try record(frame,routine.operands,first+i);
+                let token be try get(frame,source);
+                let member be identity Token { index=token.index; next=none; };
+                if tail == none { head=member; } else { tail.next=member; }
+                tail=member; i=i+1;
+            }
+            return identity CallResult { kind=0; code=0; location=0;
+                first=head; count=count; };
+        }
+        let transferred be false;
+        if op == 6 or op == 7 or op == 35 {
+            let edge be payload;
+            if op == 7 {
+                let condition be try record(frame,routine.operands,first);
+                if (try av.bits(machine.engine,try get(frame,condition))) == 0 {
+                    edge=try record(frame,routine.instructions,offset+8);
+                }
+            }
+            if op == 35 {
+                let selector be try record(frame,routine.operands,first);
+                edge=try successors.choose(routine,frame.readPhase,current,
+                    try av.bits(machine.engine,try get(frame,selector)));
+            }
+            let edgeOffset be (edge-1)*3;
+            let targetBlock be try record(frame,routine.edges,edgeOffset);
+            let argFirst be try record(frame,routine.edges,edgeOffset+1);
+            let argCount be try record(frame,routine.edges,edgeOffset+2);
+            let targetOffset be (targetBlock-1)*5;
+            let destination be try record(frame,routine.blocks,targetOffset);
+            let ordinal be 0;
+            while ordinal < argCount {
+                let source be try record(frame,routine.arguments,argFirst+ordinal);
+                let token be try get(frame,source);
+                if ordinal == frame.scratch.length {
+                    let ignored be try words.push(frame.scratch,machine.phase,token.index);
+                } else {
+                    try words.set(frame.scratch,machine.phase,ordinal,token.index);
+                }
+                try budget.work(machine.phase,1); ordinal=ordinal+1;
+            }
+            ordinal=0;
+            while ordinal < argCount {
+                let token be av.ValueId { owner=machine.engine.key;
+                    index=try words.get(frame.scratch,machine.phase,ordinal); };
+                try put(frame,destination+ordinal,token);
+                ordinal=ordinal+1;
+            }
+            current=try record(frame,routine.blocks,targetOffset+2);
+            terminal=try record(frame,routine.blocks,targetOffset+4);
+            transferred=true;
+        }
+        if op != 1 and op != 2 and op != 36 and op != 43 and
+           op != 44 and op != 45 and op != 5 and op != 34 and op != 8 and
+           op != 6 and op != 7 and op != 35 {
+            return failResult(3,op,loc);
+        }
+        if not transferred { current=try record(frame,routine.instructions,offset+9); }
+    }
+    return failResult(3,0,0);
+}
+// Revalidate the complete linked publication at every execution ingress.
+// Neither sealed=true nor unchanged revision counters authorize execution.
+function declarationMatch(program identity Program,entry identity Entry,
+    phase identity budget.Phase) fails budget.LimitError {
+    let signature be try meta.functionSignature(program.metadata,phase,entry.target);
+    let kind be try words.get(program.metadata.declarations,phase,(entry.target.index-1)*6+3);
+    if kind != 1 or signature != entry.body.signature {
+        try budget.reject("changed U1b linked declaration signature or kind");
+    }
+}
+function revalidate(program identity Program) fails budget.LimitError,verify.InvalidIR {
+    let cursor be program.head;
+    let count be 0;
+    while cursor != none {
+        if count >= 32 or cursor.body.metadata != program.metadata or
+           cursor.body.state != 1 or cursor.body.revision != cursor.revision or
+           cursor.body.owner.kind != 2 or
+           cursor.body.owner.parent != program.metadata.owner.parent {
+            try budget.reject("stale or foreign U1b linked body");
+        }
+        let phase be try budget.verificationPhase(cursor.body.owner);
+        declarationMatch(program,cursor,phase)
+        else error budget.LimitError { try budget.finishPhase(phase); fail error; };
+        try budget.finishPhase(phase);
+        let report be try verify.verifyAggregates(cursor.body,program.graph,
+            try budget.verificationPhase(cursor.body.owner));
+        cursor=cursor.next; count=count+1;
+    }
+    if count != program.count or count != program.metadata.declarations.length/6 {
+        try budget.reject("incomplete U1b linked publication");
+    }
+}
+public function run(program identity Program,target meta.FunctionId,
+    owner identity budget.Owner,inputs,fuel Int,depthLimit Int)
+    returns identity Outcome fails budget.LimitError,verify.InvalidIR {
+    try active(program);
+    if not program.sealed or fuel < 1 or fuel > 1048576 or
+       depthLimit < 1 or depthLimit > 16 {
+        try budget.reject("U1b linked program unsealed or unbounded");
+    }
+    let routine be try find(program,target);
+    if owner != routine.owner or owner.kind != 2 {
+        try budget.reject("linked U1b execution owner must be entry function owner");
+    }
+    try revalidate(program);
+    let phase be try budget.constructionPhase(owner);
+    let engine be av.create(program.graph,owner,phase)
+        else error graphVerify.InvalidGraph {
+            try budget.finishPhase(phase);
+            fail verify.InvalidIR { message=error.message; category="invalid-ir";
+                stage=1; block=0; instruction=0; location=0; };
+        } else error budget.LimitError {
+            try budget.finishPhase(phase); fail error;
+        };
+    let machine be identity Machine { engine=engine; phase=phase; owner=owner;
+        fuel=fuel; steps=0; depthLimit=depthLimit; };
+    let completed be executeRoot(program,machine,routine,target,inputs)
+        else error budget.LimitError {
+            try av.close(engine); try budget.finishPhase(phase); fail error;
+        };
+    try av.close(engine); try budget.finishPhase(phase);
+    return completed;
+}
+function rootInputs(program identity Program,engine identity av.Engine,
+    routine identity build.Function,inputPhase identity budget.Phase,inputs)
+    returns maybe identity Token fails budget.LimitError {
+    let arguments maybe identity Token be none;
+    let tail maybe identity Token be none;
+    let params be try meta.parameterCount(program.metadata,inputPhase,routine.signature);
+    if params != inputs.count or params > 16 {
+        try budget.reject("U1b root call scalar argument arity mismatch");
+    }
+    let i be 0;
+    while i < params {
+        let offset be (routine.signature.index-1)*6;
+        let start be try words.get(program.metadata.signatures,inputPhase,offset+2);
+        let ty be try aggregate.typeAt(program.graph,
+            try words.get(program.metadata.types,inputPhase,start+i));
+        if ty.index > 6 or ty.index == 3 {
+            try budget.reject("U1b linked entry requires scalar inputs");
+        }
+        let token be try av.scalar(engine,ty,inputs[i]);
+        let item be identity Token { index=token.index; next=none; };
+        if tail == none { arguments=item; } else { tail.next=item; }
+        tail=item; i=i+1;
+    }
+    return arguments;
+}
+function executeRoot(program identity Program,machine identity Machine,
+    routine identity build.Function,target meta.FunctionId,inputs)
+    returns identity Outcome fails budget.LimitError {
+    let engine be machine.engine;
+    let inputPhase be try budget.verificationPhase(routine.owner);
+    let arguments be rootInputs(program,engine,routine,inputPhase,inputs)
+        else error budget.LimitError {
+            try budget.finishPhase(inputPhase); fail error;
+        };
+    try budget.finishPhase(inputPhase);
+    let result be try invoke(program,machine,target,arguments,inputs.count,1,0);
+    let head maybe identity Scalar be none;
+    let end maybe identity Scalar be none;
+    let count be 0;
+    if result.kind == 0 {
+        let cursor be result.first; let i be 0;
+        let originalCount be result.count;
+        while i < originalCount {
+            if cursor != none {
+                let token be av.ValueId { owner=engine.key; index=cursor.index; };
+                let ty be try av.typeOf(engine,token);
+                if ty.index > 6 or ty.index == 3 {
+                    result=failResult(3,8,0);
+                    head=none; count=0;
+                    i=originalCount;
+                }
+                else {
+                let scalar be identity Scalar { bits=try av.bits(engine,token); next=none; };
+                if end == none { head=scalar; } else { end.next=scalar; }
+                end=scalar; i=i+1; count=i; cursor=cursor.next;
+                }
+            } else { try budget.reject("missing linked root return"); }
+        }
+    }
+    let completed be identity Outcome { kind=result.kind; code=result.code;
+        location=result.location; steps=machine.steps; first=head; count=count; };
+    return completed;
+}
+public function scalar(value identity Outcome,index Int)
+    returns Int fails budget.LimitError {
+    if value.kind != 0 or index < 0 or index >= value.count {
+        try budget.reject("invalid U1b linked scalar result");
+    }
+    let cursor be value.first; let i be 0;
+    while cursor != none {
+        if i == index { return cursor.bits; }
+        i=i+1; cursor=cursor.next;
+    }
+    try budget.reject("missing U1b linked scalar");
+    return 0;
+}
+public function close(program identity Program) fails budget.LimitError {
+    if program.closed { try budget.reject("double close U1b linked program"); }
+    program.closed=true;
+    let cursor be program.head; program.head=none;
+    while cursor != none {
+        let item be cursor; cursor=item.next; item.next=none;
+        try budget.release(item.lease);
+    }
+    program.count=0;
+    try budget.release(program.lease);
+}

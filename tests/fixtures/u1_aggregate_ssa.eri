@@ -1,0 +1,199 @@
+// Canonical U1b SSA operations in the existing U1 Function records.
+// Independent verifier checks every instruction, including dead blocks.
+import std.process;
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+import compiler.u1_meta as meta;
+import compiler.u1_builder as build;
+import compiler.u1_aggregate as aggregate;
+import compiler.u1_aggregate_build as agbuild;
+import compiler.u1_verify as verify;
+
+error ProbeError { message Text; }
+function check(okay Bool,label Text) fails ProbeError {
+    if not okay { fail ProbeError { message=label; }; }
+}
+function rejectGet(routine identity build.Function,graph identity aggregate.Registry,
+    block build.BlockId,source build.ValueId,location meta.LocId)
+    returns Bool fails budget.LimitError,ProbeError {
+    let attempt be agbuild.get(routine,graph,block,source,99,location)
+    else error budget.LimitError {
+        try check(error.category == "invalid-state","reject out-of-range field");
+        return true;
+    };
+    fail ProbeError { message="out-of-range field accepted"; };
+}
+function rejectSet(routine identity build.Function,graph identity aggregate.Registry,
+    block build.BlockId,source build.ValueId,replacement build.ValueId,
+    location meta.LocId) returns Bool fails budget.LimitError,ProbeError {
+    let attempt be agbuild.set(routine,graph,block,source,0,replacement,location)
+    else error budget.LimitError {
+        try check(error.category == "invalid-state","reject wrong replacement type");
+        return true;
+    };
+    fail ProbeError { message="wrong aggregate replacement accepted"; };
+}
+function rejectMake(routine identity build.Function,graph identity aggregate.Registry,
+    block build.BlockId,shape aggregate.TypeId,source build.ValueId,
+    location meta.LocId) returns Bool fails budget.LimitError,ProbeError {
+    let attempt be agbuild.make(routine,graph,block,shape,[source],location)
+    else error budget.LimitError {
+        try check(error.category == "invalid-state","reject wrong operand count");
+        return true;
+    };
+    fail ProbeError { message="wrong aggregate.make arity accepted"; };
+}
+function rejected(routine identity build.Function,graph identity aggregate.Registry,
+    owner identity budget.Owner,stage Int,label Text)
+    returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let phase be try budget.verificationPhase(owner);
+    let untrusted be verify.verifyAggregates(routine,graph,phase)
+    else error verify.InvalidIR {
+        try check(error.category == "invalid-ir" and error.stage == stage,
+            "independent verifier rejection "+label);
+        try check(phase.state == 1 and owner.pending == 0,
+            "independent verifier closed scratch "+label);
+        output(label+":ok"); return true;
+    } else error budget.LimitError { fail error; };
+    fail ProbeError { message="invalid aggregate UIR accepted: "+label; };
+}
+function defaultRejected(routine identity build.Function,owner identity budget.Owner)
+    returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let phase be try budget.verificationPhase(owner);
+    let untrusted be verify.verify(routine,phase)
+    else error verify.InvalidIR {
+        try check(error.stage == 2 and phase.state == 1,
+            "default U1a verifier rejects aggregate operations");
+        output("legacy-profile-rejected:ok"); return true;
+    } else error budget.LimitError { fail error; };
+    fail ProbeError { message="aggregate opcode silently accepted by U1a verifier"; };
+}
+function accepted(routine identity build.Function,graph identity aggregate.Registry,
+    owner identity budget.Owner,reachable Int,label Text)
+    returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let phase be try budget.verificationPhase(owner);
+    let report be try verify.verifyAggregates(routine,graph,phase);
+    try check(report.reachableBlocks == reachable and report.structuralVisits > 0 and
+        report.revision == routine.revision and phase.state == 1 and owner.pending == 0,
+        "fresh independent aggregate UIR verification");
+    output(label+":ok"); return true;
+}
+function change(store identity words.Words,phase identity budget.Phase,
+    index Int,value Int) fails budget.LimitError {
+    store.frozen=false; try words.set(store,phase,index,value); store.frozen=true;
+}
+function run() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let root be try budget.developmentRequest();
+    let shared be try budget.metadataOwner(root);
+    let metadataPhase be try budget.constructionPhase(shared);
+    let data be try meta.create(shared,metadataPhase);
+    let signature be try meta.signature(data,metadataPhase,[meta.i64()],[meta.i64()]);
+    let source be try meta.source(data,metadataPhase,"u1b-canonical","0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",128);
+    let location be try meta.location(data,metadataPhase,source,0,7,1,1,2);
+    let graph be try aggregate.create(shared,metadataPhase);
+    let i64 be try aggregate.primitive(graph,meta.i64());
+    let pairType be try aggregate.aggregate(graph,metadataPhase,[i64,i64]);
+    let nestedType be try aggregate.aggregate(graph,metadataPhase,[pairType,i64]);
+    try aggregate.freeze(graph); try meta.freeze(data); try budget.finishPhase(metadataPhase);
+
+    let owner be try budget.functionOwner(root,false);
+    let construct be try budget.constructionPhase(owner);
+    let routine be try build.create(data,signature,owner,construct);
+    let entry be try build.block(routine,[meta.i64()]);
+    let initial be try build.parameter(routine,entry,0);
+    let one be try build.integer(routine,entry,11,location);
+    let two be try build.integer(routine,entry,17,location);
+    let flag be try build.predicate(routine,entry,true,location);
+    let original be try agbuild.make(routine,graph,entry,pairType,[initial,one],location);
+    let first be try agbuild.get(routine,graph,entry,original,0,location);
+    let updated be try agbuild.set(routine,graph,entry,original,1,two,location);
+    let latest be try agbuild.get(routine,graph,entry,updated,1,location);
+    let nested be try agbuild.make(routine,graph,entry,nestedType,[updated,first],location);
+    let nestedPart be try agbuild.get(routine,graph,entry,nested,0,location);
+    let reused be try agbuild.get(routine,graph,entry,nestedPart,1,location);
+    try check((try agbuild.get(routine,graph,entry,original,1,location)).index !=
+        reused.index,"fresh result IDs preserve original SSA values");
+    let beforeInvalid be routine.instructions.length;
+    try check(try rejectGet(routine,graph,entry,original,location) and
+        try rejectSet(routine,graph,entry,original,flag,location) and
+        try rejectMake(routine,graph,entry,pairType,initial,location),
+        "typed aggregate builder rejections");
+    try check(routine.instructions.length == beforeInvalid,
+        "invalid aggregate builder calls cannot mutate the IR");
+    let result be try build.wrapAdd(routine,entry,latest,reused,location);
+    try build.returnValues(routine,entry,[result],location);
+    // Malformed aggregate instructions in this unreachable block MUST still
+    // be diagnosed, rather than ignored by CFG reachability.
+    let dead be try build.block(routine,[]);
+    let deadNext be try build.block(routine,[meta.i64()]);
+    // This concrete edge exercises U1a's generic checkEdge specialization;
+    // the entire dead component remains unreachable from the entry.
+    try build.jump(routine,dead,deadNext,[one],location);
+    let deadAggregate be try agbuild.make(routine,graph,deadNext,pairType,[one,two],location);
+    let deadResult be try agbuild.get(routine,graph,deadNext,deadAggregate,0,location);
+    try build.returnValues(routine,deadNext,[deadResult],location);
+    try build.complete(routine); try budget.finishPhase(construct);
+    try check(try defaultRejected(routine,owner),"U1a fail-closed");
+    try check(try accepted(routine,graph,owner,1,"typed-aggregate-valid"),
+        "canonical U1b verifier accepts both blocks");
+    let edit be try budget.constructionPhase(owner);
+    let deadGetInstruction be try words.get(routine.values,edit,(deadResult.index-1)*4+2);
+    let deadMakeInstruction be try words.get(routine.values,edit,(deadAggregate.index-1)*4+2);
+    let memberGetInstruction be try words.get(routine.values,edit,(latest.index-1)*4+2);
+    let firstInstruction be try words.get(routine.values,edit,(original.index-1)*4+2);
+    let actualField be try words.get(routine.instructions,edit,(deadGetInstruction-1)*10+7);
+    try change(routine.instructions,edit,(deadGetInstruction-1)*10+7,999);
+    try check(try rejected(routine,graph,owner,2,"dead-aggregate-field"),
+        "reject malformed dead get");
+    try change(routine.instructions,edit,(deadGetInstruction-1)*10+7,actualField);
+    try check(try accepted(routine,graph,owner,1,"dead-field-restored"),
+        "restored dead field");
+    try change(routine.instructions,edit,(deadMakeInstruction-1)*10+8,1);
+    try check(try rejected(routine,graph,owner,2,"dead-aggregate-attribute"),
+        "reject malformed dead make attribute");
+    try change(routine.instructions,edit,(deadMakeInstruction-1)*10+8,0);
+    try change(routine.values,edit,(updated.index-1)*4,2);
+    try check(try rejected(routine,graph,owner,2,"aggregate-result-type"),
+        "reject mismatched immutable result type");
+    try change(routine.values,edit,(updated.index-1)*4,pairType.index);
+    let operandFirst be try words.get(routine.instructions,edit,(firstInstruction-1)*10+2);
+    let savedOperand be try words.get(routine.operands,edit,operandFirst);
+    try change(routine.operands,edit,operandFirst,flag.index);
+    try check(try rejected(routine,graph,owner,2,"aggregate-operand-type"),
+        "reject mismatched make operand");
+    try change(routine.operands,edit,operandFirst,savedOperand);
+    try change(routine.instructions,edit,(memberGetInstruction-1)*10+6,0);
+    try check(try rejected(routine,graph,owner,3,"aggregate-source-location"),
+        "reject missing aggregate location");
+    try change(routine.instructions,edit,(memberGetInstruction-1)*10+6,location.index);
+    try check(try accepted(routine,graph,owner,1,"aggregate-records-restored"),
+        "independent verification after restoration");
+    try budget.finishPhase(edit);
+
+    let metadataEdit be try budget.constructionPhase(shared);
+    let previous be try words.get(graph.fields,metadataEdit,0);
+    try change(graph.fields,metadataEdit,0,999);
+    try check(try rejected(routine,graph,owner,1,"malformed-aggregate-type-graph"),
+        "independent type graph rejection");
+    try change(graph.fields,metadataEdit,0,previous);
+    try budget.finishPhase(metadataEdit);
+    try check(try accepted(routine,graph,owner,1,"aggregate-graph-restored"),
+        "verified type graph restoration");
+    try build.close(routine); try aggregate.close(graph); try meta.close(data);
+    try check(root.live == 0 and root.pending == 0 and owner.live == 0,
+        "zero retained U1b canonical IR owner backing");
+    try budget.close(owner); try budget.close(shared); try budget.close(root);
+    output("u1b-canonical-ssa-owners:ok");
+    return true;
+}
+function main() {
+    let okay be run()
+    else error budget.LimitError {
+        output("limit:"+error.category+":"+error.message); process.setExitCode(1); return;
+    } else error verify.InvalidIR {
+        output("invalid:"+error.message); process.setExitCode(1); return;
+    } else error ProbeError {
+        output("probe:"+error.message); process.setExitCode(1); return;
+    };
+}
+main();

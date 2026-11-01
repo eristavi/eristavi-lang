@@ -1,0 +1,184 @@
+{
+  "status": "pass",
+  "as_of": "2026-11-01",
+  "repository": "eristavi/eristavi-lang",
+  "source_revision": "e54cdb54caa8ec3f17615011f41b389512aebac0",
+  "workflow_run_id": 41296623447,
+  "workflow_url": "https://github.com/eristavi/eristavi-lang/actions/runs/41296623447",
+  "job_id": 124818725247,
+  "platform": "GitHub Actions ubuntu-latest Linux x86_64 clang CFLAGS=-O2",
+  "test": "tests/test_u1b_frame_performance.py::U1BLinkedFramePerformanceTests.test_dynamic_frame_allocation_and_paired_native_performance",
+  "test_elapsed_seconds": 461.092,
+  "performance": {
+    "cold_build_seconds": {
+      "bootstrap": 4.075844150000009,
+      "emit_asm": 1.9889475590000103,
+      "runtime_generator": 0.002630014999994046,
+      "shared_compiler": 9.729108316999998
+    },
+    "max_runtime_seconds": {
+      "bootstrap_c": 0.08724097099997152,
+      "owned_native": 75.012796299
+    },
+    "median_runtime_seconds": {
+      "bootstrap_c": 0.08693955399996867,
+      "owned_native": 72.16186289400002
+    },
+    "min_runtime_seconds": {
+      "bootstrap_c": 0.08635244999999259,
+      "owned_native": 70.73140956199995
+    },
+    "orders": [
+      "AB",
+      "BA",
+      "AB",
+      "BA",
+      "AB"
+    ],
+    "owned_over_bootstrap_ratio": 830.0233849143743,
+    "runtime_seconds": {
+      "bootstrap_c": [
+        0.08705098100000441,
+        0.08693955399996867,
+        0.08635244999999259,
+        0.08724097099997152,
+        0.08643949599996859
+      ],
+      "owned_native": [
+        71.319468659,
+        74.76903610100004,
+        75.012796299,
+        72.16186289400002,
+        70.73140956199995
+      ]
+    },
+    "scope": "Paired complete linked-fixture process time for unmodified bootstrap-C/native versus owned/native; NOT an isolated verification/execution measurement or a compiler optimization speedup"
+  },
+  "dynamic_frame_physical": {
+    "diagnostic_error": 0,
+    "forced_identity_collisions": true,
+    "frame_count": 5,
+    "frames": [
+      {
+        "after_gc": {
+          "allocations": 308,
+          "live": 0,
+          "peak": 74576,
+          "reclaimed_bytes": 83104,
+          "reclaimed_objects": 308,
+          "traffic": 83104
+        },
+        "before_gc": {
+          "allocations": 308,
+          "live": 2144,
+          "peak": 74576,
+          "reclaimed_bytes": 80960,
+          "reclaimed_objects": 303,
+          "traffic": 83104
+        },
+        "depth": 1,
+        "function_id": 3,
+        "serial": 1
+      },
+      {
+        "after_gc": {
+          "allocations": 316,
+          "live": 0,
+          "peak": 66576,
+          "reclaimed_bytes": 89840,
+          "reclaimed_objects": 316,
+          "traffic": 89840
+        },
+        "before_gc": {
+          "allocations": 316,
+          "live": 512,
+          "peak": 66576,
+          "reclaimed_bytes": 89328,
+          "reclaimed_objects": 315,
+          "traffic": 89840
+        },
+        "depth": 2,
+        "function_id": 2,
+        "serial": 2
+      },
+      {
+        "after_gc": {
+          "allocations": 227,
+          "live": 0,
+          "peak": 62736,
+          "reclaimed_bytes": 62736,
+          "reclaimed_objects": 227,
+          "traffic": 62736
+        },
+        "before_gc": {
+          "allocations": 227,
+          "live": 0,
+          "peak": 62736,
+          "reclaimed_bytes": 62736,
+          "reclaimed_objects": 227,
+          "traffic": 62736
+        },
+        "depth": 3,
+        "function_id": 1,
+        "serial": 3
+      },
+      {
+        "after_gc": {
+          "allocations": 189,
+          "live": 0,
+          "peak": 52416,
+          "reclaimed_bytes": 52416,
+          "reclaimed_objects": 189,
+          "traffic": 52416
+        },
+        "before_gc": {
+          "allocations": 189,
+          "live": 0,
+          "peak": 52416,
+          "reclaimed_bytes": 52416,
+          "reclaimed_objects": 189,
+          "traffic": 52416
+        },
+        "depth": 4,
+        "function_id": 1,
+        "serial": 4
+      },
+      {
+        "after_gc": {
+          "allocations": 187,
+          "live": 0,
+          "peak": 51216,
+          "reclaimed_bytes": 51216,
+          "reclaimed_objects": 187,
+          "traffic": 51216
+        },
+        "before_gc": {
+          "allocations": 187,
+          "live": 512,
+          "peak": 51216,
+          "reclaimed_bytes": 50704,
+          "reclaimed_objects": 186,
+          "traffic": 51216
+        },
+        "depth": 3,
+        "function_id": 1,
+        "serial": 5
+      }
+    ],
+    "original_modeled_owner_gates": {
+      "peak_bytes": 8388608,
+      "traffic_bytes": 67108864
+    },
+    "scope": "Actual owned-runtime graph capacity by unique dynamic invocation, exclusive of nested calls and untagged setup/teardown, not whole-process RSS",
+    "trace_source_emit_seconds": 1.9042591319999929
+  },
+  "acceptance_notes": [
+    "Independent opt-in diagnostic: no production compiler/runtime changes",
+    "All five unique dynamic-call-frame tag histories reclaimed after GC; error=0",
+    "Full fixture C-bootstrap and owned-native stdout/stderr/exit parity",
+    "5 fresh-process alternated AB/BA pairs on same CI runner; no clean cache guarantee",
+    "Cross-runtime native execution ratio is NOT a before/after compiler optimization; needs separate performance investigation",
+    "Recursive frame tags report exclusive graph allocator events, not inclusive stack peak, total RSS or modeled per-owner budget",
+    "Historical 224-byte marked reachable fixture graph from whole-program observer is not attributed here"
+  ]
+}

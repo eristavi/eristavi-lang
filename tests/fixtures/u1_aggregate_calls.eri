@@ -1,0 +1,213 @@
+import std.process;
+import compiler.u1_budget as budget;
+import compiler.u1_meta as meta;
+import compiler.u1_builder as build;
+import compiler.u1_aggregate as aggregate;
+import compiler.u1_aggregate_signature as signature;
+import compiler.u1_aggregate_build as ab;
+import compiler.u1_aggregate_calls as call;
+import compiler.u1_verify as verify;
+
+error ProbeError { message Text; }
+function check(ok Bool,message Text) fails ProbeError {
+    if not ok { fail ProbeError { message=message; }; }
+}
+function exercise(mode Int) returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let root be try budget.developmentRequest();
+    let shared be try budget.metadataOwner(root);
+    let mp be try budget.constructionPhase(shared);
+    let data be try meta.create(shared,mp);
+    let graph be try aggregate.create(shared,mp);
+    let i64 be try aggregate.primitive(graph,meta.i64());
+    let pred be try aggregate.primitive(graph,meta.pred());
+    let pair be try aggregate.aggregate(graph,mp,[pred,i64]);
+    // Instantiate the existing concrete scalar U1a metadata signature path.
+    // The bootstrap must analyze generic U1a helpers independently of the
+    // aggregate-only structural signature import.
+    let scalarSig be try meta.signature(data,mp,[meta.i64()],[meta.i64()]);
+    let pairSig be try signature.signature(data,graph,mp,[pair],[pair]);
+    let entrySig be try signature.signature(data,graph,mp,[i64],[i64,i64]);
+    let copyId be try meta.declaration(data,mp,pairSig,"aggregate.copy",1,0,0);
+    let updateId be try meta.declaration(data,mp,pairSig,"aggregate.update",1,0,0);
+    let mainId be try meta.declaration(data,mp,entrySig,"aggregate.main",1,0,0);
+    let failId be try meta.declaration(data,mp,entrySig,"aggregate.fail",1,0,0);
+    let source be try meta.source(data,mp,"aggregate-calls","0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",128);
+    let loc be try meta.location(data,mp,source,0,7,1,1,1);
+    let trapLoc be try meta.location(data,mp,source,8,14,9,2,1);
+    try aggregate.freeze(graph); try meta.freeze(data); try budget.finishPhase(mp);
+
+    let copyOwner be try budget.functionOwner(root,false);
+    let cp be try budget.constructionPhase(copyOwner);
+    let copy be try build.create(data,pairSig,copyOwner,cp);
+    let copyEntry be try ab.block(copy,graph,[pair]);
+    let copyInput be try build.parameter(copy,copyEntry,0);
+    let recurse be try ab.block(copy,graph,[pair]);
+    let doneBlock be try ab.block(copy,graph,[pair]);
+    let flag be try ab.get(copy,graph,copyEntry,copyInput,0,loc);
+    try ab.branch(copy,graph,copyEntry,flag,recurse,[copyInput],doneBlock,[copyInput],loc);
+    let recursiveInput be try build.parameter(copy,recurse,0);
+    let off be try build.predicate(copy,recurse,false,loc);
+    let stopped be try ab.set(copy,graph,recurse,recursiveInput,0,off,loc);
+    let recursiveCall be try ab.call(copy,graph,recurse,copyId,[stopped],loc);
+    let recursiveResult be try build.result(copy,recursiveCall,0);
+    try ab.jump(copy,graph,recurse,doneBlock,[recursiveResult],loc);
+    let finalCopy be try build.parameter(copy,doneBlock,0);
+    try ab.returnValues(copy,graph,doneBlock,[finalCopy],loc);
+    // Bootstrap's existing scalar CFG generic specialization must be
+    // concretely instantiated in a disconnected, independently checked
+    // component, without altering U1b production code.
+    let dead be try build.block(copy,[]);
+    let scalarDestination be try build.block(copy,[meta.i64()]);
+    let scalarConstant be try build.integer(copy,dead,9,loc);
+    try build.jump(copy,dead,scalarDestination,[scalarConstant],loc);
+    try ab.returnValues(copy,graph,scalarDestination,[copyInput],loc);
+    try ab.complete(copy,graph); try budget.finishPhase(cp);
+
+    let updateOwner be try budget.functionOwner(root,false);
+    cp=try budget.constructionPhase(updateOwner);
+    let update be try build.create(data,pairSig,updateOwner,cp);
+    let updateEntry be try ab.block(update,graph,[pair]);
+    let updateInput be try build.parameter(update,updateEntry,0);
+    let seventeen be try build.integer(update,updateEntry,17,loc);
+    let againOn be try build.predicate(update,updateEntry,true,loc);
+    let againOff be try build.predicate(update,updateEntry,false,loc);
+    let loopBlock be try ab.block(update,graph,[pair,pred]);
+    let exitBlock be try ab.block(update,graph,[pair]);
+    try ab.jump(update,graph,updateEntry,loopBlock,[updateInput,againOn],loc);
+    let loopInput be try build.parameter(update,loopBlock,0);
+    let again be try build.parameter(update,loopBlock,1);
+    let modified be try ab.set(update,graph,loopBlock,loopInput,1,seventeen,loc);
+    let forwarded be try ab.call(update,graph,loopBlock,copyId,[modified],loc);
+    let fromCopy be try build.result(update,forwarded,0);
+    try ab.branch(update,graph,loopBlock,again,loopBlock,[fromCopy,againOff],exitBlock,[fromCopy],loc);
+    let finalUpdate be try build.parameter(update,exitBlock,0);
+    try ab.returnValues(update,graph,exitBlock,[finalUpdate],loc);
+    try ab.complete(update,graph); try budget.finishPhase(cp);
+
+    let mainOwner be try budget.functionOwner(root,false);
+    cp=try budget.constructionPhase(mainOwner);
+    let main be try build.create(data,entrySig,mainOwner,cp);
+    let mainEntry be try ab.block(main,graph,[i64]);
+    let input be try build.parameter(main,mainEntry,0);
+    let eleven be try build.integer(main,mainEntry,11,loc);
+    let on be try build.predicate(main,mainEntry,true,loc);
+    let original be try ab.make(main,graph,mainEntry,pair,[on,eleven],loc);
+    let updatedCall be try ab.call(main,graph,mainEntry,updateId,[original],loc);
+    let updated be try build.result(main,updatedCall,0);
+    let before be try ab.get(main,graph,mainEntry,original,1,loc);
+    let after be try ab.get(main,graph,mainEntry,updated,1,loc);
+    try ab.returnValues(main,graph,mainEntry,[before,after],loc);
+    try ab.complete(main,graph); try budget.finishPhase(cp);
+
+    let failOwner be try budget.functionOwner(root,false);
+    cp=try budget.constructionPhase(failOwner);
+    let failing be try build.create(data,entrySig,failOwner,cp);
+    let failEntry be try ab.block(failing,graph,[i64]);
+    let zero be try build.predicate(failing,failEntry,false,loc);
+    try build.guard(failing,failEntry,zero,2,trapLoc);
+    let a be try build.integer(failing,failEntry,11,loc);
+    let b be try build.integer(failing,failEntry,17,loc);
+    try ab.returnValues(failing,graph,failEntry,[a,b],loc);
+    try ab.complete(failing,graph); try budget.finishPhase(cp);
+
+    let program be try call.create(data,graph);
+    let c1 be try call.bind(program,copyId,copy);
+    let c2 be try call.bind(program,updateId,update);
+    let c3 be try call.bind(program,mainId,main);
+    let c4 be try call.bind(program,failId,failing);
+    try check((try call.seal(program)) == 4,"all canonical declarations verified");
+
+    if mode != -1 {
+        let baseline be root.live;
+        let trafficBefore be mainOwner.traffic;
+        let expected be "resource-limit";
+        if mode == -2 { budget.cancel(mainOwner); expected="cancelled"; }
+        if mode >= 0 and mode < 10000 {
+            mainOwner.trafficLimit=mainOwner.traffic+mode;
+        }
+        if mode >= 10000 { mainOwner.workLimit=mainOwner.work+mode-10000; }
+        let refused be try expectRefusal(program,mainId,mainOwner,expected);
+        try check(refused,"bounded request unexpectedly completed");
+        try check(root.live == baseline and root.pending == 0 and
+            mainOwner.pending == 0 and mainOwner.traffic >= trafficBefore,
+            "entry or nested refusal leaked backing or rolled back traffic");
+    } else {
+    let success be try call.run(program,mainId,mainOwner,[0],64,8);
+    try check(success.kind == 0 and success.count == 2 and success.steps == 31,
+        "recursive calls within aggregate loop");
+    output(try call.scalar(success,0));
+    output(try call.scalar(success,1));
+
+    // Refuse at every dynamic instruction boundary, including nested
+    // recursion and loop re-entry; all frame scratch must be reclaimed.
+    let baselineLive be root.live;
+    let fuel be 1;
+    while fuel < 31 {
+        let limited be try call.run(program,mainId,mainOwner,[0],fuel,8);
+        try check(limited.kind == 2 and limited.steps == fuel and
+            limited.location == loc.index,"every cross-call fuel boundary");
+        try check(root.live == baselineLive and root.pending == 0,
+            "fuel refusal releases recursive and loop frame storage");
+        fuel=fuel+1;
+    }
+    let recursiveLimit be try call.run(program,mainId,mainOwner,[0],64,3);
+    try check(recursiveLimit.kind == 2 and recursiveLimit.location == loc.index
+        and root.live == baselineLive,"recursive depth refusal cleanup");
+
+    // Depth and fuel are GLOBAL across the entire nested call chain.
+    let bounded be try call.run(program,mainId,mainOwner,[0],2,8);
+    try check(bounded.kind == 2 and bounded.steps == 2 and
+        bounded.location == loc.index,"global call fuel and exact LocId");
+    let shallow be try call.run(program,mainId,mainOwner,[0],64,1);
+    try check(shallow.kind == 2 and shallow.location == loc.index,
+        "call-depth ceiling retains caller location");
+    // Trap has a DIFFERENT original source location from the entry call.
+    let failure be try call.run(program,failId,failOwner,[0],64,8);
+    try check(failure.kind == 1 and failure.code == 2 and
+        failure.location == trapLoc.index,"original callee guard location");
+
+    }
+    // Linked execution's aggregate engine and recursive frame scratch share
+    // the entry owner. Assert the original U1 admission ceilings without
+    // increasing them; actual allocator capacity remains a separate gate.
+    try check(mainOwner.peak <= 8388608 and
+        mainOwner.traffic <= 67108864,
+        "linked frame owner exceeded original physical admission ceilings");
+    try call.close(program);
+    try build.close(copy); try build.close(update);
+    try build.close(main); try build.close(failing);
+    try aggregate.close(graph); try meta.close(data);
+    try check(root.live == 0 and root.pending == 0,"all linked call owner backing reclaimed");
+    try budget.close(copyOwner); try budget.close(updateOwner);
+    try budget.close(mainOwner); try budget.close(failOwner);
+    try budget.close(shared); try budget.close(root);
+    if mode == -1 { output("u1b-aggregate-calls:ok"); }
+    return true;
+}
+function expectRefusal(program identity call.Program,target meta.FunctionId,
+    owner identity budget.Owner,expected Text) returns Bool fails ProbeError,verify.InvalidIR {
+    let result be call.run(program,target,owner,[0],64,8)
+    else error budget.LimitError { return error.category == expected; }
+    else error verify.InvalidIR { fail error; };
+    return false;
+}
+function all() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let normal be try exercise(-1);
+    let cancelled be try exercise(-2);
+    let limits be [0,128,512,1024,2048,4096,8192];
+    for limit in limits { let denied be try exercise(limit); }
+    let work be [0,1,16,64,128];
+    for amount in work { let denied be try exercise(10000+amount); }
+    return true;
+}
+function main() {
+    let done be all()
+    else error budget.LimitError {
+        output("limit:"+error.message); process.setExitCode(1); return;
+    } else error verify.InvalidIR {
+        output("invalid:"+error.message); process.setExitCode(1); return;
+    } else error ProbeError {
+        output("probe:"+error.message); process.setExitCode(1); return;
+    };
+}
+main();

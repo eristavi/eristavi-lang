@@ -1,0 +1,308 @@
+// U1b opt-in REFERENCE EXECUTOR for the canonical, independently verified SSA
+// Function tables. This consumes actual UIR op43/44/45 instructions, NOT a
+// parallel instruction language. It intentionally does not modify the U1a
+// evaluator, source language, native backend or public ABI.
+//
+// Current bounded profile: one reachable straight-line block; pred/i64/i8/
+// i16/i32 scalar constants and parameters, immutable aggregate make/get/set,
+// guard, and up to 16 scalar return values. Unsupported instructions and CFG
+// terminators are explicit outcomes anchored to their original LocId. Full
+// aggregate signatures, calls, phi/CFG execution and promotion are later gates.
+// The owned value Engine uses O(fields) shallow copying ONLY as an independent
+// semantic reference; native lowering must not inherit that allocation policy.
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+import compiler.u1_meta as meta;
+import compiler.u1_builder as build;
+import compiler.u1_aggregate as aggregate;
+import compiler.u1_aggregate_values as av;
+import compiler.u1_aggregate_verify as graphVerify;
+import compiler.u1_verify as verify;
+import compiler.u1_ops as ops;
+import compiler.u1_successors as successors;
+
+public type Bit { bits Int; next maybe identity Bit; }
+public type Outcome {
+    kind Int; // 0 return, 1 terminal trap, 2 fuel, 3 unsupported
+    code Int; location Int; steps Int;
+    first maybe identity Bit; count Int;
+}
+function outcome(kind Int,code Int,location Int,steps Int,
+    first maybe identity Bit,count Int) returns identity Outcome {
+    return identity Outcome {
+        kind=kind; code=code; location=location; steps=steps;
+        first=first; count=count;
+    };
+}
+public function result(value identity Outcome,index Int)
+    returns Int fails budget.LimitError {
+    if value.kind != 0 or index < 0 or index >= value.count {
+        try budget.reject("invalid U1b aggregate reference result access");
+    }
+    let current be value.first; let item be 0;
+    while current != none {
+        if item == index { return current.bits; }
+        item=item+1; current=current.next;
+    }
+    try budget.reject("missing U1b aggregate result slot");
+    return 0;
+}
+
+function read(routine identity build.Function,phase identity budget.Phase,
+    table identity words.Words,index Int) returns Int fails budget.LimitError {
+    return try words.get(table,phase,index);
+}
+function value(engine identity av.Engine,slots identity words.Words,
+    phase identity budget.Phase,index Int) returns av.ValueId
+    fails budget.LimitError {
+    if index < 1 or index > slots.length {
+        try budget.reject("invalid canonical U1b reference SSA slot");
+    }
+    let token be try words.get(slots,phase,index-1);
+    if token < 1 { try budget.reject("undefined canonical U1b SSA value"); }
+    return av.ValueId { owner=engine.key; index=token; };
+}
+function save(engine identity av.Engine,slots identity words.Words,
+    phase identity budget.Phase,routine identity build.Function,
+    index Int,token av.ValueId) fails budget.LimitError {
+    if index < 1 or index > slots.length {
+        try budget.reject("invalid U1b SSA result slot");
+    }
+    let actual be try av.typeOf(engine,token);
+    let expected be try words.get(routine.values,phase,(index-1)*4);
+    if actual.index != expected { try budget.reject("U1b executor result TypeId mismatch"); }
+    // An SSA definition is statically unique, but its *dynamic* value changes
+    // on each backedge visit. Independent canonical verification proves the
+    // sole definition and all uses; overwriting the runtime slot is essential
+    // for correct loops and avoids an unnecessary per-result read.
+    // Immutable values themselves are never overwritten in the Engine.
+    try words.set(slots,phase,index-1,token.index);
+}
+
+// Comparison relations use exactly the approved U1 i64 ordering:
+// eq, ne, signed lt/le/gt/ge and unsigned lt/le/gt/ge. All comparisons
+// return a canonical predicate, never a managed or implicit boxed value.
+function compare(a Int,b Int,relation Int) returns Int {
+    let result be false;
+    if relation == 1 { result=a == b; }
+    if relation == 2 { result=a != b; }
+    if relation == 3 { result=a < b; }
+    if relation == 4 { result=a <= b; }
+    if relation == 5 { result=a > b; }
+    if relation == 6 { result=a >= b; }
+    let less be a < b;
+    if a < 0 and b >= 0 { less=false; }
+    if a >= 0 and b < 0 { less=true; }
+    if relation == 7 { result=less; }
+    if relation == 8 { result=less or a == b; }
+    if relation == 9 { result=not less and a != b; }
+    if relation == 10 { result=not less; }
+    if result { return 1; }
+    return 0;
+}
+function walk(routine identity build.Function,graph identity aggregate.Registry,
+    engine identity av.Engine,slots identity words.Words,phase identity budget.Phase,
+    inputs,fuel Int) returns identity Outcome fails budget.LimitError {
+    let valuesCount be routine.values.length/4;
+    let item be 0;
+    while item < valuesCount {
+        let unused be try words.push(slots,phase,0);
+        item=item+1;
+    }
+    // The current canonical metadata signature profile is scalar only.
+    // Do not interpret aggregate parameters/results without the program-owned
+    // signature/CFG type extension and verified ABI mapping.
+    let params be try read(routine,phase,routine.blocks,1);
+    let firstParam be try read(routine,phase,routine.blocks,0);
+    if inputs.count != params { try budget.reject("U1b reference input arity mismatch"); }
+    item=0;
+    while item < params {
+        let typeIndex be try read(routine,phase,routine.values,(firstParam+item-1)*4);
+        if typeIndex > 6 or typeIndex == 3 {
+            try budget.reject("unsupported aggregate/f64 U1b reference input");
+        }
+        let ty be try aggregate.typeAt(graph,typeIndex);
+        let scalar be try av.scalar(engine,ty,inputs[item]);
+        try save(engine,slots,phase,routine,firstParam+item,scalar);
+        item=item+1;
+    }
+
+    let block be 1;
+    let instruction be try read(routine,phase,routine.blocks,2);
+    let terminal be try read(routine,phase,routine.blocks,4);
+    // Reused, owner-accounted edge staging preserves simultaneous block
+    // argument assignment, including backedges and swaps.
+    let edgeScratch be try words.create(engine.owner,1048576);
+    let steps be 0;
+    while true {
+        if instruction == 0 { instruction=terminal; }
+        if instruction < 1 { try budget.reject("missing U1b canonical terminator"); }
+        let offset be (instruction-1)*10;
+        let op be try read(routine,phase,routine.instructions,offset);
+        let loc be try read(routine,phase,routine.instructions,offset+6);
+        if steps >= fuel { try words.close(edgeScratch); return outcome(2,0,loc,steps,none,0); }
+        try budget.work(phase,1); steps=steps+1;
+        let operandsFirst be try read(routine,phase,routine.instructions,offset+2);
+        let operandsCount be try read(routine,phase,routine.instructions,offset+3);
+        let resultStart be try read(routine,phase,routine.instructions,offset+4);
+        let payload be try read(routine,phase,routine.instructions,offset+7);
+        if op == 1 or op == 2 or op == 36 {
+            let tyIndex be try read(routine,phase,routine.values,(resultStart-1)*4);
+            let bits be try av.scalar(engine,try aggregate.typeAt(graph,tyIndex),payload);
+            try save(engine,slots,phase,routine,resultStart,bits);
+        }
+        if op == 18 {
+            let firstArg be try read(routine,phase,routine.operands,operandsFirst);
+            let secondArg be try read(routine,phase,routine.operands,operandsFirst+1);
+            let firstBits be try av.bits(engine,try value(engine,slots,phase,firstArg));
+            let secondBits be try av.bits(engine,try value(engine,slots,phase,secondArg));
+            let predicateType be try aggregate.typeAt(graph,1);
+            let compared be try av.scalar(engine,predicateType,
+                compare(firstBits,secondBits,payload));
+            try save(engine,slots,phase,routine,resultStart,compared);
+        }
+        if op == 43 {
+            let inputsForMake be []; let ordinal be 0;
+            while ordinal < operandsCount {
+                let source be try read(routine,phase,routine.operands,operandsFirst+ordinal);
+                inputsForMake.add(try value(engine,slots,phase,source));
+                ordinal=ordinal+1;
+            }
+            let shape be try aggregate.typeAt(graph,payload);
+            let created be try av.make(engine,shape,inputsForMake);
+            try save(engine,slots,phase,routine,resultStart,created);
+        }
+        if op == 44 or op == 45 {
+            let source be try read(routine,phase,routine.operands,operandsFirst);
+            let selected be try value(engine,slots,phase,source);
+            if op == 44 {
+                let created be try av.get(engine,selected,payload);
+                try save(engine,slots,phase,routine,resultStart,created);
+            } else {
+                let replacement be try read(routine,phase,routine.operands,operandsFirst+1);
+                let created be try av.set(engine,selected,payload,
+                    try value(engine,slots,phase,replacement));
+                try save(engine,slots,phase,routine,resultStart,created);
+            }
+        }
+        if op == 5 {
+            let source be try read(routine,phase,routine.operands,operandsFirst);
+            let bits be try av.bits(engine,try value(engine,slots,phase,source));
+            if bits == 0 { try words.close(edgeScratch); return outcome(1,payload,loc,steps,none,0); }
+        }
+        if op == 8 {
+            if operandsCount > 16 {
+                try budget.reject("U1b reference result count exceeds 16");
+            }
+            let first maybe identity Bit be none;
+            let tail maybe identity Bit be none;
+            let ordinal be 0;
+            while ordinal < operandsCount {
+                let source be try read(routine,phase,routine.operands,operandsFirst+ordinal);
+                let token be try value(engine,slots,phase,source);
+                let ty be try av.typeOf(engine,token);
+                if ty.index > 6 or ty.index == 3 {
+                    // The structural aggregate result ABI is not yet accepted.
+                    try words.close(edgeScratch);
+                    return outcome(3,8,loc,steps,none,0);
+                }
+                let element be identity Bit { bits=try av.bits(engine,token); next=none; };
+                if tail == none { first=element; } else { tail.next=element; }
+                tail=element; ordinal=ordinal+1;
+            }
+            try words.close(edgeScratch);
+            return outcome(0,0,0,steps,first,operandsCount);
+        }
+        let transferred be false;
+        if op == 6 or op == 7 or op == 35 {
+            let chosenEdge be payload;
+            if op == 7 {
+                let condition be try read(routine,phase,routine.operands,operandsFirst);
+                if (try av.bits(engine,try value(engine,slots,phase,condition))) == 0 {
+                    chosenEdge=try read(routine,phase,routine.instructions,offset+8);
+                }
+            }
+            if op == 35 {
+                let selector be try read(routine,phase,routine.operands,operandsFirst);
+                chosenEdge=try successors.choose(routine,phase,instruction,
+                    try av.bits(engine,try value(engine,slots,phase,selector)));
+            }
+            let edgeOffset be (chosenEdge-1)*3;
+            let target be try read(routine,phase,routine.edges,edgeOffset);
+            let first be try read(routine,phase,routine.edges,edgeOffset+1);
+            let count be try read(routine,phase,routine.edges,edgeOffset+2);
+            let targetOffset be (target-1)*5;
+            let destination be try read(routine,phase,routine.blocks,targetOffset);
+            // Stage ALL inputs before overwriting a single target SSA slot.
+            // Reuse fixed-width storage, avoiding per-edge List allocations.
+            let ordinal be 0;
+            while ordinal < count {
+                let source be try read(routine,phase,routine.arguments,first+ordinal);
+                let token be try value(engine,slots,phase,source);
+                if ordinal == edgeScratch.length {
+                    let ignored be try words.push(edgeScratch,phase,token.index);
+                } else {
+                    try words.set(edgeScratch,phase,ordinal,token.index);
+                }
+                try budget.work(phase,1);
+                ordinal=ordinal+1;
+            }
+            ordinal=0;
+            while ordinal < count {
+                try words.set(slots,phase,destination+ordinal-1,
+                    try words.get(edgeScratch,phase,ordinal));
+                ordinal=ordinal+1;
+            }
+            block=target;
+            instruction=try read(routine,phase,routine.blocks,targetOffset+2);
+            terminal=try read(routine,phase,routine.blocks,targetOffset+4);
+            transferred=true;
+        }
+        if op != 1 and op != 2 and op != 18 and op != 36 and
+           op != 43 and op != 44 and op != 45 and op != 5 and op != 8 and
+           op != 6 and op != 7 and op != 35 {
+            // Fail closed rather than guessing additional UIR semantics.
+            try words.close(edgeScratch);
+            return outcome(3,op,loc,steps,none,0);
+        }
+        if not transferred {
+            instruction=try read(routine,phase,routine.instructions,offset+9);
+        }
+    }
+    try words.close(edgeScratch);
+    return outcome(3,0,0,steps,none,0);
+}
+
+public function run(routine identity build.Function,graph identity aggregate.Registry,
+    owner identity budget.Owner,inputs,fuel Int)
+    returns identity Outcome fails budget.LimitError,verify.InvalidIR {
+    if fuel < 1 or fuel > 1048576 or owner.kind != 2 or
+       owner != routine.owner or owner.parent == none or
+       owner.parent != routine.owner.parent or graph.owner != routine.metadata.owner {
+        try budget.reject("invalid opt-in U1b canonical execution owner or fuel");
+    }
+    // Fresh, independent verification of the *actual canonical* instruction
+    // stream, with the frozen graph verified independently before any execution.
+    let checkPhase be try budget.verificationPhase(routine.owner);
+    let checked be try verify.verifyAggregates(routine,graph,checkPhase);
+    let phase be try budget.constructionPhase(owner);
+    let engine be av.create(graph,owner,phase)
+        else error graphVerify.InvalidGraph {
+            try budget.finishPhase(phase);
+            fail verify.InvalidIR { message=error.message; category="invalid-ir";
+                stage=1; block=0; instruction=0; location=0; };
+        } else error budget.LimitError {
+            try budget.finishPhase(phase); fail error;
+        };
+    let slots be words.create(owner,1048576)
+        else error budget.LimitError {
+            try av.close(engine); try budget.finishPhase(phase); fail error;
+        };
+    let completed be walk(routine,graph,engine,slots,phase,inputs,fuel)
+        else error budget.LimitError {
+            try words.close(slots); try av.close(engine);
+            try budget.finishPhase(phase); fail error;
+        };
+    try words.close(slots); try av.close(engine); try budget.finishPhase(phase);
+    return completed;
+}

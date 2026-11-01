@@ -1,0 +1,391 @@
+// U1b canonical UIR instruction construction, opt-in for checked immutable
+// structural aggregates. Stores operations in the EXISTING U1 SSA Function
+// tables, not an alternate executable IR. U1a metadata/Function layouts and
+// the production compiler remain unchanged. Verification is mandatory.
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+import compiler.u1_meta as meta;
+import compiler.u1_builder as build;
+import compiler.u1_aggregate as aggregate;
+import compiler.u1_ops as ops;
+import compiler.u1_aggregate_finish as finish;
+
+function access(routine identity build.Function,graph identity aggregate.Registry,
+    block build.BlockId,location meta.LocId) returns Int fails budget.LimitError {
+    try budget.poll(routine.owner);
+    if routine.state != 0 or graph.state != 1 or graph.owner != routine.metadata.owner or
+       not routine.metadata.frozen or routine.metadata.closed or
+       routine.owner.parent != graph.owner.parent or routine.phase.owner != routine.owner {
+        try budget.reject("U1b aggregate instruction needs frozen same-owner type graph and open function");
+    }
+    try meta.validLocation(routine.metadata,location);
+    if block.owner != routine.key or block.index < 1 or
+       block.index > routine.blocks.length/5 {
+        try budget.reject("foreign or invalid U1b aggregate basic block");
+    }
+    let offset be (block.index-1)*5;
+    if try words.get(routine.blocks,routine.phase,offset+4) != 0 {
+        try budget.reject("U1b aggregate instruction after terminator");
+    }
+    return offset;
+}
+
+function typeOf(routine identity build.Function,graph identity aggregate.Registry,
+    value build.ValueId) returns aggregate.TypeId fails budget.LimitError {
+    if value.owner != routine.key or value.index < 1 or
+       value.index > routine.values.length/4 {
+        try budget.reject("foreign or invalid U1b aggregate SSA value");
+    }
+    let index be try words.get(routine.values,routine.phase,(value.index-1)*4);
+    return try aggregate.typeAt(graph,index);
+}
+
+function emit(routine identity build.Function,graph identity aggregate.Registry,
+    block build.BlockId,op Int,inputs,location meta.LocId,
+    payload Int,extra Int,resultType aggregate.TypeId)
+    returns build.ValueId fails budget.LimitError {
+    let blockOffset be try access(routine,graph,block,location);
+    if not ops.isAggregate(op) { try budget.reject("invalid U1b aggregate operation"); }
+    try aggregate.valid(graph,resultType);
+    if routine.instructions.length/10 >= 1048576 or
+       routine.values.length/4 >= 1048576 or
+       inputs.count > routine.operands.limit-routine.operands.length {
+        try budget.exceed(routine.owner,1,0);
+    }
+    // All type/arity/field checks occur in make/get/set before any mutation.
+    let first be routine.operands.length;
+    let item be 0;
+    while item < inputs.count {
+        let value be inputs[item];
+        let checked be try typeOf(routine,graph,value);
+        let ignored be try words.push(routine.operands,routine.phase,value.index);
+        item=item+1;
+    }
+    let instructionIndex be routine.instructions.length/10+1;
+    let valueIndex be routine.values.length/4+1;
+    let ignored be try words.push(routine.values,routine.phase,resultType.index);
+    ignored=try words.push(routine.values,routine.phase,1);
+    ignored=try words.push(routine.values,routine.phase,instructionIndex);
+    ignored=try words.push(routine.values,routine.phase,0);
+    ignored=try words.push(routine.instructions,routine.phase,op);
+    ignored=try words.push(routine.instructions,routine.phase,block.index);
+    ignored=try words.push(routine.instructions,routine.phase,first);
+    ignored=try words.push(routine.instructions,routine.phase,inputs.count);
+    ignored=try words.push(routine.instructions,routine.phase,valueIndex);
+    ignored=try words.push(routine.instructions,routine.phase,1);
+    ignored=try words.push(routine.instructions,routine.phase,location.index);
+    ignored=try words.push(routine.instructions,routine.phase,payload);
+    ignored=try words.push(routine.instructions,routine.phase,extra);
+    ignored=try words.push(routine.instructions,routine.phase,0);
+    let previous be try words.get(routine.blocks,routine.phase,blockOffset+3);
+    if previous == 0 {
+        try words.set(routine.blocks,routine.phase,blockOffset+2,instructionIndex);
+    } else {
+        try words.set(routine.instructions,routine.phase,(previous-1)*10+9,instructionIndex);
+    }
+    try words.set(routine.blocks,routine.phase,blockOffset+3,instructionIndex);
+    routine.revision=routine.revision+1;
+    return build.ValueId { owner=routine.key; index=valueIndex; };
+}
+
+// 43: aggregate.make. Ordered operand types and total arity are structural.
+public function make(routine identity build.Function,graph identity aggregate.Registry,
+    block build.BlockId,shape aggregate.TypeId,inputs,location meta.LocId)
+    returns build.ValueId fails budget.LimitError {
+    let selected be try access(routine,graph,block,location);
+    let count be try aggregate.fieldCount(graph,routine.phase,shape);
+    if inputs.count != count { try budget.reject("aggregate.make field arity mismatch"); }
+    let item be 0;
+    while item < count {
+        let actual be try typeOf(routine,graph,inputs[item]);
+        let required be try aggregate.field(graph,routine.phase,shape,item);
+        if actual.index != required.index {
+            try budget.reject("aggregate.make field type mismatch");
+        }
+        try budget.work(routine.phase,1);
+        item=item+1;
+    }
+    return try emit(routine,graph,block,43,inputs,location,shape.index,0,shape);
+}
+
+// 44: aggregate.get. The field ordinal is an instruction attribute, NOT an SSA
+// runtime index; the operation always returns its declared exact field type.
+public function get(routine identity build.Function,graph identity aggregate.Registry,
+    block build.BlockId,source build.ValueId,index Int,location meta.LocId)
+    returns build.ValueId fails budget.LimitError {
+    let selected be try access(routine,graph,block,location);
+    let shape be try typeOf(routine,graph,source);
+    let fieldType be try aggregate.field(graph,routine.phase,shape,index);
+    return try emit(routine,graph,block,44,[source],location,index,shape.index,fieldType);
+}
+
+// 45: aggregate.set. Pure immutable update: the old SSA value remains valid.
+public function set(routine identity build.Function,graph identity aggregate.Registry,
+    block build.BlockId,source build.ValueId,index Int,replacement build.ValueId,
+    location meta.LocId) returns build.ValueId fails budget.LimitError {
+    let selected be try access(routine,graph,block,location);
+    let shape be try typeOf(routine,graph,source);
+    let fieldType be try aggregate.field(graph,routine.phase,shape,index);
+    let actual be try typeOf(routine,graph,replacement);
+    if actual.index != fieldType.index {
+        try budget.reject("aggregate.set replacement type mismatch");
+    }
+    return try emit(routine,graph,block,45,[source,replacement],location,index,shape.index,shape);
+}
+
+
+// U1b opt-in canonical block/edge/signature adapters. These append directly to
+// the SAME Function tables and do not change the existing U1a object layout.
+// All TypeIds are checked against a frozen graph before record publication.
+public function block(routine identity build.Function,graph identity aggregate.Registry,
+    parameters) returns build.BlockId fails budget.LimitError {
+    try budget.poll(routine.owner);
+    if routine.state != 0 or graph.state != 1 or
+       graph.owner != routine.metadata.owner or
+       routine.owner.parent != graph.owner.parent {
+        try budget.reject("U1b block requires frozen same-request aggregate types");
+    }
+    if routine.blocks.length/5 >= 65536 or
+       parameters.count > 1048576-routine.values.length/4 {
+        try budget.exceed(routine.owner,1,0);
+    }
+    let item be 0;
+    while item < parameters.count {
+        try aggregate.valid(graph,parameters[item]);
+        item=item+1;
+    }
+    let result be build.BlockId { owner=routine.key; index=routine.blocks.length/5+1; };
+    let first be 0;
+    if parameters.count > 0 { first=routine.values.length/4+1; }
+    let ignored be try words.push(routine.blocks,routine.phase,first);
+    ignored=try words.push(routine.blocks,routine.phase,parameters.count);
+    ignored=try words.push(routine.blocks,routine.phase,0);
+    ignored=try words.push(routine.blocks,routine.phase,0);
+    ignored=try words.push(routine.blocks,routine.phase,0);
+    item=0;
+    while item < parameters.count {
+        let ty be parameters[item];
+        ignored=try words.push(routine.values,routine.phase,ty.index);
+        ignored=try words.push(routine.values,routine.phase,0);
+        ignored=try words.push(routine.values,routine.phase,result.index);
+        ignored=try words.push(routine.values,routine.phase,item);
+        item=item+1;
+    }
+    routine.revision=routine.revision+1;
+    return result;
+}
+// These helpers consume ONLY integers, never a generic List. Eristavi's
+// bootstrap specialization is guaranteed by each public concrete entry point.
+function targetParameters(routine identity build.Function,target build.BlockId,
+    count Int) returns Int fails budget.LimitError {
+    if target.owner != routine.key or target.index < 2 or
+       target.index > routine.blocks.length/5 {
+        try budget.reject("foreign, invalid or entry-targeted U1b edge");
+    }
+    let offset be (target.index-1)*5;
+    if try words.get(routine.blocks,routine.phase,offset+1) != count {
+        try budget.reject("U1b edge arity mismatch");
+    }
+    return try words.get(routine.blocks,routine.phase,offset);
+}
+function beginArguments(routine identity build.Function,count Int)
+    returns Int fails budget.LimitError {
+    if routine.edges.length/3 >= 262144 or
+       count > routine.arguments.limit-routine.arguments.length {
+        try budget.exceed(routine.owner,1,0);
+    }
+    return routine.arguments.length;
+}
+function edgeRecord(routine identity build.Function,target build.BlockId,
+    first Int,count Int) returns Int fails budget.LimitError {
+    let ordinal be routine.edges.length/3+1;
+    let ignored be try words.push(routine.edges,routine.phase,target.index);
+    ignored=try words.push(routine.edges,routine.phase,first);
+    ignored=try words.push(routine.edges,routine.phase,count);
+    return ordinal;
+}
+function terminalRecord(routine identity build.Function,from build.BlockId,
+    opcode Int,start Int,count Int,loc meta.LocId,payload Int,extra Int)
+    fails budget.LimitError {
+    if routine.instructions.length/10 >= 1048576 {
+        try budget.exceed(routine.owner,1,0);
+    }
+    let ordinal be routine.instructions.length/10+1;
+    let ignored be try words.push(routine.instructions,routine.phase,opcode);
+    ignored=try words.push(routine.instructions,routine.phase,from.index);
+    ignored=try words.push(routine.instructions,routine.phase,start);
+    ignored=try words.push(routine.instructions,routine.phase,count);
+    ignored=try words.push(routine.instructions,routine.phase,0);
+    ignored=try words.push(routine.instructions,routine.phase,0);
+    ignored=try words.push(routine.instructions,routine.phase,loc.index);
+    ignored=try words.push(routine.instructions,routine.phase,payload);
+    ignored=try words.push(routine.instructions,routine.phase,extra);
+    ignored=try words.push(routine.instructions,routine.phase,0);
+    try words.set(routine.blocks,routine.phase,(from.index-1)*5+4,ordinal);
+    routine.revision=routine.revision+1;
+}
+public function jump(routine identity build.Function,graph identity aggregate.Registry,
+    from build.BlockId,target build.BlockId,values,loc meta.LocId)
+    fails budget.LimitError {
+    let checked be try access(routine,graph,from,loc);
+    let expected be try targetParameters(routine,target,values.count);
+    let item be 0;
+    while item < values.count {
+        let current be values[item];
+        let actual be try typeOf(routine,graph,current);
+        let ty be try words.get(routine.values,routine.phase,(expected+item-1)*4);
+        if actual.index != ty { try budget.reject("U1b edge type mismatch"); }
+        item=item+1;
+    }
+    let start be try beginArguments(routine,values.count);
+    item=0;
+    while item < values.count {
+        let current be values[item]; let actual be try typeOf(routine,graph,current);
+        let ignored be try words.push(routine.arguments,routine.phase,current.index);
+        item=item+1;
+    }
+    let number be try edgeRecord(routine,target,start,values.count);
+    try terminalRecord(routine,from,6,routine.operands.length,0,loc,number,0);
+}
+public function branch(routine identity build.Function,graph identity aggregate.Registry,
+    from build.BlockId,test build.ValueId,
+    yes build.BlockId,yesValues,no build.BlockId,noValues,loc meta.LocId)
+    fails budget.LimitError {
+    let checked be try access(routine,graph,from,loc);
+    if (try typeOf(routine,graph,test)).index != 1 {
+        try budget.reject("U1b branch requires predicate");
+    }
+    let yesFirst be try targetParameters(routine,yes,yesValues.count);
+    let noFirst be try targetParameters(routine,no,noValues.count);
+    let i be 0;
+    while i < yesValues.count {
+        let current be yesValues[i]; let actual be try typeOf(routine,graph,current);
+        let ty be try words.get(routine.values,routine.phase,(yesFirst+i-1)*4);
+        if actual.index != ty { try budget.reject("U1b first edge type mismatch"); }
+        i=i+1;
+    }
+    i=0;
+    while i < noValues.count {
+        let current be noValues[i]; let actual be try typeOf(routine,graph,current);
+        let ty be try words.get(routine.values,routine.phase,(noFirst+i-1)*4);
+        if actual.index != ty { try budget.reject("U1b second edge type mismatch"); }
+        i=i+1;
+    }
+    let start be try beginArguments(routine,yesValues.count+noValues.count);
+    i=0;
+    while i < yesValues.count {
+        let current be yesValues[i]; let actual be try typeOf(routine,graph,current);
+        let ignored be try words.push(routine.arguments,routine.phase,current.index);
+        i=i+1;
+    }
+    let left be try edgeRecord(routine,yes,start,yesValues.count);
+    let secondStart be routine.arguments.length;
+    i=0;
+    while i < noValues.count {
+        let current be noValues[i]; let actual be try typeOf(routine,graph,current);
+        let ignored be try words.push(routine.arguments,routine.phase,current.index);
+        i=i+1;
+    }
+    let right be try edgeRecord(routine,no,secondStart,noValues.count);
+    let operandStart be routine.operands.length;
+    let ignored be try words.push(routine.operands,routine.phase,test.index);
+    try terminalRecord(routine,from,7,operandStart,1,loc,left,right);
+}
+public function returnValues(routine identity build.Function,
+    graph identity aggregate.Registry,from build.BlockId,values,loc meta.LocId)
+    fails budget.LimitError {
+    let checked be try access(routine,graph,from,loc);
+    let count be try meta.resultCount(routine.metadata,routine.phase,routine.signature);
+    if values.count != count { try budget.reject("U1b return arity mismatch"); }
+    let signatureOffset be (routine.signature.index-1)*6;
+    let first be try words.get(routine.metadata.signatures,routine.phase,signatureOffset+4);
+    let item be 0;
+    while item < count {
+        let current be values[item]; let actual be try typeOf(routine,graph,current);
+        let required be try words.get(routine.metadata.types,routine.phase,first+item);
+        if actual.index != required { try budget.reject("U1b return type mismatch"); }
+        item=item+1;
+    }
+    if count > routine.operands.limit-routine.operands.length {
+        try budget.exceed(routine.owner,count,0);
+    }
+    let start be routine.operands.length; item=0;
+    while item < count {
+        let current be values[item]; let actual be try typeOf(routine,graph,current);
+        let ignored be try words.push(routine.operands,routine.phase,current.index);
+        item=item+1;
+    }
+    try terminalRecord(routine,from,8,start,count,loc,0,0);
+}
+public function complete(routine identity build.Function,
+    graph identity aggregate.Registry) fails budget.LimitError {
+    try finish.complete(routine,graph);
+}
+
+// U1b call schema shares the original canonical op34 and declaration pool.
+// This constructs/reverifies aggregate parameter/result signatures but does
+// NOT claim the standalone reference executor can invoke multi-function IR.
+public function call(routine identity build.Function,graph identity aggregate.Registry,
+    from build.BlockId,target meta.FunctionId,inputs,loc meta.LocId)
+    returns build.InstId fails budget.LimitError {
+    let checked be try access(routine,graph,from,loc);
+    let signature be try meta.functionSignature(routine.metadata,routine.phase,target);
+    let signatureOffset be (signature.index-1)*6;
+    let parameters be try words.get(routine.metadata.signatures,routine.phase,signatureOffset+3);
+    let results be try words.get(routine.metadata.signatures,routine.phase,signatureOffset+5);
+    if inputs.count != parameters { try budget.reject("U1b call arity mismatch"); }
+    let paramStart be try words.get(routine.metadata.signatures,routine.phase,signatureOffset+2);
+    let resultStart be try words.get(routine.metadata.signatures,routine.phase,signatureOffset+4);
+    let index be 0;
+    while index < inputs.count {
+        let actual be try typeOf(routine,graph,inputs[index]);
+        let required be try words.get(routine.metadata.types,routine.phase,paramStart+index);
+        if actual.index != required { try budget.reject("U1b call parameter type mismatch"); }
+        index=index+1;
+    }
+    if routine.instructions.length/10 >= 1048576 or
+       results > 1048576-routine.values.length/4 or
+       inputs.count > routine.operands.limit-routine.operands.length {
+        try budget.exceed(routine.owner,1,0);
+    }
+    let firstOperand be routine.operands.length; index=0;
+    while index < inputs.count {
+        let value be inputs[index];
+        let ignored be try words.push(routine.operands,routine.phase,value.index);
+        index=index+1;
+    }
+    let instructionIndex be routine.instructions.length/10+1;
+    let firstResult be 0;
+    if results > 0 { firstResult=routine.values.length/4+1; }
+    index=0;
+    while index < results {
+        let ty be try words.get(routine.metadata.types,routine.phase,resultStart+index);
+        let typeCheck be try aggregate.typeAt(graph,ty);
+        let ignored be try words.push(routine.values,routine.phase,ty);
+        ignored=try words.push(routine.values,routine.phase,1);
+        ignored=try words.push(routine.values,routine.phase,instructionIndex);
+        ignored=try words.push(routine.values,routine.phase,index);
+        index=index+1;
+    }
+    let ignored be try words.push(routine.instructions,routine.phase,34);
+    ignored=try words.push(routine.instructions,routine.phase,from.index);
+    ignored=try words.push(routine.instructions,routine.phase,firstOperand);
+    ignored=try words.push(routine.instructions,routine.phase,inputs.count);
+    ignored=try words.push(routine.instructions,routine.phase,firstResult);
+    ignored=try words.push(routine.instructions,routine.phase,results);
+    ignored=try words.push(routine.instructions,routine.phase,loc.index);
+    ignored=try words.push(routine.instructions,routine.phase,target.index);
+    ignored=try words.push(routine.instructions,routine.phase,0);
+    ignored=try words.push(routine.instructions,routine.phase,0);
+    let blockOffset be (from.index-1)*5;
+    let tail be try words.get(routine.blocks,routine.phase,blockOffset+3);
+    if tail == 0 {
+        try words.set(routine.blocks,routine.phase,blockOffset+2,instructionIndex);
+    } else {
+        try words.set(routine.instructions,routine.phase,(tail-1)*10+9,
+            instructionIndex);
+    }
+    try words.set(routine.blocks,routine.phase,blockOffset+3,instructionIndex);
+    routine.revision=routine.revision+1;
+    return build.InstId { owner=routine.key; index=instructionIndex; };
+}

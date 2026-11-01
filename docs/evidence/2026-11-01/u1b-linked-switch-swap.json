@@ -1,0 +1,12 @@
+{
+  "status": "success",
+  "test_methods": 1,
+  "selector_cases": 5,
+  "seconds": 3.228,
+  "negative_control": "deliberately sequential edge transfer completed with different output, caught by oracle",
+  "source_sha256": {
+    "tests/fixtures/u1_aggregate_switch_calls.eri": "e644fcb9953b06ea373082e4473b48ccb128aded56e20012538f8f2a579cf0a4",
+    "tests/test_u1_aggregate_switch_calls.py": "4a516cbdcd3e65625bbde3dcd00712de8193ae6d7c579a91cbe0288a850ff43d"
+  },
+  "scope": "local compiled bootstrap execution of linked canonical UIR reference executor; test-only, no full qualification"
+}

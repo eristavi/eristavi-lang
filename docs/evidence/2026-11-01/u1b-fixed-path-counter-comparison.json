@@ -1,0 +1,36 @@
+{
+  "scope": "separate instrumented before/after runs; counters, not timing speed comparison",
+  "identical_checks": {
+    "words_child": 3229200,
+    "words_get": 392601,
+    "words_set": 16064,
+    "words_push": 129542,
+    "budget_work": 3794180,
+    "budget_active": 8278710,
+    "budget_poll": 644173,
+    "verify_read": 152310
+  },
+  "reductions": {
+    "alloc": {
+      "baseline": 951197434,
+      "candidate": 918504253,
+      "saved": 32693181
+    },
+    "alloc_capacity_traffic": {
+      "baseline": 76185950512,
+      "candidate": 73569249040,
+      "saved": 2616701472
+    },
+    "value_new": {
+      "baseline": 919544101,
+      "candidate": 886851050,
+      "saved": 32693051
+    },
+    "slots": {
+      "baseline": 442049,
+      "candidate": 198485,
+      "saved": 243564
+    }
+  },
+  "same_output_parity": true
+}

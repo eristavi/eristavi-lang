@@ -1,0 +1,46 @@
+name: U1b owned-runtime matched optimization pilot (opt-in)
+on:
+  workflow_dispatch:
+    inputs:
+      candidate:
+        description: "Which non-production generated-assembly experiment?"
+        type: choice
+        options: [safepoint, graph_find, positive_cache, positive_table]
+        default: positive_table
+      pairs:
+        description: "One exploratory pair or five qualifying pairs?"
+        type: choice
+        options: ['1', '5']
+        default: '1'
+permissions:
+  contents: read
+concurrency:
+  group: u1b-owned-runtime-benchmark-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CC: clang
+      CFLAGS: -O2
+      ERISTAVI_U1B_BENCH_PAIRS: ${{ inputs.pairs }}
+      ERISTAVI_U1B_CANDIDATE: ${{ inputs.candidate }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: python -m pip install -e .
+      - name: Identical-source selected original-owned versus candidate paired benchmark
+        shell: bash
+        run: |
+          set -o pipefail
+          PYTHONPATH=tests python -u -m unittest -v test_u1b_owned_runtime_benchmark 2>&1 | tee u1b-owned-pair.log
+      - name: Preserve comparison evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: u1b-owned-pair-${{ github.run_attempt }}
+          retention-days: 14
+          path: u1b-owned-pair.log

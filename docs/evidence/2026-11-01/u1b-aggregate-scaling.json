@@ -1,0 +1,197 @@
+{
+  "scope": "Actual tagged aggregate graph/value engine backing, forced identity hash collisions; no linked whole-program or RSS attribution, no paired speedup claim",
+  "samples": [
+    {
+      "width": 8,
+      "depth": 2,
+      "probe_wall_seconds": 10.86092339400011,
+      "evidence": {
+        "actual_after_gc": {
+          "function": {
+            "live": 0,
+            "objects": 68,
+            "observed_bytes": 25760,
+            "reclaimed_bytes": 25760,
+            "reclaimed_objects": 68
+          },
+          "metadata": {
+            "live": 0,
+            "objects": 116,
+            "observed_bytes": 44512,
+            "reclaimed_bytes": 44512,
+            "reclaimed_objects": 116
+          }
+        },
+        "actual_before_gc": {
+          "function": {
+            "live": 25760,
+            "objects": 68,
+            "observed_bytes": 25760,
+            "reclaimed_bytes": 0,
+            "reclaimed_objects": 0
+          },
+          "metadata": {
+            "live": 44512,
+            "objects": 116,
+            "observed_bytes": 44512,
+            "reclaimed_bytes": 0,
+            "reclaimed_objects": 0
+          }
+        },
+        "measurement_scope": "U1b immutable type graph and reference value-engine only; no canonical whole compiler RSS",
+        "owner_request_peak_traffic": {
+          "function": [
+            45408,
+            71264
+          ],
+          "metadata": [
+            129632,
+            129632
+          ]
+        },
+        "structural_backing": {
+          "function": [
+            34,
+            20256,
+            1088,
+            21344
+          ],
+          "metadata": [
+            58,
+            35136,
+            1856,
+            36992
+          ]
+        }
+      }
+    },
+    {
+      "width": 32,
+      "depth": 8,
+      "probe_wall_seconds": 6.767918793000263,
+      "evidence": {
+        "actual_after_gc": {
+          "function": {
+            "live": 0,
+            "objects": 92,
+            "observed_bytes": 35424,
+            "reclaimed_bytes": 35424,
+            "reclaimed_objects": 92
+          },
+          "metadata": {
+            "live": 0,
+            "objects": 136,
+            "observed_bytes": 52288,
+            "reclaimed_bytes": 52288,
+            "reclaimed_objects": 136
+          }
+        },
+        "actual_before_gc": {
+          "function": {
+            "live": 35424,
+            "objects": 92,
+            "observed_bytes": 35424,
+            "reclaimed_bytes": 0,
+            "reclaimed_objects": 0
+          },
+          "metadata": {
+            "live": 52288,
+            "objects": 136,
+            "observed_bytes": 52288,
+            "reclaimed_bytes": 0,
+            "reclaimed_objects": 0
+          }
+        },
+        "measurement_scope": "U1b immutable type graph and reference value-engine only; no canonical whole compiler RSS",
+        "owner_request_peak_traffic": {
+          "function": [
+            45408,
+            80672
+          ],
+          "metadata": [
+            137472,
+            137472
+          ]
+        },
+        "structural_backing": {
+          "function": [
+            46,
+            27744,
+            1472,
+            29216
+          ],
+          "metadata": [
+            68,
+            41376,
+            2176,
+            43552
+          ]
+        }
+      }
+    },
+    {
+      "width": 128,
+      "depth": 32,
+      "probe_wall_seconds": 7.451102339000045,
+      "evidence": {
+        "actual_after_gc": {
+          "function": {
+            "live": 0,
+            "objects": 194,
+            "observed_bytes": 75616,
+            "reclaimed_bytes": 75616,
+            "reclaimed_objects": 194
+          },
+          "metadata": {
+            "live": 0,
+            "objects": 196,
+            "observed_bytes": 75808,
+            "reclaimed_bytes": 75808,
+            "reclaimed_objects": 196
+          }
+        },
+        "actual_before_gc": {
+          "function": {
+            "live": 75616,
+            "objects": 194,
+            "observed_bytes": 75616,
+            "reclaimed_bytes": 0,
+            "reclaimed_objects": 0
+          },
+          "metadata": {
+            "live": 75808,
+            "objects": 196,
+            "observed_bytes": 75808,
+            "reclaimed_bytes": 0,
+            "reclaimed_objects": 0
+          }
+        },
+        "measurement_scope": "U1b immutable type graph and reference value-engine only; no canonical whole compiler RSS",
+        "owner_request_peak_traffic": {
+          "function": [
+            75264,
+            120672
+          ],
+          "metadata": [
+            160992,
+            160992
+          ]
+        },
+        "structural_backing": {
+          "function": [
+            97,
+            59584,
+            3104,
+            62688
+          ],
+          "metadata": [
+            98,
+            60096,
+            3136,
+            63232
+          ]
+        }
+      }
+    }
+  ]
+}

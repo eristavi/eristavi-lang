@@ -1,0 +1,76 @@
+import std.process;
+import compiler.u1_budget as budget;
+import compiler.u1_meta as meta;
+import compiler.u1_builder as build;
+import compiler.u1_aggregate as aggregate;
+import compiler.u1_aggregate_build as agbuild;
+import compiler.u1_aggregate_execute as run;
+import compiler.u1_verify as verify;
+error ProbeError { message Text; }
+function check(okay Bool,message Text) fails ProbeError {
+    if not okay { fail ProbeError { message=message; }; }
+}
+function mainRun() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let root be try budget.developmentRequest();
+    let shared be try budget.metadataOwner(root);
+    let mp be try budget.constructionPhase(shared);
+    let data be try meta.create(shared,mp);
+    let sig be try meta.signature(data,mp,[meta.i64()],[meta.i64(),meta.i64()]);
+    let source be try meta.source(data,mp,"u1b-execute","0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",128);
+    let loc be try meta.location(data,mp,source,0,8,1,1,1);
+    let graph be try aggregate.create(shared,mp);
+    let intType be try aggregate.primitive(graph,meta.i64());
+    let shape be try aggregate.aggregate(graph,mp,[intType,intType]);
+    try aggregate.freeze(graph);
+    try meta.freeze(data);
+    try budget.finishPhase(mp);
+    let owner be try budget.functionOwner(root,false);
+    let cp be try budget.constructionPhase(owner);
+    let fn be try build.create(data,sig,owner,cp);
+    let entry be try build.block(fn,[meta.i64()]);
+    let eleven be try build.integer(fn,entry,11,loc);
+    let seventeen be try build.integer(fn,entry,17,loc);
+    let original be try agbuild.make(fn,graph,entry,shape,[eleven,eleven],loc);
+    let updated be try agbuild.set(fn,graph,entry,original,1,seventeen,loc);
+    let old be try agbuild.get(fn,graph,entry,original,1,loc);
+    let fresh be try agbuild.get(fn,graph,entry,updated,1,loc);
+    let yes be try build.block(fn,[meta.i64(),meta.i64()]);
+    let no be try build.block(fn,[meta.i64(),meta.i64()]);
+    let choose be try build.predicate(fn,entry,true,loc);
+    try build.branch(fn,entry,choose,yes,[old,fresh],no,[fresh,old],loc);
+    let yesOld be try build.parameter(fn,yes,0);
+    let yesNew be try build.parameter(fn,yes,1);
+    try build.returnValues(fn,yes,[yesOld,yesNew],loc);
+    let noOld be try build.parameter(fn,no,0);
+    let noNew be try build.parameter(fn,no,1);
+    try build.returnValues(fn,no,[noOld,noNew],loc);
+    // Instantiate generic edge checking in this standalone bootstrap fixture.
+    // The entire component is unreachable and must still verify structurally.
+    let dead be try build.block(fn,[]);
+    let deadNext be try build.block(fn,[meta.i64()]);
+    try build.jump(fn,dead,deadNext,[eleven],loc);
+    try build.returnValues(fn,deadNext,[eleven,seventeen],loc);
+    try build.complete(fn);
+    try budget.finishPhase(cp);
+    let outcome be try run.run(fn,graph,owner,[123],50);
+    try check(outcome.kind == 0 and outcome.count == 2 and
+        (try run.result(outcome,0)) == 11 and
+        (try run.result(outcome,1)) == 17 and outcome.steps == 9,
+        "canonical SSA immutable snapshot");
+    output("canonical-u1b-execution:11,17:ok");
+    try build.close(fn); try aggregate.close(graph); try meta.close(data);
+    try check(root.live == 0 and root.pending == 0,"all owner backing reclaimed");
+    try budget.close(owner); try budget.close(shared); try budget.close(root);
+    return true;
+}
+function main() {
+    let okay be mainRun()
+    else error budget.LimitError {
+        output("limit:"+error.category+":"+error.message); process.setExitCode(1); return;
+    } else error verify.InvalidIR {
+        output("ir:"+error.message); process.setExitCode(1); return;
+    } else error ProbeError {
+        output("probe:"+error.message); process.setExitCode(1); return;
+    };
+}
+main();

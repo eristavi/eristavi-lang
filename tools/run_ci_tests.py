@@ -19,12 +19,23 @@ SMOKE_TESTS=(
     'test_universal_ir.UniversalIRTests.test_universal_ir_contains_function_contract_and_call',
     'test_universal_ir.UniversalIRTests.test_universal_ir_has_explicit_checked_arithmetic_and_control_flow',
     'test_u1_foundation.U1FoundationTests.test_accounting_metadata_and_builder_on_c_bootstrap',
+    'test_u1_words_path.U1WordPathTests',
+    'test_u1b_profile_decoder.U1BProfileDecoderTests',
     'test_u1_calls.U1CallContracts.test_direct_call_declarations_and_verifier',
     'test_u1_module.U1ModuleBindingTests.test_declarations_bind_exact_verified_bodies',
     'test_u1_execution.U1CallExecutionTests.test_recursive_frames_effects_and_versioned_imports',
     'test_u1_native.U1NativeTests',
     'test_u1_integer_execution.U1IntegerExecutionTests.test_integer_recursion_switch_promotion_and_fault_traces',
     'test_u1_narrow_execution.U1NarrowExecutionTests.test_independent_canonical_narrow_execution_and_faults',
+    'test_u1_aggregate_graph.U1AggregateTypeGraphTests.test_native_owned_type_graph_and_independent_verifier',
+    'test_u1_aggregate_values.U1AggregateValuesTests.test_immutable_make_get_set_against_python_value_copy_oracle',
+    'test_u1_aggregate_ssa.U1AggregateSSATests.test_canonical_aggregate_operations_and_independent_dead_code_verifier',
+    'test_u1_aggregate_execution.U1AggregateExecutionTests.test_verified_canonical_ssa_immutable_execution',
+    'test_u1_aggregate_canonical_oracle.U1CanonicalAggregateOracleTests.test_native_verified_canonical_aggregate_oracle',
+    'test_u1_aggregate_signatures.U1AggregateSignatureTests.test_canonical_aggregate_signature_cfg_and_promotion',
+    'test_u1_aggregate_loops.U1AggregateLoopTests.test_canonical_aggregate_loop_reentry_and_fuel',
+    'test_u1_aggregate_calls.U1AggregateCallTests.test_linked_canonical_aggregate_calls_and_first_fault',
+    'test_u1b_actual_physical.U1BAggregatePhysicalTests.test_actual_aggregate_owner_backing_and_gc_reclamation',
     # U1a #77 acceptance: exact owner-partition backing under both the C bootstrap
     # and freestanding owned runtime, independently predicted large radix/scratch
     # shapes, and the retained PR #103 C-heap evidence boundary.

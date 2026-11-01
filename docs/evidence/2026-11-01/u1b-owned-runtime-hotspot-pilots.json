@@ -1,0 +1,300 @@
+{
+  "title": "U1b linked full-fixture owned-runtime profile and bounded optimization pilot evidence",
+  "date": "2026-11-01",
+  "repo": "eristavi/eristavi-lang",
+  "reference_pr": 106,
+  "original_code_qualification": "14fa2893d83c925421e275d85639fc9f87168770",
+  "scope": "Private generated-assembly runtime instrumentation with unchanged original U1b linked fixture: one complete phase profiler, four one-pair exploratory candidates, and one final five-pair AB/BA/AB/BA/AB matched original-owned versus private positive_table cache comparison. No production compiler, runtime, ABI, resource limits or collector policy changed.",
+  "verified_output": "All pilot runs had identical stdout, stderr and exit status versus the independent C-bootstrap fixture. U1b profiler also passed parity and all phase-counter assertions.",
+  "profile": {
+    "github_run_id": 41299296330,
+    "github_url": "https://github.com/eristavi/eristavi-lang/actions/runs/41299296330",
+    "job_id": 124826707929,
+    "cumulative": {
+      "alloc": 964789930,
+      "finds": 341449724,
+      "gc": 1057,
+      "gc_time_ns": 393759852,
+      "graphs": 232148,
+      "index": 1057,
+      "live_graphs": 1741,
+      "owners": 3467,
+      "safe": 932256371,
+      "slots": 442049,
+      "sweeps": 1057,
+      "tag": 0,
+      "time_ns": 308707484919
+    },
+    "full_output_parity": true,
+    "observed_process_seconds": 43.99606827599996,
+    "scope": "FULL linked fixture, real owned-runtime diagnostic only; phase wall from CLOCK_MONOTONIC; GC inclusive time overlaps phases; counters instrumented; profiler speed NOT comparable to production",
+    "snapshots": 231,
+    "stages": {
+      "aggregate_engine_and_type_validation": {
+        "alloc": 48182528,
+        "finds": 17040075,
+        "gc": 39,
+        "gc_seconds_inclusive": 0.013484253,
+        "graphs": 12063,
+        "index": 39,
+        "intervals": 35,
+        "owners": 42,
+        "safe": 46575585,
+        "slots": 18200,
+        "sweeps": 39,
+        "wall_seconds": 1.718380464
+      },
+      "engine_close": {
+        "alloc": 9985,
+        "finds": 6825,
+        "gc": 0,
+        "gc_seconds_inclusive": 0,
+        "graphs": 150,
+        "index": 0,
+        "intervals": 35,
+        "owners": 0,
+        "safe": 9485,
+        "slots": 0,
+        "sweeps": 0,
+        "wall_seconds": 0.001018426
+      },
+      "ingress_reverification": {
+        "alloc": 497492849,
+        "finds": 175863916,
+        "gc": 481,
+        "gc_seconds_inclusive": 0.184686201,
+        "graphs": 84250,
+        "index": 481,
+        "intervals": 48,
+        "owners": 1809,
+        "safe": 480725905,
+        "slots": 231031,
+        "sweeps": 481,
+        "wall_seconds": 21.83764428
+      },
+      "linked_aggregate_execution": {
+        "alloc": 22200134,
+        "finds": 7990198,
+        "gc": 28,
+        "gc_seconds_inclusive": 0.012402535,
+        "graphs": 24900,
+        "index": 28,
+        "intervals": 35,
+        "owners": 56,
+        "safe": 21442622,
+        "slots": 10577,
+        "sweeps": 28,
+        "wall_seconds": 1.649245257
+      },
+      "other_setup_refusals_teardown": {
+        "alloc": 202028351,
+        "finds": 71665771,
+        "gc": 313,
+        "gc_seconds_inclusive": 0.093709715,
+        "graphs": 75684,
+        "index": 313,
+        "intervals": 63,
+        "owners": 861,
+        "safe": 195197822,
+        "slots": 91314,
+        "sweeps": 313,
+        "wall_seconds": 9.428429491
+      },
+      "seal_verification": {
+        "alloc": 179340858,
+        "finds": 63373654,
+        "gc": 170,
+        "gc_seconds_inclusive": 0.083763526,
+        "graphs": 29404,
+        "index": 170,
+        "intervals": 14,
+        "owners": 632,
+        "safe": 173294856,
+        "slots": 83902,
+        "sweeps": 170,
+        "wall_seconds": 8.732752393
+      }
+    }
+  },
+  "pilots": [
+    {
+      "candidate": "safepoint",
+      "github_run_id": 41299581706,
+      "github_url": "https://github.com/eristavi/eristavi-lang/actions/runs/41299581706",
+      "job_id": 124827616349,
+      "source_revision": "766fc9e0c386",
+      "application_assembly_sha256": "b91f772f7ac730d8a6e2cb145940d3395fab8e653ee2c44cb6bd4a8a6fb2902a",
+      "candidate_assembly_sha256": "a87a064ae04a22fb46612f112b006afd495e3e16c675e4d0e26858028aa7eeb6",
+      "candidate_change": "inline readonly .Lvalue_slot_count load instead of calling pure erist_rt_slots_live",
+      "duration_seconds": {
+        "baseline": [
+          73.638889273
+        ],
+        "optimized": [
+          75.36888151900001
+        ]
+      },
+      "fixture_sha256": "b5a03a861efa494fbfd55e5a2440d34f6e522cf8f2f3b45f8a916cda56725993",
+      "median_seconds": {
+        "baseline": 73.638889273,
+        "optimized": 75.36888151900001
+      },
+      "order": "AB",
+      "pairs": 1,
+      "ratio_candidate_over_baseline": 1.0234929160811543,
+      "runtime_source_sha256": "dad392a24099e22d4d79090f34bbdaf5cd1ff08a50c5e93be493efafc40cad49",
+      "scope": "Same exact generated source assembly; original owned runtime vs one safe-point exact counter load. Uninstrumented process wall times include startup/OS noise. No source semantics, ABI, memory budget, collector thresholds, or root changes.",
+      "speedup_baseline_over_candidate": 0.9770463325031049,
+      "strict_C_bootstrap_stdout_and_exit_parity": true
+    },
+    {
+      "candidate": "graph_find",
+      "github_run_id": 41299890268,
+      "github_url": "https://github.com/eristavi/eristavi-lang/actions/runs/41299890268",
+      "job_id": 124828534366,
+      "source_revision": "2acffe45ed5ca85244c88fa71dbf99039687deaf",
+      "application_assembly_sha256": "b91f772f7ac730d8a6e2cb145940d3395fab8e653ee2c44cb6bd4a8a6fb2902a",
+      "candidate_assembly_sha256": "cc3e7fac36f0791e27aaf03af4ee4003d3bacad09a3d05fda773a65d1746b8e6",
+      "candidate_change": "inline existing graph bucket hash and table selection into erist_rt_graph_find, preserve all collisions/identity",
+      "duration_seconds": {
+        "baseline": [
+          74.40005523800002
+        ],
+        "optimized": [
+          75.33459597199999
+        ]
+      },
+      "fixture_sha256": "b5a03a861efa494fbfd55e5a2440d34f6e522cf8f2f3b45f8a916cda56725993",
+      "median_seconds": {
+        "baseline": 74.40005523800002,
+        "optimized": 75.33459597199999
+      },
+      "order": "AB",
+      "pairs": 1,
+      "ratio_candidate_over_baseline": 1.0125610220450838,
+      "runtime_source_sha256": "dad392a24099e22d4d79090f34bbdaf5cd1ff08a50c5e93be493efafc40cad49",
+      "scope": "Same exact generated source assembly; original owned runtime vs one safe-point exact counter load. Uninstrumented process wall times include startup/OS noise. No source semantics, ABI, memory budget, collector thresholds, or root changes.",
+      "speedup_baseline_over_candidate": 0.9875947999462649,
+      "strict_C_bootstrap_stdout_and_exit_parity": true
+    },
+    {
+      "candidate": "positive_cache",
+      "github_run_id": 41300216836,
+      "github_url": "https://github.com/eristavi/eristavi-lang/actions/runs/41300216836",
+      "job_id": 124829474854,
+      "source_revision": "590b53fb280db96ba2cc16c528fa73bebc606fd3",
+      "application_assembly_sha256": "b91f772f7ac730d8a6e2cb145940d3395fab8e653ee2c44cb6bd4a8a6fb2902a",
+      "candidate_assembly_sha256": "5c57962e60b14f2838d77728a22ddceaa66e84b19d81b09f788e72c740e2132a",
+      "candidate_change": "cache positive exact graph pointer, invalidate at GC sweep; fall back to original collision-safe lookup on misses",
+      "duration_seconds": {
+        "baseline": [
+          62.017685136999994
+        ],
+        "optimized": [
+          61.946635519
+        ]
+      },
+      "fixture_sha256": "b5a03a861efa494fbfd55e5a2440d34f6e522cf8f2f3b45f8a916cda56725993",
+      "median_seconds": {
+        "baseline": 62.017685136999994,
+        "optimized": 61.946635519
+      },
+      "order": "AB",
+      "pairs": 1,
+      "ratio_candidate_over_baseline": 0.9988543652049726,
+      "runtime_source_sha256": "dad392a24099e22d4d79090f34bbdaf5cd1ff08a50c5e93be493efafc40cad49",
+      "scope": "Same exact generated source assembly, original owned runtime versus one private, explicitly named runtime candidate. Uninstrumented native process wall times; output and exit match independent C-bootstrap. Candidate never changes source semantics, 32-byte ABI, memory admission budgets, collector schedule or root traversal policy.",
+      "speedup_baseline_over_candidate": 1.001146948779457,
+      "strict_C_bootstrap_stdout_and_exit_parity": true
+    },
+    {
+      "application_assembly_sha256": "b91f772f7ac730d8a6e2cb145940d3395fab8e653ee2c44cb6bd4a8a6fb2902a",
+      "candidate": "positive_table",
+      "candidate_assembly_sha256": "beb7c3da272d9ebc2508102aff39762f2103c2e6a249b09af7a862f6441b1cf3",
+      "candidate_change": "64-line direct-mapped positive exact-pointer cache; entire table cleared at GC sweep; original miss path unchanged",
+      "duration_seconds": {
+        "baseline": [
+          75.79977656599999
+        ],
+        "optimized": [
+          73.980916921
+        ]
+      },
+      "fixture_sha256": "b5a03a861efa494fbfd55e5a2440d34f6e522cf8f2f3b45f8a916cda56725993",
+      "median_seconds": {
+        "baseline": 75.79977656599999,
+        "optimized": 73.980916921
+      },
+      "order": "AB",
+      "pairs": 1,
+      "ratio_candidate_over_baseline": 0.9760044194402567,
+      "runtime_source_sha256": "dad392a24099e22d4d79090f34bbdaf5cd1ff08a50c5e93be493efafc40cad49",
+      "scope": "Same exact generated source assembly, original owned runtime versus one private, explicitly named runtime candidate. Uninstrumented native process wall times; output and exit match independent C-bootstrap. Candidate never changes source semantics, 32-byte ABI, memory admission budgets, collector schedule or root traversal policy.",
+      "speedup_baseline_over_candidate": 1.0245855244933264,
+      "strict_C_bootstrap_stdout_and_exit_parity": true,
+      "github_run_id": 41300574222,
+      "github_url": "https://github.com/eristavi/eristavi-lang/actions/runs/41300574222",
+      "job_id": 124830511991,
+      "source_revision": "562328dab1",
+      "interpretation": "Single-pair positive signal of approximately 2.46% on one GitHub runner; not independently sufficient to claim a speedup."
+    }
+  ],
+  "interpretation": [
+    "Full diagnostic phase wall timings contain instrumentation overhead and are not comparable with uninstrumented baseline or 830x cross-runtime timing.",
+    "Collector-inclusive duration overlaps phase timing and must not be added.",
+    "Run 41300574222 positive_table exploratory one-pair pilot: 75.799776566s original versus 73.980916921s candidate (nominal 2.46% better); insufficient by itself.",
+    "Completed five alternating paired native runs 41300912191 at identical generated-application SHA256: medians original 62.051454341s, 64-line positive-table 63.698386246s. Candidate median 2.65% slower; all outputs/exits matched the independent C bootstrap. Do not promote the cache.",
+    "Significant original-baseline variation between GitHub runners (~60-76s) confirms the need for paired same-runner raw comparisons; no speedup claim from an earlier single pilot.",
+    "Verifier read and boxed scalar/runtime allocation pressure dominate; count events are dynamic calls, not bytes or process RSS. The GC duration of 0.39376s shows collection is not the primary bottleneck for this fixture.",
+    "All four explored candidates were private non-production edits; the 64-line cache failed the five-pair performance gate. No compiler/runtime/GC/ABI or 8MiB peak/64MiB traffic gates were changed.",
+    "Next focus should isolate verifier word-store read patterns and allocation-free intermediate representation while retaining fresh malformed-same-revision/dead-code validation, cancellation, cleanup and independent oracle."
+  ],
+  "five_pair_comparison": {
+    "application_assembly_sha256": "b91f772f7ac730d8a6e2cb145940d3395fab8e653ee2c44cb6bd4a8a6fb2902a",
+    "candidate": "positive_table",
+    "candidate_assembly_sha256": "beb7c3da272d9ebc2508102aff39762f2103c2e6a249b09af7a862f6441b1cf3",
+    "candidate_change": "64-line direct-mapped positive exact-pointer cache; entire table cleared at GC sweep; original miss path unchanged",
+    "duration_seconds": {
+      "baseline": [
+        62.335276650999994,
+        60.891708479000016,
+        62.05145434100001,
+        63.89454392800002,
+        61.36897099299995
+      ],
+      "optimized": [
+        63.213191366000004,
+        63.89331984399999,
+        60.584959497,
+        63.698386245999984,
+        63.89012363000006
+      ]
+    },
+    "fixture_sha256": "b5a03a861efa494fbfd55e5a2440d34f6e522cf8f2f3b45f8a916cda56725993",
+    "median_seconds": {
+      "baseline": 62.05145434100001,
+      "optimized": 63.698386245999984
+    },
+    "order": "AB/BA/AB/BA/AB",
+    "pairs": 5,
+    "ratio_candidate_over_baseline": 1.026541390890685,
+    "runtime_source_sha256": "dad392a24099e22d4d79090f34bbdaf5cd1ff08a50c5e93be493efafc40cad49",
+    "scope": "Same exact generated source assembly, original owned runtime versus one private, explicitly named runtime candidate. Uninstrumented native process wall times; output and exit match independent C-bootstrap. Candidate never changes source semantics, 32-byte ABI, memory admission budgets, collector schedule or root traversal policy.",
+    "speedup_baseline_over_candidate": 0.9741448409911108,
+    "strict_C_bootstrap_stdout_and_exit_parity": true,
+    "github_run_id": 41300912191,
+    "github_url": "https://github.com/eristavi/eristavi-lang/actions/runs/41300912191",
+    "job_id": 124831431271,
+    "source_revision": "5095de3ef115d13b213f121387f1575d5a321386",
+    "result": "PASS parity/exit for all ten original-owned and modified-owned executions; REJECT optimization, candidate median 2.654139089% slower than baseline; no production changes.",
+    "details": "Independent C-bootstrap reference passed before pairs; original application assembly and runtime source SHA256 are identical to earlier pilots, candidate modifies only generated owned runtime. Five alternating fresh-process AB/BA/AB/BA/AB pairs on same runner with same source. This is genuine within-owned before/after comparison, unlike the older C-bootstrap versus owned-native 830x cross-runtime ratio."
+  },
+  "summary": {
+    "phase_profile_pass": true,
+    "four_pilot_output_parity_pass": true,
+    "final_five_pair_parity_pass": true,
+    "final_five_pair_performance_pass": false,
+    "production_optimization_shipped": false,
+    "pr_106_merge_qualified_on_performance": false
+  }
+}

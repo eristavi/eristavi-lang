@@ -1,0 +1,126 @@
+{
+  "title": "U1b owner-context duplicate poll elimination: owned-native matched five-pair evidence",
+  "date": "2026-11-01",
+  "scope": "Two separately emitted U1b full-fixture source modules, identical underlying Linux x86-64 owned runtime, no other source changes. Private test-only modified compiler/u1_words.eri candidate; strict output/stderr/exit parity to independent C bootstrap. Median comparison is within-owned-native only; compilation time omitted.",
+  "relevant_issue": 51,
+  "pr": 106,
+  "source_implementation_commit": "dc756a4ef09166b7faf29a49ce8526cd4933659e",
+  "negative_regression_commit": "b09affc5168935c33c5a91525928442a82c90ae2",
+  "smoke_run": "https://github.com/eristavi/eristavi-lang/actions/runs/41303300082",
+  "pilot": {
+    "candidate": "same_owner_duplicate_budget_poll_elimination",
+    "candidate_app_assembly_sha256": "a7233d9e196fd4ccbc249d677c4ba5c38928446fc793af55e249bd28468a9471",
+    "candidate_over_original": 0.9575641143817005,
+    "candidate_words_sha256": "63b6931916573938d84487c6d435895b0ee2ca3b3fb9853da7b76843575edfe6",
+    "exact_output_stderr_exit_C_bootstrap_parity": true,
+    "input_fixture_sha256": "b5a03a861efa494fbfd55e5a2440d34f6e522cf8f2f3b45f8a916cda56725993",
+    "limitation": "One exact full U1b fixture only; fresh native-process wall times, not separate compilation time; no qualification for all failure/ownership paths",
+    "median_seconds": {
+      "baseline": 45.215022287,
+      "candidate": 43.296282773
+    },
+    "mutation": "test-only compiler/u1_words.eri context: second budget.poll(phase.owner) retained if and only if the phase owner differs from words.owner; all other context/phase/frozen/work and memory checks unchanged",
+    "order": "AB",
+    "original_app_assembly_sha256": "02756910c2bff136255624f0e0346ac405bc0087d7ff07fe6ea3907cad833c01",
+    "original_over_candidate": 1.0443164953457977,
+    "original_words_sha256": "03c78439e65b902da8c08ca3a6d38928a38acc6a9a08ec0c4ffbb39c7788a7df",
+    "pairs": 1,
+    "production_files_changed": false,
+    "samples_seconds": {
+      "baseline": [
+        45.215022287
+      ],
+      "candidate": [
+        43.296282773
+      ]
+    },
+    "shared_owned_runtime_sha256": "dad392a24099e22d4d79090f34bbdaf5cd1ff08a50c5e93be493efafc40cad49",
+    "github_run_id": 41302328469,
+    "github_job_id": 124835691709,
+    "url": "https://github.com/eristavi/eristavi-lang/actions/runs/41302328469"
+  },
+  "qualification_five_pairs": {
+    "candidate": "same_owner_duplicate_budget_poll_elimination",
+    "candidate_app_assembly_sha256": "a7233d9e196fd4ccbc249d677c4ba5c38928446fc793af55e249bd28468a9471",
+    "candidate_over_original": 0.937611571981472,
+    "candidate_words_sha256": "63b6931916573938d84487c6d435895b0ee2ca3b3fb9853da7b76843575edfe6",
+    "exact_output_stderr_exit_C_bootstrap_parity": true,
+    "input_fixture_sha256": "b5a03a861efa494fbfd55e5a2440d34f6e522cf8f2f3b45f8a916cda56725993",
+    "limitation": "One exact full U1b fixture only; fresh native-process wall times, not separate compilation time; no qualification for all failure/ownership paths",
+    "median_seconds": {
+      "baseline": 43.954858763000004,
+      "candidate": 41.212584221000014
+    },
+    "mutation": "test-only compiler/u1_words.eri context: second budget.poll(phase.owner) retained if and only if the phase owner differs from words.owner; all other context/phase/frozen/work and memory checks unchanged",
+    "order": "AB/BA/AB/BA/AB",
+    "original_app_assembly_sha256": "02756910c2bff136255624f0e0346ac405bc0087d7ff07fe6ea3907cad833c01",
+    "original_over_candidate": 1.0665397376513617,
+    "original_words_sha256": "03c78439e65b902da8c08ca3a6d38928a38acc6a9a08ec0c4ffbb39c7788a7df",
+    "pairs": 5,
+    "production_files_changed": false,
+    "samples_seconds": {
+      "baseline": [
+        43.954858763000004,
+        44.13436660799999,
+        44.81593431900001,
+        41.820128017,
+        43.39242328200004
+      ],
+      "candidate": [
+        41.212584221000014,
+        41.20584266300003,
+        43.401338323999994,
+        40.66081818800001,
+        41.57566336799994
+      ]
+    },
+    "shared_owned_runtime_sha256": "dad392a24099e22d4d79090f34bbdaf5cd1ff08a50c5e93be493efafc40cad49",
+    "github_run_id": 41302564199,
+    "github_job_id": 124836367268,
+    "url": "https://github.com/eristavi/eristavi-lang/actions/runs/41302564199"
+  },
+  "pairwise": [
+    {
+      "pair": 1,
+      "order": "baseline then candidate",
+      "original_seconds": 43.954858763000004,
+      "candidate_seconds": 41.212584221000014,
+      "saved_percent": 6.238842801852798
+    },
+    {
+      "pair": 2,
+      "order": "candidate then baseline",
+      "original_seconds": 44.13436660799999,
+      "candidate_seconds": 41.20584266300003,
+      "saved_percent": 6.635472920708302
+    },
+    {
+      "pair": 3,
+      "order": "baseline then candidate",
+      "original_seconds": 44.81593431900001,
+      "candidate_seconds": 43.401338323999994,
+      "saved_percent": 3.1564576673352676
+    },
+    {
+      "pair": 4,
+      "order": "candidate then baseline",
+      "original_seconds": 41.820128017,
+      "candidate_seconds": 40.66081818800001,
+      "saved_percent": 2.7721336207501124
+    },
+    {
+      "pair": 5,
+      "order": "baseline then candidate",
+      "original_seconds": 43.39242328200004,
+      "candidate_seconds": 41.57566336799994,
+      "saved_percent": 4.186813679875137
+    }
+  ],
+  "all_pairs_faster": true,
+  "candidate_percent_lower_median_runtime": 6.238842801852796,
+  "candidate_speedup_factor": 1.0665397376513617,
+  "source_change": "Change only src/compiler/u1_words.eri context to run budget.poll(phase.owner) conditionally when phase.owner != words.owner, preserving first owner poll. budget.poll -> active is read-only: checks owner state and parent state, no work/bytes charged. Distinct owner checks unchanged in original order.",
+  "frozen_semantics": "No changes to public ABI, source language, independent canonical verifier admission, physical or modeled ownership limits, work budget charges, error source locations, cancellation/cleanup requirements.",
+  "limitation": "Five pairs on a single Linux Clang -O2 GitHub Actions runner and one exact full linked fixture, not full compiler suite or other workloads. Additional cross-platform CI/qualification and physical stress gates are required after promoting code.",
+  "result": "Prototype five-pair paired performance and parity PASS; narrow source optimization promoted into PR pending final full cross-platform/qualification gates; original ~830x bootstrap-vs-owned cross-runtime disparity not eliminated."
+}

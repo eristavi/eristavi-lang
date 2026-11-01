@@ -1,0 +1,90 @@
+// Independent bounded canonical UIR aggregate loop regression.
+// Typed self-edge loop carries a structural aggregate and predicate and
+// repeatedly defines an SSA result ValueId through immutable aggregate.set.
+import std.process;
+import compiler.u1_budget as budget;
+import compiler.u1_meta as meta;
+import compiler.u1_builder as build;
+import compiler.u1_aggregate as aggregate;
+import compiler.u1_aggregate_build as ab;
+import compiler.u1_aggregate_execute as execute;
+import compiler.u1_verify as verify;
+
+error ProbeError { message Text; }
+function check(ok Bool,message Text) fails ProbeError {
+    if not ok { fail ProbeError { message=message; }; }
+}
+function run() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let root be try budget.developmentRequest();
+    let shared be try budget.metadataOwner(root);
+    let mp be try budget.constructionPhase(shared);
+    let data be try meta.create(shared,mp);
+    let signature be try meta.signature(data,mp,[meta.i64()],[meta.i64(),meta.i64()]);
+    let source be try meta.source(data,mp,"u1b-loop","0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",128);
+    let loc be try meta.location(data,mp,source,0,7,1,1,1);
+    let graph be try aggregate.create(shared,mp);
+    let i64 be try aggregate.primitive(graph,meta.i64());
+    let pred be try aggregate.primitive(graph,meta.pred());
+    let pair be try aggregate.aggregate(graph,mp,[i64,i64]);
+    try aggregate.freeze(graph); try meta.freeze(data);
+    try budget.finishPhase(mp);
+
+    let fnOwner be try budget.functionOwner(root,false);
+    let cp be try budget.constructionPhase(fnOwner);
+    let fn be try build.create(data,signature,fnOwner,cp);
+    let entry be try ab.block(fn,graph,[i64]);
+    let input be try build.parameter(fn,entry,0);
+    let eleven be try build.integer(fn,entry,11,loc);
+    let seventeen be try build.integer(fn,entry,17,loc);
+    let on be try build.predicate(fn,entry,true,loc);
+    let off be try build.predicate(fn,entry,false,loc);
+    let initial be try ab.make(fn,graph,entry,pair,[eleven,eleven],loc);
+    let loop be try ab.block(fn,graph,[pair,pred]);
+    let exit be try ab.block(fn,graph,[pair]);
+    try ab.jump(fn,graph,entry,loop,[initial,on],loc);
+    let current be try build.parameter(fn,loop,0);
+    let again be try build.parameter(fn,loop,1);
+    let next be try ab.set(fn,graph,loop,current,1,seventeen,loc);
+    try ab.branch(fn,graph,loop,again,loop,[next,off],exit,[next],loc);
+    let finalValue be try build.parameter(fn,exit,0);
+    let before be try ab.get(fn,graph,exit,initial,1,loc);
+    let after be try ab.get(fn,graph,exit,finalValue,1,loc);
+    try ab.returnValues(fn,graph,exit,[before,after],loc);
+
+    // Instantiate the existing U1a scalar edge-specialization in this
+    // closed test fixture; it is disconnected and still independently checked.
+    let dead be try build.block(fn,[]);
+    let deadDestination be try build.block(fn,[meta.i64()]);
+    try build.jump(fn,dead,deadDestination,[input],loc);
+    try ab.returnValues(fn,graph,deadDestination,[eleven,seventeen],loc);
+
+    try ab.complete(fn,graph);
+    try budget.finishPhase(cp);
+
+    let bounded be try execute.run(fn,graph,fnOwner,[0],9);
+    try check(bounded.kind == 2 and bounded.steps == 9 and
+        bounded.location == loc.index,"loop fuel and source location");
+    let completed be try execute.run(fn,graph,fnOwner,[0],32);
+    try check(completed.kind == 0 and completed.count == 2 and
+        completed.steps == 13,"backedge re-entry executes twice");
+    output(try execute.result(completed,0));
+    output(try execute.result(completed,1));
+    try build.close(fn); try aggregate.close(graph); try meta.close(data);
+    try check(root.live == 0 and root.pending == 0 and
+        fnOwner.live == 0 and shared.live == 0,
+        "aggregate loop owner reclamation");
+    try budget.close(fnOwner); try budget.close(shared); try budget.close(root);
+    output("u1b-aggregate-loop:ok");
+    return true;
+}
+function main() {
+    let done be run()
+    else error budget.LimitError {
+        output("limit:"+error.message); process.setExitCode(1); return;
+    } else error verify.InvalidIR {
+        output("invalid:"+error.message); process.setExitCode(1); return;
+    } else error ProbeError {
+        output("probe:"+error.message); process.setExitCode(1); return;
+    };
+}
+main();

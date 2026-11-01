@@ -1,0 +1,123 @@
+{
+  "scope": "one full linked fixture, current optimized owned baseline versus private fixed-depth read; not whole-compiler speed",
+  "identities": {
+    "baseline_commit": "c2423d5b6211c4999a116e541fb11c67dfa2357d",
+    "fixture_sha256": "b5a03a861efa494fbfd55e5a2440d34f6e522cf8f2f3b45f8a916cda56725993",
+    "baseline_words_sha256": "63b6931916573938d84487c6d435895b0ee2ca3b3fb9853da7b76843575edfe6",
+    "candidate_words_sha256": "dfa8a1a61dee1a4be0ddb5fb821c54098df80de33e705647b9619d0b224be60f",
+    "shared_runtime_sha256": "dad392a24099e22d4d79090f34bbdaf5cd1ff08a50c5e93be493efafc40cad49",
+    "expected_stdout_sha256": "08003a326bea41b6f2a2b716d67eae40f6c1b3debad1a057141db7590b0d055c",
+    "cc": "gcc",
+    "cflags": "-O2",
+    "host": "Linux-6.18.57-x86_64-with-glibc2.39",
+    "machine": "x86_64",
+    "compiler": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04) 13.3.0",
+    "baseline_assembly_sha256": "a7233d9e196fd4ccbc249d677c4ba5c38928446fc793af55e249bd28468a9471",
+    "baseline_binary_sha256": "636e8c339c7837425b9796886ba165f87747ec3671b2c83d3fe282dbecc322da",
+    "candidate_assembly_sha256": "46b464b5e4ea27d3115e9c3aef2908e8b7bc11e85087396dd8f4303046b8b4f0",
+    "candidate_binary_sha256": "737853a85f354f55a17b686628379bdb382dd6e7079e3495b063b4a373a08ef7"
+  },
+  "samples": {
+    "baseline": [
+      {
+        "wall_seconds": 59.71428897999999,
+        "user_seconds": 56.286732,
+        "system_seconds": 3.416329,
+        "peak_rss_KiB": 100856,
+        "stdout_sha256": "08003a326bea41b6f2a2b716d67eae40f6c1b3debad1a057141db7590b0d055c",
+        "correct": true
+      },
+      {
+        "wall_seconds": 59.603015354000036,
+        "user_seconds": 56.177269,
+        "system_seconds": 3.412861,
+        "peak_rss_KiB": 100856,
+        "stdout_sha256": "08003a326bea41b6f2a2b716d67eae40f6c1b3debad1a057141db7590b0d055c",
+        "correct": true
+      },
+      {
+        "wall_seconds": 61.790446386999974,
+        "user_seconds": 58.302704,
+        "system_seconds": 3.43515,
+        "peak_rss_KiB": 100856,
+        "stdout_sha256": "08003a326bea41b6f2a2b716d67eae40f6c1b3debad1a057141db7590b0d055c",
+        "correct": true
+      },
+      {
+        "wall_seconds": 63.12669408900001,
+        "user_seconds": 59.343796,
+        "system_seconds": 3.7672499999999998,
+        "peak_rss_KiB": 100856,
+        "stdout_sha256": "08003a326bea41b6f2a2b716d67eae40f6c1b3debad1a057141db7590b0d055c",
+        "correct": true
+      },
+      {
+        "wall_seconds": 62.99806609999996,
+        "user_seconds": 59.34965,
+        "system_seconds": 3.640983,
+        "peak_rss_KiB": 100856,
+        "stdout_sha256": "08003a326bea41b6f2a2b716d67eae40f6c1b3debad1a057141db7590b0d055c",
+        "correct": true
+      }
+    ],
+    "candidate": [
+      {
+        "wall_seconds": 54.709536756000034,
+        "user_seconds": 53.411979,
+        "system_seconds": 1.286727,
+        "peak_rss_KiB": 100856,
+        "stdout_sha256": "08003a326bea41b6f2a2b716d67eae40f6c1b3debad1a057141db7590b0d055c",
+        "correct": true
+      },
+      {
+        "wall_seconds": 52.06674993599995,
+        "user_seconds": 50.814092,
+        "system_seconds": 1.247287,
+        "peak_rss_KiB": 100856,
+        "stdout_sha256": "08003a326bea41b6f2a2b716d67eae40f6c1b3debad1a057141db7590b0d055c",
+        "correct": true
+      },
+      {
+        "wall_seconds": 55.893081105999954,
+        "user_seconds": 54.511273,
+        "system_seconds": 1.372478,
+        "peak_rss_KiB": 100856,
+        "stdout_sha256": "08003a326bea41b6f2a2b716d67eae40f6c1b3debad1a057141db7590b0d055c",
+        "correct": true
+      },
+      {
+        "wall_seconds": 54.983744377999756,
+        "user_seconds": 53.704783,
+        "system_seconds": 1.271449,
+        "peak_rss_KiB": 100856,
+        "stdout_sha256": "08003a326bea41b6f2a2b716d67eae40f6c1b3debad1a057141db7590b0d055c",
+        "correct": true
+      },
+      {
+        "wall_seconds": 55.1218048869996,
+        "user_seconds": 53.896046,
+        "system_seconds": 1.214422,
+        "peak_rss_KiB": 100856,
+        "stdout_sha256": "08003a326bea41b6f2a2b716d67eae40f6c1b3debad1a057141db7590b0d055c",
+        "correct": true
+      }
+    ]
+  },
+  "pairs": 5,
+  "order": "AB/BA/AB/BA/AB",
+  "rss_scope": "whole child process; may include inherited launcher high-water pages, not owner backing",
+  "source_semantics_ABI_budgets_unchanged": true,
+  "median_seconds": {
+    "baseline": 61.790446386999974,
+    "candidate": 54.983744377999756
+  },
+  "candidate_over_baseline": 0.8898421615799773,
+  "pairwise_saved_percent": [
+    8.38116355312577,
+    12.644100928853952,
+    9.544137687668108,
+    12.899376133208895,
+    12.50238570894856
+  ],
+  "cache_state": "Fresh native process per sample; binaries were already built and pilot-run; OS page caches were not flushed or controlled."
+}
