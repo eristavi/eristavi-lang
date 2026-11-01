@@ -1,6 +1,6 @@
 # Eristavi compiler — current handover
 
-**Authoritative recovery checkpoint: 1 November 2026, Asia/Nicosia. Read section 49 for the active untested performance correction and CI access limitation, section 48 for the unsuccessful full-run trigger investigation, and section 44 for last fully qualified U1a.**
+**Authoritative recovery checkpoint: 1 November 2026, Asia/Nicosia. Read section 50 for the new U1b canonical CFG execution candidate, section 49 for prior optimization and verified smoke, and section 44 for fully qualified U1a.**
 PR #105 is **QUALIFIED AND MERGED**. U1a's scoped physical acceptance gate passed;
 issue #77 is CLOSED/completed. Sections 1–43 preserve
 historical evidence and rejected prototypes; their pending/keep-open statements
@@ -2431,3 +2431,35 @@ aggregate signatures/calls/CFG, promotion and owner/physical tests. For full
 four-platform CI, a workflow_dispatch-capable client/app is required or the
 repository's Actions UI can be used; do not falsely report it started. Preserve
 frozen semantics, exact ownership, rollback, and full qualification gates.
+
+## 50. U1b canonical CFG reference execution — development candidate (2026-11-01)
+
+**Code head:** `febeaed06536d560994982631030cdca3ca0b264` on draft PR #106.
+**Focused run:** [41279731193](https://github.com/eristavi/eristavi-lang/actions/runs/41279731193), queued/in progress at writing, **NOT YET QUALIFIED OR GREEN**.
+The previous pure `aggregate.set` optimization at `b38ea99` passed focused run
+[41279349991](https://github.com/eristavi/eristavi-lang/actions/runs/41279349991).
+
+- `src/compiler/u1_aggregate_execute.eri` now accepts verified canonical
+  jump/branch/sparse-switch instructions and stages every edge argument in
+  bounded, owner-charged `words.Words` storage before assigning destination
+  block parameter slots. This preserves simultaneous phi/block-parameter
+  semantics on edges and includes fuel charges for traversed edges, reusing
+  scratch instead of per-edge allocations. Unsupported operations remain
+  explicitly unsupported. Still a narrow opt-in canonical reference executor.
+- The existing `tests/fixtures/u1_aggregate_execution.eri` test now routes
+  the original/updated immutable field result pair through an actual
+  `build.branch` to a 2-parameter target block and returns those values,
+  with a second alternative arm also present for structural verification.
+  It does **not yet** test both branch outcomes, aggregate-typed block
+  parameters or loops. It is **not** the complete independent nested Python
+  oracle nor aggregate signature/call/CFG promotion acceptance.
+- All production U1a metadata, 32-byte public ABI, source grammar and
+  default compiler remain unchanged. No full matrix or expensive owned
+  self-build was invoked. PR #106 remains draft, issue #73 remains OPEN.
+
+**Next:** inspect the exact-head focused CI logs and fix regressions before
+marking any of these lines tested; then complete independent 2/9/32-field
+nested oracle, source-neutral aggregate signatures/block parameters/calls,
+aggregate-capable mandatory SSA promotion, cancellation, physical owner backing
+and measured perf. Follow philosophy → semantics → architecture → implementation;
+update this section with actual evidence and no optimistic milestone closures.
