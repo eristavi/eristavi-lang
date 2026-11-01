@@ -22,6 +22,7 @@ jobs:
     env:
       CC: clang
       CFLAGS: -O2
+      ERISTAVI_U1B_FRAME_PROBE: '1'
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
