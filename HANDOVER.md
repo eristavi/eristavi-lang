@@ -1,6 +1,6 @@
 # Eristavi compiler — current handover
 
-**Authoritative recovery checkpoint: 1 November 2026, Asia/Nicosia. Read section 57 for current linked-switch/parallel-transfer evidence and section 53 for the prior FOCUSED TESTED 45/45, section 52 for prior loop/physical evidence, and section 44 for last fully qualified U1a.**
+**Authoritative recovery checkpoint: 1 November 2026, Asia/Nicosia. Read section 58 for current linked-program ingress verification and section 53 for the prior FOCUSED TESTED 45/45, section 52 for prior loop/physical evidence, and section 44 for last fully qualified U1a.**
 PR #105 is **QUALIFIED AND MERGED**. U1a's scoped physical acceptance gate passed;
 issue #77 is CLOSED/completed. Sections 1–43 preserve
 historical evidence and rejected prototypes; their pending/keep-open statements
@@ -88,7 +88,7 @@ redundant indexing, unbounded caches or unnecessarily expensive CI.
 > memory from design under correctness and safety gates. The permanent rule above
 > must be preserved in every future handover, without prompting from the user.
 >
-> Continue from **HANDOVER.md section 57** (45/45 focused-tested U1b linked
+> Continue from **HANDOVER.md section 58** (45/45 focused-tested U1b linked
 > aggregate calls; NOT full U1b qualification) and section 52,
 > retaining section 44 as the latest fully qualified release checkpoint. Section 45 is historical and superseded for the
 > current U1b code/test checkpoint. PR #105 is qualified and merged at
@@ -2808,3 +2808,45 @@ no experimental owned compiler self-build or expensive unchanged test rerun.
 
 Focused linked-switch/swap test PASSED locally in 3.228 seconds, including the
 negative control. Evidence: `docs/evidence/2026-11-01/u1b-linked-switch-swap.json`.
+
+
+## 58. Fresh linked-program ingress verification and rejection matrix — 2026-11-01
+
+Active draft PR #106. Found a genuine trust gap: execution checked body revision
+but could accept a changed callee signature after sealing. A new compiled test
+FAILED against the prior executor with `changed callee signature accepted`.
+Sealing and unchanged revision counters must not substitute for fresh verification.
+
+Implemented a pre-execution bounded walk of ALL linked entries (max 32): check
+metadata/function ownership, complete state and recorded revision; freshly match
+FunctionId declaration signature and definition kind; independently verify each
+canonical body including unreachable instructions. Temporary declaration-read
+phases finish on refusal. This runs before execution Engine/frame allocation.
+Final entry count must equal program count and metadata declaration count.
+No new public format, ABI, runtime or default production pipeline change.
+
+New `tests/test_u1_aggregate_linked_rejections.py` compiles the existing actual
+recursive-loop fixture with six isolated mutations: changed callee revision,
+changed callee signature without revision increment, foreign FunctionId owner,
+foreign execution owner, same-revision malformed unreachable callee instruction,
+and same-revision malformed UNCALLED linked body. Each must reject with the
+appropriate invalid-state/invalid-ir category; restored valid records execute
+normally (11/17), all temporary live/pending charges return and final owners close.
+No verifier bypass or relaxed semantic assertion was introduced.
+
+Local focused aggregate suite PASSED 12/12 in 26.089 seconds. The strengthened
+six-case rejection fixture separately PASSED in 2.143 seconds (suite originally
+covered the earlier four-case version; implementation identical). Existing
+recursive-loop, switch/swap, cancellation and allocator-refusal tests remain green.
+Evidence: `docs/evidence/2026-11-01/u1b-linked-rejections.json`.
+
+Performance scope: ingress now pays the sum of independent body verification
+work and repeated type-graph validation per linked body. This is charged under
+existing work budgets; it is not a measured speedup. Profile this component
+separately from execution in the remaining paired performance study. Do not
+skip fresh verification merely to improve timings or trust an unchanged revision.
+
+Next: larger/deeper actual tagged owner-memory scaling and reclamation, then
+paired performance acceptance, then one coherent final-head four-platform CI
+and completed-batch qualification. PR #106 remains draft/#73 open. No full
+qualification, merge or experimental owned compiler self-build in this slice.

@@ -392,6 +392,38 @@ function walk(program identity Program,frame identity Frame,depth Int)
     }
     return failResult(3,0,0);
 }
+// Revalidate the complete linked publication at every execution ingress.
+// Neither sealed=true nor unchanged revision counters authorize execution.
+function declarationMatch(program identity Program,entry identity Entry,
+    phase identity budget.Phase) fails budget.LimitError {
+    let signature be try meta.functionSignature(program.metadata,phase,entry.target);
+    let kind be try words.get(program.metadata.declarations,phase,(entry.target.index-1)*6+3);
+    if kind != 1 or signature != entry.body.signature {
+        try budget.reject("changed U1b linked declaration signature or kind");
+    }
+}
+function revalidate(program identity Program) fails budget.LimitError,verify.InvalidIR {
+    let cursor be program.head;
+    let count be 0;
+    while cursor != none {
+        if count >= 32 or cursor.body.metadata != program.metadata or
+           cursor.body.state != 1 or cursor.body.revision != cursor.revision or
+           cursor.body.owner.kind != 2 or
+           cursor.body.owner.parent != program.metadata.owner.parent {
+            try budget.reject("stale or foreign U1b linked body");
+        }
+        let phase be try budget.verificationPhase(cursor.body.owner);
+        declarationMatch(program,cursor,phase)
+        else error budget.LimitError { try budget.finishPhase(phase); fail error; };
+        try budget.finishPhase(phase);
+        let report be try verify.verifyAggregates(cursor.body,program.graph,
+            try budget.verificationPhase(cursor.body.owner));
+        cursor=cursor.next; count=count+1;
+    }
+    if count != program.count or count != program.metadata.declarations.length/6 {
+        try budget.reject("incomplete U1b linked publication");
+    }
+}
 public function run(program identity Program,target meta.FunctionId,
     owner identity budget.Owner,inputs,fuel Int,depthLimit Int)
     returns identity Outcome fails budget.LimitError,verify.InvalidIR {
@@ -404,6 +436,7 @@ public function run(program identity Program,target meta.FunctionId,
     if owner != routine.owner or owner.kind != 2 {
         try budget.reject("linked U1b execution owner must be entry function owner");
     }
+    try revalidate(program);
     let phase be try budget.constructionPhase(owner);
     let engine be av.create(program.graph,owner,phase)
         else error graphVerify.InvalidGraph {
