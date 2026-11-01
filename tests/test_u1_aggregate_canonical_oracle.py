@@ -94,7 +94,6 @@ def program():
         "    let no be try build.block(fn,["+",".join("meta.i64()" for _ in operands)+"]);\n",
         "    try build.branch(fn,entry,condition,yes,["+",".join(operands)+"],no,["
         +",".join(reversed(operands))+"],loc);\n",
-        "    let yesResults be []; let noResults be [];\n"
     ])
     for i in range(len(operands)):
         s.append(f"    let yes{i} be try build.parameter(fn,yes,{i});\n")
