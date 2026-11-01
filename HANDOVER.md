@@ -1,14 +1,14 @@
 # Eristavi compiler — current handover
 
-**Authoritative recovery checkpoint: 31 October 2026, Asia/Nicosia. Read section 46 for the active, focused-tested U1b canonical-SSA draft and section 44 for the last fully qualified release.**
+**Authoritative recovery checkpoint: 1 November 2026, Asia/Nicosia. Read section 47 for the current canonical SSA reference-execution candidate, section 46 for last focused-qualified canonical construction, and section 44 for the fully qualified U1a release.**
 PR #105 is **QUALIFIED AND MERGED**. U1a's scoped physical acceptance gate passed;
 issue #77 is CLOSED/completed. Sections 1–43 preserve
 historical evidence and rejected prototypes; their pending/keep-open statements
 are superseded by section 44. U1b aggregates #73 remain OPEN: type graph,
 immutable reference make/get/set, and the NEW canonical SSA builder/independent
-verification are FOCUSED TESTED (39/39); canonical SSA reference execution,
-aggregate signatures/CFG handling/promotion, performance and final qualification
-remain incomplete. U2 #74, U3 #75 and U4 #102 remain OPEN.
+verification are FOCUSED TESTED (39/39). Canonical SSA reference execution
+is now IMPLEMENTED ON DRAFT PR #106 but NOT YET TESTED; aggregate signatures,
+CFG handling/promotion, performance and final qualification remain incomplete. U2 #74, U3 #75 and U4 #102 remain OPEN.
 
 ## Mandatory philosophy-first engineering discipline — standing user instruction
 
@@ -84,9 +84,9 @@ redundant indexing, unbounded caches or unnecessarily expensive CI.
 > memory from design under correctness and safety gates. The permanent rule above
 > must be preserved in every future handover, without prompting from the user.
 >
-> Continue from **HANDOVER.md section 46** (canonical U1b aggregate SSA draft,
-> focused 39/39 but NOT full U1b qualified), retaining section 44 as the latest
-> qualified release checkpoint. Section 45 is historical and superseded for the
+> Continue from **HANDOVER.md section 47** (untested canonical aggregate SSA
+> execution candidate) and section 46 (last green construction smoke, 39/39),
+> retaining section 44 as the latest fully qualified release checkpoint. Section 45 is historical and superseded for the
 > current U1b code/test checkpoint. PR #105 is qualified and merged at
 > `8c625b1ece6a229844def93e2bf9563c14e9e273`, tested head `f1fba11ff5e11791ad8c5d635fbf90873c686fa9`,
 > identical tested/merged tree `0d8bf1f4a58f66a15bb9a89bd42f596091ed9c36`.
@@ -2290,3 +2290,45 @@ independently executing verified UIR path; keep the opt-in construction
 fail-closed and the production compiler unchanged. Follow the permanent
 **Philosophy → Semantics → Architecture → Implementation** mandate above,
 and update this handover after every substantive change.
+
+## 47. Canonical U1b aggregate SSA reference execution candidate — 2026-11-01
+
+**Draft branch:** `compiler/u1b-owned-aggregate-graph-20261031`, PR #106.
+**Code revision:** `afbca3caa6ff2686e3e526c8659b5968e6c21c38`.
+**Status:** new opt-in reference execution slice IMPLEMENTED, **focused CI pending**;
+not accepted, merged or U1b-complete. Last passing canonical construction
+checkpoint is §46 (39/39, commit `677e6d9`, run 41237356963).
+
+- `src/compiler/u1_aggregate_execute.eri` performs FRESH, independent
+  `verifyAggregates` on actual canonical SSA instructions before execution;
+  reads the real 10-word `Function.instructions` records, SSA value indexes,
+  and immutable op43/44/45; executes primitive constants and scalar returns,
+  guard, and produces explicit bounded fuel/unsupported outcomes with LocId.
+  It reuses `u1_aggregate_values` only as a **semantic reference store**;
+  this is not a second IR, the production evaluator, native backend or ABI.
+  A function-owned execution value store and SSA slot table are closed on
+  success and checked refusal; all returned values are copied to scalar
+  results. Current bounded profile: one reachable straight-line block,
+  scalar entry/signature, at most 16 scalar results, and no Float, calls,
+  branches, aggregate signature returns or aggregate CFG operands.
+- `tests/fixtures/u1_aggregate_execution.eri` and
+  `tests/test_u1_aggregate_execution.py` compile the real Eristavi U1b
+  executor and independently check canonical make/get/set old/new snapshots
+  with expected 11/17 scalar results and owner reclamation; the new Python
+  test is added to the **focused CI list**, not the full qualification gate.
+- Work/memory design: one owned SSA slot table (zero-initialized once),
+  immutable value engine with existing bounded type/member/node quotas,
+  fuel-capped instruction steps. Aggregate `set` remains O(n) reference
+  member-copy, **not a proposed native representation or speedup claim**.
+  No changes to production compiler, source semantics, existing U1a layout
+  or 32-byte public ABI. Existing reference execution is opt-in and does
+  not establish full U1b type/call/CFG semantics.
+- **Validation pending:** [focused run 41277911119](https://github.com/eristavi/eristavi-lang/actions/runs/41277911119)
+  is the first code-head gate; inspect exact result and correct any failures
+  BEFORE describing the slice as tested. Do not launch full four-platform CI.
+- **Subsequent work:** independent varied 2/9/32 field and nested oracle,
+  explicit malformed dead-block/fault/LocId/exhaustion checks, true program
+  owned aggregate signature/call/CFG types, canonical SSA value promotion,
+  physical backing and performance evidence. Preserve failure cleanup and
+  the philosophy/semantics/architecture ordering. PR #106 stays DRAFT, #73
+  OPEN. Keep this checkpoint reconciled with actual CI evidence.
