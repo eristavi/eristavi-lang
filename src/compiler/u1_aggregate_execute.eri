@@ -77,6 +77,27 @@ function save(engine identity av.Engine,slots identity words.Words,
     try words.set(slots,phase,index-1,token.index);
 }
 
+// Comparison relations use exactly the approved U1 i64 ordering:
+// eq, ne, signed lt/le/gt/ge and unsigned lt/le/gt/ge. All comparisons
+// return a canonical predicate, never a managed or implicit boxed value.
+function compare(a Int,b Int,relation Int) returns Int {
+    let result be false;
+    if relation == 1 { result=a == b; }
+    if relation == 2 { result=a != b; }
+    if relation == 3 { result=a < b; }
+    if relation == 4 { result=a <= b; }
+    if relation == 5 { result=a > b; }
+    if relation == 6 { result=a >= b; }
+    let less be a < b;
+    if a < 0 and b >= 0 { less=false; }
+    if a >= 0 and b < 0 { less=true; }
+    if relation == 7 { result=less; }
+    if relation == 8 { result=less or a == b; }
+    if relation == 9 { result=not less and a != b; }
+    if relation == 10 { result=not less; }
+    if result { return 1; }
+    return 0;
+}
 function walk(routine identity build.Function,graph identity aggregate.Registry,
     engine identity av.Engine,slots identity words.Words,phase identity budget.Phase,
     inputs,fuel Int) returns identity Outcome fails budget.LimitError {
@@ -127,6 +148,16 @@ function walk(routine identity build.Function,graph identity aggregate.Registry,
             let tyIndex be try read(routine,phase,routine.values,(resultStart-1)*4);
             let bits be try av.scalar(engine,try aggregate.typeAt(graph,tyIndex),payload);
             try save(engine,slots,phase,routine,resultStart,bits);
+        }
+        if op == 18 {
+            let firstArg be try read(routine,phase,routine.operands,operandsFirst);
+            let secondArg be try read(routine,phase,routine.operands,operandsFirst+1);
+            let firstBits be try av.bits(engine,try value(engine,slots,phase,firstArg));
+            let secondBits be try av.bits(engine,try value(engine,slots,phase,secondArg));
+            let predicateType be try aggregate.typeAt(graph,1);
+            let compared be try av.scalar(engine,predicateType,
+                compare(firstBits,secondBits,payload));
+            try save(engine,slots,phase,routine,resultStart,compared);
         }
         if op == 43 {
             let inputsForMake be []; let ordinal be 0;
@@ -225,7 +256,7 @@ function walk(routine identity build.Function,graph identity aggregate.Registry,
             terminal=try read(routine,phase,routine.blocks,targetOffset+4);
             transferred=true;
         }
-        if op != 1 and op != 2 and op != 36 and
+        if op != 1 and op != 2 and op != 18 and op != 36 and
            op != 43 and op != 44 and op != 45 and op != 5 and op != 8 and
            op != 6 and op != 7 and op != 35 {
             // Fail closed rather than guessing additional UIR semantics.
