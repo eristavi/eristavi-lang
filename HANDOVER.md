@@ -1,13 +1,13 @@
 # Eristavi compiler — current handover
 
-**Authoritative recovery checkpoint: 1 November 2026, Asia/Nicosia. Read section 47 for the current canonical SSA reference-execution candidate, section 46 for last focused-qualified canonical construction, and section 44 for the fully qualified U1a release.**
+**Authoritative recovery checkpoint: 1 November 2026, Asia/Nicosia. Read section 47 for the current focused-tested canonical SSA reference execution (40/40), section 46 for prior canonical construction, and section 44 for the last fully qualified U1a release.**
 PR #105 is **QUALIFIED AND MERGED**. U1a's scoped physical acceptance gate passed;
 issue #77 is CLOSED/completed. Sections 1–43 preserve
 historical evidence and rejected prototypes; their pending/keep-open statements
 are superseded by section 44. U1b aggregates #73 remain OPEN: type graph,
 immutable reference make/get/set, and the NEW canonical SSA builder/independent
 verification are FOCUSED TESTED (39/39). Canonical SSA reference execution
-is now IMPLEMENTED ON DRAFT PR #106 but NOT YET TESTED; aggregate signatures,
+is now FOCUSED TESTED (40/40) on draft PR #106; aggregate signatures,
 CFG handling/promotion, performance and final qualification remain incomplete. U2 #74, U3 #75 and U4 #102 remain OPEN.
 
 ## Mandatory philosophy-first engineering discipline — standing user instruction
@@ -84,8 +84,8 @@ redundant indexing, unbounded caches or unnecessarily expensive CI.
 > memory from design under correctness and safety gates. The permanent rule above
 > must be preserved in every future handover, without prompting from the user.
 >
-> Continue from **HANDOVER.md section 47** (untested canonical aggregate SSA
-> execution candidate) and section 46 (last green construction smoke, 39/39),
+> Continue from **HANDOVER.md section 47** (focused-tested canonical aggregate
+> SSA reference execution, 40/40, not full U1b qualification) and section 46,
 > retaining section 44 as the latest fully qualified release checkpoint. Section 45 is historical and superseded for the
 > current U1b code/test checkpoint. PR #105 is qualified and merged at
 > `8c625b1ece6a229844def93e2bf9563c14e9e273`, tested head `f1fba11ff5e11791ad8c5d635fbf90873c686fa9`,
@@ -122,7 +122,7 @@ redundant indexing, unbounded caches or unnecessarily expensive CI.
 | Current independent C evidence | Refreshed 20/20 whole C-managed samples passed; source-hashed C inputs unchanged during later owned-only collision tuning. Not per-owner C allocation attribution |
 | Performance | Five final-code AB/BA worker0 pairs: 8.135968 → 8.254257 s (0.9857×), roughly flat amid host variance. **No whole-compiler speedup claim**; #51 full compiler phase profiling remains open |
 | U1a | Scalar/SSA/calls/recursion/effects/switches/strict native f64/provenance/bounded simplification plus scoped physical acceptance **COMPLETE within the adopted U1a boundary** |
-| U1b #73 | Narrow i8/i16/i32 previously qualified/merged (#101). **Draft PR #106 canonical SSA construction and independent aggregate verification: FOCUSED TESTED (39/39, run 41237356963, exact CODE head `677e6d92175a4f91408e864644674ec60dbe42dd`).** Includes prior opt-in type graph and immutable value reference execution; NOT YET canonical runtime execution, aggregate signatures/calls/CFG promotion, full physical resource stress or final four-platform qualification. PR remains draft/unmerged; #73 remains OPEN |
+| U1b #73 | Narrow i8/i16/i32 qualified/merged (#101). Draft PR #106: canonical aggregate SSA construction, independent verification, and **bounded canonical reference execution FOCUSED TESTED 40/40**, exact code head `bc743faf135927fa59b172cab2f151173fd07565`, [run 41278535614](https://github.com/eristavi/eristavi-lang/actions/runs/41278535614). Aggregate signatures/calls/CFG execution, promotion, physical-performance acceptance and final full qualification remain **PENDING**. Draft/unmerged; #73 OPEN |
 | U2 #74 | New UIR managed Text/List/identity, checked failures, root maps and deterministic cleanup **NOT IMPLEMENTED** |
 | U3 #75 | Direct frozen frontend → new UIR → production native target/artifact/cache integration **NOT IMPLEMENTED**. Existing adapter is isolated; #104 is test-only reference parity |
 | U4 #102 | Redesigned UIR machine/legalization/artifact migration **NOT IMPLEMENTED / NOT QUALIFIED** |
@@ -2294,9 +2294,9 @@ and update this handover after every substantive change.
 ## 47. Canonical U1b aggregate SSA reference execution candidate — 2026-11-01
 
 **Draft branch:** `compiler/u1b-owned-aggregate-graph-20261031`, PR #106.
-**Code revision:** `afbca3caa6ff2686e3e526c8659b5968e6c21c38`.
-**Status:** new opt-in reference execution slice IMPLEMENTED, **focused CI pending**;
-not accepted, merged or U1b-complete. Last passing canonical construction
+**Exactly focused-tested code revision:** `bc743faf135927fa59b172cab2f151173fd07565`.
+**Status:** new opt-in canonical reference execution slice IMPLEMENTED and **focused CI PASSED 40/40**;
+not fully qualified, merged or U1b-complete. Last passing canonical construction
 checkpoint is §46 (39/39, commit `677e6d9`, run 41237356963).
 
 - `src/compiler/u1_aggregate_execute.eri` performs FRESH, independent
@@ -2323,12 +2323,40 @@ checkpoint is §46 (39/39, commit `677e6d9`, run 41237356963).
   No changes to production compiler, source semantics, existing U1a layout
   or 32-byte public ABI. Existing reference execution is opt-in and does
   not establish full U1b type/call/CFG semantics.
-- **Validation pending:** [focused run 41277911119](https://github.com/eristavi/eristavi-lang/actions/runs/41277911119)
-  is the first code-head gate; inspect exact result and correct any failures
-  BEFORE describing the slice as tested. Do not launch full four-platform CI.
+- **Verified focused result:** [run 41278535614](https://github.com/eristavi/eristavi-lang/actions/runs/41278535614) **SUCCESS**, 40/40 tests, 153.587 seconds, on exact CODE head
+  `bc743faf135927fa59b172cab2f151173fd07565`, including native
+  `test_verified_canonical_ssa_immutable_execution` and existing U1a/U1b
+  smoke/physical-owner checks. Four-platform full CI **SKIPPED** by design.
+  Earlier exploratory runs failed only in the NEW executor and were fixed:
+  [41277911119](https://github.com/eristavi/eristavi-lang/actions/runs/41277911119)
+  syntax; [41278106311](https://github.com/eristavi/eristavi-lang/actions/runs/41278106311)
+  standalone generic edge specialization;
+  [41278235109](https://github.com/eristavi/eristavi-lang/actions/runs/41278235109)
+  concrete input-list specialization;
+  [41278387039](https://github.com/eristavi/eristavi-lang/actions/runs/41278387039)
+  function-owned instruction tables accessed through a foreign execution owner.
+  Final code reuses the exact function owner and closes all reference storage.
+  These historical failures are not qualified. No full four-platform CI or
+  experimental owned compiler self-build was requested.
 - **Subsequent work:** independent varied 2/9/32 field and nested oracle,
   explicit malformed dead-block/fault/LocId/exhaustion checks, true program
   owned aggregate signature/call/CFG types, canonical SSA value promotion,
   physical backing and performance evidence. Preserve failure cleanup and
   the philosophy/semantics/architecture ordering. PR #106 stays DRAFT, #73
   OPEN. Keep this checkpoint reconciled with actual CI evidence.
+
+### Exact-head result reconciliation — 2026-11-01
+
+The newest code-bearing candidate `bc743faf135927fa59b172cab2f151173fd07565`
+**PASSED 40/40 focused Linux Clang CI tests** at
+[run 41278535614](https://github.com/eristavi/eristavi-lang/actions/runs/41278535614).
+The new canonical verified UIR executor returned independent scalar snapshots
+`11` (original) and `17` (immutable replacement), with exact per-function
+owner lifecycle reclamation. The existing accepted U1a physical regression and
+all prior U1b focused tests remain green. **Do not conflate this with full
+U1b execution/conformance or an owned native compiler acceptance.** Next:
+run independent randomized/three-size nested aggregate canonical-execution
+oracles, malformed dead code and trap/source-location profiles; integrate
+aggregate signatures/calls/CFG and canonical SSA promotion; then adversarial
+resource/physical performance evidence before one final expensive qualification.
+Current HANDOVER-only commits do not change the passing executable code.
