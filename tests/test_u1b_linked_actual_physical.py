@@ -109,9 +109,9 @@ class U1BLinkedActualPhysicalTests(unittest.TestCase):
             before, after = _decode_owner_records(raw[:2 * RECORD_BYTES])
             tail = raw[2 * RECORD_BYTES:]
             self.assertEqual(len(tail) % 48, 0)
-            survivors = [dict(zip(("pointer", "allocator_bytes", "cells", "capacity"),
-                        struct.unpack_from("<QQQQ", tail, i)))
-                         for i in range(0, len(tail), 32)]
+            survivors = [dict(zip(("pointer", "allocator_bytes", "cells", "capacity", "marked", "cell_pointer"),
+                        struct.unpack_from("<QQQQQQ", tail, i)))
+                         for i in range(0, len(tail), 48)]
             print("U1B_LINKED_SURVIVORS=" + __import__("json").dumps(survivors), flush=True)
             self.assertEqual((before["error"], after["error"]), (0, 0))
             # The diagnostic tag is active for every linked request, including
