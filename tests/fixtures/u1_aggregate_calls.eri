@@ -1,0 +1,125 @@
+import std.process;
+import compiler.u1_budget as budget;
+import compiler.u1_meta as meta;
+import compiler.u1_builder as build;
+import compiler.u1_aggregate as aggregate;
+import compiler.u1_aggregate_signature as signature;
+import compiler.u1_aggregate_build as ab;
+import compiler.u1_aggregate_calls as call;
+import compiler.u1_verify as verify;
+
+error ProbeError { message Text; }
+function check(ok Bool,message Text) fails ProbeError {
+    if not ok { fail ProbeError { message=message; }; }
+}
+function exercise() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let root be try budget.developmentRequest();
+    let shared be try budget.metadataOwner(root);
+    let mp be try budget.constructionPhase(shared);
+    let data be try meta.create(shared,mp);
+    let graph be try aggregate.create(shared,mp);
+    let i64 be try aggregate.primitive(graph,meta.i64());
+    let pair be try aggregate.aggregate(graph,mp,[i64,i64]);
+    let pairSig be try signature.signature(data,graph,mp,[pair],[pair]);
+    let entrySig be try signature.signature(data,graph,mp,[i64],[i64,i64]);
+    let copyId be try meta.declaration(data,mp,pairSig,"aggregate.copy",1,0,0);
+    let updateId be try meta.declaration(data,mp,pairSig,"aggregate.update",1,0,0);
+    let mainId be try meta.declaration(data,mp,entrySig,"aggregate.main",1,0,0);
+    let failId be try meta.declaration(data,mp,entrySig,"aggregate.fail",1,0,0);
+    let source be try meta.source(data,mp,"aggregate-calls","0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",128);
+    let loc be try meta.location(data,mp,source,0,7,1,1,1);
+    let trapLoc be try meta.location(data,mp,source,8,14,9,2,1);
+    try aggregate.freeze(graph); try meta.freeze(data); try budget.finishPhase(mp);
+
+    let copyOwner be try budget.functionOwner(root,false);
+    let cp be try budget.constructionPhase(copyOwner);
+    let copy be try build.create(data,pairSig,copyOwner,cp);
+    let copyEntry be try ab.block(copy,graph,[pair]);
+    let copyInput be try build.parameter(copy,copyEntry,0);
+    try ab.returnValues(copy,graph,copyEntry,[copyInput],loc);
+    try ab.complete(copy,graph); try budget.finishPhase(cp);
+
+    let updateOwner be try budget.functionOwner(root,false);
+    cp=try budget.constructionPhase(updateOwner);
+    let update be try build.create(data,pairSig,updateOwner,cp);
+    let updateEntry be try ab.block(update,graph,[pair]);
+    let updateInput be try build.parameter(update,updateEntry,0);
+    let seventeen be try build.integer(update,updateEntry,17,loc);
+    let modified be try ab.set(update,graph,updateEntry,updateInput,1,seventeen,loc);
+    let forwarded be try ab.call(update,graph,updateEntry,copyId,[modified],loc);
+    let fromCopy be try build.result(update,forwarded,0);
+    try ab.returnValues(update,graph,updateEntry,[fromCopy],loc);
+    try ab.complete(update,graph); try budget.finishPhase(cp);
+
+    let mainOwner be try budget.functionOwner(root,false);
+    cp=try budget.constructionPhase(mainOwner);
+    let main be try build.create(data,entrySig,mainOwner,cp);
+    let mainEntry be try ab.block(main,graph,[i64]);
+    let input be try build.parameter(main,mainEntry,0);
+    let eleven be try build.integer(main,mainEntry,11,loc);
+    let original be try ab.make(main,graph,mainEntry,pair,[eleven,eleven],loc);
+    let updatedCall be try ab.call(main,graph,mainEntry,updateId,[original],loc);
+    let updated be try build.result(main,updatedCall,0);
+    let before be try ab.get(main,graph,mainEntry,original,1,loc);
+    let after be try ab.get(main,graph,mainEntry,updated,1,loc);
+    try ab.returnValues(main,graph,mainEntry,[before,after],loc);
+    try ab.complete(main,graph); try budget.finishPhase(cp);
+
+    let failOwner be try budget.functionOwner(root,false);
+    cp=try budget.constructionPhase(failOwner);
+    let failing be try build.create(data,entrySig,failOwner,cp);
+    let failEntry be try ab.block(failing,graph,[i64]);
+    let zero be try build.predicate(failing,failEntry,false,loc);
+    try build.guard(failing,failEntry,zero,2,trapLoc);
+    let a be try build.integer(failing,failEntry,11,loc);
+    let b be try build.integer(failing,failEntry,17,loc);
+    try ab.returnValues(failing,graph,failEntry,[a,b],loc);
+    try ab.complete(failing,graph); try budget.finishPhase(cp);
+
+    let program be try call.create(data,graph);
+    let c1 be try call.bind(program,copyId,copy);
+    let c2 be try call.bind(program,updateId,update);
+    let c3 be try call.bind(program,mainId,main);
+    let c4 be try call.bind(program,failId,failing);
+    try check((try call.seal(program)) == 4,"all canonical declarations verified");
+
+    let success be try call.run(program,mainId,mainOwner,[0],64,8);
+    try check(success.kind == 0 and success.count == 2 and success.steps == 12,
+        "three-function canonical call chain");
+    output(try call.scalar(success,0));
+    output(try call.scalar(success,1));
+
+    // Depth and fuel are GLOBAL across the entire nested call chain.
+    let bounded be try call.run(program,mainId,mainOwner,[0],2,8);
+    try check(bounded.kind == 2 and bounded.steps == 2 and
+        bounded.location == loc.index,"global call fuel and exact LocId");
+    let shallow be try call.run(program,mainId,mainOwner,[0],64,1);
+    try check(shallow.kind == 2 and shallow.location == loc.index,
+        "call-depth ceiling retains caller location");
+    // Trap has a DIFFERENT original source location from the entry call.
+    let failure be try call.run(program,failId,failOwner,[0],64,8);
+    try check(failure.kind == 1 and failure.code == 2 and
+        failure.location == trapLoc.index,"original callee guard location");
+
+    try call.close(program);
+    try build.close(copy); try build.close(update);
+    try build.close(main); try build.close(failing);
+    try aggregate.close(graph); try meta.close(data);
+    try check(root.live == 0 and root.pending == 0,"all linked call owner backing reclaimed");
+    try budget.close(copyOwner); try budget.close(updateOwner);
+    try budget.close(mainOwner); try budget.close(failOwner);
+    try budget.close(shared); try budget.close(root);
+    output("u1b-aggregate-calls:ok");
+    return true;
+}
+function main() {
+    let done be exercise()
+    else error budget.LimitError {
+        output("limit:"+error.message); process.setExitCode(1); return;
+    } else error verify.InvalidIR {
+        output("invalid:"+error.message); process.setExitCode(1); return;
+    } else error ProbeError {
+        output("probe:"+error.message); process.setExitCode(1); return;
+    };
+}
+main();

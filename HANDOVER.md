@@ -1,6 +1,6 @@
 # Eristavi compiler — current handover
 
-**Authoritative recovery checkpoint: 1 November 2026, Asia/Nicosia. Read section 52 for latest focused-tested U1b aggregate loop acceptance (44/44, code `d2f2b63`) and physical evidence, section 51 for prior construction, section 44 for last fully qualified U1a.**
+**Authoritative recovery checkpoint: 1 November 2026, Asia/Nicosia. Read section 53 for an unqualified bounded U1b multi-function call execution candidate, section 52 for the last focused-tested 44/44 U1b code, and section 44 for the fully qualified U1a.**
 PR #105 is **QUALIFIED AND MERGED**. U1a's scoped physical acceptance gate passed;
 issue #77 is CLOSED/completed. Sections 1–43 preserve
 historical evidence and rejected prototypes; their pending/keep-open statements
@@ -2602,3 +2602,51 @@ large/deep physical owner/performance scaling, and final exact-head
 four-platform CI + completed-batch qualification. Preserve philosophy,
 frozen semantics, independent verifier, and one coherent final expensive
 gate; no experimental full owned compiler self-build.
+
+## 53. Multi-function immutable aggregate call reference executor — development candidate 2026-11-01
+
+**Base fully green:** exact code head `d2f2b637e0ffca25ee870f18768c5dc1866433eb`,
+[focused CI 41282767784](https://github.com/eristavi/eristavi-lang/actions/runs/41282767784)
+**44/44 SUCCESS**; subsequent `1c577c6` modified HANDOVER.md only.
+**Active work:** draft PR #106 branch `compiler/u1b-owned-aggregate-graph-20261031`.
+**Candidate:** this commit adds a new opt-in multi-function reference execution
+profile and an independent test; **NOT TESTED / NOT QUALIFIED** until a
+new exact-head focused result is independently observed.
+
+Design follows Philosophy → frozen Semantics → canonical UIR contract:
+- New private `src/compiler/u1_aggregate_calls.eri` consumes the SAME
+  10-word canonical instruction tables and FunctionId declaration pool,
+  and **independently verifies every linked function including unreachable
+  malformed blocks** using the frozen owner-scoped aggregate graph.
+  It creates no second executable IR, no new source keyword or semantic
+  type, no ABI change, and does not modify the established U1a module,
+  native backend, default compiler or previous U1b single-function executor.
+- Bounded, opt-in initial profile: at most 32 complete *defined* functions,
+  16 arguments/results per function and call-depth <= 16; global fuel <= 2^20
+  counts instructions across all frames. Unsupported operations, imported
+  functions, unfinished programs and stale body revisions reject explicitly.
+  Only straight-line pred/i64/narrow constants, immutable make/get/set,
+  guard, verified direct op34 calls and returns are executed in this first
+  slice. No CFG/cycles, f64, arithmetic effects or managed U2 operations
+  are given guessed semantics.
+- Every dynamic call gets a fresh owner-charged SSA slot map and read phase.
+  All functions share one owner-charged immutable reference value engine
+  **within the root request**, so aggregate parameters/results are transferred
+  by exact validated TypeId and immutable value token rather than
+  copying/boxing through the current public Eristavi ABI. Nested calls and
+  recursion share fuel/depth controls; terminal trap and earliest callee LocId
+  propagate without rewriting at caller sites.
+- `tests/fixtures/u1_aggregate_calls.eri` and
+  `tests/test_u1_aggregate_calls.py` exercise the three-function
+  main → update → copy chain, old/new tuple snapshots, global fuel,
+  maximum call depth, original guard source provenance, revalidation,
+  and exact owner cleanup. The expected old/new pair (11,17) is derived
+  from independent Python immutable tuples. Full aggregate root-return
+  ABI remains explicitly unsupported, not silently converted.
+
+**Acceptance boundaries**: candidate code must first pass focused CI; then
+add independent nested cross-call CFG/recursion success and malformation oracles,
+explicit cancellation/alloc-refusal and larger tagged owner backing/performance
+evidence before one final four-platform CI plus completed-batch qualification.
+Do not claim full U1b acceptance, merge #106 or close #73 yet.
+The separate experimental owned compiler full self-build is not authorized.
