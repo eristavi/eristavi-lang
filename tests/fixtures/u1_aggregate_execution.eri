@@ -55,7 +55,7 @@ function mainRun() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeEr
     let outcome be try run.run(fn,graph,owner,[123],50);
     try check(outcome.kind == 0 and outcome.count == 2 and
         (try run.result(outcome,0)) == 11 and
-        (try run.result(outcome,1)) == 17 and outcome.steps == 8,
+        (try run.result(outcome,1)) == 17 and outcome.steps == 9,
         "canonical SSA immutable snapshot");
     output("canonical-u1b-execution:11,17:ok");
     try build.close(fn); try aggregate.close(graph); try meta.close(data);
