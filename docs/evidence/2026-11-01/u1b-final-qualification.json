@@ -1,0 +1,94 @@
+{
+  "date": "2026-11-01",
+  "qualified_head": "bd0a159975d73239f87300debce89c453a59ebb1",
+  "qualified_tree": "e81f594294f4c0700a0a572ec4434742199d4573",
+  "merge_sha": "b86d54f2f6268d12831bb0b09f3016b1dd3c1f67",
+  "merge_base": "ccfe726ad80212c9a10ee16d5f3cf17e52db160a",
+  "tested_merge_commit": "c9f12a87d71dd1885dde81ba3a47187f59da579f",
+  "tested_merge_tree": "e81f594294f4c0700a0a572ec4434742199d4573",
+  "code_test_evidence_revision": "866f7a547b517549197d1a31c17fa3392f1fce53",
+  "ci_run": 41313784760,
+  "ci_conclusion": "success",
+  "qualification_run": 41313784884,
+  "qualification_conclusion": "success",
+  "ci_jobs": [
+    {
+      "id": 124869537435,
+      "tests": 491,
+      "seconds": 441.584,
+      "skips": 8
+    },
+    {
+      "id": 124869537546,
+      "tests": 491,
+      "seconds": 706.466,
+      "skips": 8
+    },
+    {
+      "id": 124869537516,
+      "tests": 491,
+      "seconds": 230.919,
+      "skips": 118
+    },
+    {
+      "id": 124869537527,
+      "tests": 491,
+      "seconds": 228.646,
+      "skips": 127
+    }
+  ],
+  "qualification_jobs": [
+    {
+      "id": 124869539810,
+      "status": "success",
+      "stage": "offline-audit",
+      "repeatable": true,
+      "compiler_C_completed": true,
+      "compiler_D_completed": true,
+      "offline_audit_completed": true,
+      "source_snapshot_unchanged": true
+    },
+    {
+      "id": 124869539957,
+      "status": "success",
+      "stage": "offline-audit",
+      "repeatable": true,
+      "compiler_C_completed": true,
+      "compiler_D_completed": true,
+      "offline_audit_completed": true,
+      "source_snapshot_unchanged": true
+    },
+    {
+      "id": 124869540036,
+      "status": "success",
+      "stage": "offline-audit",
+      "repeatable": true,
+      "compiler_C_completed": true,
+      "compiler_D_completed": true,
+      "offline_audit_completed": true,
+      "source_snapshot_unchanged": true
+    },
+    {
+      "id": 124869540162,
+      "status": "success",
+      "stage": "offline-audit",
+      "repeatable": false,
+      "compiler_C_completed": false,
+      "compiler_D_completed": false,
+      "offline_audit_completed": true,
+      "source_snapshot_unchanged": true
+    }
+  ],
+  "experimental_owned_selfbuild": {
+    "job_id": 124869540885,
+    "conclusion": "skipped",
+    "certified": false
+  },
+  "pr_106_merged": true,
+  "issue_73_state": "closed",
+  "issue_73_reason": "completed",
+  "issue_51_state": "open",
+  "scope": "bounded reference U1b; no production frontend promotion or whole compiler speedup",
+  "source_test_tool_workflow_changes_after_qualification": false,
+  "postmerge_status_documentation_checks": "git diff --check; JSON parse; all implementation trees identical to qualified head"
+}

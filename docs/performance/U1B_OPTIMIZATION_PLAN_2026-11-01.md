@@ -1,8 +1,8 @@
 # Eristavi optimization plan — 1 November 2026
 
-Status: execution in progress; current results and explicit deferrals below supersede the original proposed sequence.
+Status: feasible bounded steps executed, qualified and merged via PR #106; #73 closed. Current results and explicit deferrals below supersede the original proposed sequence.
 Review baseline: PR #106 head `c2423d5b6211c4999a116e541fb11c67dfa2357d`.
-This document records a plan, not completed optimizations or permission to merge.
+Sections 1–5 preserve the original plan/review; the execution checkpoint records the completed work and explicit deferrals.
 Follow Philosophy → Semantics → Architecture → Implementation.
 
 ## 1. Verified starting point
@@ -275,7 +275,7 @@ decoder cheaply, then run ONE corrected current-source attribution profile.
 Select the first record-read pilot from that evidence. No optimization
 implementation or new expensive workflow was performed during this plan review.
 
-## Execution checkpoint — see HANDOVER §74
+## Final execution checkpoint — see HANDOVER §77
 
 - Step 0: raw-unit reconciliation repaired; three cheap decoder/trace tests and
   one corrected current-source native profile passed. Automatic expensive PR
@@ -297,14 +297,13 @@ implementation or new expensive workflow was performed during this plan review.
 - Step 4: per-invocation shared type validation remains lower priority. Current
   fresh graph/body/dead-code validation must be retained; no shortcut adopted.
 - Step 5: five pairs and expanded candidate allocation profile complete (32.69M fewer boxed temporaries; identical checks/work).
-  A separate bounded current compiler-source diagnostic is prepared. Static
+  A separate bounded current compiler-source diagnostic completed typed_ir with exact parity; ir_verify was censored at the unchanged 90s cap during old universal-optimize. Static
   import closure confirms U1 modules are absent from the existing frontend;
   no production compilation-speed gain can be attributed to this change.
-- Step 6: physical/scaling and smoke 49/49 PASS; final hosted exact-head qualification pending. No merge,
-  U2/U3/U4 implementation or full owned compiler self-build has occurred.
+- Step 6: physical/scaling and smoke 49/49 PASS. Final exact-head four-platform CI 41313784760 (491 discovered each) and qualification 41313784884 PASS. Qualified head bd0a159975d73239f87300debce89c453a59ebb1; tested/merged tree e81f594294f4c0700a0a572ec4434742199d4573. PR #106 merged b86d54f2f6268d12831bb0b09f3016b1dd3c1f67; U1b #73 closed/completed. No U2/U3/U4 implementation or experimental full owned compiler self-build.
 
 The full paired raw samples, CPU/RSS scope, hashes and independent output oracle
 are in ../evidence/2026-11-01/u1b-fixed-path-five-pairs.json. This checkpoint
 records a bounded improvement, not completion of all performance work in #51.
 
-Latest execution/acceptance disposition: HANDOVER §75 and U1B_FIXED_DEPTH_WORD_READ_2026-11-01.md. The bounded source profile completed typed_ir with exact parity; ir_verify is censored at 90s. No total compiler-performance completion or owned full self-build is claimed.
+Latest execution/acceptance disposition: HANDOVER §77 and U1B_FIXED_DEPTH_WORD_READ_2026-11-01.md. The bounded source profile completed typed_ir with exact parity; ir_verify is censored at 90s. No total compiler-performance completion or owned full self-build is claimed.

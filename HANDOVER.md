@@ -1,32 +1,32 @@
 # Eristavi compiler — current handover
 
-**Authoritative recovery checkpoint: 1 November 2026, Asia/Nicosia. Read §76 FIRST for optimization execution and its latest result.** §73 is the original plan; §72 records the earlier full source qualification, not qualification of the new candidate.
+**Authoritative recovery checkpoint: 1 November 2026, Asia/Nicosia. Read §77 FIRST. The optimization batch is QUALIFIED / MERGED.** §§73–76 preserve the plan, implementation and superseded pending states.
 
-PR #106 remains DRAFT/OPEN/unmerged, #73/#51 OPEN. Optimization work is preserved
-on `compiler/u1b-optimization-execution-20261101` and integrated into #106's
-`compiler/u1b-owned-aggregate-graph-20261031` branch at code/test/evidence
-revision `866f7a547b517549197d1a31c17fa3392f1fce53`. Plan PR #107 is now
-MERGED by ancestry into #106 (not into main). This handover reconciliation
-changes documentation only; required final qualification is selected afterward. Profiler raw-unit repair,
-three decoder/trace checks and expanded current-source native profiles PASS.
-Automatic expensive PR profiling is removed; explicit manual profiling retains
-raw snapshots and summary. New fixed-depth noncreating word reads preserve all
-six current child checks and seven per-word credits, with unchanged layouts,
-ABI, owner/cancellation behavior and quotas.
+[PR #106](https://github.com/eristavi/eristavi-lang/pull/106) is confirmed MERGED at
+`b86d54f2f6268d12831bb0b09f3016b1dd3c1f67`; bounded reference U1b #73 is CLOSED/completed.
+Exact qualified head `bd0a159975d73239f87300debce89c453a59ebb1`, tested and merged tree
+`e81f594294f4c0700a0a572ec4434742199d4573` are identical. Plan #107 is included by ancestry.
+Final [four-platform CI 41313784760](https://github.com/eristavi/eristavi-lang/actions/runs/41313784760)
+and [qualification 41313784884](https://github.com/eristavi/eristavi-lang/actions/runs/41313784884)
+both PASSED. Each platform discovered 491 tests; actual skips are recorded below.
+Three bootstrap C/D repeatability/offline audits and owned static/offline integration
+passed. Experimental full owned compiler self-build was intentionally excluded.
 
-**Five owned-native AB/BA pairs PASS exact oracle parity, all five faster:**
-median 61.790446 → 54.983744s (**11.0158% lower on this one reference fixture**).
-Separate profiles prove 32.69M fewer boxed temporaries and 2.62GB less cumulative
-actual allocator traffic, with identical child checks/work/active/poll/verifier
-read counts. Final local smoke **49/49 PASS** (168.513s); forced-collision
-physical peak **7,830,912 B**, traffic **21,973,968 B**, all tagged backing
-reclaimed under original 8MiB/64MiB gates. The current production frontend does
-not import U1 modules, so no source-compilation speedup or cure of the historical
-cross-runtime disparity is claimed. **Independent width/depth scaling PASS. Bounded source profiling completed:
-typed_ir parity PASS, ir_verify CENSORED at its unchanged 90s cap. Final
-exact-head hosted CI and qualification remain PENDING.** Keep #106 draft until those gates and explicit
-reference-only acceptance. U2 → U3 → U4 remain downstream; experimental full
-owned compiler self-build remains excluded.
+Fixed-depth fresh word reads preserve all six current child checks and seven
+per-word credits. Five serialized paired native comparisons all passed exact
+oracles and all improved: median 61.790446 → 54.983744s, **11.0158% lower on one
+Linux GCC reference workload**. Separate profiles prove 32.69M fewer boxed
+temporaries and 2.62GB less cumulative allocator capacity traffic, with identical
+checks/work/polls. Local smoke 49/49, original 8MiB/64MiB forced-collision physical
+gates and five independent width/depth points passed.
+
+**Next work is #51:** bounded attribution of the larger current production
+universal-optimizer path. typed_ir source parity passed; ir_verify reached its
+unchanged 90s diagnostic cap during universal-optimize. No whole-compiler speedup
+is claimed; this U1 storage change is absent from the default frontend import
+closure. Larger scalar unboxing and shared type validation require the recorded
+safety/ownership proofs. U2 → U3 → U4 remain separate, unimplemented milestones.
+No qualification or build is left running for this completed batch.
 
 ## Standing GitHub authorization — explicit user instruction, 2026-11-01
 
@@ -94,40 +94,40 @@ redundant indexing, unbounded caches or unnecessarily expensive CI.
 - Maintain a ranked optimization backlog and update this handover after
   implementation, qualification, merge or a discovered performance regression.
   An unqualified prototype is not production-ready or a future CI time guarantee.
-- **Latest qualified batch: PR #105, merge `8c625b1ece6a229844def93e2bf9563c14e9e273`.** Word-store aggregate leases, optional-identity member lowering, bounded collision-stable identity backing reuse and bitmap/split allocator reuse are qualified. The adversarial all-same-hash physical gate passed unchanged 8 MiB / 64 MiB limits. Current matched worker0 timing is roughly flat (~1.5% higher median wall time amid host variance); no whole-compiler speedup is claimed. Profile remaining complete-compiler phases (#51) and apply the same ownership/cost discipline to U1b aggregates, U2, U3 and U4.
+- **Latest qualified U1a memory batch: PR #105, merge `8c625b1ece6a229844def93e2bf9563c14e9e273`.** Word-store aggregate leases, optional-identity member lowering, bounded collision-stable identity backing reuse and bitmap/split allocator reuse are qualified. The adversarial all-same-hash physical gate passed unchanged 8 MiB / 64 MiB limits. Current matched worker0 timing is roughly flat (~1.5% higher median wall time amid host variance); no whole-compiler speedup is claimed. Profile remaining complete-compiler phases (#51) and apply the same ownership/cost discipline to U1b aggregates, U2, U3 and U4.
 
 ## Start a new chat with this
 
 > **MANDATORY:** Read complete governing philosophy/semantics, applicable architecture/IR and CI contracts and this handover. Follow Philosophy → Semantics → Architecture → Implementation, optimization-first after correctness/safety. Standing GitHub authorization does not waive acceptance or select experimental owned full self-build.
 >
-> **Resume at §76.** The profiler is repaired and manual-only expensive selection restored in the working candidate. Fixed-depth fresh word reads pass all 12 focused checks, five alternating owned-native pairs (all wins; median 61.790446 → 54.983744s) and final local smoke 49/49, including actual physical/forced-collision gates. Counter evidence proves identical checks/work and fewer boxes/traffic. Independent scaling passed; typed_ir source compilation passed parity and ir_verify was censored at 90s. Final hosted exact-head qualification remains pending until observed. Code/test/evidence revision 866f7a5 is integrated into #106; plan #107 is merged into that feature branch by ancestry. #106 remains draft/unmerged into main pending final hosted qualification. Preserve malformed same-revision dead/uncalled IR checks, ABI/budgets, cleanup and source faults. #51 remains open for much larger boxing/source-compiler work; U2/U3/U4 are separate. No automatic full owned compiler self-build or repeated expensive CI for docs.
+> **Resume at §77.** PR #106 is qualified/merged at b86d54f2f6268d12831bb0b09f3016b1dd3c1f67; #73 is closed/completed. Exact tested head bd0a159975d73239f87300debce89c453a59ebb1, tested/merged tree e81f594294f4c0700a0a572ec4434742199d4573. Final four-platform CI 41313784760 and full bootstrap/offline plus owned integration 41313784884 passed; full owned self-build intentionally skipped. Profiler repair, manual-only expensive selection and fixed-depth current word reads are merged. Five correct pairs all improved (11.0158% lower median on one reference fixture); 32.69M fewer boxes with identical checks/work. Local smoke 49/49 and original physical gates passed. #51 stays open: current larger ir_verify source attempt censored at 90s during old universal-optimize; next is bounded current hot-path attribution, not an assumed fix or production U3 promotion. Preserve philosophy/semantics, ABI/budgets, fresh malformed/dead/uncalled checks, cleanup/faults and independent oracles. Do not rerun expensive qualification for status documentation.
 
 ## Current verified status — read before historical sections
 
 | Scope | Current status |
 | --- | --- |
 | Repository | https://github.com/eristavi/eristavi-lang |
-| Latest qualified compiler/runtime merge | `8c625b1ece6a229844def93e2bf9563c14e9e273` ([PR #105](https://github.com/eristavi/eristavi-lang/pull/105)) |
-| Exact tested #105 head | `f1fba11ff5e11791ad8c5d635fbf90873c686fa9` |
-| Exact tested/merged tree | `0d8bf1f4a58f66a15bb9a89bd42f596091ed9c36` — identical, ordinary two-parent merge, unchanged base |
-| Focused smoke | [41222208171](https://github.com/eristavi/eristavi-lang/actions/runs/41222208171): **36/36 PASSED**, including deliberately colliding full physical fixture |
-| Four-platform full CI | [41222506854](https://github.com/eristavi/eristavi-lang/actions/runs/41222506854): **SUCCESS**, 469 discovered each. Linux GCC/Clang: 4 skips; ARM64: 112; macOS: 121 |
-| Completed-batch qualification | [41222506873](https://github.com/eristavi/eristavi-lang/actions/runs/41222506873): three bootstrap C/D builds, repeatable=true, offline audit and unchanged source snapshots; owned static/offline integration passed with repeatable=false |
+| Latest qualified compiler/runtime merge | `b86d54f2f6268d12831bb0b09f3016b1dd3c1f67` ([PR #106](https://github.com/eristavi/eristavi-lang/pull/106)) |
+| Exact tested #106 head | `bd0a159975d73239f87300debce89c453a59ebb1` (final #106 head; source/test/evidence revision 866f7a5) |
+| Exact tested/merged tree | `e81f594294f4c0700a0a572ec4434742199d4573` — identical, ordinary two-parent merge, unchanged base ccfe726 |
+| Focused smoke | Local expanded final smoke **49/49 PASS**, 168.513s; all 12 focused contracts pass |
+| Four-platform full CI | [41313784760](https://github.com/eristavi/eristavi-lang/actions/runs/41313784760): **SUCCESS**, 491 discovered each. Linux GCC/Clang: 8 skips; ARM64: 118; macOS: 127 |
+| Completed-batch qualification | [41313784884](https://github.com/eristavi/eristavi-lang/actions/runs/41313784884): three bootstrap C/D builds, repeatable=true, offline audit and unchanged source snapshots; owned static/offline integration passed with repeatable=false |
 | Experimental full owned compiler self-build | Intentionally skipped; **NOT CERTIFIED** |
 | U1a #77 physical acceptance | **QUALIFIED / MERGED**. #77 **CLOSED/completed**; original 8 MiB / 64 MiB gates preserved |
-| Actual adversarial owned stress | 65,536 words / 4,096 pages, all initial identity hashes collide: **7,853,712 B phase peak**, **21,957,296 B traffic**, 72,682 graph allocations. Exact retained stress backing **6,653,840 B / 16,938 wrapper-body objects**, all reclaimed |
+| Actual adversarial owned stress | 65,536 words / 4,096 pages, all initial identity hashes collide: **7,830,912 B phase peak**, **21,973,968 B traffic**. Retained stress backing **6,654,368 B / 16,938 objects**, all reclaimed; original 8MiB/64MiB gates unchanged |
 | Physical scope | Actual per-structure semantic-owner backing plus separate temporary/bookkeeping phase history. Shared region slack, diagnostic maps and shared caches are not attributed to arbitrary U1 owners; this is not process RSS or a global heap cap |
 | Current independent C evidence | Refreshed 20/20 whole C-managed samples passed; source-hashed C inputs unchanged during later owned-only collision tuning. Not per-owner C allocation attribution |
-| Performance | Five final-code AB/BA worker0 pairs: 8.135968 → 8.254257 s (0.9857×), roughly flat amid host variance. **No whole-compiler speedup claim**; #51 full compiler phase profiling remains open |
+| Performance | Fixed-depth word reads: five AB/BA pairs, median 61.790446 → 54.983744s (**11.0158% lower on one reference fixture**); 32.69M fewer boxes. **No whole-compiler speedup claim**. #51 current production optimizer/boxing remains OPEN |
 | U1a | Scalar/SSA/calls/recursion/effects/switches/strict native f64/provenance/bounded simplification plus scoped physical acceptance **COMPLETE within the adopted U1a boundary** |
-| U1b #73 | **NEW OPTIMIZATION FOCUSED/PERFORMANCE/LOCAL SMOKE PASS; FINAL HOSTED QUALIFICATION PENDING.** Earlier full source `0a2ba594` passed required gates. Working branch fixes later profiler/CI bugs and adds fixed-depth current word reads; 12 focused checks, five paired oracle runs (all faster, 11.0158% lower median), unchanged operation/work counts, fewer boxes/traffic, local smoke 49/49 and physical collision gates PASS. Independent scaling PASS; typed_ir parity PASS, larger ir_verify censored at 90s; final hosted qualification next. #106 draft/open, #73/#51 open. See §75. |
+| U1b #73 | **QUALIFIED / MERGED / CLOSED-completed** via #106. Immutable aggregate graph/make/get/set, linked execution, independent oracles, fresh malformed/dead/uncalled rejection, exact faults/fuel/LocId and physical/cancellation acceptance within adopted REFERENCE boundary; see §77 |
 | U2 #74 | New UIR managed Text/List/identity, checked failures, root maps and deterministic cleanup **NOT IMPLEMENTED** |
 | U3 #75 | Direct frozen frontend → new UIR → production native target/artifact/cache integration **NOT IMPLEMENTED**. Existing adapter is isolated; #104 is test-only reference parity |
 | U4 #102 | Redesigned UIR machine/legalization/artifact migration **NOT IMPLEMENTED / NOT QUALIFIED** |
 | Production | Existing source language and default compiler pipeline retained; no new-UIR backend promotion |
-| Environment / next stage | Local and remote working branch `compiler/u1b-optimization-execution-20261101` contains the tested candidate and plan #107. Integrated into #106 at code/test/evidence head 866f7a5; plan #107 merged into the feature branch, not main. Final hosted qualification next; see §76. No U1b main merge yet. |
+| Environment / next stage | Main includes qualified merge #106 and plan #107. Completed implementation branches: compiler/u1b-owned-aggregate-graph-20261031 and compiler/u1b-optimization-execution-20261101. No running gate; next #51 bounded production universal-optimizer attribution. U2/U3/U4 remain separate |
 
-**Reading rule:** the opening and newest checkpoint (§76) govern current status; section 44 governs the accepted U1a boundary. Earlier keep-open and pending
+**Reading rule:** the opening and newest checkpoint (§77) govern current status; section 44 governs the accepted U1a boundary. Earlier keep-open and pending
 statements describe their historical revisions. U1a acceptance does not certify
 U2 managed GC/cleanup, U3 durable artifacts/source integration or U4 toolchains.
 Documentation-only status reconciliation reuses unchanged implementation evidence
@@ -3400,3 +3400,86 @@ Existing concurrency groups supersede the earlier in-flight gate instead of
 letting duplicate old and new runs complete. Do not claim the earlier queued
 runs qualified this newer workflow revision. All local measured/physical
 evidence remains valid for unchanged implementation inputs.
+
+## 77. Final exact-tree qualification PASS; U1b merged, #73 closed — 2026-11-01
+
+This is the latest checkpoint. All planned feasible bounded optimization steps
+have executed; explicit deferred proofs and production bottleneck remain #51.
+The earlier pending/draft statements in §§73–76 describe historical states.
+
+### Final hosted evidence and exact merge
+
+- Code/test/evidence input revision: `866f7a547b517549197d1a31c17fa3392f1fce53`.
+- Final qualified head: `bd0a159975d73239f87300debce89c453a59ebb1`; final tree `e81f594294f4c0700a0a572ec4434742199d4573`.
+- [CI 41313784760](https://github.com/eristavi/eristavi-lang/actions/runs/41313784760) **SUCCESS** on that exact head.
+- [Qualification 41313784884](https://github.com/eristavi/eristavi-lang/actions/runs/41313784884) **SUCCESS** on that exact head.
+- Qualified merge `b86d54f2f6268d12831bb0b09f3016b1dd3c1f67` at 14:12:15 UTC,
+  [PR #106](https://github.com/eristavi/eristavi-lang/pull/106) confirmed CLOSED/MERGED.
+  Parents are unchanged main `ccfe726ad80212c9a10ee16d5f3cf17e52db160a`
+  and the exact qualified head. Merged tree equals the tested tree.
+- Plan #107 included by ancestry; U1b #73 confirmed CLOSED/completed.
+  #51 remains OPEN with current source evidence and next action in its body.
+
+| Full suite platform | Discovered | Skipped | Suite seconds | Job |
+| --- | ---: | ---: | ---: | --- |
+| Linux x86-64 Clang | 491 | 8 | 441.584 | 124869537435 |
+| Linux x86-64 GCC | 491 | 8 | 706.466 | 124869537546 |
+| Linux ARM64 Clang | 491 | 118 | 230.919 | 124869537516 |
+| macOS Clang | 491 | 127 | 228.646 | 124869537527 |
+
+All four suite logs end OK with the actual platform skips above.
+Three bootstrap jobs (ARM64 Clang 124869539810, x86 Clang 124869539957,
+GCC 124869540036) report status=success, compiler_C/D_completed=true,
+repeatable=true, offline_audit_completed=true, source_snapshot_unchanged=true.
+Owned integration 124869540162 reports success/offline/source-unchanged=true,
+repeatable=false and no C/D compile, as intended. Experimental full owned
+compiler self-build 124869540885 was SKIPPED, not certified. No excluded
+B→C→D owned frontend build was selected.
+
+The first malformed manual-workflow validation and superseded bb36c104 runs in
+§76 are not substituted for this successful corrected bd0a159 revision.
+No source/test changes followed final qualification. Postmerge status docs and
+qualification metadata reuse the unchanged implementation evidence; only
+lightweight patch/JSON and input-tree identity checks apply.
+
+### Accepted optimization and boundaries
+
+Fresh fixed-depth noncreating reads remove loop/control boxing while retaining
+six current child checks, seven per-word credits, layout/ABI, fault and cleanup
+order, ownership/cancellation and original quotas. Independent sparse paths,
+same-revision malformed dead/uncalled records, allocator refusal, cancellation,
+local smoke 49/49, forced-collision physical gates and five independent scaling
+points all pass. Five paired timings all match exact C/owned stdout/stderr/exit
+and favor the candidate: 61.790446 → 54.983744s median, 11.0158% lower on ONE
+Linux GCC reference workload. Separate profiles prove 32,693,051 fewer boxes,
+2,616,701,472 B less cumulative allocator capacity traffic and unchanged
+child/work/active/poll/verifier-read counts. About 887M boxed creations remain.
+
+This explicitly accepts U1b as a bounded REFERENCE UIR slice, not a production
+frontend or a complete performance solution. The production frontend's 33-module
+closure has no compiler.u1 modules. Current source diagnostic: typed_ir exact
+assembly parity in 2.186212s; larger ir_verify censored at unchanged 90s during
+old universal-optimize. No total-duration/parity/speedup claim for the censored case.
+See the fixed-depth report, executed plan and raw docs/evidence/2026-11-01 inputs.
+
+### Exact next step / safe resumption
+
+1. Read this checkpoint and governing philosophy/semantics/architecture/CI
+   contracts; verify latest main and #51 before another material decision.
+2. Continue #51 with bounded attribution of the CURRENT larger production
+   universal-optimizer path: separate boxing/allocation from graph/registry/index
+   and required validation work, retain phase/raw capture and source hashes.
+   Keep the existing 90s diagnostic cap; do not repeat censored work merely to
+   search for a favorable timing or enable excluded full owned self-build.
+3. Choose ONE measured, reversible candidate with an independent assembly oracle.
+   Preserve both verifier passes, source/ABI/fault/cleanup semantics and budgets.
+   Scalar unboxing is deferred until typed-region/escape/liveness/root/exhaustion
+   proof; shared type validation until invocation-owned immutable-context proof.
+   Do not revive rejected caches or already-applied registry growth thresholds.
+4. Treat U2 #74 → U3 #75 → U4 #102 as separately reviewed milestones, with
+   representation/physical cost and correctness gates before implementation.
+   No new UIR production promotion follows from #73 closure.
+
+No process or qualification is left pending for #106. The status-only postmerge
+reconciliation is the final action of this optimization batch. Handover maintenance
+and standing authorization/philosophy-first requirements above remain mandatory.

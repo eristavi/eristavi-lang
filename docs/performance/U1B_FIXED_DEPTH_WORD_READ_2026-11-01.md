@@ -1,7 +1,6 @@
 # U1b fixed-depth word-read optimization — 1 November 2026
 
-Status: five pairs, 12 focused checks, local smoke 49/49, physical backing and
-independent scaling PASS; final hosted qualification pending. Follow HANDOVER §75.
+Status: QUALIFIED / MERGED in PR #106; U1b #73 closed/completed. Five pairs, 12 focused checks, local smoke 49/49, physical backing and independent scaling PASS. Final four-platform/full qualification PASS. Follow HANDOVER §77.
 
 ## Cause and selected change
 
@@ -101,8 +100,7 @@ records, schemas, hashes and summaries are in the evidence directory.
 
 ## Remaining work and release boundary
 
-Finish smoke/actual backing gates and one final four-platform CI plus full
-bootstrap repeatability/offline and owned integration for the final code revision.
+Smoke/actual backing and final four-platform CI plus full bootstrap repeatability/offline and owned integration all passed for the exact final revision.
 Experimental full owned compiler self-build remains excluded. A separate bounded
 current source-compiler diagnostic continues #51; it is not before/after evidence
 for this U1-only source change.
@@ -142,7 +140,13 @@ records/manifests are retained as u1b-source-compiler-* evidence. This fulfills
 the current bounded diagnostic part of #51 and identifies remaining work; it
 does not close #51 or establish source compilation speedups from the U1 change.
 
-Disposition: accept this bounded U1b reference-storage improvement only after
-one exact-head four-platform/full qualification. Keep much larger boxing and
+Disposition: this bounded U1b reference-storage improvement is accepted after passing exact-head four-platform/full qualification. Keep much larger boxing and
 current production universal-optimizer work explicit in #51, without promoting
 U3 or weakening verification/resource gates.
+
+
+## Final hosted qualification and merge
+
+Exact qualified head `bd0a159975d73239f87300debce89c453a59ebb1`; [CI 41313784760](https://github.com/eristavi/eristavi-lang/actions/runs/41313784760) and [qualification 41313784884](https://github.com/eristavi/eristavi-lang/actions/runs/41313784884) both SUCCESS. Full suites: 491 discovered each, Linux GCC/Clang 8 skips, ARM64 118, macOS 127. Three bootstrap C/D repeatability/offline audits passed with unchanged sources. Owned static/offline integration passed; experimental owned frontend self-build intentionally skipped and not certified.
+
+[PR #106](https://github.com/eristavi/eristavi-lang/pull/106) merged at `b86d54f2f6268d12831bb0b09f3016b1dd3c1f67`; tested and merged tree `e81f594294f4c0700a0a572ec4434742199d4573` match, unchanged main base and ordinary two-parent merge. U1b #73 closed/completed under the explicit reference boundary; #51 remains open. Machine-readable final qualification evidence: [u1b-final-qualification.json](../evidence/2026-11-01/u1b-final-qualification.json). Postmerge documentation does not alter qualified code, tests, tools or workflows and requires only lightweight checks.
