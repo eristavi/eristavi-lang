@@ -3059,7 +3059,11 @@ This planning checkpoint is preserved on documentation branch
 `docs/u1b-optimization-plan-review-20261101-c2423d5`, stacked on reviewed U1b head
 `c2423d5`. It is not merged into the active U1b branch: doing that before the
 selector repair could automatically rerun the expensive profiler. Use this
-review branch for the newest plan until reconciliation.
+review branch for the newest plan until reconciliation. Documentation-only
+[draft PR #107](https://github.com/eristavi/eristavi-lang/pull/107) targets the active
+U1b branch; it remains unmerged. Local git diff --check passed, and the remote
+comparison confirmed exactly three Markdown files. No expensive tests were
+requested during this planning review.
 
 ### Fresh GitHub evidence corrects an incomplete recovery summary
 
