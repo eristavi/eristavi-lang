@@ -3,7 +3,7 @@
 
 Five paired, uninstrumented same-host runs. Real production owned compiler B
 compiled by the C bootstrap, plus independent C and owned validator corpus.
-The only candidate change is semantic_model.at's immutable ordinal snapshot.
+The only candidate change is semantic_model.at's short-circuit branch order.
 Never invoke an owned frontend to build frontend. Exact output and errors win
 over timing; no assertion that an optimization must be faster.
 """
@@ -159,7 +159,7 @@ def main():
     old_sha=hashlib.sha256(old).hexdigest()
     if old_sha==original_sha:
         raise AssertionError("candidate source unexpectedly identical to baseline")
-    summary={"scope":"issue #51 current production semantic location lookup, immutable-key hoist; "
+    summary={"scope":"issue #51 current production semantic location lookup, short-circuit left-first branch; "
                      "five uninstrumented paired Linux Clang trials; not full compiler self-build",
              "baseline_source_sha256":old_sha,"candidate_source_sha256":original_sha,
              "compiler_owned_self_build":False,"benchmarks":{}}
