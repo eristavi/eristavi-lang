@@ -41,6 +41,14 @@ function exercise() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeE
     let copyEntry be try ab.block(copy,graph,[pair]);
     let copyInput be try build.parameter(copy,copyEntry,0);
     try ab.returnValues(copy,graph,copyEntry,[copyInput],loc);
+    // Bootstrap's existing scalar CFG generic specialization must be
+    // concretely instantiated in a disconnected, independently checked
+    // component, without altering U1b production code.
+    let dead be try build.block(copy,[]);
+    let scalarDestination be try build.block(copy,[meta.i64()]);
+    let scalarConstant be try build.integer(copy,dead,9,loc);
+    try build.jump(copy,dead,scalarDestination,[scalarConstant],loc);
+    try ab.returnValues(copy,graph,scalarDestination,[copyInput],loc);
     try ab.complete(copy,graph); try budget.finishPhase(cp);
 
     let updateOwner be try budget.functionOwner(root,false);
