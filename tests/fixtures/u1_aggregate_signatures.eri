@@ -46,6 +46,12 @@ function run() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError 
     try ab.jump(fn,graph,entry,destination,[updated],loc);
     let result be try build.parameter(fn,destination,0);
     try ab.returnValues(fn,graph,destination,[result],loc);
+    // Force the old scalar U1a checkEdge specialization in this standalone
+    // test without relying on a production importer or new aggregate ABI.
+    let dead be try build.block(fn,[]);
+    let scalarTarget be try build.block(fn,[meta.i64()]);
+    try build.jump(fn,dead,scalarTarget,[field],loc);
+    try ab.returnValues(fn,graph,scalarTarget,[result],loc);
     try ab.complete(fn,graph); try budget.finishPhase(cp);
     let vp be try budget.verificationPhase(fnOwner);
     let report be try verify.constructionAggregates(fn,graph,vp);
