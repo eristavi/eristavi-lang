@@ -16,6 +16,9 @@ sys.path.insert(0,str(ROOT/'tests'))
 
 # Fast PR feedback only. The full test discovery below remains unchanged.
 SMOKE_TESTS=(
+    # #51 semantic location-index optimization must retain AST identity,
+    # duplicate-token collision handling and synthetic negative-token fallback.
+    'test_source_fact_index.SourceFactIndexTests.test_identity_collisions_reanalysis_and_synthetic_nodes',
     'test_universal_ir.UniversalIRTests.test_universal_ir_contains_function_contract_and_call',
     'test_universal_ir.UniversalIRTests.test_universal_ir_has_explicit_checked_arithmetic_and_control_flow',
     'test_u1_foundation.U1FoundationTests.test_accounting_metadata_and_builder_on_c_bootstrap',

@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   production-profile:
-    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'perf/issue51-production-profile-20261101'
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.head_ref, 'perf/issue51-')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
