@@ -2422,7 +2422,7 @@ calls `get` for get operations. This is a bounded algorithmic improvement,
 **not a measured performance gain** and NOT TESTED/qualified until focused CI
 on this exact code revision passes. Last confirmed green focused suite remains
 40/40 at `bc743faf135927fa59b172cab2f151173fd07565` (run 41278535614).
-No workflow for commit `b38ea99` was observed during the immediate check.
+A subsequent check confirmed focused Linux smoke run [41279349991](https://github.com/eristavi/eristavi-lang/actions/runs/41279349991) for code commit `b38ea99`, initially IN PROGRESS. The full four-platform matrix was explicitly SKIPPED in that run. Recheck actual completion before claiming the optimization tested; this run does not qualify full U1b.
 
 **Still OPEN**: #73, #74, #75, #102, #51. Existing closed #71/#77 and merged
 #105 remain correctly closed. No new milestone can be closed from these results.
