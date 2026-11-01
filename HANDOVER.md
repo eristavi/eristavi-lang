@@ -1,6 +1,6 @@
 # Eristavi compiler — current handover
 
-**Authoritative recovery checkpoint: 1 November 2026, Asia/Nicosia. Read section 58 for current linked-program ingress verification and section 53 for the prior FOCUSED TESTED 45/45, section 52 for prior loop/physical evidence, and section 44 for last fully qualified U1a.**
+**Authoritative recovery checkpoint: 1 November 2026, Asia/Nicosia. Read section 59 for current physical aggregate scaling evidence and section 53 for the prior FOCUSED TESTED 45/45, section 52 for prior loop/physical evidence, and section 44 for last fully qualified U1a.**
 PR #105 is **QUALIFIED AND MERGED**. U1a's scoped physical acceptance gate passed;
 issue #77 is CLOSED/completed. Sections 1–43 preserve
 historical evidence and rejected prototypes; their pending/keep-open statements
@@ -88,7 +88,7 @@ redundant indexing, unbounded caches or unnecessarily expensive CI.
 > memory from design under correctness and safety gates. The permanent rule above
 > must be preserved in every future handover, without prompting from the user.
 >
-> Continue from **HANDOVER.md section 58** (45/45 focused-tested U1b linked
+> Continue from **HANDOVER.md section 59** (45/45 focused-tested U1b linked
 > aggregate calls; NOT full U1b qualification) and section 52,
 > retaining section 44 as the latest fully qualified release checkpoint. Section 45 is historical and superseded for the
 > current U1b code/test checkpoint. PR #105 is qualified and merged at
@@ -2850,3 +2850,39 @@ Next: larger/deeper actual tagged owner-memory scaling and reclamation, then
 paired performance acceptance, then one coherent final-head four-platform CI
 and completed-batch qualification. PR #106 remains draft/#73 open. No full
 qualification, merge or experimental owned compiler self-build in this slice.
+
+
+## 59. Opt-in three-scale actual aggregate backing/reclamation — 2026-11-01
+
+User requested continued work with only 9% of the five-hour usage allowance left;
+kept this batch to one targeted physical probe, without full-suite/self-build.
+Test/tool/evidence-only continuation on draft PR #106; production code unchanged.
+
+`tools/probes/u1b_aggregate_scaling.py` reuses the existing independent structural
+owner observer and actual owned-runtime allocator/GC diagnostic. Three jointly
+increasing field-width/depth scales (8/2, 32/8, 128/32) execute immutable wide
+replacement and deep projection, check bootstrap/owned/diagnostic exact output
+parity, and force all initial identity hashes to collide. Every observed tagged
+wrapper/body object is reclaimed with zero final live backing. Original owner
+8 MiB peak / 64 MiB traffic admission gates remain enforced; no limits raised.
+
+| Fields / depth | Actual function backing | Actual metadata backing | Function modeled peak / traffic |
+| --- | ---: | ---: | ---: |
+| 8 / 2 | 25,760 B | 44,512 B | 45,408 / 71,264 B |
+| 32 / 8 | 35,424 B | 52,288 B | 45,408 / 80,672 B |
+| 128 / 32 | 75,616 B | 75,808 B | 75,264 / 120,672 B |
+
+Three probes PASSED (10.861 / 6.768 / 7.451 seconds). Raw evidence:
+`docs/evidence/2026-11-01/u1b-aggregate-scaling.json`. Runtime is measured for
+probe cost only, not a baseline/candidate compiler speedup. Actual retained
+backing, logical owner peak/traffic and process RSS are different scopes.
+This study covers immutable type graph/value engine, NOT complete linked-frame
+physical peak or whole compiler. Width/depth increase together; this is not
+independent attribution of their costs. The tool remains outside routine test
+and smoke discovery to avoid adding recurring physical-profiling cost.
+
+Next: integrate linked-frame physical/scale evidence as needed, measure paired
+performance with separate ingress-verification/execution attribution, then the
+coherent final U1b four-platform CI + completed-batch qualification. PR #106
+remains draft; #73 OPEN. No complete memory/performance acceptance, merge or
+experimental owned compiler self-build is claimed by this scoped probe.
