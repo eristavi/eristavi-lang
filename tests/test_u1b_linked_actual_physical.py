@@ -8,6 +8,7 @@ or process RSS.
 """
 from pathlib import Path
 import shutil
+import struct
 import subprocess
 import tempfile
 import unittest
@@ -89,13 +90,29 @@ class U1BLinkedActualPhysicalTests(unittest.TestCase):
                     "    call erist_rt_text_collect\n"
                     "    call .Ltest_owner_write\n"
                     "    movq .Lprocess_exit_code", 1)
+                # Diagnostic-only survivor scan: record each live tag-103
+                # allocation pointer, allocator capacity, graph cell count,
+                # and graph capacity after the final collection.
+                anchor = "    movq .Lprocess_exit_code"
+                self.assertEqual(instrumented.count(anchor), 1)
+                instrumented = instrumented.replace(anchor,
+                    "    call .Ltest_linked_survivor_write\n" + anchor, 1)
+                instrumented += f"""\n.text\n.Ltest_linked_survivor_write:\n    xorq %r12,%r12\n    leaq .Ltest_owner_tags(%rip),%r13\n    leaq .Ltest_owner_keys(%rip),%r14\n    leaq .Ltest_owner_sizes(%rip),%r15\n.Ltest_linked_survivor_loop:\n    cmpq $262144,%r12\n    jae .Ltest_linked_survivor_done\n    cmpq $3,(%r13,%r12,8)\n    jne .Ltest_linked_survivor_next\n    movq (%r14,%r12,8),%rbx\n    subq $32,%rsp\n    movq %rbx,0(%rsp)\n    movq (%r15,%r12,8),%rax\n    movq %rax,8(%rsp)\n    movq 0(%rbx),%rax\n    movq %rax,16(%rsp)\n    movq 48(%rbx),%rax\n    movq %rax,24(%rsp)\n    movq $1,%rax\n    movq ${dump.fileno()},%rdi\n    movq %rsp,%rsi\n    movq $32,%rdx\n    syscall\n    addq $32,%rsp\n.Ltest_linked_survivor_next:\n    incq %r12\n    jmp .Ltest_linked_survivor_loop\n.Ltest_linked_survivor_done:\n    ret\n"""
                 observed = link("linked-observed", instrumented)
                 result = subprocess.run([str(observed)], pass_fds=(dump.fileno(),),
                                         capture_output=True, text=True, timeout=180,
                                         check=False)
             self.assertEqual((result.returncode, result.stderr, result.stdout),
                              (0, "", baseline.stdout))
-            before, after = _decode_owner_records((root / "actual.bin").read_bytes())
+            from test_u1_owner_physical import RECORD_BYTES
+            raw = (root / "actual.bin").read_bytes()
+            before, after = _decode_owner_records(raw[:2 * RECORD_BYTES])
+            tail = raw[2 * RECORD_BYTES:]
+            self.assertEqual(len(tail) % 32, 0)
+            survivors = [dict(zip(("pointer", "allocator_bytes", "cells", "capacity"),
+                        struct.unpack_from("<QQQQ", tail, i)))
+                         for i in range(0, len(tail), 32)]
+            print("U1B_LINKED_SURVIVORS=" + __import__("json").dumps(survivors), flush=True)
             self.assertEqual((before["error"], after["error"]), (0, 0))
             # The diagnostic tag is active for every linked request, including
             # recursive execution and all bounded failure paths.
