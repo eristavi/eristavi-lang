@@ -28,11 +28,11 @@ function sequence(graph identity aggregate.Registry,phase identity budget.Phase,
     }
     return (hash*131+values.count)%2147483629;
 }
-function same(data identity meta.Metadata,phase identity budget.Phase,
+function same(data identity meta.Metadata,graph identity aggregate.Registry,phase identity budget.Phase,
     offset Int,values) returns Bool fails budget.LimitError {
     let item be 0;
     while item < values.count {
-        let value be values[item];
+        let value be values[item]; try aggregate.valid(graph,value);
         if try words.get(data.types,phase,offset+item) != value.index { return false; }
         item=item+1;
     }
@@ -53,8 +53,8 @@ public function signature(data identity meta.Metadata,graph identity aggregate.R
            try words.get(data.signatures,phase,offset+5) == results.count {
             let first be try words.get(data.signatures,phase,offset+2);
             let second be try words.get(data.signatures,phase,offset+4);
-            if try same(data,phase,first,parameters) and
-               try same(data,phase,second,results) {
+            if try same(data,graph,phase,first,parameters) and
+               try same(data,graph,phase,second,results) {
                 return meta.SignatureId { owner=data.key; index=cursor; };
             }
         }
