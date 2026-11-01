@@ -19,6 +19,7 @@ jobs:
       CC: clang
       CFLAGS: -O2
       ERISTAVI_U1B_HOTSPOT: '1'
+      ERISTAVI_U1B_PROFILE_OUTPUT: ${{ runner.temp }}/u1b-hotspot
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -36,4 +37,6 @@ jobs:
         with:
           name: u1b-hotspot-${{ github.run_attempt }}
           retention-days: 14
-          path: u1b-hotspot.log
+          path: |
+            u1b-hotspot.log
+            ${{ runner.temp }}/u1b-hotspot/

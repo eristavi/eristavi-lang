@@ -1,6 +1,6 @@
 # Eristavi optimization plan — 1 November 2026
 
-Status: proposed implementation sequence after a complete handover review.
+Status: execution in progress; current results and explicit deferrals below supersede the original proposed sequence.
 Review baseline: PR #106 head `c2423d5b6211c4999a116e541fb11c67dfa2357d`.
 This document records a plan, not completed optimizations or permission to merge.
 Follow Philosophy → Semantics → Architecture → Implementation.
@@ -274,3 +274,35 @@ Repair raw-counter reconciliation and explicit profiler selection, validate the
 decoder cheaply, then run ONE corrected current-source attribution profile.
 Select the first record-read pilot from that evidence. No optimization
 implementation or new expensive workflow was performed during this plan review.
+
+## Execution checkpoint — see HANDOVER §74
+
+- Step 0: raw-unit reconciliation repaired; three cheap decoder/trace tests and
+  one corrected current-source native profile passed. Automatic expensive PR
+  profiling removed; explicit workflow retains raw records/summary.
+- Step 1: current profile attributes 951M successful allocator entries, 920M
+  boxed values and 3.23M current radix-child reads; GC inclusive 0.614s.
+- Step 2: chose a SMALLER bounded alternative to a record-read burst: explicitly
+  unroll the existing fixed six-level noncreating path. It retains every
+  current child/page check and all seven per-word work units; creating push
+  traversal remains unchanged. No page cache, API/record-layout or ABI change.
+  All 12 focused checks pass after correcting one new fixture's optional
+  narrowing. Five paired native executions per variant all match the oracle;
+  median 61.790446 → 54.983744s (11.0158% lower), all five pairs favorable.
+- Step 3: larger scalar unboxing remains deferred under #51. The current
+  production Universal IR's generic value class and boxed helper boundary
+  do not by themselves prove scalar type/escape/liveness and root-map safety.
+  It needs a separately reviewed typed-region/adaptor/exhaustion contract;
+  do not expand this safe word-store batch into a speculative backend rewrite.
+- Step 4: per-invocation shared type validation remains lower priority. Current
+  fresh graph/body/dead-code validation must be retained; no shortcut adopted.
+- Step 5: five pairs complete; expanded candidate allocation profile running.
+  A separate bounded current compiler-source diagnostic is prepared. Static
+  import closure confirms U1 modules are absent from the existing frontend;
+  no production compilation-speed gain can be attributed to this change.
+- Step 6: physical/smoke and final exact-head qualification pending. No merge,
+  U2/U3/U4 implementation or full owned compiler self-build has occurred.
+
+The full paired raw samples, CPU/RSS scope, hashes and independent output oracle
+are in ../evidence/2026-11-01/u1b-fixed-path-five-pairs.json. This checkpoint
+records a bounded improvement, not completion of all performance work in #51.

@@ -19,6 +19,8 @@ SMOKE_TESTS=(
     'test_universal_ir.UniversalIRTests.test_universal_ir_contains_function_contract_and_call',
     'test_universal_ir.UniversalIRTests.test_universal_ir_has_explicit_checked_arithmetic_and_control_flow',
     'test_u1_foundation.U1FoundationTests.test_accounting_metadata_and_builder_on_c_bootstrap',
+    'test_u1_words_path.U1WordPathTests',
+    'test_u1b_profile_decoder.U1BProfileDecoderTests',
     'test_u1_calls.U1CallContracts.test_direct_call_declarations_and_verifier',
     'test_u1_module.U1ModuleBindingTests.test_declarations_bind_exact_verified_bodies',
     'test_u1_execution.U1CallExecutionTests.test_recursive_frames_effects_and_versioned_imports',

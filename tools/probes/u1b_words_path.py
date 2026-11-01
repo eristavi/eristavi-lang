@@ -147,7 +147,8 @@ def main():
               "identities": identities, "samples": samples, "pairs": args.pairs,
               "order": "AB" if args.pairs == 1 else "AB/BA/AB/BA/AB",
               "rss_scope": "whole child process; may include inherited launcher high-water pages, not owner backing",
-              "source_semantics_ABI_budgets_unchanged": True}
+              "source_semantics_ABI_budgets_unchanged": True,
+              "cache_state": "Fresh process per sample, built binaries; OS page caches not flushed or controlled"}
     for i in range(args.pairs):
         order = ("baseline", "candidate") if i % 2 == 0 else ("candidate", "baseline")
         for name in order:

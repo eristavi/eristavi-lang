@@ -28,7 +28,7 @@ SOURCE_COUNTERS = {
 }
 EXTRA_COUNTERS = ("value_new", "scalar_new", "scalar_copy", "scalar_binary",
                   "alloc_requested_bytes", "alloc_success", "alloc_failure",
-                  "alloc_capacity_traffic") + tuple(SOURCE_COUNTERS.values())
+                  "alloc_capacity_traffic", "words_read_path") + tuple(SOURCE_COUNTERS.values())
 FIELDS = ("tag", "time_ns", "gc", "gc_time_ns", "owners", "finds", "index",
           "alloc", "graphs", "slots", "safe", "sweeps") + EXTRA_COUNTERS + ("live_graphs",)
 SIZE = len(FIELDS) * 8
@@ -107,13 +107,19 @@ def observed_application(s, diagnostics):
             continue
         symbol, specialized = row["subject"].split(" ", 1)
         name = specialized.split("$", 1)[0]
+        if name == "compiler.u1_words.readPath":
+            if name in found:
+                raise AssertionError("ambiguous read-path specialization")
+            found[name] = symbol
+            s = patch(s, "\n" + symbol + ":\n",
+                      "\n" + symbol + ":\n" + bump("words_read_path"))
         if name in SOURCE_COUNTERS:
             if name in found:
                 raise AssertionError("ambiguous source counter: " + name)
             found[name] = symbol
             s = patch(s, "\n" + symbol + ":\n",
                       "\n" + symbol + ":\n" + bump(SOURCE_COUNTERS[name]))
-    if found.keys() != SOURCE_COUNTERS.keys():
+    if SOURCE_COUNTERS.keys() - found.keys():
         raise AssertionError("missing source counters: " + str(SOURCE_COUNTERS.keys() - found.keys()))
     return s, found
 
@@ -303,7 +309,8 @@ class U1BHotspotProfiler(unittest.TestCase):
             self.assertEqual(last["alloc_failure"], 0)
             self.assertEqual(last["words_context"], last["words_get"] + last["words_set"] + last["words_push"])
             # Expected work/quota refusals can interrupt a path before level 6.
-            self.assertLessEqual(last["words_child"], 6 * last["words_path"])
+            self.assertLessEqual(last["words_child"],
+                                 6 * (last["words_path"] + last["words_read_path"]))
             self.assertGreater(last["words_child"], 0)
             # Guard against misattributing a phase: interval counters must
             # reconcile exactly with cumulative snapshots for monotonic events.
@@ -341,6 +348,8 @@ class U1BHotspotProfiler(unittest.TestCase):
                 "stages":stages,"attribution":attribution,
                 "cumulative":last,"snapshots":len(records),
                 "source_symbols": source_symbols,
+                "raw_record_fields": FIELDS,
+                "counter_scope": "value_new covers all boxed values; scalar_copy counts every evn_copy entry, including managed values; successful capacity traffic includes allocator rounding and 32-byte headers, not live memory",
                 "identities": {
                     "fixture_sha256": hashlib.sha256(fixture.encode()).hexdigest(),
                     "words_sha256": hashlib.sha256((ROOT/"src/compiler/u1_words.eri").read_bytes()).hexdigest(),

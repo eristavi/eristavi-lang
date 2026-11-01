@@ -50,5 +50,6 @@
   "candidate_over_baseline": 0.8997688495881794,
   "pairwise_saved_percent": [
     10.023115041182063
-  ]
+  ],
+  "cache_state": "Fresh native process per sample; binaries were already built and pilot-run; OS page caches were not flushed or controlled."
 }

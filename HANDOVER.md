@@ -3239,3 +3239,28 @@ The fixed-depth source exactly matches the already parity-checked pilot
 candidate hash. Five AB/BA/AB/BA/AB pairs have started using the pinned existing
 binaries, serialized without concurrent native builds. Raw wall/CPU/RSS and
 output hashes are saved after each execution. A running study is not a pass.
+
+### §74 five alternating pairs — correctness PASS, all five faster
+
+The original optimized owned baseline and fixed-depth candidate completed all
+10 fresh-process AB/BA/AB/BA/AB executions with exact independent C-bootstrap
+stdout/stderr/exit parity. Baseline seconds: 59.714289, 59.603015, 61.790446,
+63.126694, 62.998066. Candidate: 54.709537, 52.066750, 55.893081, 54.983744,
+55.121805. Median 61.790446 → 54.983744s, ratio 0.8898422, 11.0158% lower;
+all pairwise gains 8.38–12.90%. User/system CPU and whole-child RSS are raw in
+docs/evidence/2026-11-01/u1b-fixed-path-five-pairs.json. RSS 100,856 KiB for
+both may include inherited launcher pages; no per-owner RSS claim.
+
+Candidate source hash dfa8a1a61dee1a4be0ddb5fb821c54098df80de33e705647b9619d0b224be60f
+exactly matches the local source under focused tests; runtime hash unchanged.
+This one Linux GCC host/one U1b reference workload is NOT general compiler
+performance. Current frontend import closure has 33 modules and NO compiler.u1_*
+modules: this change does not enter the existing production source pipeline.
+A separate bounded #51 source-compiler profile is prepared, not a U1 speed claim.
+
+Expanded profiling now supports optional readPath source counters and preserves
+raw schema/phase data; candidate allocation profile is running. Baseline raw
+231 snapshots are saved losslessly in u1b-word-boxing-records.json alongside
+their schema/digest. Manual profiling workflow now retains raw data as well
+as log; ordinary PR CI no longer runs the expensive profiler automatically.
+Final smoke/physical and exact-head qualification remain pending.
