@@ -9,6 +9,7 @@ only unreachable tagged allocations are required to be reclaimed.
 """
 from pathlib import Path
 import shutil
+import platform
 import struct
 import subprocess
 import tempfile
@@ -23,6 +24,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class U1BLinkedActualPhysicalTests(unittest.TestCase):
     def test_linked_recursive_actual_allocator_reclamation(self):
+        if platform.system() != "Linux" or platform.machine().lower() not in ("x86_64", "amd64"):
+            self.skipTest("freestanding x86-64 assembler and runtime require Linux x86-64")
         for command in ("as", "ld"):
             if shutil.which(command) is None:
                 self.skipTest(f"{command} unavailable")
