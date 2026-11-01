@@ -1,6 +1,6 @@
 # Eristavi compiler — current handover
 
-**Authoritative recovery checkpoint: 1 November 2026, Asia/Nicosia. Read section 59 for current physical aggregate scaling evidence and section 53 for the prior FOCUSED TESTED 45/45, section 52 for prior loop/physical evidence, and section 44 for last fully qualified U1a.**
+**Authoritative recovery checkpoint: 1 November 2026, Asia/Nicosia. Read section 60 for the latest linked-frame budget regression pin and section 59 for current physical aggregate scaling evidence and section 53 for the prior FOCUSED TESTED 45/45, section 52 for prior loop/physical evidence, and section 44 for last fully qualified U1a.**
 PR #105 is **QUALIFIED AND MERGED**. U1a's scoped physical acceptance gate passed;
 issue #77 is CLOSED/completed. Sections 1–43 preserve
 historical evidence and rejected prototypes; their pending/keep-open statements
@@ -2886,3 +2886,10 @@ performance with separate ingress-verification/execution attribution, then the
 coherent final U1b four-platform CI + completed-batch qualification. PR #106
 remains draft; #73 OPEN. No complete memory/performance acceptance, merge or
 experimental owned compiler self-build is claimed by this scoped probe.
+
+
+## 60. Linked-frame original owner budget regression pin — 2026-11-01
+
+Active draft PR #106, branch `compiler/u1b-owned-aggregate-graph-20261031`. Commit `bc93b9de5250371301c2852de29d9e0c8fdce8df` adds an explicit assertion to `tests/fixtures/u1_aggregate_calls.eri`: after recursive calls, aggregate transfers, loop re-entry, fuel/depth refusal and other existing fixture cases, the entry function owner must remain within the original 8 MiB modeled peak and 64 MiB cumulative traffic admission ceilings. No limit was raised and no production implementation, source semantics, ABI or backend was changed.
+
+**Status: IMPLEMENTED, NOT YET TESTED on this new commit.** This assertion measures owner ledger limits, NOT actual linked-frame allocator capacity or process RSS; do not confuse it with section 59's actual aggregate graph/value-engine probe. Next: add independently tagged actual linked-frame physical allocation/reclamation observations (including nested frame scratch) and focused execution validation, then paired ingress-verification versus execution performance measurements. Only after all acceptance gates: one coherent four-platform CI and completed-batch qualification, merge #106 and close #73. Do not run experimental owned full compiler self-build.
