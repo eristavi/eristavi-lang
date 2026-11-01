@@ -121,7 +121,7 @@ class U1BWordStorePollBenchmark(unittest.TestCase):
                 asm.write_text(code)
                 subprocess.run(["as", "--64", str(asm), "-o", str(obj)],
                                check=True, capture_output=True, timeout=60)
-                exe = root / name
+                exe = root / (name + "-owned-native")
                 linking = subprocess.run(
                     ["ld", "-nostdlib", "-static", "-e", "_start",
                      str(obj), str(runtime_o), "-o", str(exe)],
