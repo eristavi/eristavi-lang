@@ -83,8 +83,8 @@ function find(program identity Program,target meta.FunctionId)
         }
         item=item.next;
     }
-    try budget.reject("unbound U1b function definition");
-    return program.head.body;
+    fail budget.LimitError { message="unbound U1b function definition";
+        category="invalid-state"; requested=0; remaining=0; };
 }
 public function bind(program identity Program,target meta.FunctionId,
     routine identity build.Function) returns Int
