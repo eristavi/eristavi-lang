@@ -93,10 +93,10 @@ class U1BLinkedActualPhysicalTests(unittest.TestCase):
                 # Diagnostic-only survivor scan: record each live tag-103
                 # allocation pointer, allocator capacity, graph cell count,
                 # and graph capacity after the final collection.
-                anchor = "    movq .Lprocess_exit_code"
+                anchor = "    call .Ltest_owner_write\n    movq .Lprocess_exit_code"
                 self.assertEqual(instrumented.count(anchor), 1)
                 instrumented = instrumented.replace(anchor,
-                    "    call .Ltest_linked_survivor_write\n" + anchor, 1)
+                    "    call .Ltest_owner_write\n    call .Ltest_linked_survivor_write\n    movq .Lprocess_exit_code", 1)
                 instrumented += f"""\n.text\n.Ltest_linked_survivor_write:\n    xorq %r12,%r12\n    leaq .Ltest_owner_tags(%rip),%r13\n    leaq .Ltest_owner_keys(%rip),%r14\n    leaq .Ltest_owner_sizes(%rip),%r15\n.Ltest_linked_survivor_loop:\n    cmpq $262144,%r12\n    jae .Ltest_linked_survivor_done\n    cmpq $3,(%r13,%r12,8)\n    jne .Ltest_linked_survivor_next\n    movq (%r14,%r12,8),%rbx\n    subq $32,%rsp\n    movq %rbx,0(%rsp)\n    movq (%r15,%r12,8),%rax\n    movq %rax,8(%rsp)\n    movq 0(%rbx),%rax\n    movq %rax,16(%rsp)\n    movq 48(%rbx),%rax\n    movq %rax,24(%rsp)\n    movq $1,%rax\n    movq ${dump.fileno()},%rdi\n    movq %rsp,%rsi\n    movq $32,%rdx\n    syscall\n    addq $32,%rsp\n.Ltest_linked_survivor_next:\n    incq %r12\n    jmp .Ltest_linked_survivor_loop\n.Ltest_linked_survivor_done:\n    ret\n"""
                 observed = link("linked-observed", instrumented)
                 result = subprocess.run([str(observed)], pass_fds=(dump.fileno(),),
