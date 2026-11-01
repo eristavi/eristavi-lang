@@ -1,6 +1,6 @@
 # Eristavi compiler — current handover
 
-**Authoritative recovery checkpoint: 1 November 2026, Asia/Nicosia. Read section 50 for the new U1b canonical CFG execution candidate, section 49 for prior optimization and verified smoke, and section 44 for fully qualified U1a.**
+**Authoritative recovery checkpoint: 1 November 2026, Asia/Nicosia. Read section 51 for the currently unqualified U1b aggregate oracle, signature/CFG and promotion batch, section 50 for prior CFG history, section 44 for last qualified U1a.**
 PR #105 is **QUALIFIED AND MERGED**. U1a's scoped physical acceptance gate passed;
 issue #77 is CLOSED/completed. Sections 1–43 preserve
 historical evidence and rejected prototypes; their pending/keep-open statements
@@ -2463,3 +2463,78 @@ nested oracle, source-neutral aggregate signatures/block parameters/calls,
 aggregate-capable mandatory SSA promotion, cancellation, physical owner backing
 and measured perf. Follow philosophy → semantics → architecture → implementation;
 update this section with actual evidence and no optimistic milestone closures.
+
+## 51. Active U1b canonical oracle, aggregate signatures, CFG and promotion — 2026-11-01
+
+**Work branch:** `compiler/u1b-owned-aggregate-graph-20261031` / draft PR #106.
+**Latest implementation head (NOT yet passing):**
+`008e70264b84217901f9519f350c4328352474ca`.
+**Focused CI** [41280474424](https://github.com/eristavi/eristavi-lang/actions/runs/41280474424)
+initially pending; recheck actual result. **Do not mark passing or complete** until
+this exact code is green. Four-platform full CI and owned self-build were NOT
+requested for this unfinished batch.
+
+### Implementation now on branch
+
+- Opt-in `u1_aggregate_execute.eri` reads **canonical verified SSA**
+  operation records, executes approved i64 comparison semantics and immutable
+  make/get/set; takes checked jump/branch/switch edges, staging simultaneous
+  block-argument transfers in bounded owner-accounted scratch. This is a
+  reference executor, not source/native production integration.
+- `test_u1_aggregate_canonical_oracle.py` generates 2/9/32-field values,
+  empty/nested projection/update snapshots, and independent Python immutable
+  tuple expectations across both branch outcomes. Its earlier exploration
+  [41279847076](https://github.com/eristavi/eristavi-lang/actions/runs/41279847076)
+  failed because the executor lacked i64 comparison and a fixture expected
+  the wrong step count; corrective commits `15e617a` and `888d486`
+  implement comparison and correct the step count. **Oracle is NOT yet
+  qualified** without passing the newest actual code-head run.
+- `u1_aggregate_signature.eri` interns owner-scoped aggregate signatures in
+  the EXISTING six-word metadata signature table and 64-bucket index; this
+  deliberately retains the old public ABI and original 14-field Metadata
+  layout. `u1_aggregate_build.eri` has opt-in canonical aggregate block/
+  edge/return/complete adapters with static TypeId/arity/owner checks, not an
+  extra execution IR. `u1_verify.eri` exposes independent
+  `constructionAggregates`/ `verifyAggregates` and does not grant trust from
+  builder flags. `u1_promote.eri` exposes `promoteAggregates`, uses unchanged
+  owned SSA promotion algorithm with independent aggregate input/output
+  verification and aggregate-completion logic, without changing State layout.
+- Focused signature/promotion test verifies canonical scalar signature
+  interning compatibility, aggregate TypeIds in the existing metadata table,
+  aggregate typed entry/block/edge, scalar cell promotion and independent
+  output verification. The exploratory run
+  [41280226897](https://github.com/eristavi/eristavi-lang/actions/runs/41280226897)
+  FAILED due generic helper member-field type inference, which also disturbed
+  old U1a compiler tests. The aggregate signature helper now binds generic
+  elements explicitly. The tested U1a path no longer imports the entire
+  aggregate builder: new `u1_aggregate_finish.eri` contains the single
+  completion implementation used by U1b construction and promotion. This
+  isolation is the latest candidate `008e702`, **not yet validated**.
+
+### Performance/evidence/acceptance still outstanding
+
+- The aggregate reference `set` now skips an unnecessary get, with earlier
+  focused 40-test suite passing on [41279349991](https://github.com/eristavi/eristavi-lang/actions/runs/41279349991).
+  No measured speedup claim. The aggregate reference materialization
+  remains O(number of fields), not a production native lowering commitment.
+- A memory-evidence **draft** was prepared but not merged: it would emit
+  owner-model peak/traffic and capture actual child-process peak RSS. These
+  are different attribution scopes, and **neither** demonstrates actual new
+  U1b per-owner physical retained backing without an independent allocator
+  diagnostic like U1a #77. Larger adversarial aggregate/owner memory tests,
+  cancellation, nested oracle across calls, negative unreachable CFG and
+  complete exact-head qualification remain missing.
+- Aggregate **direct call construction** and its checked integration were
+  designed but not yet merged/tested. Full multi-function aggregate reference
+  execution, recursive calls, aggregate signatures at runtime and true native
+  lowering remain incomplete. **Do not close issue #73 or merge PR #106.**
+- U2 #74 → U3 #75 → U4 #102 remain next milestones. #51 whole-compiler
+  profiling stays open. Scoped U1a #77 remains qualified/closed at §44.
+
+**Next:** inspect focused run #41280474424, fix observed failures, then add
+fully checked canonical aggregate call construction, paired execution/CFG/SSA
+negative tests, independent actual owner-backed physical evidence and a
+measured baseline. Only after all U1b gates pass run one full four-platform
+CI plus completed-batch qualification and decide release/closure. Follow
+mandatory philosophy → semantics → architecture → implementation and retain
+performance/safety and precise owner/fault/ABI boundaries.
