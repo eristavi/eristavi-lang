@@ -42,13 +42,41 @@ SOURCE_COUNTERS = {
     "compiler.universal_optimize.optimize": "optimize",
     "compiler.universal_optimize.routine": "optimize_routine",
     "compiler.universal_optimize.visit": "optimize_visit",
+    "compiler.universal_lower.lowerWithTracing": "lower_enter",
+    "compiler.universal_lower.routine": "lower_routine",
+    "compiler.universal_lower.block": "lower_block",
+    "compiler.universal_lower.expression": "lower_expression",
+    "compiler.universal_lower.place": "lower_place",
+    "compiler.universal_lower.required": "lower_required",
+    "compiler.universal_lower.local": "lower_local",
+    "compiler.universal_lower.call": "lower_call",
+    "compiler.universal_model.instruction": "model_instruction",
+    "compiler.universal_model.allocate": "model_allocate",
+    "compiler.universal_model.append": "model_append",
+    "compiler.universal_model.operands": "model_operands",
+    "compiler.universal_model.local": "model_local",
+    "compiler.universal_model.registerClass": "model_register_class",
+    "compiler.universal_model.copy": "model_copy",
+    "compiler.universal_model.blockAt": "model_block_at",
+    "compiler.universal_model.resultClass": "model_result_class",
+    "compiler.ir_verify.expression": "typed_verify_expression",
+    "compiler.ir_verify.routine": "typed_verify_routine",
+    "compiler.ir_verify.statement": "typed_verify_statement",
+    "compiler.ir_verify.block": "typed_verify_block",
+    "compiler.ir_verify.tracedRoutine": "typed_verify_traced_routine",
+    "compiler.typed_ir.kind": "typed_kind",
+    "compiler.typed_ir.typeAt": "typed_type_at",
 }
 MARKERS = {
+    "compiler.universal_lower.lowerWithTracing": 6,
+    "compiler.universal_lower.routine": 7,
     "compiler.universal_optimize.optimize": 10,
     "compiler.universal_verify.verify": 20,
     "compiler.universal_optimize.routine": 30,
 }
-STAGE = {1: "start", 10: "optimizer_entry", 20: "verify_entry",
+STAGE = {1: "start", 6: "typed_ir_verifier_entry",
+         7: "universal_lower_routines_entry",
+         10: "optimizer_entry", 20: "verify_entry",
          30: "reachable_block_pass", 90: "exit"}
 
 # The existing owned-runtime observer is extended only in this disposable
@@ -96,10 +124,14 @@ def profile_application(assembly, trace):
         if name in MARKERS:
             # Only the first optimizer-routine marker is needed; all routine
             # entries remain counted. No per-routine profile file explosion.
-            if name == "compiler.universal_optimize.routine":
-                extra += ("    cmpq $30,.Lprof_phase_code(%rip)\n"
-                          "    je .Lissue51_routine_marked\n"
-                          + marked(30) + ".Lissue51_routine_marked:\n")
+            if name in ("compiler.universal_optimize.routine",
+                        "compiler.universal_lower.routine"):
+                tag = MARKERS[name]
+                anchor = (".Lissue51_routine_marked" if tag == 30 else
+                          ".Lissue51_lower_routine_marked")
+                extra += ("    cmpq $" + str(tag) + ",.Lprof_phase_code(%rip)\n"
+                          "    je " + anchor + "\n"
+                          + marked(tag) + anchor + ":\n")
             else:
                 extra += marked(MARKERS[name])
         assembly = replace_exact(assembly, "\n" + symbol + ":\n",
