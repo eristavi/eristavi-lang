@@ -2,6 +2,7 @@
 import argparse
 import contextlib
 import io
+import hashlib
 import json
 from pathlib import Path
 import sys
@@ -71,6 +72,12 @@ def measure(width,depth):
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser(); parser.add_argument('--output',required=True)
+    parser.add_argument('--independent',action='store_true',
+                        help='vary width at fixed depth, then depth at fixed width')
     args=parser.parse_args()
-    samples=[measure(w,d) for w,d in ((8,2),(32,8),(128,32))]
-    Path(args.output).write_text(json.dumps({'scope':'Actual tagged aggregate graph/value engine backing, forced identity hash collisions; no linked whole-program or RSS attribution, no paired speedup claim','samples':samples},indent=2)+'\n')
+    scales=((8,2),(32,2),(128,2),(8,8),(8,32)) if args.independent else ((8,2),(32,8),(128,32))
+    samples=[measure(w,d) for w,d in scales]
+    Path(args.output).write_text(json.dumps({'scope':'Actual tagged aggregate graph/value engine backing, forced identity hash collisions; no linked whole-program or RSS attribution, no paired speedup claim',
+        'dimensions':'width 8/32/128 at depth 2; depth 2/8/32 at width 8' if args.independent else 'width and depth increase jointly',
+        'words_sha256':hashlib.sha256((ROOT/'src/compiler/u1_words.eri').read_bytes()).hexdigest(),
+        'samples':samples},indent=2)+'\n')

@@ -296,13 +296,15 @@ implementation or new expensive workflow was performed during this plan review.
   do not expand this safe word-store batch into a speculative backend rewrite.
 - Step 4: per-invocation shared type validation remains lower priority. Current
   fresh graph/body/dead-code validation must be retained; no shortcut adopted.
-- Step 5: five pairs complete; expanded candidate allocation profile running.
+- Step 5: five pairs and expanded candidate allocation profile complete (32.69M fewer boxed temporaries; identical checks/work).
   A separate bounded current compiler-source diagnostic is prepared. Static
   import closure confirms U1 modules are absent from the existing frontend;
   no production compilation-speed gain can be attributed to this change.
-- Step 6: physical/smoke and final exact-head qualification pending. No merge,
+- Step 6: physical/scaling and smoke 49/49 PASS; final hosted exact-head qualification pending. No merge,
   U2/U3/U4 implementation or full owned compiler self-build has occurred.
 
 The full paired raw samples, CPU/RSS scope, hashes and independent output oracle
 are in ../evidence/2026-11-01/u1b-fixed-path-five-pairs.json. This checkpoint
 records a bounded improvement, not completion of all performance work in #51.
+
+Latest execution/acceptance disposition: HANDOVER §75 and U1B_FIXED_DEPTH_WORD_READ_2026-11-01.md. The bounded source profile completed typed_ir with exact parity; ir_verify is censored at 90s. No total compiler-performance completion or owned full self-build is claimed.

@@ -29,7 +29,7 @@ changed to relative repository links; their decision text was retained.
 
 ## Evidence available in Git
 
-All evidence is under [evidence/2026-10-30](evidence/2026-10-30):
+The original publication evidence is under [evidence/2026-10-30](evidence/2026-10-30):
 
 | File | Contents |
 | --- | --- |
@@ -81,3 +81,16 @@ experimental work were included; tracked compiler source was already on GitHub.
 This is separate from GitHub Actions artifacts. Their run IDs/digests and 14-day
 retention are recorded in the handover; this upload does not extend their lifetime.
 No full owned compiler self-build was started or established by this publication.
+
+## Current optimization records — 1 November 2026
+
+| Record | Scope |
+| --- | --- |
+| [Optimization plan](performance/U1B_OPTIMIZATION_PLAN_2026-11-01.md) | Ordered execution, constraints and explicit larger-work deferrals |
+| [Fixed-depth word reads](performance/U1B_FIXED_DEPTH_WORD_READ_2026-11-01.md) | Source proof, five paired measurements, allocation, safety and physical evidence |
+| [Hotspot investigation](performance/U1B_OWNED_RUNTIME_OPTIMIZATION_2026-11-01.md) | Original profile, four rejected micro-candidates and earlier same-owner poll improvement |
+| [Current evidence directory](evidence/2026-11-01) | Raw paired samples, lossless profiler records, owner/scaling checks and bounded source-compiler phases |
+
+The handover records exact qualification and merge state. The larger source
+compiler probe can be censored at its fixed cap; a saved result is not necessarily
+a performance pass, source-compilation speedup or full owned self-build.

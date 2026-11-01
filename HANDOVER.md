@@ -1,28 +1,30 @@
 # Eristavi compiler — current handover
 
-**Authoritative recovery checkpoint: 1 November 2026, Asia/Nicosia. Read §74 FIRST for active optimization execution, the corrected current-source profile and the fixed-depth word-read candidate.** §73 is the plan; §72 is the last full U1b source qualification, not qualification of the new candidate.
+**Authoritative recovery checkpoint: 1 November 2026, Asia/Nicosia. Read §75 FIRST for optimization execution and its latest result.** §73 is the original plan; §72 records the earlier full source qualification, not qualification of the new candidate.
 
-PR #106 remains DRAFT/OPEN/unmerged, #73/#51 OPEN. Work starts from documentation
-PR #107 head `d2bb747`, on `compiler/u1b-optimization-execution-20261101`. The
-original #106 head is still `c2423d5` until integration. The profiler raw-unit
-reconciliation is fixed locally, three cheap decoder/trace tests pass, and the
-expanded native profile PASSes exact C/owned parity and all 231-snapshot counter
-checks. Automatic expensive PR profiling has been removed from the candidate CI;
-the explicit manual workflow remains. No source semantics/ABI/budgets changed.
+PR #106 remains DRAFT/OPEN/unmerged, #73/#51 OPEN. Optimization work is preserved
+on `compiler/u1b-optimization-execution-20261101`, starting from plan PR #107
+head `d2bb747`; the latest published working checkpoint is `4a377c6`. The
+original #106 head remains `c2423d5` until integration. Profiler raw-unit repair,
+three decoder/trace checks and expanded current-source native profiles PASS.
+Automatic expensive PR profiling is removed; explicit manual profiling retains
+raw snapshots and summary. New fixed-depth noncreating word reads preserve all
+six current child checks and seven per-word credits, with unchanged layouts,
+ABI, owner/cancellation behavior and quotas.
 
-The new profile confirms boxed value and word/budget amplification, not GC as
-the main cause: about 951M successful allocations and 920M boxed values, with
-0.614s inclusive GC. A private fixed-depth noncreating radix path preserved the
-complete linked fixture and ran 61.4445 → 55.2858 seconds in ONE pilot pair
-(10.02% nominal lower; NOT performance qualification). The candidate is now in
-the local source for focused safety tests; targeted validation is in progress,
-five pairs and final exact-head qualification remain PENDING. Keep #106 draft.
-The older 6.24% same-owner poll improvement remains a separate accepted result;
-no whole-compiler speedup or cure of the historic cross-runtime disparity is
-claimed. Next: finish exact radix/refusal/current-corruption regressions, run
-five paired trials if safe, then physical/smoke gates and one final required
-qualification for an adopted batch. U2 → U3 → U4 remain downstream; no full
-experimental owned compiler self-build.
+**Five owned-native AB/BA pairs PASS exact oracle parity, all five faster:**
+median 61.790446 → 54.983744s (**11.0158% lower on this one reference fixture**).
+Separate profiles prove 32.69M fewer boxed temporaries and 2.62GB less cumulative
+actual allocator traffic, with identical child checks/work/active/poll/verifier
+read counts. Final local smoke **49/49 PASS** (168.513s); forced-collision
+physical peak **7,830,912 B**, traffic **21,973,968 B**, all tagged backing
+reclaimed under original 8MiB/64MiB gates. The current production frontend does
+not import U1 modules, so no source-compilation speedup or cure of the historical
+cross-runtime disparity is claimed. **Independent width/depth scaling PASS. Bounded source profiling completed:
+typed_ir parity PASS, ir_verify CENSORED at its unchanged 90s cap. Final
+exact-head hosted CI and qualification remain PENDING.** Keep #106 draft until those gates and explicit
+reference-only acceptance. U2 → U3 → U4 remain downstream; experimental full
+owned compiler self-build remains excluded.
 
 ## Standing GitHub authorization — explicit user instruction, 2026-11-01
 
@@ -94,9 +96,9 @@ redundant indexing, unbounded caches or unnecessarily expensive CI.
 
 ## Start a new chat with this
 
-> **MANDATORY:** Read the complete governing philosophy/semantics, applicable architecture/IR and CI contracts, and this complete handover. Follow Philosophy → Semantics → Architecture → Implementation, optimization-first after correctness/safety. Standing GitHub authorization does not waive acceptance or select experimental owned full self-build.
+> **MANDATORY:** Read complete governing philosophy/semantics, applicable architecture/IR and CI contracts and this handover. Follow Philosophy → Semantics → Architecture → Implementation, optimization-first after correctness/safety. Standing GitHub authorization does not waive acceptance or select experimental owned full self-build.
 >
-> **Resume at §73 and the linked optimization plan.** Current PR #106 is draft/unmerged; #73/#51 open. §72's exact source qualification passed, but later diagnostic/workflow edits at `c2423d5` introduced a failing GC-counter reconciliation and automatic expensive PR profiling. Smoke passed; compiler/runtime source did not change. First repair measurement/selection with cheap decoder checks, then one corrected current-source profile. Attribute boxed scalar/word-store work before ONE bounded structural pilot. Preserve independent verification of current, same-revision malformed dead/uncalled IR, original budgets, owner cleanup and ABI. Four graph micro-candidates remain rejected; the same-owner poll optimization alone has five-pair evidence. Qualify a final production code batch once; documentation-only updates need patch checks. No U1b merge/performance-risk acceptance or U2/U3/U4 completion is implied.
+> **Resume at §75.** The profiler is repaired and manual-only expensive selection restored in the working candidate. Fixed-depth fresh word reads pass all 12 focused checks, five alternating owned-native pairs (all wins; median 61.790446 → 54.983744s) and final local smoke 49/49, including actual physical/forced-collision gates. Counter evidence proves identical checks/work and fewer boxes/traffic. Independent scaling passed; typed_ir source compilation passed parity and ir_verify was censored at 90s. Final hosted exact-head qualification remains pending until observed. Working branch compiler/u1b-optimization-execution-20261101 includes plan #107; original #106 remains draft/unmerged until integration. Preserve malformed same-revision dead/uncalled IR checks, ABI/budgets, cleanup and source faults. #51 remains open for much larger boxing/source-compiler work; U2/U3/U4 are separate. No automatic full owned compiler self-build or repeated expensive CI for docs.
 
 ## Current verified status — read before historical sections
 
@@ -116,14 +118,14 @@ redundant indexing, unbounded caches or unnecessarily expensive CI.
 | Current independent C evidence | Refreshed 20/20 whole C-managed samples passed; source-hashed C inputs unchanged during later owned-only collision tuning. Not per-owner C allocation attribution |
 | Performance | Five final-code AB/BA worker0 pairs: 8.135968 → 8.254257 s (0.9857×), roughly flat amid host variance. **No whole-compiler speedup claim**; #51 full compiler phase profiling remains open |
 | U1a | Scalar/SSA/calls/recursion/effects/switches/strict native f64/provenance/bounded simplification plus scoped physical acceptance **COMPLETE within the adopted U1a boundary** |
-| U1b #73 | **FUNCTIONAL SOURCE QUALIFIED; LATER DIAGNOSTIC FAILS; MERGE PENDING.** Exact source/test/workflow head `0a2ba594` passed full CI 41303717634 and qualification 41303717596. Later `c2423d5` changes diagnostic/CI/handover only: smoke PASS, hotspot GC-counter reconciliation FAIL in 41307434281. Same-owner poll reduction retains five-pair 6.24% one-fixture gain. Repair measurement/selector, then attribute word-read/boxing cost and evaluate one bounded structural candidate. PR #106 draft/open, #73/#51 open; no merge/risk waiver. See §73 and linked plan. |
+| U1b #73 | **NEW OPTIMIZATION FOCUSED/PERFORMANCE/LOCAL SMOKE PASS; FINAL HOSTED QUALIFICATION PENDING.** Earlier full source `0a2ba594` passed required gates. Working branch fixes later profiler/CI bugs and adds fixed-depth current word reads; 12 focused checks, five paired oracle runs (all faster, 11.0158% lower median), unchanged operation/work counts, fewer boxes/traffic, local smoke 49/49 and physical collision gates PASS. Independent scaling PASS; typed_ir parity PASS, larger ir_verify censored at 90s; final hosted qualification next. #106 draft/open, #73/#51 open. See §75. |
 | U2 #74 | New UIR managed Text/List/identity, checked failures, root maps and deterministic cleanup **NOT IMPLEMENTED** |
 | U3 #75 | Direct frozen frontend → new UIR → production native target/artifact/cache integration **NOT IMPLEMENTED**. Existing adapter is isolated; #104 is test-only reference parity |
 | U4 #102 | Redesigned UIR machine/legalization/artifact migration **NOT IMPLEMENTED / NOT QUALIFIED** |
 | Production | Existing source language and default compiler pipeline retained; no new-UIR backend promotion |
-| Environment / next stage | GitHub draft PR #106 active on `compiler/u1b-owned-aggregate-graph-20261031`; local checkout is restored; section 54 records current local validation. U1b aggregation is actively developed, not merged |
+| Environment / next stage | Local and remote working branch `compiler/u1b-optimization-execution-20261101` contains the tested candidate and plan #107. Integrate into #106 for final hosted qualification; see §75. No U1b merge yet. |
 
-**Reading rule:** the opening and newest checkpoint (§73) govern current status; section 44 governs the accepted U1a boundary. Earlier keep-open and pending
+**Reading rule:** the opening and newest checkpoint (§75) govern current status; section 44 governs the accepted U1a boundary. Earlier keep-open and pending
 statements describe their historical revisions. U1a acceptance does not certify
 U2 managed GC/cleanup, U3 durable artifacts/source integration or U4 toolchains.
 Documentation-only status reconciliation reuses unchanged implementation evidence
@@ -3264,3 +3266,98 @@ raw schema/phase data; candidate allocation profile is running. Baseline raw
 their schema/digest. Manual profiling workflow now retains raw data as well
 as log; ordinary PR CI no longer runs the expensive profiler automatically.
 Final smoke/physical and exact-head qualification remain pending.
+
+### §74 candidate allocation proof PASS; final smoke RUNNING
+
+Candidate expanded native profile passed 1/1 in 159.998s total; all 231
+snapshots reconcile and exact C/owned output parity holds. Compare COUNTS, not
+instrumented clocks: successful allocator entries 951,197,434 → 918,504,253
+(32,693,181 fewer), boxed value creations 919,544,101 → 886,851,050
+(32,693,051 fewer), actual cumulative allocator capacity traffic
+76,185,950,512 → 73,569,249,040 B (2,616,701,472 B less), slot collections
+442,049 → 198,485. Same 3,229,200 current child checks, 392,601 get/16,064 set/
+129,542 push entries, 3,794,180 work calls, 8,278,710 active checks, 644,173
+polls and 152,310 verifier reads. This proves the gain removes temporary
+representation/control overhead rather than checks or logical work.
+
+Candidate profile/records and before/after counter comparison are in
+docs/evidence/2026-11-01/u1b-fixed-path-{profile,records,counter-comparison}.json.
+The raw-record schema is retained; live_graphs is a gauge and not summed.
+Counter name scalar_copy includes ALL evn_copy calls, not only numeric values.
+Final smoke adds only the cheap decoder and radix contracts to the old selector;
+all original tests and opt-in expensive profiling policy are preserved. Smoke
+(including physical owner backing/forced collision) is running locally under
+GCC -O2. Do not claim full qualification or merge before the remaining gates.
+
+### §74 final local smoke/physical gate PASS — 49/49
+
+Final expanded smoke passed all 49 tests in 168.513s on local GCC -O2, including
+the new current-path/credit decoder regressions and every previous selected
+U1a/U1b/runtime/Stage-0 check. Actual forced-collision stress phase peak is
+7,830,912 B and traffic 21,973,968 B; exact observed retained stress backing
+6,654,368 B / 16,938 objects, all reclaimed. Original 8,388,608 / 67,108,864 B
+gates unchanged. Earlier 6,653,840 B was the previous runtime sample, not this
+new measurement; capacity reuse can differ, so retain both with their revisions.
+U1b type/value actual backing remains metadata 44,448 B / 116 objects, function
+22,720 B / 60 objects, all reclaimed. Raw data: u1b-fixed-path-smoke.json and
+u1b-fixed-path-owner-physical.json in docs/evidence/2026-11-01/.
+
+Independent dimensions (width 8/32/128 at fixed depth 2; depth 2/8/32 at fixed
+width 8) now have an explicit opt-in scaling mode; the historical joint-scale
+mode is preserved. That study runs next, followed by bounded source-compiler
+profiling on typed_ir.eri and ir_verify.eri, each with the existing 90s diagnostic
+cap. Only the bootstrap builds owned frontend B; B never compiles frontend itself.
+Full owned B→C→D remains excluded. Final hosted qualification has not started.
+
+## 75. Optimization batch locally accepted; final hosted qualification next — 2026-11-01
+
+All feasible bounded steps of the recorded plan have executed. The selected
+fixed-depth source candidate retains source hash
+dfa8a1a61dee1a4be0ddb5fb821c54098df80de33e705647b9619d0b224be60f.
+Its five paired runs, 12 focused checks, expanded current-source allocation
+profile, final smoke 49/49 and actual owner/forced-collision gates PASS. The
+manual independent scale study also PASSED all five width/depth points, with
+zero final tagged function/metadata backing; original joint-scale mode remains.
+
+Bounded current production compiler profiling: bootstrap-built owned B once,
+never B→C/C→D. typed_ir.eri completed in 2.186212s, exact independent bootstrap
+assembly SHA 172769263e830e6bb555926612972f8b807b8a6f9261e0ca88087165f135cfb7;
+whole child RSS 17,016 KiB, not an owner measure. ir_verify.eri reached its
+original 90s cap DURING old universal-optimize, after analysis 10.519s, typed
+lowering 6.506s, typed verification 8.966s and universal lowering 24.960s
+(inclusive/nested phase observations, NOT additive). The latter is CENSORED,
+not complete output parity, not a measured whole-build duration or speedup.
+No retry, raised watchdog or experimental owned full self-build. All source
+hashes unchanged. Raw summary, source manifest and lossless phase events saved
+as docs/evidence/2026-11-01/u1b-source-compiler-*.json. #51 remains OPEN.
+
+### Explicit bounded reference-only performance disposition
+
+Accept the U1b implementation as an independently verified, bounded REFERENCE
+UIR slice once the final exact-head hosted gates pass. The new 11.0158% result
+is one-workload storage/verification improvement on top of the already accepted
+same-owner poll baseline. It does not eliminate approximately 887M remaining
+boxed values in the full fixture, prove production compiler performance or
+resolve the larger old Universal optimizer's capped workload. Keep those as
+high-priority #51 debt; U2/U3/U4 and production promotion remain independent.
+
+The first selected implementation is smaller than a record-read burst: six
+explicit current reads with unchanged charges, no cache. Broad scalar unboxing
+is deferred because the existing generic boxed backend lacks the necessary
+typed-region/escape/liveness/root/exhaustion proof. Shared type verification
+is deferred pending invocation-owned immutability/context proof. No safety
+shortcut or speculative rewrite was substituted for these missing contracts.
+See docs/performance/U1B_FIXED_DEPTH_WORD_READ_2026-11-01.md for full proof,
+resource/timing scope and relevant raw evidence.
+
+### Exact next action and remaining gates
+
+Publish one coherent final source/test/workflow/evidence revision into #106,
+reconcile integrated plan #107, and select ONE final four-platform CI plus
+full bootstrap repeatability/offline and owned integration on that revision.
+Inspect actual exact-head jobs; keep draft/unmerged until passing, and do not
+select experimental full owned self-build. Then verify tested/merge tree parity,
+merge the bounded U1b slice and close #73 under standing user authorization,
+while keeping #51 open. Immediately reconcile handover/report after any result
+or merge. As of this checkpoint, final hosted qualification has NOT started;
+no merge or issue closure is claimed.

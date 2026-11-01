@@ -1,0 +1,60 @@
+{
+  "profile": "smoke",
+  "status": "success",
+  "discovered_tests": 49,
+  "tests_run": 49,
+  "passed": 49,
+  "unsuccessful_tests": 0,
+  "failure_records": 0,
+  "skipped": [],
+  "failures": [],
+  "errors": [],
+  "expected_failures": [],
+  "unexpected_successes": [],
+  "seconds": 168.51333139400003,
+  "slowest_tests": [
+    {
+      "test": "test_u1_owner_physical.U1OwnerPhysicalTests.test_owned_actual_capacity_by_owner_and_gc_reclamation",
+      "seconds": 20.022
+    },
+    {
+      "test": "test_u1_narrow_execution.U1NarrowExecutionTests.test_independent_canonical_narrow_execution_and_faults",
+      "seconds": 15.149
+    },
+    {
+      "test": "test_u1_words_path.U1WordPathTests.test_current_radix_paths_and_exact_failure_charges_on_both_runtimes",
+      "seconds": 11.151
+    },
+    {
+      "test": "test_freestanding_text_roots.FreestandingTextRootTests.test_registered_roots_bound_loop_slots_and_preserve_pending_results",
+      "seconds": 10.078
+    },
+    {
+      "test": "test_u1b_actual_physical.U1BAggregatePhysicalTests.test_actual_aggregate_owner_backing_and_gc_reclamation",
+      "seconds": 6.532
+    },
+    {
+      "test": "test_u3_stage0_parity_baseline.U3Stage0ParityBaseline.test_frozen_successful_programs_match_existing_native_compilers",
+      "seconds": 5.719
+    },
+    {
+      "test": "test_u1_integer_execution.U1IntegerExecutionTests.test_integer_recursion_switch_promotion_and_fault_traces",
+      "seconds": 5.678
+    },
+    {
+      "test": "test_u1_promotion.U1PromotionTests.test_switch_physical_samples",
+      "seconds": 4.611
+    },
+    {
+      "test": "test_u1_aggregate_calls.U1AggregateCallTests.test_linked_canonical_aggregate_calls_and_first_fault",
+      "seconds": 4.409
+    },
+    {
+      "test": "test_u1_aggregate_signatures.U1AggregateSignatureTests.test_canonical_aggregate_signature_cfg_and_promotion",
+      "seconds": 4.015
+    }
+  ],
+  "platform": "Linux-6.18.57-x86_64-with-glibc2.39",
+  "python": "3.12.14",
+  "cc": "gcc"
+}

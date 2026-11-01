@@ -109,6 +109,12 @@ def main():
     summary["source_snapshot_unchanged"] = snapshot() == original
     if not summary["source_snapshot_unchanged"]:
         raise AssertionError("compiler inputs changed during profile")
+    summary["status"] = ("completed" if all(row["status"] == "completed"
+                          for row in summary["workloads"].values())
+                         else "completed-with-censored-workload")
+    journal.state.update(status=summary["status"], source_snapshot_unchanged=True,
+                         scope="bounded source-module diagnostic, not owned self-build qualification")
+    journal.save()
     (output / "source-manifest.json").write_text(json.dumps(original, indent=2) + "\n")
     (output / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     print(json.dumps(summary), flush=True)
