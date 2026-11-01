@@ -35,6 +35,12 @@ function mainRun() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeEr
     let old be try agbuild.get(fn,graph,entry,original,1,loc);
     let fresh be try agbuild.get(fn,graph,entry,updated,1,loc);
     try build.returnValues(fn,entry,[old,fresh],loc);
+    // Instantiate generic edge checking in this standalone bootstrap fixture.
+    // The entire component is unreachable and must still verify structurally.
+    let dead be try build.block(fn,[]);
+    let deadNext be try build.block(fn,[meta.i64()]);
+    try build.jump(fn,dead,deadNext,[eleven],loc);
+    try build.returnValues(fn,deadNext,[eleven,seventeen],loc);
     try build.complete(fn);
     try budget.finishPhase(cp);
     let executionOwner be try budget.functionOwner(root,false);
