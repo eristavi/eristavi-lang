@@ -1,0 +1,161 @@
+{
+  "baseline_commit": "00b2043e6e4c612b0ebbc4e78f338698a6d49345",
+  "archive": "issue51-round3-experiments.zip",
+  "archive_sha256": "dac6879dcbf69bcf9ca4037522d72ab10eba994b1c4cfa6684ce827e8b968eef",
+  "archive_bytes": 103476,
+  "files": 58,
+  "production_changes_adopted": false,
+  "normal_and_experimental_qualification_runs_started": 0,
+  "all_private_processes_completed": true,
+  "large_source_cap_seconds": 90,
+  "remaining_issue": "#51 open; no full compiler performance certification",
+  "epoch_contract_exit": 0,
+  "unsigned_sort_oracle_cases": 128,
+  "projection_contract_cases": 20,
+  "projection_all_routines": {
+    "scope": "five uninstrumented same-host alternating production typed_ir compilations; baseline and candidate use identical target source path, root, runtime and oracle",
+    "pairs": [
+      {
+        "baseline_b": {
+          "wall": 1.7188693000000512,
+          "user": 1.486682,
+          "system": 0.22917099999999999
+        },
+        "projection_b": {
+          "wall": 2.156415683999967,
+          "user": 1.896103,
+          "system": 0.25889399999999996
+        }
+      },
+      {
+        "projection_b": {
+          "wall": 1.8307581829999435,
+          "user": 1.5815099999999997,
+          "system": 0.24847600000000003
+        },
+        "baseline_b": {
+          "wall": 1.789993683000148,
+          "user": 1.5524909999999998,
+          "system": 0.236603
+        }
+      },
+      {
+        "baseline_b": {
+          "wall": 1.6544124100000772,
+          "user": 1.4248910000000006,
+          "system": 0.22895399999999988
+        },
+        "projection_b": {
+          "wall": 1.7534405710000556,
+          "user": 1.531573999999999,
+          "system": 0.22109600000000018
+        }
+      },
+      {
+        "projection_b": {
+          "wall": 1.8789335360002042,
+          "user": 1.636082,
+          "system": 0.24192100000000005
+        },
+        "baseline_b": {
+          "wall": 1.7641111360001105,
+          "user": 1.5120889999999996,
+          "system": 0.2513629999999998
+        }
+      },
+      {
+        "baseline_b": {
+          "wall": 1.6297171749999961,
+          "user": 1.4168460000000014,
+          "system": 0.21201700000000012
+        },
+        "projection_b": {
+          "wall": 1.8130501919999915,
+          "user": 1.5968129999999991,
+          "system": 0.21499200000000007
+        }
+      }
+    ],
+    "compiler_sha256": {
+      "baseline_b": "1573ce68de3156fabac5f56eb4e3ddb489b5258831a0696eb08f0ec49c8e9431",
+      "projection_b": "a92c3a32c5532be5a313e19bca23ae3a2c4e688848a74771f245c97552e79160"
+    },
+    "baseline_median": 1.7188693000000512,
+    "candidate_median": 1.8307581829999435,
+    "reduction_percent": -6.50944682064476,
+    "wins": 0
+  },
+  "projection_large_routines": {
+    "scope": "five uninstrumented same-host alternating production typed_ir compilations; baseline and candidate use identical target source path, root, runtime and oracle",
+    "pairs": [
+      {
+        "baseline_b": {
+          "wall": 1.7542982209997717,
+          "user": 1.499939,
+          "system": 0.253629
+        },
+        "large_projection_b": {
+          "wall": 1.7788688900000125,
+          "user": 1.552105,
+          "system": 0.22505399999999998
+        }
+      },
+      {
+        "large_projection_b": {
+          "wall": 1.7293188889998419,
+          "user": 1.5500630000000002,
+          "system": 0.17873899999999998
+        },
+        "baseline_b": {
+          "wall": 1.8380507169999873,
+          "user": 1.575564,
+          "system": 0.26144999999999996
+        }
+      },
+      {
+        "baseline_b": {
+          "wall": 1.9885509209998418,
+          "user": 1.7366399999999995,
+          "system": 0.2500120000000001
+        },
+        "large_projection_b": {
+          "wall": 1.7938457810000727,
+          "user": 1.586779,
+          "system": 0.20632799999999984
+        }
+      },
+      {
+        "large_projection_b": {
+          "wall": 1.8662209609997262,
+          "user": 1.639431,
+          "system": 0.2262090000000001
+        },
+        "baseline_b": {
+          "wall": 1.6688181660001646,
+          "user": 1.4663620000000002,
+          "system": 0.20186300000000013
+        }
+      },
+      {
+        "baseline_b": {
+          "wall": 1.668166637000013,
+          "user": 1.4187829999999995,
+          "system": 0.2476339999999997
+        },
+        "large_projection_b": {
+          "wall": 2.018147728000258,
+          "user": 1.7626740000000005,
+          "system": 0.2549370000000004
+        }
+      }
+    ],
+    "compiler_sha256": {
+      "baseline_b": "1573ce68de3156fabac5f56eb4e3ddb489b5258831a0696eb08f0ec49c8e9431",
+      "large_projection_b": "5563951ea4a08c42269d3bfb0be214c2cc2839504f5d4f61f3e053ee2564bc84"
+    },
+    "baseline_median": 1.7542982209997717,
+    "candidate_median": 1.7938457810000727,
+    "reduction_percent": -2.2543236678290057,
+    "wins": 2
+  }
+}
