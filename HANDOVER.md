@@ -1,9 +1,10 @@
 # Eristavi compiler — current handover
 
-**Authoritative recovery checkpoint: 1 November 2026, Asia/Nicosia. Read §72 FIRST for the latest exact-revision four-platform CI and completed-batch qualification PASS, the now-promoted narrow word-store optimization, and the remaining pre-merge performance-risk decision. Read §71 for source-level same-owner poll proof and five-pair owned-native performance evidence; §70 for the rejected graph-lookup cache; §69 for the root-cause phase/allocator profile; §68/§67 for U1b acceptance and per-frame physical evidence; §59/§53/§44 for earlier U1b/U1a history. Old §71 “full CI pending” lines are historical and superseded by §72.**
+**Authoritative recovery checkpoint: 1 November 2026, Asia/Nicosia. Read §73 FIRST for the complete handover review, newly observed current-head profiler failure, and the ordered optimization plan.** §72 records the last successful exact-revision full CI/qualification; §71 the 6.24% one-workload source improvement; §§69–70 the earlier profile and rejected micro-candidates.
 
-PR #105 **MERGED**, U1a #77 **CLOSED**. **U1b issue #73 and draft PR #106 are still OPEN, not merged**, but **U1b functional correctness, narrow source-level optimization, full four-platform CI and required completed-batch build qualification ALL PASS** at source/test/workflow revision `0a2ba59472a9571b9f352255c62957594ebacc68`. [Full CI 41303717634](https://github.com/eristavi/eristavi-lang/actions/runs/41303717634): Linux GCC, Linux Clang, Linux ARM64 Clang, macOS Clang all SUCCESS. [Qualification 41303717596](https://github.com/eristavi/eristavi-lang/actions/runs/41303717596): three Linux bootstrap self-build repeatability/offline jobs and owned integration SUCCESS; experimental full owned compiler self-build intentionally SKIPPED, not certified. This includes the **production** `src/compiler/u1_words.eri` same-owner redundant budget-poll elimination (`dc756a4`) with explicit distinct-owner work/cancellation/cleanup negative regression, unchanged ABI/budgets/independent canonical verification. [Five paired owned-native timings 41302564199](https://github.com/eristavi/eristavi-lang/actions/runs/41302564199) PASSED exact output checks, **5/5 pairs faster**, original median **43.954859s** to optimized **41.212584s** (**6.24% lower** on that one workload, not a universal speedup). Earlier micro-cache candidates were rejected (§70). **Outstanding: decide explicitly whether to merge U1b as a bounded nonproduction/reference UIR slice while keeping much larger verifier/runtime boxed allocation overhead in performance issue #51; the earlier roughly 830× C-bootstrap vs owned reference disparity has NOT been solved.** Do not present reference U1b as optimized production compiler or close performance #51; do not rerun full matrix for documentation-only changes or run experimental owned full self-build. U2 #74, U3 #75 and U4 #102 remain OPEN/not started. Next planned action after explicit performance-risk disposition: mark PR #106 ready, merge/close #73 if all acceptance checks remain satisfied, and update handover; U2 implementation follows.
+PR #105 is **MERGED**, U1a #77 **CLOSED**. PR #106 remains **DRAFT/OPEN/UNMERGED**, #73 and performance #51 remain **OPEN**. Source/test/workflow revision `0a2ba59472a9571b9f352255c62957594ebacc68` passed [four-platform CI 41303717634](https://github.com/eristavi/eristavi-lang/actions/runs/41303717634) and [completed-batch qualification 41303717596](https://github.com/eristavi/eristavi-lang/actions/runs/41303717596), experimental owned full compiler self-build intentionally skipped. **Later current head `c2423d5b6211c4999a116e541fb11c67dfa2357d` is not entirely green:** [CI 41307434281](https://github.com/eristavi/eristavi-lang/actions/runs/41307434281) passed smoke but FAILED its new hotspot profiler. The diff after the qualified head changes only a diagnostic test, CI workflow and this handover; compiler/runtime source is unchanged. The profiler converts/removes per-stage `gc_time_ns` before a later raw-nanosecond reconciliation, causing a demonstrated zero-versus-positive assertion. A new branch-specific CI selector also reintroduces automatic expensive profiling on PR code synchronization. Both need a focused correction; no compiler defect is established by that failure.
 
+The qualified same-owner redundant poll optimization remains measured at **43.954859 → 41.212584 seconds median (6.24% lower)** in five paired owned-native runs on one fixture. The much larger verifier/boxed scalar overhead and historical cross-runtime ~830× disparity remain unresolved. **Next: repair diagnostic counter units/retention and explicit profiling selection, then one current-source attribution run and a bounded verified record-read pilot if the profile supports it.** Full plan: [U1B_OPTIMIZATION_PLAN_2026-11-01.md](docs/performance/U1B_OPTIMIZATION_PLAN_2026-11-01.md). No merge or performance waiver is made by this review. U2 → U3 → U4 remain downstream. Do not rerun full CI for documentation alone or start experimental owned full self-build.
 
 ## Standing GitHub authorization — explicit user instruction, 2026-11-01
 
@@ -75,9 +76,9 @@ redundant indexing, unbounded caches or unnecessarily expensive CI.
 
 ## Start a new chat with this
 
-> **MANDATORY:** Read complete `DESIGN_PHILOSOPHY.md`, relevant locked `LANGUAGE_SEMANTICS.md` and architecture/IR contracts, the current `HANDOVER.md`, and `CI_QUALIFICATION.md`. Follow **Philosophy → Semantics → Architecture → Implementation**, with optimization-first after correctness and safety. The owner authorized routine GitHub actions but NOT skipping acceptance gates or launching the experimental full owned compiler self-build.
+> **MANDATORY:** Read the complete governing philosophy/semantics, applicable architecture/IR and CI contracts, and this complete handover. Follow Philosophy → Semantics → Architecture → Implementation, optimization-first after correctness/safety. Standing GitHub authorization does not waive acceptance or select experimental owned full self-build.
 >
-> **Continue from section 69** for the newest **verified** U1b profile and rejected performance micro-pilots, and sections 68/67 for the already successful four-platform correctness qualification and per-dynamic-frame memory proof. PR #106 is still **DRAFT/UNMERGED**, #73 is **OPEN**. Issue #51 covers the **unresolved** extraordinary owned-reference-runtime execution cost. The last merged/qualified implementation on `main` is still PR #105 / U1a. The new artifacts are test-only opt-in instrumentation and evidence; **the production compiler/runtime were not edited during §69**. Avoid repeating the three ineffective experiments or full CI. Examine boxed scalar intermediate allocations and verifier word-store operation cost before proposing a bounded, oracle-validated candidate. Five alternating fresh-process pairs are mandatory for a **meaningful** future candidate and must not be claimed for the three single-pair pilots. Update the opening summary, milestone table and newest checkpoint with every substantial result.
+> **Resume at §73 and the linked optimization plan.** Current PR #106 is draft/unmerged; #73/#51 open. §72's exact source qualification passed, but later diagnostic/workflow edits at `c2423d5` introduced a failing GC-counter reconciliation and automatic expensive PR profiling. Smoke passed; compiler/runtime source did not change. First repair measurement/selection with cheap decoder checks, then one corrected current-source profile. Attribute boxed scalar/word-store work before ONE bounded structural pilot. Preserve independent verification of current, same-revision malformed dead/uncalled IR, original budgets, owner cleanup and ABI. Four graph micro-candidates remain rejected; the same-owner poll optimization alone has five-pair evidence. Qualify a final production code batch once; documentation-only updates need patch checks. No U1b merge/performance-risk acceptance or U2/U3/U4 completion is implied.
 
 ## Current verified status — read before historical sections
 
@@ -97,14 +98,14 @@ redundant indexing, unbounded caches or unnecessarily expensive CI.
 | Current independent C evidence | Refreshed 20/20 whole C-managed samples passed; source-hashed C inputs unchanged during later owned-only collision tuning. Not per-owner C allocation attribution |
 | Performance | Five final-code AB/BA worker0 pairs: 8.135968 → 8.254257 s (0.9857×), roughly flat amid host variance. **No whole-compiler speedup claim**; #51 full compiler phase profiling remains open |
 | U1a | Scalar/SSA/calls/recursion/effects/switches/strict native f64/provenance/bounded simplification plus scoped physical acceptance **COMPLETE within the adopted U1a boundary** |
-| U1b #73 | **FUNCTIONALLY QUALIFIED, PERFORMANCE IMPROVED ON ONE WORKLOAD, MERGE PENDING**. Latest exact source/test head `0a2ba59472a9571b9f352255c62957594ebacc68`: [four-platform full CI 41303717634](https://github.com/eristavi/eristavi-lang/actions/runs/41303717634) **PASS** on Linux GCC/Clang, Linux ARM64 Clang, macOS Clang; [completed-batch 41303717596](https://github.com/eristavi/eristavi-lang/actions/runs/41303717596) **PASS** 3 bootstrap/offline audits plus owned integration; experimental full owned self-build deliberately SKIPPED. Immutable aggregates, canonical SSA/CFG/recursion, independent oracle, stale/dead-code ingress verification, bounded physical cleanup and cancellation gates previously passed. Production `u1_words.context` duplicate owner-poll elimination (only same owner) passed focused negative regressions and [five-pair C-oracle parity/optimization 41302564199](https://github.com/eristavi/eristavi-lang/actions/runs/41302564199): **43.955s → 41.213s median, 6.24% lower**, single reference workload. **PR #106 DRAFT/OPEN, issue #73 OPEN; not merged.** Huge reference-owned overhead remains #51; explicit reference-only risk disposition before merge. See §72. |
+| U1b #73 | **FUNCTIONAL SOURCE QUALIFIED; LATER DIAGNOSTIC FAILS; MERGE PENDING.** Exact source/test/workflow head `0a2ba594` passed full CI 41303717634 and qualification 41303717596. Later `c2423d5` changes diagnostic/CI/handover only: smoke PASS, hotspot GC-counter reconciliation FAIL in 41307434281. Same-owner poll reduction retains five-pair 6.24% one-fixture gain. Repair measurement/selector, then attribute word-read/boxing cost and evaluate one bounded structural candidate. PR #106 draft/open, #73/#51 open; no merge/risk waiver. See §73 and linked plan. |
 | U2 #74 | New UIR managed Text/List/identity, checked failures, root maps and deterministic cleanup **NOT IMPLEMENTED** |
 | U3 #75 | Direct frozen frontend → new UIR → production native target/artifact/cache integration **NOT IMPLEMENTED**. Existing adapter is isolated; #104 is test-only reference parity |
 | U4 #102 | Redesigned UIR machine/legalization/artifact migration **NOT IMPLEMENTED / NOT QUALIFIED** |
 | Production | Existing source language and default compiler pipeline retained; no new-UIR backend promotion |
 | Environment / next stage | GitHub draft PR #106 active on `compiler/u1b-owned-aggregate-graph-20261031`; local checkout is restored; section 54 records current local validation. U1b aggregation is actively developed, not merged |
 
-**Reading rule:** section 44 is authoritative. Earlier keep-open and pending
+**Reading rule:** the opening and newest checkpoint (§73) govern current status; section 44 governs the accepted U1a boundary. Earlier keep-open and pending
 statements describe their historical revisions. U1a acceptance does not certify
 U2 managed GC/cleanup, U3 durable artifacts/source integration or U4 toolchains.
 Documentation-only status reconciliation reuses unchanged implementation evidence
@@ -3043,3 +3044,83 @@ Even after full green, issue #51 remains: ~965M boxed allocator calls and repeat
 ### Next responsible step
 
 **Performance/scope decision:** U1b is an **independently verified reference UIR execution and aggregate semantics slice**, not the production-optimized U3 pipeline. Full functional/physical/portability acceptance gates are now green and the bounded optimization has verified improvement; only the explicit decision to accept current *reference-only* performance debt (while retaining issue #51 as a high-priority future optimization) remains before marking PR #106 ready, merging and closing issue #73. Do not claim the huge verifier cost has been fixed. Do not start a new experimental self-build or waste another full matrix on a documentation-only checkpoint. U2 #74, U3 #75 and U4 #102 remain next implementation milestones. Preserve **Philosophy → Semantics → Architecture → Implementation**, independent untrusted canonical IR revalidation, exact cancellation/cleanup and original quota semantics. The current source-level optimization is implementation detail and is not promoted as a new language semantic rule.
+
+## 73. Complete handover review and optimization plan — 2026-11-01
+
+**Scope: planning and documentation only; no new optimization, workflow run,
+merge or issue closure.** Read the complete active-branch HANDOVER.md (3,046
+lines, opening mandates plus §§1–72), complete DESIGN_PHILOSOPHY.md,
+LANGUAGE_SEMANTICS.md, U1 contract, typed UIR proposal, CI qualification policy,
+remaining acceptance plan and current U1b performance report; reviewed relevant
+value/cleanup/private-memory contracts and current implementation sources.
+No repository AGENTS.md was present in the inspected tree.
+
+This planning checkpoint is preserved on documentation branch
+`docs/u1b-optimization-plan-review-20261101-c2423d5`, stacked on reviewed U1b head
+`c2423d5`. It is not merged into the active U1b branch: doing that before the
+selector repair could automatically rerun the expensive profiler. Use this
+review branch for the newest plan until reconciliation.
+
+### Fresh GitHub evidence corrects an incomplete recovery summary
+
+The latest inspected PR #106 head is `c2423d5b6211c4999a116e541fb11c67dfa2357d`;
+draft/open/unmerged. #73/#51 are open. Both final workflows cited in §72 truly
+passed on `0a2ba59472a9571b9f352255c62957594ebacc68`: all four CI platforms
+and three bootstrap/offline jobs plus owned integration passed; full owned
+compiler self-build skipped. However a direct comparison from that qualified
+head to current head finds **three** changed paths: HANDOVER.md,
+tests/test_u1b_runtime_hotspot.py and .github/workflows/ci.yml. Therefore later
+work is not all documentation-only, although compiler/runtime source is unchanged.
+
+[Current-head CI 41307434281](https://github.com/eristavi/eristavi-lang/actions/runs/41307434281)
+reports smoke SUCCESS (job 124850624436), hotspot profile FAILURE (job
+124850624427), full matrix unselected. The profiler's decode() converts/removes
+`gc_time_ns` into `gc_seconds_inclusive`; the added reconciliation then looks
+up the removed per-stage nanosecond key with default zero. Exact failure:
+`0 != 545628495: non-reconciling phase event counter: gc_time_ns`.
+Output parity checks execute before this assertion. This demonstrates a
+diagnostic bookkeeping bug, not a new compiler semantic regression. Repair
+raw integer retention/unit reconciliation; do not delete the assertion.
+
+The new ci.yml branch-specific profiler selects every code PR synchronize event.
+The PR-wide code classification can also select it on a documentation-only push
+to this existing code PR. This contradicts the earlier manual-only profiling
+policy; restore explicit selection in a focused follow-up. A Markdown edit alone
+must not be claimed to guarantee that this current selector stays idle.
+
+### Ordered optimization plan recorded
+
+See [U1B_OPTIMIZATION_PLAN_2026-11-01.md](docs/performance/U1B_OPTIMIZATION_PLAN_2026-11-01.md)
+for mechanisms, exit criteria, negative/resource gates and evidence scope:
+
+1. Repair profiler raw counter reconciliation and explicit CI selection; cheap
+   synthetic decoder checks, then ONE focused current-source profile.
+2. Attribute verifier words.get/pageAt/context/budget helpers and scalar boxing,
+   distinguishing allocator entries from true allocation bytes and helper time.
+3. If confirmed hot, pilot one bounded fresh record-read burst to reduce repeated
+   radix walks, with no cross-invocation page cache or verification bypass.
+4. If boxing remains dominant, separately review/prototype narrow backend-private
+   nonescaping Int/Bool intermediates behind unchanged ABI/boxed fallback, with
+   root/fault/exhaustion proof. Optional per-invocation shared type validation is
+   lower priority and requires fresh graph and every-body verification.
+5. For a promising candidate, compare CURRENT optimized owned baseline against
+   candidate in five alternating fresh-process pairs, independent oracle plus
+   memory/work/fault/cancellation checks; then representative bounded compiler
+   inputs and independent three-point scaling.
+6. One final exact-head qualification for an adopted production batch; explicit
+   reference-only performance disposition before U1b merge. Keep #51 open until
+   its real compiler-performance work is evidenced; U2 → U3 → U4 stay separate.
+
+Historical profiling assigned about 30.57/43.996 instrumented seconds to sealing
+and ingress verification, versus about 0.394 seconds inclusive GC. The profile
+predates the accepted same-owner poll change and must not be presented as a fresh
+current-source profile. Four runtime micro-candidates remain rejected. The
+five-pair 6.24% word-store improvement is valid only for its stated workload;
+neither it nor old cross-runtime samples prove optimization completion.
+
+**Recommended current disposition:** keep #106 draft during measurement repair
+and the first structural pilot; do not merge or waive performance debt in a
+planning review. U1b's functional scope does not require solving every #51
+problem, but subsequent reference-only acceptance must be explicit, accurately
+measured and based on applicable passing gates. No repeated expensive
+qualification is justified by this documentation-only plan.
