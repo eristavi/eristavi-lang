@@ -34,7 +34,16 @@ function mainRun() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeEr
     let updated be try agbuild.set(fn,graph,entry,original,1,seventeen,loc);
     let old be try agbuild.get(fn,graph,entry,original,1,loc);
     let fresh be try agbuild.get(fn,graph,entry,updated,1,loc);
-    try build.returnValues(fn,entry,[old,fresh],loc);
+    let yes be try build.block(fn,[meta.i64(),meta.i64()]);
+    let no be try build.block(fn,[meta.i64(),meta.i64()]);
+    let choose be try build.predicate(fn,entry,true,loc);
+    try build.branch(fn,entry,choose,yes,[old,fresh],no,[fresh,old],loc);
+    let yesOld be try build.parameter(fn,yes,0);
+    let yesNew be try build.parameter(fn,yes,1);
+    try build.returnValues(fn,yes,[yesOld,yesNew],loc);
+    let noOld be try build.parameter(fn,no,0);
+    let noNew be try build.parameter(fn,no,1);
+    try build.returnValues(fn,no,[noOld,noNew],loc);
     // Instantiate generic edge checking in this standalone bootstrap fixture.
     // The entire component is unreachable and must still verify structurally.
     let dead be try build.block(fn,[]);
@@ -46,7 +55,7 @@ function mainRun() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeEr
     let outcome be try run.run(fn,graph,owner,[123],50);
     try check(outcome.kind == 0 and outcome.count == 2 and
         (try run.result(outcome,0)) == 11 and
-        (try run.result(outcome,1)) == 17 and outcome.steps == 7,
+        (try run.result(outcome,1)) == 17 and outcome.steps == 8,
         "canonical SSA immutable snapshot");
     output("canonical-u1b-execution:11,17:ok");
     try build.close(fn); try aggregate.close(graph); try meta.close(data);
