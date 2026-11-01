@@ -1,6 +1,6 @@
 # Eristavi compiler — current handover
 
-**Authoritative recovery checkpoint: 1 November 2026, Asia/Nicosia. Read section 48 for the requested full-CI qualification invocation and unresolved delivery state, section 47 for latest focused 40/40 code, and section 44 for last fully qualified U1a.**
+**Authoritative recovery checkpoint: 1 November 2026, Asia/Nicosia. Read section 49 for the active untested performance correction and CI access limitation, section 48 for the unsuccessful full-run trigger investigation, and section 44 for last fully qualified U1a.**
 PR #105 is **QUALIFIED AND MERGED**. U1a's scoped physical acceptance gate passed;
 issue #77 is CLOSED/completed. Sections 1–43 preserve
 historical evidence and rejected prototypes; their pending/keep-open statements
@@ -2399,3 +2399,35 @@ owner accountability, and optimization-first/limited-test policy. Do not
 confuse a CI event request, a queued workflow, a succeeded workflow and
 completed milestone acceptance. Resume at this section and reconcile exact
 head/checks before any merge or closure action.
+
+## 49. Current U1b follow-up and workflow capability audit — 2026-11-01
+
+**Repository admin rights confirmed**, but connected GitHub tools expose no
+workflow-dispatch action: the available GitHub fetch action is GET-only and
+attempts to find an approved workflow-dispatch action were unsuccessful. PR #106
+was made ready and labeled `qualification` in response to the user's full-test
+request, yet GitHub showed **zero new workflow runs/checks** for that head.
+This is NOT a completed expensive qualification. Because #73 remains incomplete,
+the qualification label was subsequently removed and PR #106 returned to
+**DRAFT**, avoiding an accidental claim that the current implementation is
+release-ready. GitHub admin privileges do not bypass missing connector methods.
+
+**New unqualified optimization candidate:** code commit
+`b38ea99c832d7b82153a0e6f250dce7b82aca50c` removes an unnecessary
+`aggregate.get` from the `aggregate.set` case of the opt-in verified canonical
+SSA reference executor. The old path fetched a field (with validation/work)
+before discarding it and copying the aggregate; the independent verifier and
+`av.set` already check field type and ordinal. The new branch condition only
+calls `get` for get operations. This is a bounded algorithmic improvement,
+**not a measured performance gain** and NOT TESTED/qualified until focused CI
+on this exact code revision passes. Last confirmed green focused suite remains
+40/40 at `bc743faf135927fa59b172cab2f151173fd07565` (run 41278535614).
+No workflow for commit `b38ea99` was observed during the immediate check.
+
+**Still OPEN**: #73, #74, #75, #102, #51. Existing closed #71/#77 and merged
+#105 remain correctly closed. No new milestone can be closed from these results.
+**Next action:** verify CI for new code SHA, and continue focused oracle,
+aggregate signatures/calls/CFG, promotion and owner/physical tests. For full
+four-platform CI, a workflow_dispatch-capable client/app is required or the
+repository's Actions UI can be used; do not falsely report it started. Preserve
+frozen semantics, exact ownership, rollback, and full qualification gates.
