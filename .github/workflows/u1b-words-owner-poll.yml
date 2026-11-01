@@ -24,7 +24,7 @@ jobs:
         with:
           python-version: '3.11'
       - run: python -m pip install -e .
-      - name: Five alternating owned-native pairs: idempotent same-owner poll elimination
+      - name: Five alternating owned-native pairs for same-owner poll optimization
         shell: bash
         run: |
           set -o pipefail
