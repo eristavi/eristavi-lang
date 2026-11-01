@@ -38,6 +38,12 @@ def traced_source(fixture, mod):
         '    process.setExitCode(21);\n'
         '    try check((try call.seal(program)) == 4,"all canonical declarations verified");\n'
         '    process.setExitCode(0);')
+    fixture = patch(fixture,
+        "    else error budget.LimitError { return error.category == expected; }",
+        "    else error budget.LimitError { process.setExitCode(0); return error.category == expected; }")
+    fixture = patch(fixture,
+        "    else error verify.InvalidIR { fail error; };\n    return false;\n}",
+        "    else error verify.InvalidIR { process.setExitCode(0); fail error; };\n    return false;\n}")
     mod = patch(mod, "import compiler.u1_budget as budget;",
                 "import std.process as process;\nimport compiler.u1_budget as budget;")
     mod = patch(mod,
@@ -68,6 +74,8 @@ def traced_source(fixture, mod):
         "        };\n    process.setExitCode(25);\n"
         "    try av.close(engine); try budget.finishPhase(phase);\n"
         "    process.setExitCode(0);\n    return completed;")
+    fixture = patch(fixture, "    };\n}\nmain();\n",
+        "    };\n    process.setExitCode(0);\n}\nmain();\n")
     return fixture, mod
 
 
