@@ -35,8 +35,11 @@ function intersect(values,target Int,source Int,count Int) returns Bool {
             if result == 0 or other == 0 { result=0; }
             else { if result == 4611686018427387903 { result=other; }
             else { if other != 4611686018427387903 {
+                // The word is not mutated until after the 62-bit intersection.
+                // Snapshot once: avoid re-reading an identity field per bit.
+                let original be result;
                 result=0; let flag be 1; let index be 0;
-                while index<62 { if (current.value/flag)%2 == 1 and (other/flag)%2 == 1 { result=result+flag; } if index<61 { flag=flag*2; } index=index+1; }
+                while index<62 { if (original/flag)%2 == 1 and (other/flag)%2 == 1 { result=result+flag; } if index<61 { flag=flag*2; } index=index+1; }
             } } }
         }
         if result != current.value { current.value=result; changed=true; } word=word+1;
