@@ -1,4 +1,4 @@
-name: U1b owned-runtime safe-point pilot (opt-in)
+name: U1b owned-runtime matched optimization pilot (opt-in)
 on:
   pull_request:
     paths:
@@ -18,13 +18,14 @@ jobs:
       CC: clang
       CFLAGS: -O2
       ERISTAVI_U1B_BENCH_PAIRS: '1'
+      ERISTAVI_U1B_CANDIDATE: 'graph_find'
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
       - run: python -m pip install -e .
-      - name: Identical-source C oracle and paired owned-native runtime pilot
+      - name: Identical-source graph bucket inline one-pair performance pilot
         shell: bash
         run: |
           set -o pipefail
