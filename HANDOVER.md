@@ -1,6 +1,6 @@
 # Eristavi compiler — current handover
 
-**Authoritative recovery checkpoint: 1 November 2026, Asia/Nicosia. Read section 55 for the current resource-refusal continuation and section 53 for the prior FOCUSED TESTED 45/45, section 52 for prior loop/physical evidence, and section 44 for last fully qualified U1a.**
+**Authoritative recovery checkpoint: 1 November 2026, Asia/Nicosia. Read section 56 for current interruption/allocator-refusal evidence and section 53 for the prior FOCUSED TESTED 45/45, section 52 for prior loop/physical evidence, and section 44 for last fully qualified U1a.**
 PR #105 is **QUALIFIED AND MERGED**. U1a's scoped physical acceptance gate passed;
 issue #77 is CLOSED/completed. Sections 1–43 preserve
 historical evidence and rejected prototypes; their pending/keep-open statements
@@ -88,7 +88,7 @@ redundant indexing, unbounded caches or unnecessarily expensive CI.
 > memory from design under correctness and safety gates. The permanent rule above
 > must be preserved in every future handover, without prompting from the user.
 >
-> Continue from **HANDOVER.md section 55** (45/45 focused-tested U1b linked
+> Continue from **HANDOVER.md section 56** (45/45 focused-tested U1b linked
 > aggregate calls; NOT full U1b qualification) and section 52,
 > retaining section 44 as the latest fully qualified release checkpoint. Section 45 is historical and superseded for the
 > current U1b code/test checkpoint. PR #105 is qualified and merged at
@@ -2738,3 +2738,39 @@ self-build, merge or issue closure was requested/performed in this slice.
 Local evidence: `docs/evidence/2026-11-01/u1b-resource-refusal-smoke.json`.
 The final seven-allowance fixture separately PASSED in 1.940 seconds; the full
 45-test run covered the six-allowance version with identical implementation.
+
+
+## 56. Mid-execution cancellation and bootstrap allocator NULL injection — 2026-11-01
+
+Prior code `0ffc84d5398197b7b3cc93b557eb1dac2910abd8` passed hosted focused
+CI 41287552548. This continuation adds tests only; no compiler/runtime semantics,
+ABI, production hook or budget limit changed. PR #106 remains draft and #73 open.
+
+`tests/test_u1_aggregate_interruptions.py` compiles private copies of the actual
+linked aggregate fixture. At global executed-instruction counts 1, 8 and 20,
+a temporary executor hook cancels the execution owner and calls its real poll.
+The fixture requires category=cancelled, exact restoration of live/pending owner
+backing, nondecreasing traffic and complete final owner close. All three pass.
+The hook is confined to a temporary compiler source file; committed executor
+source remains unchanged. This is deterministic synchronous poll injection,
+not an asynchronous host-thread cancellation latency certification.
+
+Separately, generated bootstrap C arms allocation refusal immediately before
+linked execution. A private allocator wrapper returns NULL on allocation 1, 32
+or 128 after arming. Each child terminates with exit 1 and exactly
+`Eristavi runtime fault: out of memory`; no successful result is emitted.
+This exercises the real bootstrap `eri_alloc` terminal-fault path. It does NOT
+claim recoverable OS OOM, cleanup following a terminal defect, owned-runtime
+allocator coverage or physical-owner stress qualification. The terminal behavior
+preserves the locked trap/cleanup distinction.
+
+Focused tests: 2/2 test methods and all six injected subcases PASSED locally
+in 8.488 seconds. First test exploration failed only because the bootstrap emits
+Text literals as byte arrays, not C string literals; the injection anchor now
+checks the exact emitted output statement and refuses a missing/ambiguous anchor.
+No expensive unchanged full suite/self-build was rerun for this test-only slice.
+
+Next: linked switch/parallel-transfer and stale/malformed-body oracles, larger/
+deeper actual tagged owner-memory scaling and paired performance evidence, then
+one final coherent-head four-platform CI plus completed-batch qualification.
+Keep old qualified U1a and current production pipeline acceptance boundaries.
