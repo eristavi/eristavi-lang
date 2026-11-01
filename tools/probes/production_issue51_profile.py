@@ -25,7 +25,8 @@ import time
 ROOT = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(ROOT), str(ROOT / "tests")]
 from u1_native_tools import shared_u1_compilers
-from test_u1b_runtime_hotspot import FIELDS, SIZE, observed_asm, bump
+from test_u1b_runtime_hotspot import observed_asm, bump
+import test_u1b_runtime_hotspot as u1b_hotspot
 
 SOURCE_COUNTERS = {
     "compiler.universal_verify.verify": "verify",
@@ -49,6 +50,13 @@ MARKERS = {
 }
 STAGE = {1: "start", 10: "optimizer_entry", 20: "verify_entry",
          30: "reachable_block_pass", 90: "exit"}
+
+# The existing owned-runtime observer is extended only in this disposable
+# diagnostic process. All published U1b profile formats remain unchanged.
+u1b_hotspot.EXTRA_COUNTERS += tuple(SOURCE_COUNTERS.values())
+u1b_hotspot.FIELDS = u1b_hotspot.FIELDS[:-1] + tuple(SOURCE_COUNTERS.values()) + ("live_graphs",)
+u1b_hotspot.SIZE = len(u1b_hotspot.FIELDS) * 8
+FIELDS, SIZE = u1b_hotspot.FIELDS, u1b_hotspot.SIZE
 
 
 def digest(path):
