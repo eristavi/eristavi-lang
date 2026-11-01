@@ -233,6 +233,17 @@ class U1BHotspotProfiler(unittest.TestCase):
             last=records[-1]
             for name in ("gc","alloc","owners","graphs","safe"):
                 self.assertGreater(last[name],0)
+            # Guard against misattributing a phase: interval counters must
+            # reconcile exactly with cumulative snapshots for monotonic events.
+            for field in FIELDS[2:-1]:
+                self.assertEqual(
+                    sum(stage.get(field, 0) for stage in stages.values()),
+                    last[field] - records[0][field],
+                    "non-reconciling phase event counter: " + field)
+            self.assertGreater(
+                stages["ingress_reverification"].get("alloc", 0), 0)
+            self.assertGreater(
+                stages["seal_verification"].get("alloc", 0), 0)
             # Derived diagnostic attribution only: event counts are not bytes or
             # time spent inside the allocator. Keep the original raw counters.
             total_alloc = sum(stage.get("alloc", 0) for stage in stages.values())
