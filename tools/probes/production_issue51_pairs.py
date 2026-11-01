@@ -50,21 +50,10 @@ def run(command, cap=60, output_file=None):
 
 
 def overlay(root, baseline_source):
-    # Frozen Eristavi inputs unchanged; create a private import tree with one
-    # baseline verifier file, and symlink every other module byte-for-byte.
-    root.mkdir()
-    for entry in (ROOT/"src").iterdir():
-        if entry.name == "compiler":
-            compiler=root/"compiler"
-            compiler.mkdir()
-            for member in entry.iterdir():
-                target=compiler/member.name
-                if member.name == "universal_verify.eri":
-                    target.write_bytes(baseline_source)
-                else:
-                    target.symlink_to(member, target_is_directory=member.is_dir())
-        else:
-            (root/entry.name).symlink_to(entry,target_is_directory=entry.is_dir())
+    # Frozen Eristavi source resolution canonicalizes symlinks, so a
+    # linked entry escapes its source root. Use private byte-for-byte copies.
+    shutil.copytree(ROOT/"src",root,symlinks=False)
+    (root/"compiler/universal_verify.eri").write_bytes(baseline_source)
     return root
 
 
@@ -127,7 +116,7 @@ def paired_compilers(base_binary,candidate_binary,base_c,candidate_c,
     for name,frontend,root in (("baseline",base_c,base_root),
                                ("candidate",candidate_c,candidate_root)):
         output=work/(name+".reference.s")
-        c_emit(frontend,source,root,output)
+        c_emit(frontend,root/"compiler/typed_ir.eri",root,output)
         reference[name]=sha(output)
     pairs=[]
     for index in range(5):
@@ -137,7 +126,7 @@ def paired_compilers(base_binary,candidate_binary,base_c,candidate_c,
             root=base_root if name=="baseline" else candidate_root
             binary=base_binary if name=="baseline" else candidate_binary
             output=work/(f"{name}-{index}.s")
-            duration=run([binary,"emit-asm",source,"--source-root",root,
+            duration=run([binary,"emit-asm",root/"compiler/typed_ir.eri","--source-root",root,
                           "--target","x86_64-linux"],cap=cap,output_file=output)[0]
             if sha(output)!=reference[name]:
                 raise AssertionError(f"independent compiler output parity failed: {name}, pair {index}")
@@ -175,7 +164,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix="issue51-paired-") as d:
         work=Path(d)
         base_root=overlay(work/"baseline_src",old)
-        candidate_root=ROOT/"src"
+        candidate_root=overlay(work/"candidate_src",source.read_bytes())
         candidate_frontend, generator=shared_u1_compilers()
         baseline_frontend=work/"baseline_c_frontend"
         summary["baseline_frontend_build_seconds"]=build_reference(
@@ -194,11 +183,11 @@ def main():
         # Verify the complete *public* Universal verifier malformed/CFG/bit
         # boundary contract against its separate frozen expected strings.
         regression, expected=regression_program()
-        reg=work/"regression.eri"
-        reg.write_text(regression)
         truth=expected.encode()
         for label,root,cc in (("baseline",base_root,baseline_frontend),
                               ("candidate",candidate_root,candidate_frontend)):
+            reg=root/"__issue51_regression.eri"
+            reg.write_text(regression)
             c_obj=work/(label+"-regression-C")
             build_reference(reg,c_obj,root)
             expected_run(c_obj,truth,cap=75)
@@ -214,10 +203,11 @@ def main():
         print("public verifier regression corpus: C+owned baseline/candidate PASS",flush=True)
         # Same controlled branch joins, definite-initialization, and 62-bit
         # intersections as production verify, repeated to amplify the candidate.
-        benchmark=work/"benchmark.eri"
-        benchmark.write_text(benchmark_program(width=512,chains=12,rounds=4))
+        benchmark_text=benchmark_program(width=512,chains=12,rounds=4)
         for label,root,cc in (("baseline",base_root,baseline_frontend),
                               ("candidate",candidate_root,candidate_frontend)):
+            benchmark=root/"__issue51_benchmark.eri"
+            benchmark.write_text(benchmark_text)
             c_obj=work/(label+"-benchmark-C")
             build_reference(benchmark,c_obj,root)
             expected_run(c_obj,b"4\n",cap=75)
