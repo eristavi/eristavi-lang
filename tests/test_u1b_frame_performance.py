@@ -6,6 +6,7 @@ The unmodified linked fixture is separately timed AB/BA on C-bootstrap and
 owned-native execution. No production implementation, ABI or budget is changed.
 """
 import json
+import os
 from pathlib import Path
 import shutil
 import statistics
@@ -158,6 +159,8 @@ def parse_frame_markers(output):
 
 class U1BLinkedFramePerformanceTests(unittest.TestCase):
     def test_dynamic_frame_allocation_and_paired_native_performance(self):
+        if os.environ.get("ERISTAVI_U1B_FRAME_PROBE") != "1":
+            self.skipTest("expensive U1b frame probe is opt-in only")
         for executable in ("as", "ld"):
             if shutil.which(executable) is None:
                 self.skipTest(f"{executable} unavailable")
