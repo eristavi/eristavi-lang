@@ -236,10 +236,12 @@ function enter(program identity Program,frame identity Frame,
     }
     let cursor be inputs; i=0;
     while i < count {
-        if cursor == none { try budget.reject("missing U1b call input"); }
-        let token be av.ValueId { owner=machine.engine.key; index=cursor.index; };
-        try put(frame,paramFirst+i,token);
-        cursor=cursor.next; i=i+1;
+        if cursor != none {
+            let token be av.ValueId { owner=machine.engine.key; index=cursor.index; };
+            try put(frame,paramFirst+i,token);
+            cursor=cursor.next;
+        } else { try budget.reject("missing U1b call input"); }
+        i=i+1;
     }
     if cursor != none { try budget.reject("excess U1b call input"); }
     return try walk(program,frame,depth);
@@ -311,10 +313,12 @@ function walk(program identity Program,frame identity Frame,depth Int)
             if result.count != expected { try budget.reject("U1b call result arity mismatch"); }
             let cursor be result.first; i=0;
             while i < expected {
-                if cursor == none { try budget.reject("missing U1b call output"); }
-                let token be av.ValueId { owner=machine.engine.key; index=cursor.index; };
-                try put(frame,resultStart+i,token);
-                cursor=cursor.next; i=i+1;
+                if cursor != none {
+                    let token be av.ValueId { owner=machine.engine.key; index=cursor.index; };
+                    try put(frame,resultStart+i,token);
+                    cursor=cursor.next;
+                } else { try budget.reject("missing U1b call output"); }
+                i=i+1;
             }
             if cursor != none { try budget.reject("excess U1b call output"); }
         }
@@ -399,17 +403,18 @@ public function run(program identity Program,target meta.FunctionId,
     if result.kind == 0 {
         let cursor be result.first; i=0;
         while i < result.count {
-            if cursor == none { try budget.reject("missing linked root return"); }
-            let token be av.ValueId { owner=engine.key; index=cursor.index; };
-            let ty be try av.typeOf(engine,token);
-            if ty.index > 6 or ty.index == 3 {
-                result=failResult(3,8,0);
-                head=none; count=0;
-                break;
-            }
-            let scalar be identity Scalar { bits=try av.bits(engine,token); next=none; };
-            if end == none { head=scalar; } else { end.next=scalar; }
-            end=scalar; i=i+1; count=i; cursor=cursor.next;
+            if cursor != none {
+                let token be av.ValueId { owner=engine.key; index=cursor.index; };
+                let ty be try av.typeOf(engine,token);
+                if ty.index > 6 or ty.index == 3 {
+                    result=failResult(3,8,0);
+                    head=none; count=0;
+                    break;
+                }
+                let scalar be identity Scalar { bits=try av.bits(engine,token); next=none; };
+                if end == none { head=scalar; } else { end.next=scalar; }
+                end=scalar; i=i+1; count=i; cursor=cursor.next;
+            } else { try budget.reject("missing linked root return"); }
         }
     }
     let completed be identity Outcome { kind=result.kind; code=result.code;
