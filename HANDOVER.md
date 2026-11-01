@@ -1,6 +1,6 @@
 # Eristavi compiler — current handover
 
-**Authoritative recovery checkpoint: 1 November 2026, Asia/Nicosia. Read section 53 for an unqualified bounded U1b multi-function call execution candidate, section 52 for the last focused-tested 44/44 U1b code, and section 44 for the fully qualified U1a.**
+**Authoritative recovery checkpoint: 1 November 2026, Asia/Nicosia. Read section 53 for the latest U1b multi-function aggregate call execution FOCUSED TESTED 45/45, section 52 for prior loop/physical evidence, and section 44 for last fully qualified U1a.**
 PR #105 is **QUALIFIED AND MERGED**. U1a's scoped physical acceptance gate passed;
 issue #77 is CLOSED/completed. Sections 1–43 preserve
 historical evidence and rejected prototypes; their pending/keep-open statements
@@ -84,8 +84,8 @@ redundant indexing, unbounded caches or unnecessarily expensive CI.
 > memory from design under correctness and safety gates. The permanent rule above
 > must be preserved in every future handover, without prompting from the user.
 >
-> Continue from **HANDOVER.md section 52** (43/43 previous green U1b and
-> loop/re-entry candidate; NOT fully qualified) and section 51,
+> Continue from **HANDOVER.md section 53** (45/45 focused-tested U1b linked
+> aggregate calls; NOT full U1b qualification) and section 52,
 > retaining section 44 as the latest fully qualified release checkpoint. Section 45 is historical and superseded for the
 > current U1b code/test checkpoint. PR #105 is qualified and merged at
 > `8c625b1ece6a229844def93e2bf9563c14e9e273`, tested head `f1fba11ff5e11791ad8c5d635fbf90873c686fa9`,
@@ -122,7 +122,7 @@ redundant indexing, unbounded caches or unnecessarily expensive CI.
 | Current independent C evidence | Refreshed 20/20 whole C-managed samples passed; source-hashed C inputs unchanged during later owned-only collision tuning. Not per-owner C allocation attribution |
 | Performance | Five final-code AB/BA worker0 pairs: 8.135968 → 8.254257 s (0.9857×), roughly flat amid host variance. **No whole-compiler speedup claim**; #51 full compiler phase profiling remains open |
 | U1a | Scalar/SSA/calls/recursion/effects/switches/strict native f64/provenance/bounded simplification plus scoped physical acceptance **COMPLETE within the adopted U1a boundary** |
-| U1b #73 | Narrow i8/i16/i32 qualified/merged (#101). Draft PR #106 **43/43 focused PASSED**, exact code head `1382dc899c7a930507786269a2d5afa3dae65bfe`, [run 41281956706](https://github.com/eristavi/eristavi-lang/actions/runs/41281956706): independent canonical 2/9/32-field oracle, structural signatures, aggregate typed edges, scalar SSA promotion, checked direct-call construction and scoped physical backing. Loop re-entry focused TESTED 44/44 on `d2f2b63`; aggregate call execution, larger stress and complete qualification PENDING. Draft/unmerged; #73 OPEN |
+| U1b #73 | Narrow i8/i16/i32 qualified/merged (#101). Draft PR #106 **45/45 focused PASSED**, exact code head `a23c53e97767ca956b65e4054f5bd218350939c5`, [run 41284543722](https://github.com/eristavi/eristavi-lang/actions/runs/41284543722): canonical 2/9/32 aggregate oracle, signatures, CFG, loop re-entry, scalar SSA promotion, scoped tagged actual physical backing and first bounded linked aggregate call execution. Recursive/general CFG calls, large-scale negative/resource/performance and final full qualification remain PENDING. Draft/unmerged; #73 OPEN |
 | U2 #74 | New UIR managed Text/List/identity, checked failures, root maps and deterministic cleanup **NOT IMPLEMENTED** |
 | U3 #75 | Direct frozen frontend → new UIR → production native target/artifact/cache integration **NOT IMPLEMENTED**. Existing adapter is isolated; #104 is test-only reference parity |
 | U4 #102 | Redesigned UIR machine/legalization/artifact migration **NOT IMPLEMENTED / NOT QUALIFIED** |
@@ -2609,9 +2609,13 @@ gate; no experimental full owned compiler self-build.
 [focused CI 41282767784](https://github.com/eristavi/eristavi-lang/actions/runs/41282767784)
 **44/44 SUCCESS**; subsequent `1c577c6` modified HANDOVER.md only.
 **Active work:** draft PR #106 branch `compiler/u1b-owned-aggregate-graph-20261031`.
-**Candidate:** this commit adds a new opt-in multi-function reference execution
-profile and an independent test; **NOT TESTED / NOT QUALIFIED** until a
-new exact-head focused result is independently observed.
+**Exact passing code head:** `a23c53e97767ca956b65e4054f5bd218350939c5`.
+[Focused Linux Clang run 41284543722](https://github.com/eristavi/eristavi-lang/actions/runs/41284543722)
+**PASSED 45/45 tests in 163.560 seconds**, including independent linked
+aggregate call and first-fault test. The full four-platform matrix was
+**SKIPPED**, so this is focused-tested, not U1b fully qualified.
+The new opt-in profile and its new independent Python oracle are now
+FOCUSED TESTED, rather than merely proposed.
 
 Design follows Philosophy → frozen Semantics → canonical UIR contract:
 - New private `src/compiler/u1_aggregate_calls.eri` consumes the SAME
@@ -2644,9 +2648,30 @@ Design follows Philosophy → frozen Semantics → canonical UIR contract:
   from independent Python immutable tuples. Full aggregate root-return
   ABI remains explicitly unsupported, not silently converted.
 
-**Acceptance boundaries**: candidate code must first pass focused CI; then
+**Acceptance boundaries**: focused CI has passed. Still
 add independent nested cross-call CFG/recursion success and malformation oracles,
 explicit cancellation/alloc-refusal and larger tagged owner backing/performance
 evidence before one final four-platform CI plus completed-batch qualification.
 Do not claim full U1b acceptance, merge #106 or close #73 yet.
 The separate experimental owned compiler full self-build is not authorized.
+
+### Exploration and exact test results
+
+Earlier exploratory CI revisions were **not green**: 41283298373
+(optional linked entry access), 41283504101 (optional call tokens),
+41283703325 (unsupported `break` syntax), 41283871144
+(existing scalar metadata specialization in isolated fixture), and
+41284078521 (existing scalar CFG edge specialization in isolated fixture),
+and 41284339510 (incorrect 12-versus-11 operation count). All were
+corrected in the tested code, without modifying the U1a builder,
+production source compiler, ABI or old single-function executor.
+
+**Actual green:** [41284543722](https://github.com/eristavi/eristavi-lang/actions/runs/41284543722),
+45/45 focused Linux Clang tests, 163.560 seconds, at exact
+`a23c53e97767ca956b65e4054f5bd218350939c5`. Expected and
+observed independent Python old/new immutable tuple results: 11 and 17;
+the standalone native fixture also passed linked call fuel, depth,
+original guard trap LocId and complete owner-ledger reclamation.
+This does not establish U1b recursion or general cross-call CFG,
+full negative/OOM/cancellation matrices, complete physical/scale evidence,
+or full four-platform qualification. Do not merge #106/close #73.
