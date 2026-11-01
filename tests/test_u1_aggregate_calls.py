@@ -1,7 +1,7 @@
 """Independent multi-function canonical UIR aggregate oracle.
 
-Caller -> immutable-update callee -> identity callee; a failing callee must
-retain its original guard LocId rather than the caller's callsite.
+Caller -> loop/update callee -> recursive immutable-copy callee.
+Fuel/depth refusal releases every frame; direct guards retain their LocId.
 This is an isolated reference interpreter profile (not native UIR lowering).
 """
 from pathlib import Path
@@ -14,8 +14,11 @@ ROOT=Path(__file__).resolve().parents[1]
 
 class U1AggregateCallTests(unittest.TestCase):
     def test_linked_canonical_aggregate_calls_and_first_fault(self):
-        original=(11,11)
-        updated=original[:1]+(17,)
+        original=(True,11)
+        updated=original
+        for _ in range(2):
+            updated=(False,17)
+        self.assertEqual(original,(True,11))
         expected=f"{original[1]}\n{updated[1]}\nu1b-aggregate-calls:ok\n"
         with tempfile.TemporaryDirectory() as d:
             root=Path(d)

@@ -19,7 +19,8 @@ function exercise() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeE
     let data be try meta.create(shared,mp);
     let graph be try aggregate.create(shared,mp);
     let i64 be try aggregate.primitive(graph,meta.i64());
-    let pair be try aggregate.aggregate(graph,mp,[i64,i64]);
+    let pred be try aggregate.primitive(graph,meta.pred());
+    let pair be try aggregate.aggregate(graph,mp,[pred,i64]);
     // Instantiate the existing concrete scalar U1a metadata signature path.
     // The bootstrap must analyze generic U1a helpers independently of the
     // aggregate-only structural signature import.
@@ -40,7 +41,18 @@ function exercise() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeE
     let copy be try build.create(data,pairSig,copyOwner,cp);
     let copyEntry be try ab.block(copy,graph,[pair]);
     let copyInput be try build.parameter(copy,copyEntry,0);
-    try ab.returnValues(copy,graph,copyEntry,[copyInput],loc);
+    let recurse be try ab.block(copy,graph,[pair]);
+    let doneBlock be try ab.block(copy,graph,[pair]);
+    let flag be try ab.get(copy,graph,copyEntry,copyInput,0,loc);
+    try ab.branch(copy,graph,copyEntry,flag,recurse,[copyInput],doneBlock,[copyInput],loc);
+    let recursiveInput be try build.parameter(copy,recurse,0);
+    let off be try build.predicate(copy,recurse,false,loc);
+    let stopped be try ab.set(copy,graph,recurse,recursiveInput,0,off,loc);
+    let recursiveCall be try ab.call(copy,graph,recurse,copyId,[stopped],loc);
+    let recursiveResult be try build.result(copy,recursiveCall,0);
+    try ab.jump(copy,graph,recurse,doneBlock,[recursiveResult],loc);
+    let finalCopy be try build.parameter(copy,doneBlock,0);
+    try ab.returnValues(copy,graph,doneBlock,[finalCopy],loc);
     // Bootstrap's existing scalar CFG generic specialization must be
     // concretely instantiated in a disconnected, independently checked
     // component, without altering U1b production code.
@@ -57,10 +69,19 @@ function exercise() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeE
     let updateEntry be try ab.block(update,graph,[pair]);
     let updateInput be try build.parameter(update,updateEntry,0);
     let seventeen be try build.integer(update,updateEntry,17,loc);
-    let modified be try ab.set(update,graph,updateEntry,updateInput,1,seventeen,loc);
-    let forwarded be try ab.call(update,graph,updateEntry,copyId,[modified],loc);
+    let againOn be try build.predicate(update,updateEntry,true,loc);
+    let againOff be try build.predicate(update,updateEntry,false,loc);
+    let loopBlock be try ab.block(update,graph,[pair,pred]);
+    let exitBlock be try ab.block(update,graph,[pair]);
+    try ab.jump(update,graph,updateEntry,loopBlock,[updateInput,againOn],loc);
+    let loopInput be try build.parameter(update,loopBlock,0);
+    let again be try build.parameter(update,loopBlock,1);
+    let modified be try ab.set(update,graph,loopBlock,loopInput,1,seventeen,loc);
+    let forwarded be try ab.call(update,graph,loopBlock,copyId,[modified],loc);
     let fromCopy be try build.result(update,forwarded,0);
-    try ab.returnValues(update,graph,updateEntry,[fromCopy],loc);
+    try ab.branch(update,graph,loopBlock,again,loopBlock,[fromCopy,againOff],exitBlock,[fromCopy],loc);
+    let finalUpdate be try build.parameter(update,exitBlock,0);
+    try ab.returnValues(update,graph,exitBlock,[finalUpdate],loc);
     try ab.complete(update,graph); try budget.finishPhase(cp);
 
     let mainOwner be try budget.functionOwner(root,false);
@@ -69,7 +90,8 @@ function exercise() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeE
     let mainEntry be try ab.block(main,graph,[i64]);
     let input be try build.parameter(main,mainEntry,0);
     let eleven be try build.integer(main,mainEntry,11,loc);
-    let original be try ab.make(main,graph,mainEntry,pair,[eleven,eleven],loc);
+    let on be try build.predicate(main,mainEntry,true,loc);
+    let original be try ab.make(main,graph,mainEntry,pair,[on,eleven],loc);
     let updatedCall be try ab.call(main,graph,mainEntry,updateId,[original],loc);
     let updated be try build.result(main,updatedCall,0);
     let before be try ab.get(main,graph,mainEntry,original,1,loc);
@@ -96,10 +118,26 @@ function exercise() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeE
     try check((try call.seal(program)) == 4,"all canonical declarations verified");
 
     let success be try call.run(program,mainId,mainOwner,[0],64,8);
-    try check(success.kind == 0 and success.count == 2 and success.steps == 11,
-        "three-function canonical call chain");
+    try check(success.kind == 0 and success.count == 2 and success.steps == 31,
+        "recursive calls within aggregate loop");
     output(try call.scalar(success,0));
     output(try call.scalar(success,1));
+
+    // Refuse at every dynamic instruction boundary, including nested
+    // recursion and loop re-entry; all frame scratch must be reclaimed.
+    let baselineLive be root.live;
+    let fuel be 1;
+    while fuel < 31 {
+        let limited be try call.run(program,mainId,mainOwner,[0],fuel,8);
+        try check(limited.kind == 2 and limited.steps == fuel and
+            limited.location == loc.index,"every cross-call fuel boundary");
+        try check(root.live == baselineLive and root.pending == 0,
+            "fuel refusal releases recursive and loop frame storage");
+        fuel=fuel+1;
+    }
+    let recursiveLimit be try call.run(program,mainId,mainOwner,[0],64,3);
+    try check(recursiveLimit.kind == 2 and recursiveLimit.location == loc.index
+        and root.live == baselineLive,"recursive depth refusal cleanup");
 
     // Depth and fuel are GLOBAL across the entire nested call chain.
     let bounded be try call.run(program,mainId,mainOwner,[0],2,8);

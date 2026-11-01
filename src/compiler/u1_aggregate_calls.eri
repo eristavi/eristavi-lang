@@ -3,7 +3,7 @@
 // Each body is independently verified against the SAME frozen graph and
 // revision, including malformed dead blocks. No imports, managed U2,
 // external effects, new source syntax or public ABI are admitted.
-// Initial executable slice: straight-line scalar/aggregate constants,
+// Executable slice: CFG branches/switches, loops, scalar/aggregate constants,
 // make/get/set, direct calls, guard/trap and scalar root returns.
 // Recursive calls share one bounded fuel counter and depth limit.
 // All aggregate values use ONE immutable reference Engine; every frame owns
@@ -16,6 +16,7 @@ import compiler.u1_aggregate as aggregate;
 import compiler.u1_aggregate_values as av;
 import compiler.u1_aggregate_verify as graphVerify;
 import compiler.u1_verify as verify;
+import compiler.u1_successors as successors;
 
 public type Entry {
     target meta.FunctionId; body identity build.Function; revision Int;
@@ -42,7 +43,7 @@ type Machine {
 }
 type Frame {
     routine identity build.Function; readPhase identity budget.Phase;
-    slots identity words.Words; machine identity Machine;
+    slots identity words.Words; scratch identity words.Words; machine identity Machine;
 }
 function failResult(kind Int,code Int,location Int)
     returns identity CallResult {
@@ -210,13 +211,17 @@ function invoke(program identity Program,machine identity Machine,
         else error budget.LimitError {
             try budget.finishPhase(rp); fail error;
         };
-    let frame be identity Frame { routine=routine; readPhase=rp;
-        slots=slots; machine=machine; };
-    let finished be enter(program,frame,inputs,count,depth)
+    let scratch be words.create(machine.owner,1048576)
         else error budget.LimitError {
             try words.close(slots); try budget.finishPhase(rp); fail error;
         };
-    try words.close(slots); try budget.finishPhase(rp);
+    let frame be identity Frame { routine=routine; readPhase=rp;
+        slots=slots; scratch=scratch; machine=machine; };
+    let finished be enter(program,frame,inputs,count,depth)
+        else error budget.LimitError {
+            try words.close(scratch); try words.close(slots); try budget.finishPhase(rp); fail error;
+        };
+    try words.close(scratch); try words.close(slots); try budget.finishPhase(rp);
     return finished;
 }
 function enter(program identity Program,frame identity Frame,
@@ -336,11 +341,54 @@ function walk(program identity Program,frame identity Frame,depth Int)
             return identity CallResult { kind=0; code=0; location=0;
                 first=head; count=count; };
         }
+        let transferred be false;
+        if op == 6 or op == 7 or op == 35 {
+            let edge be payload;
+            if op == 7 {
+                let condition be try record(frame,routine.operands,first);
+                if (try av.bits(machine.engine,try get(frame,condition))) == 0 {
+                    edge=try record(frame,routine.instructions,offset+8);
+                }
+            }
+            if op == 35 {
+                let selector be try record(frame,routine.operands,first);
+                edge=try successors.choose(routine,frame.readPhase,current,
+                    try av.bits(machine.engine,try get(frame,selector)));
+            }
+            let edgeOffset be (edge-1)*3;
+            let targetBlock be try record(frame,routine.edges,edgeOffset);
+            let argFirst be try record(frame,routine.edges,edgeOffset+1);
+            let argCount be try record(frame,routine.edges,edgeOffset+2);
+            let targetOffset be (targetBlock-1)*5;
+            let destination be try record(frame,routine.blocks,targetOffset);
+            let ordinal be 0;
+            while ordinal < argCount {
+                let source be try record(frame,routine.arguments,argFirst+ordinal);
+                let token be try get(frame,source);
+                if ordinal == frame.scratch.length {
+                    let ignored be try words.push(frame.scratch,machine.phase,token.index);
+                } else {
+                    try words.set(frame.scratch,machine.phase,ordinal,token.index);
+                }
+                try budget.work(machine.phase,1); ordinal=ordinal+1;
+            }
+            ordinal=0;
+            while ordinal < argCount {
+                let token be av.ValueId { owner=machine.engine.key;
+                    index=try words.get(frame.scratch,machine.phase,ordinal); };
+                try put(frame,destination+ordinal,token);
+                ordinal=ordinal+1;
+            }
+            current=try record(frame,routine.blocks,targetOffset+2);
+            terminal=try record(frame,routine.blocks,targetOffset+4);
+            transferred=true;
+        }
         if op != 1 and op != 2 and op != 36 and op != 43 and
-           op != 44 and op != 45 and op != 5 and op != 34 and op != 8 {
+           op != 44 and op != 45 and op != 5 and op != 34 and op != 8 and
+           op != 6 and op != 7 and op != 35 {
             return failResult(3,op,loc);
         }
-        current=try record(frame,routine.instructions,offset+9);
+        if not transferred { current=try record(frame,routine.instructions,offset+9); }
     }
     return failResult(3,0,0);
 }

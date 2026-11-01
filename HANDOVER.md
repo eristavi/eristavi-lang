@@ -1,6 +1,6 @@
 # Eristavi compiler — current handover
 
-**Authoritative recovery checkpoint: 1 November 2026, Asia/Nicosia. Read section 53 for the latest U1b multi-function aggregate call execution FOCUSED TESTED 45/45, section 52 for prior loop/physical evidence, and section 44 for last fully qualified U1a.**
+**Authoritative recovery checkpoint: 1 November 2026, Asia/Nicosia. Read section 54 for the current CFG/recursive-call continuation and section 53 for the prior FOCUSED TESTED 45/45, section 52 for prior loop/physical evidence, and section 44 for last fully qualified U1a.**
 PR #105 is **QUALIFIED AND MERGED**. U1a's scoped physical acceptance gate passed;
 issue #77 is CLOSED/completed. Sections 1–43 preserve
 historical evidence and rejected prototypes; their pending/keep-open statements
@@ -88,7 +88,7 @@ redundant indexing, unbounded caches or unnecessarily expensive CI.
 > memory from design under correctness and safety gates. The permanent rule above
 > must be preserved in every future handover, without prompting from the user.
 >
-> Continue from **HANDOVER.md section 53** (45/45 focused-tested U1b linked
+> Continue from **HANDOVER.md section 54** (45/45 focused-tested U1b linked
 > aggregate calls; NOT full U1b qualification) and section 52,
 > retaining section 44 as the latest fully qualified release checkpoint. Section 45 is historical and superseded for the
 > current U1b code/test checkpoint. PR #105 is qualified and merged at
@@ -126,12 +126,12 @@ redundant indexing, unbounded caches or unnecessarily expensive CI.
 | Current independent C evidence | Refreshed 20/20 whole C-managed samples passed; source-hashed C inputs unchanged during later owned-only collision tuning. Not per-owner C allocation attribution |
 | Performance | Five final-code AB/BA worker0 pairs: 8.135968 → 8.254257 s (0.9857×), roughly flat amid host variance. **No whole-compiler speedup claim**; #51 full compiler phase profiling remains open |
 | U1a | Scalar/SSA/calls/recursion/effects/switches/strict native f64/provenance/bounded simplification plus scoped physical acceptance **COMPLETE within the adopted U1a boundary** |
-| U1b #73 | Narrow i8/i16/i32 qualified/merged (#101). Draft PR #106 **45/45 focused PASSED**, exact code head `a23c53e97767ca956b65e4054f5bd218350939c5`, [run 41284543722](https://github.com/eristavi/eristavi-lang/actions/runs/41284543722): canonical 2/9/32 aggregate oracle, signatures, CFG, loop re-entry, scalar SSA promotion, scoped tagged actual physical backing and first bounded linked aggregate call execution. Recursive/general CFG calls, large-scale negative/resource/performance and final full qualification remain PENDING. Draft/unmerged; #73 OPEN |
+| U1b #73 | Narrow i8/i16/i32 qualified/merged (#101). Draft PR #106 **45/45 focused PASSED**, exact code head `a23c53e97767ca956b65e4054f5bd218350939c5`, [run 41284543722](https://github.com/eristavi/eristavi-lang/actions/runs/41284543722): canonical 2/9/32 aggregate oracle, signatures, CFG, loop re-entry, scalar SSA promotion, scoped tagged actual physical backing and first bounded linked aggregate call execution. Section 54 adds locally tested recursive calls within loops (45/45 smoke). Large-scale negative/resource/performance and final full qualification remain PENDING. Draft/unmerged; #73 OPEN |
 | U2 #74 | New UIR managed Text/List/identity, checked failures, root maps and deterministic cleanup **NOT IMPLEMENTED** |
 | U3 #75 | Direct frozen frontend → new UIR → production native target/artifact/cache integration **NOT IMPLEMENTED**. Existing adapter is isolated; #104 is test-only reference parity |
 | U4 #102 | Redesigned UIR machine/legalization/artifact migration **NOT IMPLEMENTED / NOT QUALIFIED** |
 | Production | Existing source language and default compiler pipeline retained; no new-UIR backend promotion |
-| Environment / next stage | GitHub draft PR #106 active on `compiler/u1b-owned-aggregate-graph-20261031`; latest verified code is `1382dc8`. No local checkout available; hosted CI is executable evidence. U1b aggregation is actively developed, not merged |
+| Environment / next stage | GitHub draft PR #106 active on `compiler/u1b-owned-aggregate-graph-20261031`; local checkout is restored; section 54 records current local validation. U1b aggregation is actively developed, not merged |
 
 **Reading rule:** section 44 is authoritative. Earlier keep-open and pending
 statements describe their historical revisions. U1a acceptance does not certify
@@ -2679,3 +2679,28 @@ original guard trap LocId and complete owner-ledger reclamation.
 This does not establish U1b recursion or general cross-call CFG,
 full negative/OOM/cancellation matrices, complete physical/scale evidence,
 or full four-platform qualification. Do not merge #106/close #73.
+
+
+## 54. Linked aggregate CFG, recursive calls and loop re-entry — 2026-11-01
+
+Active PR #106 remains draft on `compiler/u1b-owned-aggregate-graph-20261031`.
+Local checkout restored from `034b1f9`. Implemented jump/branch/sparse-switch
+execution in the linked canonical executor using the existing successor schema.
+Each call frame owns reusable edge scratch; all argument tokens are staged before
+any destination slot changes, preserving simultaneous transfer and loop re-entry.
+Scratch closes on normal return, terminal outcome and checked budget refusal.
+Existing instruction fuel is global across recursion; edge work is additionally
+charged to the request budget. No public ABI or production backend changes.
+
+The focused aggregate-call test PASSED locally: two loop iterations containing
+recursive immutable aggregate calls, both predicate branches, old/new scalar
+snapshots 11/17, 31 executed instructions, each fuel limit 1–30, recursive depth
+refusal and exact owner-ledger cleanup. Existing guard-origin assertions pass.
+Local focused smoke PASSED 45/45 in 108.471 seconds; no full qualification or merge is claimed.
+The strengthened fuel-boundary fixture additionally passed in a separate focused run.
+Evidence: `docs/evidence/2026-11-01/u1b-linked-cfg-smoke.json`.
+Sparse-switch execution uses the existing helper but a new linked-switch-specific
+oracle remains pending. Larger/deeper negative, cancellation/OOM, actual physical
+backing/performance and full final qualification remain U1b acceptance work.
+Preserve philosophy-first/optimization-first discipline and existing ceilings.
+No experimental owned compiler self-build was run.
