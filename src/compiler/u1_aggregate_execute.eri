@@ -137,13 +137,15 @@ function walk(routine identity build.Function,graph identity aggregate.Registry,
         if op == 44 or op == 45 {
             let source be try read(routine,phase,routine.operands,operandsFirst);
             let selected be try value(engine,slots,phase,source);
-            let created be try av.get(engine,selected,payload);
-            if op == 45 {
+            if op == 44 {
+                let created be try av.get(engine,selected,payload);
+                try save(engine,slots,phase,routine,resultStart,created);
+            } else {
                 let replacement be try read(routine,phase,routine.operands,operandsFirst+1);
-                created=try av.set(engine,selected,payload,
+                let created be try av.set(engine,selected,payload,
                     try value(engine,slots,phase,replacement));
+                try save(engine,slots,phase,routine,resultStart,created);
             }
-            try save(engine,slots,phase,routine,resultStart,created);
         }
         if op == 5 {
             let source be try read(routine,phase,routine.operands,operandsFirst);
