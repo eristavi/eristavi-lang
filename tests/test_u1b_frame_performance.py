@@ -231,7 +231,8 @@ class U1BLinkedFramePerformanceTests(unittest.TestCase):
             for order in (("bootstrap_c", "owned_native"),
                           ("owned_native", "bootstrap_c"),
                           ("bootstrap_c", "owned_native"),
-                          ("owned_native", "bootstrap_c")):
+                          ("owned_native", "bootstrap_c"),
+                          ("bootstrap_c", "owned_native")):
                 for label in order:
                     binary = bootstrap if label == "bootstrap_c" else owned
                     started = time.perf_counter()
@@ -250,9 +251,11 @@ class U1BLinkedFramePerformanceTests(unittest.TestCase):
                          "unmodified bootstrap-C/native versus owned/native; "
                          "NOT an isolated verification/execution measurement "
                          "or a compiler optimization speedup",
-                "orders": ["AB", "BA", "AB", "BA"],
+                "orders": ["AB", "BA", "AB", "BA", "AB"],
                 "runtime_seconds": timings,
                 "median_runtime_seconds": medians,
+                "min_runtime_seconds": {name: min(values) for name, values in timings.items()},
+                "max_runtime_seconds": {name: max(values) for name, values in timings.items()},
                 "owned_over_bootstrap_ratio":
                     medians["owned_native"] / medians["bootstrap_c"],
                 "cold_build_seconds": {
