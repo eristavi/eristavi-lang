@@ -1,0 +1,80 @@
+import std.process;
+import compiler.format as format;
+import compiler.u1_budget as budget;
+import compiler.u1_meta as meta;
+import compiler.u1_aggregate as aggregate;
+import compiler.u1_aggregate_values as values;
+import compiler.u1_aggregate_verify as graphVerify;
+import compiler.u1_aggregate_physical as observer;
+import compiler.u1_physical as physical;
+
+error ProbeError { message Text; }
+function check(ok Bool,message Text) fails ProbeError {
+    if not ok { fail ProbeError { message=message; }; }
+}
+function display(name Text,backing physical.Backing) {
+    output("u1b-physical:"+name+":"+format.integer(backing.objects)+
+        ":"+format.integer(backing.graphPayloadBytes)+
+        ":"+format.integer(backing.allocatorHeaderBytes)+
+        ":"+format.integer(backing.blockBytes));
+}
+function run() returns Bool fails budget.LimitError,graphVerify.InvalidGraph,ProbeError {
+    process.setExitCode(101);
+    let root be try budget.developmentRequest();
+    process.setExitCode(102);
+    let shared be try budget.metadataOwner(root);
+    let mp be try budget.constructionPhase(shared);
+    let data be try meta.create(shared,mp);
+    let sig be try meta.signature(data,mp,[meta.i64()],[meta.i64()]);
+    let graph be try aggregate.create(shared,mp);
+    let i64 be try aggregate.primitive(graph,meta.i64());
+    let pair be try aggregate.aggregate(graph,mp,[i64,i64]);
+    let nested be try aggregate.aggregate(graph,mp,[pair,i64]);
+    try aggregate.freeze(graph); try meta.freeze(data);
+    try budget.finishPhase(mp);
+
+    process.setExitCode(103);
+    let fnOwner be try budget.functionOwner(root,false);
+    let cp be try budget.constructionPhase(fnOwner);
+    let engine be try values.create(graph,fnOwner,cp);
+    let left be try values.scalar(engine,i64,11);
+    let right be try values.scalar(engine,i64,17);
+    let old be try values.make(engine,pair,[left,left]);
+    let changed be try values.set(engine,old,1,right);
+    let outer be try values.make(engine,nested,[changed,left]);
+    let replaced be try values.set(engine,outer,0,old);
+    let child be try values.get(engine,outer,0);
+    let original be try values.get(engine,replaced,0);
+    let after be try values.bits(engine,try values.get(engine,child,1));
+    let before be try values.bits(engine,try values.get(engine,original,1));
+    try check(after == 17 and before == 11,"U1b immutable reference snapshots");
+    process.setExitCode(0);
+    let graphBacking be try observer.typeGraph(graph,shared,102);
+    let engineBacking be try observer.valueEngine(engine,fnOwner,103);
+    display("metadata",graphBacking); display("function",engineBacking);
+    output("u1b-ledger:metadata:"+format.integer(shared.peak)+
+        ":"+format.integer(shared.traffic));
+    output("u1b-ledger:function:"+format.integer(fnOwner.peak)+
+        ":"+format.integer(fnOwner.traffic));
+    process.setExitCode(103);
+    try values.close(engine); try budget.finishPhase(cp);
+    process.setExitCode(102);
+    try aggregate.close(graph); try meta.close(data);
+    process.setExitCode(0);
+    try check(root.live == 0 and root.pending == 0 and shared.live == 0
+        and fnOwner.live == 0,"U1b ledger close");
+    try budget.close(fnOwner); try budget.close(shared); try budget.close(root);
+    output("u1b-physical-owner-cleanup:ok");
+    return true;
+}
+function main() {
+    let checked be run()
+    else error budget.LimitError {
+        output("limit:"+error.message); process.setExitCode(1); return;
+    } else error graphVerify.InvalidGraph {
+        output("graph:"+error.message); process.setExitCode(1); return;
+    } else error ProbeError {
+        output("probe:"+error.message); process.setExitCode(1); return;
+    };
+}
+main();

@@ -29,6 +29,7 @@ function run() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError 
         (try sig.parameterType(data,graph,mp,aggregateSignature,0)).index == pair.index and
         (try sig.resultType(data,graph,mp,aggregateSignature,0)).index == pair.index,
         "canonical aggregate signature and field type");
+    let callTarget be try meta.declaration(data,mp,aggregateSignature,"aggregate.copy_pair",1,0,0);
     let source be try meta.source(data,mp,"aggregate-signature","0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",128);
     let loc be try meta.location(data,mp,source,0,8,1,1,1);
     try aggregate.freeze(graph); try meta.freeze(data); try budget.finishPhase(mp);
@@ -37,7 +38,9 @@ function run() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError 
     let fn be try build.create(data,aggregateSignature,fnOwner,cp);
     let entry be try ab.block(fn,graph,[pair]);
     let input be try build.parameter(fn,entry,0);
-    let field be try ab.get(fn,graph,entry,input,0,loc);
+    let callInstruction be try ab.call(fn,graph,entry,callTarget,[input],loc);
+    let callValue be try build.result(fn,callInstruction,0);
+    let field be try ab.get(fn,graph,entry,callValue,0,loc);
     let local be try build.cell(fn,meta.i64());
     try build.initialize(fn,entry,local,field,loc);
     let read be try build.readCell(fn,entry,local,loc);
