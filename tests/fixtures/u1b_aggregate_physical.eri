@@ -2,6 +2,7 @@ import std.process;
 import compiler.format as format;
 import compiler.u1_budget as budget;
 import compiler.u1_meta as meta;
+import compiler.u1_builder as build;
 import compiler.u1_aggregate as aggregate;
 import compiler.u1_aggregate_values as values;
 import compiler.u1_aggregate_verify as graphVerify;
@@ -26,6 +27,8 @@ function run() returns Bool fails budget.LimitError,graphVerify.InvalidGraph,Pro
     let mp be try budget.constructionPhase(shared);
     let data be try meta.create(shared,mp);
     let sig be try meta.signature(data,mp,[meta.i64()],[meta.i64()]);
+    let source be try meta.source(data,mp,"u1b-physical","0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",128);
+    let location be try meta.location(data,mp,source,0,7,1,1,1);
     let graph be try aggregate.create(shared,mp);
     let i64 be try aggregate.primitive(graph,meta.i64());
     let pair be try aggregate.aggregate(graph,mp,[i64,i64]);
@@ -36,6 +39,17 @@ function run() returns Bool fails budget.LimitError,graphVerify.InvalidGraph,Pro
     process.setExitCode(103);
     let fnOwner be try budget.functionOwner(root,false);
     let cp be try budget.constructionPhase(fnOwner);
+    // Concrete scalar edge instantiation is needed by U1a's generic physical
+    // observation import; retire it before measuring U1b retained backing.
+    let scalarFixture be try build.create(data,sig,fnOwner,cp);
+    let sourceBlock be try build.block(scalarFixture,[meta.i64()]);
+    let targetBlock be try build.block(scalarFixture,[meta.i64()]);
+    let argument be try build.parameter(scalarFixture,sourceBlock,0);
+    try build.jump(scalarFixture,sourceBlock,targetBlock,[argument],location);
+    try build.returnValues(scalarFixture,targetBlock,
+        [try build.parameter(scalarFixture,targetBlock,0)],location);
+    try build.complete(scalarFixture);
+    try build.close(scalarFixture);
     let engine be try values.create(graph,fnOwner,cp);
     let left be try values.scalar(engine,i64,11);
     let right be try values.scalar(engine,i64,17);
