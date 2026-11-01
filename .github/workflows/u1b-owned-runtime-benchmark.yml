@@ -18,7 +18,7 @@ jobs:
       CC: clang
       CFLAGS: -O2
       ERISTAVI_U1B_BENCH_PAIRS: '1'
-      ERISTAVI_U1B_CANDIDATE: 'positive_cache'
+      ERISTAVI_U1B_CANDIDATE: 'positive_table'
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
