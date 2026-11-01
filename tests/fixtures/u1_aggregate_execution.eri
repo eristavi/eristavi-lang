@@ -43,14 +43,12 @@ function mainRun() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeEr
     try build.returnValues(fn,deadNext,[eleven,seventeen],loc);
     try build.complete(fn);
     try budget.finishPhase(cp);
-    let executionOwner be try budget.functionOwner(root,false);
-    let outcome be try run.run(fn,graph,executionOwner,[123],50);
+    let outcome be try run.run(fn,graph,owner,[123],50);
     try check(outcome.kind == 0 and outcome.count == 2 and
         (try run.result(outcome,0)) == 11 and
         (try run.result(outcome,1)) == 17 and outcome.steps == 7,
         "canonical SSA immutable snapshot");
     output("canonical-u1b-execution:11,17:ok");
-    try budget.close(executionOwner);
     try build.close(fn); try aggregate.close(graph); try meta.close(data);
     try check(root.live == 0 and root.pending == 0,"all owner backing reclaimed");
     try budget.close(owner); try budget.close(shared); try budget.close(root);
