@@ -415,13 +415,20 @@ public function run(program identity Program,target meta.FunctionId,
         };
     let machine be identity Machine { engine=engine; phase=phase; owner=owner;
         fuel=fuel; steps=0; depthLimit=depthLimit; };
+    let completed be executeRoot(program,machine,routine,target,inputs)
+        else error budget.LimitError {
+            try av.close(engine); try budget.finishPhase(phase); fail error;
+        };
+    try av.close(engine); try budget.finishPhase(phase);
+    return completed;
+}
+function rootInputs(program identity Program,engine identity av.Engine,
+    routine identity build.Function,inputPhase identity budget.Phase,inputs)
+    returns maybe identity Token fails budget.LimitError {
     let arguments maybe identity Token be none;
     let tail maybe identity Token be none;
-    let inputPhase be try budget.verificationPhase(routine.owner);
     let params be try meta.parameterCount(program.metadata,inputPhase,routine.signature);
     if params != inputs.count or params > 16 {
-        try budget.finishPhase(inputPhase);
-        try av.close(engine); try budget.finishPhase(phase);
         try budget.reject("U1b root call scalar argument arity mismatch");
     }
     let i be 0;
@@ -431,8 +438,6 @@ public function run(program identity Program,target meta.FunctionId,
         let ty be try aggregate.typeAt(program.graph,
             try words.get(program.metadata.types,inputPhase,start+i));
         if ty.index > 6 or ty.index == 3 {
-            try budget.finishPhase(inputPhase);
-            try av.close(engine); try budget.finishPhase(phase);
             try budget.reject("U1b linked entry requires scalar inputs");
         }
         let token be try av.scalar(engine,ty,inputs[i]);
@@ -440,16 +445,24 @@ public function run(program identity Program,target meta.FunctionId,
         if tail == none { arguments=item; } else { tail.next=item; }
         tail=item; i=i+1;
     }
-    try budget.finishPhase(inputPhase);
-    let result be invoke(program,machine,target,arguments,params,1,0)
+    return arguments;
+}
+function executeRoot(program identity Program,machine identity Machine,
+    routine identity build.Function,target meta.FunctionId,inputs)
+    returns identity Outcome fails budget.LimitError {
+    let engine be machine.engine;
+    let inputPhase be try budget.verificationPhase(routine.owner);
+    let arguments be rootInputs(program,engine,routine,inputPhase,inputs)
         else error budget.LimitError {
-            try av.close(engine); try budget.finishPhase(phase); fail error;
+            try budget.finishPhase(inputPhase); fail error;
         };
+    try budget.finishPhase(inputPhase);
+    let result be try invoke(program,machine,target,arguments,inputs.count,1,0);
     let head maybe identity Scalar be none;
     let end maybe identity Scalar be none;
     let count be 0;
     if result.kind == 0 {
-        let cursor be result.first; i=0;
+        let cursor be result.first; let i be 0;
         let originalCount be result.count;
         while i < originalCount {
             if cursor != none {
@@ -460,15 +473,16 @@ public function run(program identity Program,target meta.FunctionId,
                     head=none; count=0;
                     i=originalCount;
                 }
+                else {
                 let scalar be identity Scalar { bits=try av.bits(engine,token); next=none; };
                 if end == none { head=scalar; } else { end.next=scalar; }
                 end=scalar; i=i+1; count=i; cursor=cursor.next;
+                }
             } else { try budget.reject("missing linked root return"); }
         }
     }
     let completed be identity Outcome { kind=result.kind; code=result.code;
         location=result.location; steps=machine.steps; first=head; count=count; };
-    try av.close(engine); try budget.finishPhase(phase);
     return completed;
 }
 public function scalar(value identity Outcome,index Int)

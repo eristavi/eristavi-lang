@@ -1,6 +1,6 @@
 # Eristavi compiler — current handover
 
-**Authoritative recovery checkpoint: 1 November 2026, Asia/Nicosia. Read section 54 for the current CFG/recursive-call continuation and section 53 for the prior FOCUSED TESTED 45/45, section 52 for prior loop/physical evidence, and section 44 for last fully qualified U1a.**
+**Authoritative recovery checkpoint: 1 November 2026, Asia/Nicosia. Read section 55 for the current resource-refusal continuation and section 53 for the prior FOCUSED TESTED 45/45, section 52 for prior loop/physical evidence, and section 44 for last fully qualified U1a.**
 PR #105 is **QUALIFIED AND MERGED**. U1a's scoped physical acceptance gate passed;
 issue #77 is CLOSED/completed. Sections 1–43 preserve
 historical evidence and rejected prototypes; their pending/keep-open statements
@@ -88,7 +88,7 @@ redundant indexing, unbounded caches or unnecessarily expensive CI.
 > memory from design under correctness and safety gates. The permanent rule above
 > must be preserved in every future handover, without prompting from the user.
 >
-> Continue from **HANDOVER.md section 54** (45/45 focused-tested U1b linked
+> Continue from **HANDOVER.md section 55** (45/45 focused-tested U1b linked
 > aggregate calls; NOT full U1b qualification) and section 52,
 > retaining section 44 as the latest fully qualified release checkpoint. Section 45 is historical and superseded for the
 > current U1b code/test checkpoint. PR #105 is qualified and merged at
@@ -2704,3 +2704,37 @@ oracle remains pending. Larger/deeper negative, cancellation/OOM, actual physica
 backing/performance and full final qualification remain U1b acceptance work.
 Preserve philosophy-first/optimization-first discipline and existing ceilings.
 No experimental owned compiler self-build was run.
+
+
+## 55. Linked execution entry/refusal cleanup — 2026-11-01
+
+PR #106 remains draft; prior hosted code `40e14c21c42a8089e78e911c0f69bf8b7dec3b81`
+PASSED focused GitHub CI 41286989428. The local workspace contains the next
+resource-cleanup candidate; local focused smoke PASSED 45/45 in 110.472 seconds. No full qualification.
+
+Found a real leak: entry scalar construction could raise LimitError after the
+reference engine was created, outside its cleanup handler. Root-result extraction
+had the same missing outer cleanup boundary. Added one executeRoot boundary with
+engine/phase cleanup, plus rootInputs with guaranteed input-phase finish. Nested
+frame cleanup remains in invoke. Unsupported aggregate/f64 root returns now stop
+before attempting scalar bits extraction, preserving the explicit unsupported
+outcome. No source semantics, ABI, budget ceilings or production backend changed.
+
+Expanded the existing independent recursive/loop fixture with fresh requests for
+cancellation, seven traffic allowances (0/128/512/1024/2048/4096/8192 bytes), and five work
+allowances (0/1/16/64/128 visits). All must refuse with the expected category,
+restore live/pending owner counts exactly, and never reduce accumulated traffic.
+The expanded test FAILS against the prior code with the explicit backing-leak
+assertion and PASSES with this fix (2.077 seconds locally). These are admission
+refusals, not physical OS malloc-failure or mid-execution cancellation injection.
+The existing fuel/depth/immutable snapshot checks remain.
+
+Remaining U1b gates: stronger linked-switch/parallel-swap and malformed/stale
+program oracles, mid-execution cancellation/physical allocator refusal, deeper
+and larger tagged physical owner/performance studies, then one coherent final
+four-platform CI and completed-batch qualification. No experimental owned compiler
+self-build, merge or issue closure was requested/performed in this slice.
+
+Local evidence: `docs/evidence/2026-11-01/u1b-resource-refusal-smoke.json`.
+The final seven-allowance fixture separately PASSED in 1.940 seconds; the full
+45-test run covered the six-allowance version with identical implementation.

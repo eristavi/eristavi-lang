@@ -12,7 +12,7 @@ error ProbeError { message Text; }
 function check(ok Bool,message Text) fails ProbeError {
     if not ok { fail ProbeError { message=message; }; }
 }
-function exercise() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError {
+function exercise(mode Int) returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError {
     let root be try budget.developmentRequest();
     let shared be try budget.metadataOwner(root);
     let mp be try budget.constructionPhase(shared);
@@ -117,6 +117,21 @@ function exercise() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeE
     let c4 be try call.bind(program,failId,failing);
     try check((try call.seal(program)) == 4,"all canonical declarations verified");
 
+    if mode != -1 {
+        let baseline be root.live;
+        let trafficBefore be mainOwner.traffic;
+        let expected be "resource-limit";
+        if mode == -2 { budget.cancel(mainOwner); expected="cancelled"; }
+        if mode >= 0 and mode < 10000 {
+            mainOwner.trafficLimit=mainOwner.traffic+mode;
+        }
+        if mode >= 10000 { mainOwner.workLimit=mainOwner.work+mode-10000; }
+        let refused be try expectRefusal(program,mainId,mainOwner,expected);
+        try check(refused,"bounded request unexpectedly completed");
+        try check(root.live == baseline and root.pending == 0 and
+            mainOwner.pending == 0 and mainOwner.traffic >= trafficBefore,
+            "entry or nested refusal leaked backing or rolled back traffic");
+    } else {
     let success be try call.run(program,mainId,mainOwner,[0],64,8);
     try check(success.kind == 0 and success.count == 2 and success.steps == 31,
         "recursive calls within aggregate loop");
@@ -151,6 +166,7 @@ function exercise() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeE
     try check(failure.kind == 1 and failure.code == 2 and
         failure.location == trapLoc.index,"original callee guard location");
 
+    }
     try call.close(program);
     try build.close(copy); try build.close(update);
     try build.close(main); try build.close(failing);
@@ -159,11 +175,27 @@ function exercise() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeE
     try budget.close(copyOwner); try budget.close(updateOwner);
     try budget.close(mainOwner); try budget.close(failOwner);
     try budget.close(shared); try budget.close(root);
-    output("u1b-aggregate-calls:ok");
+    if mode == -1 { output("u1b-aggregate-calls:ok"); }
+    return true;
+}
+function expectRefusal(program identity call.Program,target meta.FunctionId,
+    owner identity budget.Owner,expected Text) returns Bool fails ProbeError,verify.InvalidIR {
+    let result be call.run(program,target,owner,[0],64,8)
+    else error budget.LimitError { return error.category == expected; }
+    else error verify.InvalidIR { fail error; };
+    return false;
+}
+function all() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let normal be try exercise(-1);
+    let cancelled be try exercise(-2);
+    let limits be [0,128,512,1024,2048,4096,8192];
+    for limit in limits { let denied be try exercise(limit); }
+    let work be [0,1,16,64,128];
+    for amount in work { let denied be try exercise(10000+amount); }
     return true;
 }
 function main() {
-    let done be exercise()
+    let done be all()
     else error budget.LimitError {
         output("limit:"+error.message); process.setExitCode(1); return;
     } else error verify.InvalidIR {
