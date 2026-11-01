@@ -82,14 +82,22 @@ class U1BWordStorePollBenchmark(unittest.TestCase):
         if not shutil.which("as") or not shutil.which("ld"):
             self.skipTest("as/ld unavailable")
         fixture = (ROOT / "tests/fixtures/u1_aggregate_calls.eri").read_text()
-        original_words = (ROOT / "src/compiler/u1_words.eri").read_text()
-        modified_words = change_poll_only(original_words)
+        current_words = (ROOT / "src/compiler/u1_words.eri").read_text()
+        if current_words.count(OLD) == 1:
+            original_words = current_words
+            modified_words = change_poll_only(current_words)
+        elif current_words.count(NEW) == 1:
+            modified_words = current_words
+            original_words = current_words.replace(NEW, OLD, 1)
+            self.assertEqual(change_poll_only(original_words), modified_words)
+        else:
+            raise AssertionError("word-store context must match a known owner-check form")
 
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             baseline_root = root / "baseline"
             candidate_root = root / "candidate"
-            baseline = prepare_source(baseline_root, fixture)
+            baseline = prepare_source(baseline_root, fixture, original_words)
             candidate = prepare_source(candidate_root, fixture, modified_words)
 
             # The independent original C-bootstrap produces the external oracle.
