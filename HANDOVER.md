@@ -1,11 +1,13 @@
 # Eristavi compiler — current handover
 
-**Authoritative recovery checkpoint: 1 November 2026, Asia/Nicosia. Read §75 FIRST for optimization execution and its latest result.** §73 is the original plan; §72 records the earlier full source qualification, not qualification of the new candidate.
+**Authoritative recovery checkpoint: 1 November 2026, Asia/Nicosia. Read §76 FIRST for optimization execution and its latest result.** §73 is the original plan; §72 records the earlier full source qualification, not qualification of the new candidate.
 
 PR #106 remains DRAFT/OPEN/unmerged, #73/#51 OPEN. Optimization work is preserved
-on `compiler/u1b-optimization-execution-20261101`, starting from plan PR #107
-head `d2bb747`; the latest published working checkpoint is `4a377c6`. The
-original #106 head remains `c2423d5` until integration. Profiler raw-unit repair,
+on `compiler/u1b-optimization-execution-20261101` and integrated into #106's
+`compiler/u1b-owned-aggregate-graph-20261031` branch at code/test/evidence
+revision `866f7a547b517549197d1a31c17fa3392f1fce53`. Plan PR #107 is now
+MERGED by ancestry into #106 (not into main). This handover reconciliation
+changes documentation only; required final qualification is selected afterward. Profiler raw-unit repair,
 three decoder/trace checks and expanded current-source native profiles PASS.
 Automatic expensive PR profiling is removed; explicit manual profiling retains
 raw snapshots and summary. New fixed-depth noncreating word reads preserve all
@@ -98,7 +100,7 @@ redundant indexing, unbounded caches or unnecessarily expensive CI.
 
 > **MANDATORY:** Read complete governing philosophy/semantics, applicable architecture/IR and CI contracts and this handover. Follow Philosophy → Semantics → Architecture → Implementation, optimization-first after correctness/safety. Standing GitHub authorization does not waive acceptance or select experimental owned full self-build.
 >
-> **Resume at §75.** The profiler is repaired and manual-only expensive selection restored in the working candidate. Fixed-depth fresh word reads pass all 12 focused checks, five alternating owned-native pairs (all wins; median 61.790446 → 54.983744s) and final local smoke 49/49, including actual physical/forced-collision gates. Counter evidence proves identical checks/work and fewer boxes/traffic. Independent scaling passed; typed_ir source compilation passed parity and ir_verify was censored at 90s. Final hosted exact-head qualification remains pending until observed. Working branch compiler/u1b-optimization-execution-20261101 includes plan #107; original #106 remains draft/unmerged until integration. Preserve malformed same-revision dead/uncalled IR checks, ABI/budgets, cleanup and source faults. #51 remains open for much larger boxing/source-compiler work; U2/U3/U4 are separate. No automatic full owned compiler self-build or repeated expensive CI for docs.
+> **Resume at §76.** The profiler is repaired and manual-only expensive selection restored in the working candidate. Fixed-depth fresh word reads pass all 12 focused checks, five alternating owned-native pairs (all wins; median 61.790446 → 54.983744s) and final local smoke 49/49, including actual physical/forced-collision gates. Counter evidence proves identical checks/work and fewer boxes/traffic. Independent scaling passed; typed_ir source compilation passed parity and ir_verify was censored at 90s. Final hosted exact-head qualification remains pending until observed. Code/test/evidence revision 866f7a5 is integrated into #106; plan #107 is merged into that feature branch by ancestry. #106 remains draft/unmerged into main pending final hosted qualification. Preserve malformed same-revision dead/uncalled IR checks, ABI/budgets, cleanup and source faults. #51 remains open for much larger boxing/source-compiler work; U2/U3/U4 are separate. No automatic full owned compiler self-build or repeated expensive CI for docs.
 
 ## Current verified status — read before historical sections
 
@@ -123,9 +125,9 @@ redundant indexing, unbounded caches or unnecessarily expensive CI.
 | U3 #75 | Direct frozen frontend → new UIR → production native target/artifact/cache integration **NOT IMPLEMENTED**. Existing adapter is isolated; #104 is test-only reference parity |
 | U4 #102 | Redesigned UIR machine/legalization/artifact migration **NOT IMPLEMENTED / NOT QUALIFIED** |
 | Production | Existing source language and default compiler pipeline retained; no new-UIR backend promotion |
-| Environment / next stage | Local and remote working branch `compiler/u1b-optimization-execution-20261101` contains the tested candidate and plan #107. Integrate into #106 for final hosted qualification; see §75. No U1b merge yet. |
+| Environment / next stage | Local and remote working branch `compiler/u1b-optimization-execution-20261101` contains the tested candidate and plan #107. Integrated into #106 at code/test/evidence head 866f7a5; plan #107 merged into the feature branch, not main. Final hosted qualification next; see §76. No U1b main merge yet. |
 
-**Reading rule:** the opening and newest checkpoint (§75) govern current status; section 44 governs the accepted U1a boundary. Earlier keep-open and pending
+**Reading rule:** the opening and newest checkpoint (§76) govern current status; section 44 governs the accepted U1a boundary. Earlier keep-open and pending
 statements describe their historical revisions. U1a acceptance does not certify
 U2 managed GC/cleanup, U3 durable artifacts/source integration or U4 toolchains.
 Documentation-only status reconciliation reuses unchanged implementation evidence
@@ -3361,3 +3363,21 @@ merge the bounded U1b slice and close #73 under standing user authorization,
 while keeping #51 open. Immediately reconcile handover/report after any result
 or merge. As of this checkpoint, final hosted qualification has NOT started;
 no merge or issue closure is claimed.
+
+## 76. Final candidate integrated into #106; exact-head qualification selection — 2026-11-01
+
+Code/test/workflow/evidence revision `866f7a547b517549197d1a31c17fa3392f1fce53`
+has been published and integrated by guarded fast-forward into draft PR #106.
+All 28 changed files were verified against local Git blob hashes. Plan #107
+is confirmed CLOSED/MERGED by ancestry into that feature branch; main remains
+`ccfe726ad80212c9a10ee16d5f3cf17e52db160a`. PR #106 and #73/#51 remain OPEN;
+no main merge or milestone closure. PR title/body now describe the final scope.
+
+The local/measurement/physical acceptance and explicit reference-only disposition
+are in §§74–75. This checkpoint changes HANDOVER.md only. The stale existing
+qualification label was removed; re-add it ONCE after this documentation commit
+to select the required four-platform full CI and full bootstrap/offline plus
+owned integration at the final head. Do not mark Ready as a second trigger.
+Experimental owned full compiler self-build is excluded. A requested/queued run
+is not passing; inspect exact source SHA/job outcomes before merge and record
+the final evidence. No repeated full matrix is needed for documentation alone.
