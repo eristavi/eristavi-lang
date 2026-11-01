@@ -1,0 +1,38 @@
+name: U1b owned-runtime safe-point pilot (opt-in)
+on:
+  pull_request:
+    paths:
+      - tests/test_u1b_owned_runtime_benchmark.py
+      - .github/workflows/u1b-owned-runtime-benchmark.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: u1b-owned-runtime-benchmark-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CC: clang
+      CFLAGS: -O2
+      ERISTAVI_U1B_BENCH_PAIRS: '1'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: python -m pip install -e .
+      - name: Identical-source C oracle and paired owned-native runtime pilot
+        shell: bash
+        run: |
+          set -o pipefail
+          PYTHONPATH=tests python -u -m unittest -v test_u1b_owned_runtime_benchmark 2>&1 | tee u1b-owned-pair.log
+      - name: Preserve comparison evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: u1b-owned-pair-${{ github.run_attempt }}
+          retention-days: 14
+          path: u1b-owned-pair.log
