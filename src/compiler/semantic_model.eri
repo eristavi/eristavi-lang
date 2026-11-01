@@ -47,10 +47,12 @@ public function at(owner identity Module, token Int) returns identity Location {
     let cursor be owner.locationIndex;
     while cursor != none {
         let node be cursor;
-        // Location tree nodes are immutable during lookup. Read the key once.
-        let ordinal be node.ordinal;
-        if token == ordinal { return node; }
-        if token < ordinal { cursor=node.left; } else { cursor=node.right; }
+        // One key read on the left branch; preserve exact-match/right semantics.
+        if token < node.ordinal { cursor=node.left; }
+        else {
+            if token == node.ordinal { return node; }
+            cursor=node.right;
+        }
     }
     return identity Location { path=owner.path; line=1; column=1; next=none; ordinal=-1; left=none; right=none; facts=none; };
 }
