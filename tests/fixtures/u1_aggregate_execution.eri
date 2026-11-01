@@ -15,7 +15,7 @@ function mainRun() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeEr
     let shared be try budget.metadataOwner(root);
     let mp be try budget.constructionPhase(shared);
     let data be try meta.create(shared,mp);
-    let sig be try meta.signature(data,mp,[],[meta.i64(),meta.i64()]);
+    let sig be try meta.signature(data,mp,[meta.i64()],[meta.i64(),meta.i64()]);
     let source be try meta.source(data,mp,"u1b-execute","0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",128);
     let loc be try meta.location(data,mp,source,0,8,1,1,1);
     let graph be try aggregate.create(shared,mp);
@@ -27,7 +27,7 @@ function mainRun() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeEr
     let owner be try budget.functionOwner(root,false);
     let cp be try budget.constructionPhase(owner);
     let fn be try build.create(data,sig,owner,cp);
-    let entry be try build.block(fn,[]);
+    let entry be try build.block(fn,[meta.i64()]);
     let eleven be try build.integer(fn,entry,11,loc);
     let seventeen be try build.integer(fn,entry,17,loc);
     let original be try agbuild.make(fn,graph,entry,shape,[eleven,eleven],loc);
@@ -44,7 +44,7 @@ function mainRun() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeEr
     try build.complete(fn);
     try budget.finishPhase(cp);
     let executionOwner be try budget.functionOwner(root,false);
-    let outcome be try run.run(fn,graph,executionOwner,[],50);
+    let outcome be try run.run(fn,graph,executionOwner,[123],50);
     try check(outcome.kind == 0 and outcome.count == 2 and
         (try run.result(outcome,0)) == 11 and
         (try run.result(outcome,1)) == 17 and outcome.steps == 7,
