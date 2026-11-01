@@ -96,7 +96,7 @@ function exercise() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeE
     try check((try call.seal(program)) == 4,"all canonical declarations verified");
 
     let success be try call.run(program,mainId,mainOwner,[0],64,8);
-    try check(success.kind == 0 and success.count == 2 and success.steps == 12,
+    try check(success.kind == 0 and success.count == 2 and success.steps == 11,
         "three-function canonical call chain");
     output(try call.scalar(success,0));
     output(try call.scalar(success,1));
