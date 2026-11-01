@@ -131,3 +131,190 @@ public function set(routine identity build.Function,graph identity aggregate.Reg
     }
     return try emit(routine,graph,block,45,[source,replacement],location,index,shape.index,shape);
 }
+
+
+// U1b opt-in canonical block/edge/signature adapters. These append directly to
+// the SAME Function tables and do not change the existing U1a object layout.
+// All TypeIds are checked against a frozen graph before record publication.
+public function block(routine identity build.Function,graph identity aggregate.Registry,
+    parameters) returns build.BlockId fails budget.LimitError {
+    try budget.poll(routine.owner);
+    if routine.state != 0 or graph.state != 1 or
+       graph.owner != routine.metadata.owner or
+       routine.owner.parent != graph.owner.parent {
+        try budget.reject("U1b block requires frozen same-request aggregate types");
+    }
+    if routine.blocks.length/5 >= 65536 or
+       parameters.count > 1048576-routine.values.length/4 {
+        try budget.exceed(routine.owner,1,0);
+    }
+    let item be 0;
+    while item < parameters.count {
+        try aggregate.valid(graph,parameters[item]);
+        item=item+1;
+    }
+    let result be build.BlockId { owner=routine.key; index=routine.blocks.length/5+1; };
+    let first be 0;
+    if parameters.count > 0 { first=routine.values.length/4+1; }
+    let ignored be try words.push(routine.blocks,routine.phase,first);
+    ignored=try words.push(routine.blocks,routine.phase,parameters.count);
+    ignored=try words.push(routine.blocks,routine.phase,0);
+    ignored=try words.push(routine.blocks,routine.phase,0);
+    ignored=try words.push(routine.blocks,routine.phase,0);
+    item=0;
+    while item < parameters.count {
+        let ty be parameters[item];
+        ignored=try words.push(routine.values,routine.phase,ty.index);
+        ignored=try words.push(routine.values,routine.phase,0);
+        ignored=try words.push(routine.values,routine.phase,result.index);
+        ignored=try words.push(routine.values,routine.phase,item);
+        item=item+1;
+    }
+    routine.revision=routine.revision+1;
+    return result;
+}
+function checkedEdge(routine identity build.Function,graph identity aggregate.Registry,
+    target build.BlockId,values) fails budget.LimitError {
+    if target.owner != routine.key or target.index < 2 or
+       target.index > routine.blocks.length/5 {
+        try budget.reject("foreign, invalid or entry-targeted U1b edge");
+    }
+    let offset be (target.index-1)*5;
+    let count be try words.get(routine.blocks,routine.phase,offset+1);
+    if count != values.count { try budget.reject("U1b edge arity mismatch"); }
+    let first be try words.get(routine.blocks,routine.phase,offset);
+    let item be 0;
+    while item < count {
+        let actual be try typeOf(routine,graph,values[item]);
+        let required be try words.get(routine.values,routine.phase,(first+item-1)*4);
+        if actual.index != required { try budget.reject("U1b edge type mismatch"); }
+        item=item+1;
+    }
+}
+function appendEdge(routine identity build.Function,target build.BlockId,values)
+    returns Int fails budget.LimitError {
+    if routine.edges.length/3 >= 262144 or
+       values.count > routine.arguments.limit-routine.arguments.length {
+        try budget.exceed(routine.owner,1,0);
+    }
+    let start be routine.arguments.length; let item be 0;
+    while item < values.count {
+        let value be values[item];
+        let ignored be try words.push(routine.arguments,routine.phase,value.index);
+        item=item+1;
+    }
+    let ordinal be routine.edges.length/3+1;
+    let ignored be try words.push(routine.edges,routine.phase,target.index);
+    ignored=try words.push(routine.edges,routine.phase,start);
+    ignored=try words.push(routine.edges,routine.phase,values.count);
+    return ordinal;
+}
+function terminator(routine identity build.Function,blockId build.BlockId,
+    op Int,inputs,loc meta.LocId,payload Int,extra Int)
+    fails budget.LimitError {
+    if op != 6 and op != 7 and op != 8 {
+        try budget.reject("invalid U1b terminator profile");
+    }
+    let offset be (blockId.index-1)*5;
+    if routine.instructions.length/10 >= 1048576 or
+       inputs.count > routine.operands.limit-routine.operands.length {
+        try budget.exceed(routine.owner,1,0);
+    }
+    let first be routine.operands.length; let index be 0;
+    while index < inputs.count {
+        let value be inputs[index];
+        let ignored be try words.push(routine.operands,routine.phase,value.index);
+        index=index+1;
+    }
+    let number be routine.instructions.length/10+1;
+    let ignored be try words.push(routine.instructions,routine.phase,op);
+    ignored=try words.push(routine.instructions,routine.phase,blockId.index);
+    ignored=try words.push(routine.instructions,routine.phase,first);
+    ignored=try words.push(routine.instructions,routine.phase,inputs.count);
+    ignored=try words.push(routine.instructions,routine.phase,0);
+    ignored=try words.push(routine.instructions,routine.phase,0);
+    ignored=try words.push(routine.instructions,routine.phase,loc.index);
+    ignored=try words.push(routine.instructions,routine.phase,payload);
+    ignored=try words.push(routine.instructions,routine.phase,extra);
+    ignored=try words.push(routine.instructions,routine.phase,0);
+    try words.set(routine.blocks,routine.phase,offset+4,number);
+    routine.revision=routine.revision+1;
+}
+public function jump(routine identity build.Function,graph identity aggregate.Registry,
+    from build.BlockId,target build.BlockId,values,loc meta.LocId)
+    fails budget.LimitError {
+    let checked be try access(routine,graph,from,loc);
+    try checkedEdge(routine,graph,target,values);
+    let index be try appendEdge(routine,target,values);
+    try terminator(routine,from,6,[],loc,index,0);
+}
+public function branch(routine identity build.Function,graph identity aggregate.Registry,
+    from build.BlockId,test build.ValueId,
+    yes build.BlockId,yesValues,no build.BlockId,noValues,loc meta.LocId)
+    fails budget.LimitError {
+    let checked be try access(routine,graph,from,loc);
+    if (try typeOf(routine,graph,test)).index != 1 {
+        try budget.reject("U1b branch requires predicate");
+    }
+    try checkedEdge(routine,graph,yes,yesValues);
+    try checkedEdge(routine,graph,no,noValues);
+    let left be try appendEdge(routine,yes,yesValues);
+    let right be try appendEdge(routine,no,noValues);
+    try terminator(routine,from,7,[test],loc,left,right);
+}
+public function returnValues(routine identity build.Function,
+    graph identity aggregate.Registry,from build.BlockId,values,loc meta.LocId)
+    fails budget.LimitError {
+    let checked be try access(routine,graph,from,loc);
+    let count be try meta.resultCount(routine.metadata,routine.phase,routine.signature);
+    if values.count != count { try budget.reject("U1b return arity mismatch"); }
+    let signatureOffset be (routine.signature.index-1)*6;
+    let first be try words.get(routine.metadata.signatures,routine.phase,signatureOffset+4);
+    let item be 0;
+    while item < count {
+        let actual be try typeOf(routine,graph,values[item]);
+        let required be try words.get(routine.metadata.types,routine.phase,first+item);
+        if actual.index != required { try budget.reject("U1b return type mismatch"); }
+        item=item+1;
+    }
+    try terminator(routine,from,8,values,loc,0,0);
+}
+// Frozen output contains exactly the canonical U1a Function/Metadata tables.
+// This variant checks aggregate signature TypeIds without invoking scalar-only
+// meta.parameterType, and does not imply that verification already succeeded.
+public function complete(routine identity build.Function,
+    graph identity aggregate.Registry) fails budget.LimitError {
+    try budget.poll(routine.owner);
+    if routine.state != 0 or graph.state != 1 or
+       graph.owner != routine.metadata.owner {
+        try budget.reject("U1b complete requires a frozen owned graph");
+    }
+    if routine.blocks.length == 0 { try budget.reject("missing U1b entry"); }
+    let count be try meta.parameterCount(routine.metadata,routine.phase,routine.signature);
+    if try words.get(routine.blocks,routine.phase,1) != count {
+        try budget.reject("U1b entry arity mismatch");
+    }
+    let first be try words.get(routine.blocks,routine.phase,0);
+    let signatureOffset be (routine.signature.index-1)*6;
+    let start be try words.get(routine.metadata.signatures,routine.phase,signatureOffset+2);
+    let index be 0;
+    while index < count {
+        let actual be try words.get(routine.values,routine.phase,(first+index-1)*4);
+        let required be try words.get(routine.metadata.types,routine.phase,start+index);
+        if actual != required { try budget.reject("U1b entry type mismatch"); }
+        index=index+1;
+    }
+    index=0;
+    while index < routine.blocks.length/5 {
+        if try words.get(routine.blocks,routine.phase,index*5+4) == 0 {
+            try budget.reject("unterminated U1b block");
+        }
+        index=index+1;
+    }
+    try words.freeze(routine.blocks); try words.freeze(routine.values);
+    try words.freeze(routine.instructions); try words.freeze(routine.operands);
+    try words.freeze(routine.edges); try words.freeze(routine.arguments);
+    try words.freeze(routine.cells); try words.freeze(routine.switches);
+    try words.freeze(routine.cases);
+    routine.state=1;
+}

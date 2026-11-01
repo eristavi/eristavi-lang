@@ -1,0 +1,78 @@
+import std.process;
+import compiler.u1_budget as budget;
+import compiler.u1_meta as meta;
+import compiler.u1_aggregate as aggregate;
+import compiler.u1_aggregate_signature as sig;
+import compiler.u1_aggregate_build as ab;
+import compiler.u1_builder as build;
+import compiler.u1_verify as verify;
+import compiler.u1_promote as promote;
+
+error ProbeError { message Text; }
+function check(okay Bool,label Text) fails ProbeError {
+    if not okay { fail ProbeError { message=label; }; }
+}
+function run() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let root be try budget.developmentRequest();
+    let owner be try budget.metadataOwner(root);
+    let mp be try budget.constructionPhase(owner);
+    let data be try meta.create(owner,mp);
+    let native be try meta.signature(data,mp,[meta.i64()],[meta.i64()]);
+    let graph be try aggregate.create(owner,mp);
+    let i64 be try aggregate.primitive(graph,meta.i64());
+    let pair be try aggregate.aggregate(graph,mp,[i64,i64]);
+    let compatible be try sig.signature(data,graph,mp,[i64],[i64]);
+    try check(compatible.index == native.index,"shared canonical scalar signature");
+    let aggregateSignature be try sig.signature(data,graph,mp,[pair],[pair]);
+    let identical be try sig.signature(data,graph,mp,[pair],[pair]);
+    try check(aggregateSignature.index == identical.index and
+        (try sig.parameterType(data,graph,mp,aggregateSignature,0)).index == pair.index and
+        (try sig.resultType(data,graph,mp,aggregateSignature,0)).index == pair.index,
+        "canonical aggregate signature and field type");
+    let source be try meta.source(data,mp,"aggregate-signature","0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",128);
+    let loc be try meta.location(data,mp,source,0,8,1,1,1);
+    try aggregate.freeze(graph); try meta.freeze(data); try budget.finishPhase(mp);
+    let fnOwner be try budget.functionOwner(root,false);
+    let cp be try budget.constructionPhase(fnOwner);
+    let fn be try build.create(data,aggregateSignature,fnOwner,cp);
+    let entry be try ab.block(fn,graph,[pair]);
+    let input be try build.parameter(fn,entry,0);
+    let field be try ab.get(fn,graph,entry,input,0,loc);
+    let local be try build.cell(fn,meta.i64());
+    try build.initialize(fn,entry,local,field,loc);
+    let read be try build.readCell(fn,entry,local,loc);
+    let updated be try ab.set(fn,graph,entry,input,0,read,loc);
+    let destination be try ab.block(fn,graph,[pair]);
+    try ab.jump(fn,graph,entry,destination,[updated],loc);
+    let result be try build.parameter(fn,destination,0);
+    try ab.returnValues(fn,graph,destination,[result],loc);
+    try ab.complete(fn,graph); try budget.finishPhase(cp);
+    let vp be try budget.verificationPhase(fnOwner);
+    let report be try verify.constructionAggregates(fn,graph,vp);
+    try check(report.reachableBlocks == 2 and report.revision == fn.revision,
+        "aggregate signature construction verification");
+    let promoted be try promote.promoteAggregates(fn,graph,
+        try budget.promotionPhase(fnOwner));
+    try check(promoted.routine.cells.length == 0 and
+        promoted.routine.revision != fn.revision,
+        "aggregate scalar cell promotion and invalidation");
+    let second be try verify.verifyAggregates(promoted.routine,graph,
+        try budget.verificationPhase(fnOwner));
+    try check(second.reachableBlocks == 2,"aggregate promotion reverified");
+    try build.close(promoted.routine);
+    try build.close(fn); try aggregate.close(graph); try meta.close(data);
+    try check(root.live == 0 and root.pending == 0,"aggregate signatures owner reclaimed");
+    try budget.close(fnOwner); try budget.close(owner); try budget.close(root);
+    output("aggregate-signature-promotion:ok"); return true;
+}
+function main() {
+    let result be run()
+    else error budget.LimitError {
+        output("limit:"+error.message); process.setExitCode(1); return;
+    } else error verify.InvalidIR {
+        output("ir:"+error.message); process.setExitCode(1); return;
+    } else error ProbeError {
+        output("probe:"+error.message); process.setExitCode(1); return;
+    };
+}
+main();

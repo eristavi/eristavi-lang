@@ -592,8 +592,9 @@ public function construction(routine identity build.Function,phase identity budg
 // Explicit U1b canonical typed SSA profile: independently validate the
 // program-owned frozen type graph EVERY time, even on unchanged revisions.
 // Do not turn a builder completion, cached flag, or previous report into trust.
-public function verifyAggregates(routine identity build.Function,
-    registry identity aggregate.Registry,phase identity budget.Phase)
+function verifiedAggregateMode(routine identity build.Function,
+    registry identity aggregate.Registry,phase identity budget.Phase,
+    construction Bool)
     returns Report fails budget.LimitError,InvalidIR {
     try budget.poll(routine.owner);
     if registry.owner != routine.metadata.owner or registry.state != 1 or
@@ -616,5 +617,16 @@ public function verifyAggregates(routine identity build.Function,
             fail error;
         };
     try budget.finishPhase(graphPhase);
-    return try verifyMode(routine,phase,false,registry);
+    return try verifyMode(routine,phase,construction,registry);
+}
+
+public function verifyAggregates(routine identity build.Function,
+    registry identity aggregate.Registry,phase identity budget.Phase)
+    returns Report fails budget.LimitError,InvalidIR {
+    return try verifiedAggregateMode(routine,registry,phase,false);
+}
+public function constructionAggregates(routine identity build.Function,
+    registry identity aggregate.Registry,phase identity budget.Phase)
+    returns Report fails budget.LimitError,InvalidIR {
+    return try verifiedAggregateMode(routine,registry,phase,true);
 }

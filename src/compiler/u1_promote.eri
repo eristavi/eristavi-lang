@@ -4,6 +4,8 @@ import compiler.u1_words as words;
 import compiler.u1_builder as build;
 import compiler.u1_ops as ops;
 import compiler.u1_verify as verify;
+import compiler.u1_aggregate as aggregate;
+import compiler.u1_aggregate_build as aggregateBuild;
 import compiler.u1_dominance as dom;
 import compiler.u1_successors as succ;
 public type Result {
@@ -421,7 +423,7 @@ function rewrite(state identity State,table identity words.Words) fails budget.L
         if mapped == 0 { try invalid("no emitted definition for promoted value"); } try words.set(table,state.phase,index,mapped); index=index+1;
     }
 }
-function rebuild(state identity State) fails budget.LimitError,verify.InvalidIR {
+function rebuild(state identity State,registry maybe identity aggregate.Registry) fails budget.LimitError,verify.InvalidIR {
     let output be try build.create(state.input.metadata,state.input.signature,state.input.owner,state.phase); state.output=output;
     let block be 1;
     while block <= state.graph.blocks {
@@ -457,21 +459,27 @@ function rebuild(state identity State) fails budget.LimitError,verify.InvalidIR 
         }
         block=block+1;
     }
-    try rewrite(state,output.operands); try rewrite(state,output.arguments); output.revision=state.input.revision+1; try build.complete(output);
+    try rewrite(state,output.operands); try rewrite(state,output.arguments); output.revision=state.input.revision+1;
+    if registry != none { try aggregateBuild.complete(output,registry); }
+    else { try build.complete(output); }
 }
 function closeScratch(state identity State) fails budget.LimitError {
     if not state.scratchClosed { state.scratchClosed=true; try words.close(state.plans); try dom.close(state.graph); }
 }
-function perform(state identity State) returns Result fails budget.LimitError,verify.InvalidIR {
+function perform(state identity State,registry maybe identity aggregate.Registry) returns Result fails budget.LimitError,verify.InvalidIR {
     try prepare(state); state.stage=1; try frontiers(state); state.stage=2; try placement(state);
-    state.stage=3; try rename(state); state.stage=4; try simplify(state); state.stage=5; try compact(state); state.stage=6; try rebuild(state);
+    state.stage=3; try rename(state); state.stage=4; try simplify(state); state.stage=5; try compact(state); state.stage=6; try rebuild(state,registry);
     // The sealed output no longer uses analysis storage. Retire it BEFORE the
     // independent verifier allocates its own workspace; input remains intact.
     try closeScratch(state);
     let output be state.output;
     if output != none {
         state.stage=7;
-        let checked be try verify.verify(output,try budget.verificationPhase(output.owner));
+        if registry != none {
+            let checked be try verify.verifyAggregates(output,registry,try budget.verificationPhase(output.owner));
+        } else {
+            let checked be try verify.verify(output,try budget.verificationPhase(output.owner));
+        }
         return Result { routine=output; insertedParameters=state.parameters; insertedArguments=state.arguments;
         liveStates=state.liveStates; predecessorVisits=state.predecessorVisits; placementStates=state.placementStates;
         frontierEntries=state.frontierEntries; frontierVisits=state.frontierVisits; aliasVisits=state.aliasVisits;
@@ -488,12 +496,20 @@ function discard(state identity State) fails budget.LimitError {
     let output be state.output; state.output=none; if output != none { try build.close(output); }
     try closeScratch(state); try budget.finishPhase(state.phase);
 }
-public function promote(input identity build.Function,phase identity budget.Phase) returns Result fails budget.LimitError,verify.InvalidIR {
+function promoteMode(input identity build.Function,phase identity budget.Phase,
+    registry maybe identity aggregate.Registry) returns Result fails budget.LimitError,verify.InvalidIR {
     if phase.owner != input.owner or phase.state != 0 or phase.used != 0 or phase.prepaid != 0 { try budget.reject("promotion requires a fresh function phase"); }
     if input.revision == 9223372036854775807 { try budget.exceed(input.owner,1,0); }
-    let checked be verify.construction(input,try budget.verificationPhase(input.owner))
-        else error verify.InvalidIR { try budget.finishPhase(phase); fail error; }
-        else error budget.LimitError { try budget.finishPhase(phase); fail error; };
+    if registry != none {
+        let checked be verify.constructionAggregates(input,registry,
+            try budget.verificationPhase(input.owner))
+            else error verify.InvalidIR { try budget.finishPhase(phase); fail error; }
+            else error budget.LimitError { try budget.finishPhase(phase); fail error; };
+    } else {
+        let checked be verify.construction(input,try budget.verificationPhase(input.owner))
+            else error verify.InvalidIR { try budget.finishPhase(phase); fail error; }
+            else error budget.LimitError { try budget.finishPhase(phase); fail error; };
+    }
     let preflight be try budget.reserve(input.owner,1024); try budget.cancelReservation(preflight);
     let graph be try dom.create(input.owner,phase); let plans be try words.create(input.owner,18874368);
     let state be identity State { input=input; output=none; scratchClosed=false; stage=0; phase=phase; graph=graph; plans=plans;
@@ -502,8 +518,18 @@ public function promote(input identity build.Function,phase identity budget.Phas
         aliases=0; phiForValue=0; current=0; edgeHeads=0; edgeTails=0; users=0; userTails=0; queue=0;
         blockMap=0; valueMap=0; reach=0; undo=0; liveStates=0; predecessorVisits=0; placementStates=0;
         frontierEntries=0; frontierVisits=0; aliasVisits=0; plannedParameters=0; plannedArguments=0; parameters=0; arguments=0; };
-    let result be perform(state) else error verify.InvalidIR { try discard(state); fail error; }
+    let result be perform(state,registry) else error verify.InvalidIR { try discard(state); fail error; }
         else error budget.LimitError { try discard(state);
             fail budget.LimitError { message="U1a promotion "+stageName(state.stage)+": "+error.message; category=error.category; requested=error.requested; remaining=error.remaining; }; };
     state.output=none; try closeScratch(state); try budget.finishPhase(phase); return result;
+}
+
+public function promote(input identity build.Function,phase identity budget.Phase)
+    returns Result fails budget.LimitError,verify.InvalidIR {
+    return try promoteMode(input,phase,none);
+}
+public function promoteAggregates(input identity build.Function,
+    registry identity aggregate.Registry,phase identity budget.Phase)
+    returns Result fails budget.LimitError,verify.InvalidIR {
+    return try promoteMode(input,phase,registry);
 }
