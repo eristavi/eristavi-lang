@@ -402,14 +402,15 @@ public function run(program identity Program,target meta.FunctionId,
     let count be 0;
     if result.kind == 0 {
         let cursor be result.first; i=0;
-        while i < result.count {
+        let originalCount be result.count;
+        while i < originalCount {
             if cursor != none {
                 let token be av.ValueId { owner=engine.key; index=cursor.index; };
                 let ty be try av.typeOf(engine,token);
                 if ty.index > 6 or ty.index == 3 {
                     result=failResult(3,8,0);
                     head=none; count=0;
-                    break;
+                    i=originalCount;
                 }
                 let scalar be identity Scalar { bits=try av.bits(engine,token); next=none; };
                 if end == none { head=scalar; } else { end.next=scalar; }
