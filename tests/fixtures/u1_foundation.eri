@@ -273,10 +273,50 @@ function combinedLease() fails budget.LimitError,ProbeError {
     try budget.close(owner); try budget.close(other); try budget.close(root);
     output("combined-lease:ok");
 }
+// The word-store context's second owner poll is deliberately elided only
+// for IDENTICAL owner capabilities. Cross-owner shared reads still poll
+// the phase owner before testing foreign-store rules. Polls do not consume
+// work credit; all checked failure categories and cleanup remain unchanged.
+function pollReadCategory(store identity words.Words,phase identity budget.Phase)
+    returns Text {
+    let value be words.get(store,phase,0)
+    else error budget.LimitError { return error.category; };
+    return "success";
+}
+function wordOwnerPollContracts() fails budget.LimitError,ProbeError {
+    let root be try budget.developmentRequest();
+    let sharedOwner be try budget.metadataOwner(root);
+    let localOwner be try budget.functionOwner(root,true);
+    let sharedPhase be try budget.constructionPhase(sharedOwner);
+    let localPhase be try budget.constructionPhase(localOwner);
+    let sharedWords be try words.create(sharedOwner,4);
+    let localWords be try words.create(localOwner,4);
+    let sharedIndex be try words.push(sharedWords,sharedPhase,33);
+    let localIndex be try words.push(localWords,localPhase,44);
+    try check(sharedIndex == 0 and localIndex == 0,"word poll setup");
+    let beforeWork be localOwner.work;
+    let localValue be try words.get(localWords,localPhase,0);
+    try check(localValue == 44 and localOwner.work == beforeWork+7,
+        "same-owner reads retain exact work charges");
+    let sharedValue be try words.get(sharedWords,localPhase,0);
+    try check(sharedValue == 33,"different-owner shared read remains supported");
+    try check(pollReadCategory(localWords,sharedPhase) == "invalid-state",
+        "different-owner function records remain forbidden");
+    budget.cancel(localOwner);
+    try check(pollReadCategory(sharedWords,localPhase) == "cancelled",
+        "different-owner reads must poll canceled phase owner");
+    try check(pollReadCategory(localWords,localPhase) == "cancelled",
+        "same-owner reads must poll canceled owner");
+    try words.close(sharedWords); try words.close(localWords);
+    try budget.finishPhase(sharedPhase); try budget.finishPhase(localPhase);
+    try budget.close(sharedOwner); try budget.close(localOwner);
+    try check(root.live == 0 and root.pending == 0,"word poll cleanup");
+    try budget.close(root);
+}
 function run() returns Bool fails budget.LimitError,ProbeError {
     try combinedLease(); try reservations(); try failedCapacity(); try failedParent(); try failedTraffic(); try transferCapacity(); try failedTransfer(); try transferKind();
     try duplicateCommit(); try duplicateRelease(); try workCredits(); try requestWork(); try cancellation(); try abandonedAttempt();
-    try arithmeticBoundary(); try pageStorage(); try metadataAndBuilders(); try structuralRejections(); try failedConstruction(); return true;
+    try arithmeticBoundary(); try pageStorage(); try wordOwnerPollContracts(); try metadataAndBuilders(); try structuralRejections(); try failedConstruction(); return true;
 }
 function main() {
     let done be run() else error budget.LimitError { output(error.category+":"+error.message); process.setExitCode(1); return; }
