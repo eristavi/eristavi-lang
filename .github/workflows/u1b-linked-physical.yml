@@ -3,10 +3,6 @@ name: U1b linked physical probe (opt-in)
 # Separate from smoke and final qualification. Only U1b linked observer
 # changes trigger this one Linux x86-64 diagnostic.
 on:
-  pull_request:
-    paths:
-      - tests/test_u1b_linked_actual_physical.py
-      - .github/workflows/u1b-linked-physical.yml
   workflow_dispatch:
 
 permissions:
