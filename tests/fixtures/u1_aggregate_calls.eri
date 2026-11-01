@@ -167,6 +167,12 @@ function exercise(mode Int) returns Bool fails budget.LimitError,verify.InvalidI
         failure.location == trapLoc.index,"original callee guard location");
 
     }
+    // Linked execution's aggregate engine and recursive frame scratch share
+    // the entry owner. Assert the original U1 admission ceilings without
+    // increasing them; actual allocator capacity remains a separate gate.
+    try check(mainOwner.peak <= 8388608 and
+        mainOwner.traffic <= 67108864,
+        "linked frame owner exceeded original physical admission ceilings");
     try call.close(program);
     try build.close(copy); try build.close(update);
     try build.close(main); try build.close(failing);
