@@ -20,6 +20,10 @@ function exercise() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeE
     let graph be try aggregate.create(shared,mp);
     let i64 be try aggregate.primitive(graph,meta.i64());
     let pair be try aggregate.aggregate(graph,mp,[i64,i64]);
+    // Instantiate the existing concrete scalar U1a metadata signature path.
+    // The bootstrap must analyze generic U1a helpers independently of the
+    // aggregate-only structural signature import.
+    let scalarSig be try meta.signature(data,mp,[meta.i64()],[meta.i64()]);
     let pairSig be try signature.signature(data,graph,mp,[pair],[pair]);
     let entrySig be try signature.signature(data,graph,mp,[i64],[i64,i64]);
     let copyId be try meta.declaration(data,mp,pairSig,"aggregate.copy",1,0,0);
