@@ -32,7 +32,8 @@ function same(data identity meta.Metadata,phase identity budget.Phase,
     offset Int,values) returns Bool fails budget.LimitError {
     let item be 0;
     while item < values.count {
-        if try words.get(data.types,phase,offset+item) != values[item].index { return false; }
+        let value be values[item];
+        if try words.get(data.types,phase,offset+item) != value.index { return false; }
         item=item+1;
     }
     return true;
