@@ -86,11 +86,11 @@ class U1BLinkedActualPhysicalTests(unittest.TestCase):
             self.assertEqual((before["error"], after["error"]), (0, 0))
             # The diagnostic tag is active for every linked request, including
             # recursive execution and all bounded failure paths.
-            function = before["owners"]["function"]
-            final = after["owners"]["function"]
-            self.assertGreater(function["allocations"], 0)
-            self.assertGreater(function["traffic"], 0)
-            self.assertGreater(function["peak"], 0)
+            function = before["backing"]["function"]
+            final = after["backing"]["function"]
+            self.assertGreater(function["objects"], 0)
+            self.assertGreater(function["observed_bytes"], 0)
+            self.assertGreater(function["observed_bytes"], 0)
             self.assertLessEqual(function["peak"], function["traffic"])
             self.assertEqual(final["live"], 0)
             self.assertEqual(final["reclaimed_bytes"], function["traffic"])
