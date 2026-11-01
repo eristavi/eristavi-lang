@@ -185,7 +185,7 @@ public function run(routine identity build.Function,graph identity aggregate.Reg
     owner identity budget.Owner,inputs,fuel Int)
     returns identity Outcome fails budget.LimitError,verify.InvalidIR {
     if fuel < 1 or fuel > 1048576 or owner.kind != 2 or
-       owner == routine.owner or owner.parent == none or
+       owner != routine.owner or owner.parent == none or
        owner.parent != routine.owner.parent or graph.owner != routine.metadata.owner {
         try budget.reject("invalid opt-in U1b canonical execution owner or fuel");
     }
