@@ -39,6 +39,39 @@ def candidate_runtime(runtime):
     return runtime.replace(OLD, NEW, 1)
 
 
+def candidate_lookup_runtime(runtime):
+    """Inline the existing bucket computation at its hottest exact-find call.
+
+    The original hash, dynamic bucket selection, collision chain, object
+    identity comparison, and result are byte-for-byte algorithmically the same.
+    Only one call/return and its stack adjustment are eliminated.
+    """
+    start = runtime.index(".Lg_bucket:\n")
+    end = runtime.index(".Lg_insert:\n", start)
+    bucket = runtime[start:end]
+    if bucket.count("    ret\n") != 1 or not bucket.endswith("    ret\n"):
+        raise AssertionError("bucket contains unexpected returns")
+    if runtime.count(".Lg_bucket:\n") != 1:
+        raise AssertionError("expected one graph bucket implementation")
+    body = bucket.split("\n",1)[1].removesuffix("    ret\n")
+    body = body.replace(".Lg_bucket_mask", ".Lprof_find_bucket_mask")
+    body = body.replace(".Lg_bucket_table", ".Lprof_find_bucket_table")
+    find = (
+        "erist_rt_graph_find:\n"
+        "    subq $8,%rsp\n"
+        "    call .Lg_bucket\n"
+        "    addq $8,%rsp\n"
+        "    movq (%rax),%rax\n"
+    )
+    if runtime.count(find) != 1:
+        raise AssertionError("graph find entrypoint changed")
+    for marker in (".Lprof_find_bucket_mask", ".Lprof_find_bucket_table"):
+        if marker in runtime:
+            raise AssertionError("private inline label already defined")
+    return runtime.replace(find, "erist_rt_graph_find:\n" + body
+                           + "    movq (%rax),%rax\n", 1)
+
+
 def digest(value):
     return hashlib.sha256(value.encode()).hexdigest()
 
@@ -73,7 +106,10 @@ class U1BOwnedRuntimeBenchmark(unittest.TestCase):
             runtime = subprocess.run([str(generator)],capture_output=True,
                 text=True,timeout=120)
             self.assertEqual((runtime.returncode,runtime.stderr),(0,""))
-            candidate = candidate_runtime(runtime.stdout)
+            variant = os.environ.get("ERISTAVI_U1B_CANDIDATE", "safepoint")
+            self.assertIn(variant, ("safepoint", "graph_find"))
+            candidate = (candidate_runtime(runtime.stdout) if variant == "safepoint"
+                         else candidate_lookup_runtime(runtime.stdout))
             (root/"app.s").write_text(compiled.stdout)
             subprocess.run(["as","--64",str(root/"app.s"),"-o",str(root/"app.o")],
                 capture_output=True,check=True,timeout=60)
@@ -101,7 +137,8 @@ class U1BOwnedRuntimeBenchmark(unittest.TestCase):
                         f"{name} pair={pair+1}")
                     samples[name].append(seconds)
             medians = {k:statistics.median(v) for k,v in samples.items()}
-            print("U1B_OWNED_SAFEPOINT_PAIRED=" + json.dumps({
+            print("U1B_OWNED_MATCHED_PAIRED=" + json.dumps({
+                "candidate":variant,
                 "scope":"Same exact generated source assembly; original owned runtime "
                         "vs one safe-point exact counter load. Uninstrumented process "
                         "wall times include startup/OS noise. No source semantics, "
@@ -117,8 +154,11 @@ class U1BOwnedRuntimeBenchmark(unittest.TestCase):
                 "application_assembly_sha256":digest(compiled.stdout),
                 "fixture_sha256":digest(original),
                 "strict_C_bootstrap_stdout_and_exit_parity":True,
-                "candidate_change":"inline readonly .Lvalue_slot_count load "
-                                   "instead of calling pure erist_rt_slots_live",
+                "candidate_change":(
+                    "inline readonly .Lvalue_slot_count load instead of "
+                    "calling pure erist_rt_slots_live" if variant=="safepoint" else
+                    "inline existing graph bucket hash and table selection "
+                    "into erist_rt_graph_find, preserve all collisions/identity"),
             },sort_keys=True),flush=True)
 
 
