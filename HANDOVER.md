@@ -1,6 +1,6 @@
 # Eristavi compiler — current handover
 
-**Authoritative recovery checkpoint: 1 November 2026, Asia/Nicosia. Read section 47 for the current focused-tested canonical SSA reference execution (40/40), section 46 for prior canonical construction, and section 44 for the last fully qualified U1a release.**
+**Authoritative recovery checkpoint: 1 November 2026, Asia/Nicosia. Read section 48 for the requested full-CI qualification invocation and unresolved delivery state, section 47 for latest focused 40/40 code, and section 44 for last fully qualified U1a.**
 PR #105 is **QUALIFIED AND MERGED**. U1a's scoped physical acceptance gate passed;
 issue #77 is CLOSED/completed. Sections 1–43 preserve
 historical evidence and rejected prototypes; their pending/keep-open statements
@@ -2360,3 +2360,42 @@ oracles, malformed dead code and trap/source-location profiles; integrate
 aggregate signatures/calls/CFG and canonical SSA promotion; then adversarial
 resource/physical performance evidence before one final expensive qualification.
 Current HANDOVER-only commits do not change the passing executable code.
+
+## 48. User-requested expensive qualification and closure review — 2026-11-01
+
+**Request:** run one expensive test, close only issues/work that actually meets
+acceptance. Draft PR #106 was marked **Ready for review** and given the existing
+`qualification` label at head `4649763d0fe388eff9f9789eb965988e1e0b0433`
+(documentation-only successor of focused-pass code `bc743faf135927fa59b172cab2f151173fd07565`).
+Under `CI_QUALIFICATION.md`, ready-for-review selects the 4-platform full CI;
+adding `qualification` selects full CI plus the three Linux bootstrap repeatability
+and owned integration jobs. The separately manual `owned-self-build` profile was
+**NOT requested**. These selectors are one requested qualification batch, not
+proof that a workflow executed.
+
+**Live result at this checkpoint: NOT STARTED/NOT OBSERVED.** GitHub returned
+**zero** workflow runs and **zero** checks for the exact PR head after both
+selector mutations; the last confirmed green evidence remains focused run
+[41278535614](https://github.com/eristavi/eristavi-lang/actions/runs/41278535614)
+(40/40), NOT full CI. No full-matrix or completed-batch qualification has
+passed. The test must NOT be marked completed on the strength of the label or
+an unrelated historic run. Before proceeding, recheck head-specific GitHub
+Actions runs and job results, and investigate why the workflow event produced
+no run; manually dispatch `Eristavi CI` full at the exact ref via GitHub Actions
+if the event remains unprocessed, rather than repeatedly triggering redundant
+qualification batches. Do NOT run experimental full owned compiler self-build.
+
+**Closure audit (issue state checked against GitHub):** #77 and #71 are already
+closed; #105 is already merged. #73 **must stay OPEN** because aggregate
+signatures/calls/CFG, independent nested execution/oracle, promotion and physical
+resource/performance qualification remain missing; PR #106 cannot merge solely
+because old or future full CI is green. #74 U2 managed semantics, #75 U3 direct
+production integration, #102 U4 machine lowering and #51 compiler-performance
+investigation are also **OPEN/unfinished**. No newly closable issue was established
+by the current code and focused evidence. No issues were closed or PR merged.
+
+**Important:** preserve governing philosophy, frozen semantics, original ABI,
+owner accountability, and optimization-first/limited-test policy. Do not
+confuse a CI event request, a queued workflow, a succeeded workflow and
+completed milestone acceptance. Resume at this section and reconcile exact
+head/checks before any merge or closure action.
