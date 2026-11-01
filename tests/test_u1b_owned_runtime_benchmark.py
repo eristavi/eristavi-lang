@@ -185,7 +185,7 @@ def digest(value):
 
 
 class U1BOwnedRuntimeBenchmark(unittest.TestCase):
-    def test_same_assembly_original_vs_single_safe_point_optimization(self):
+    def test_same_assembly_original_vs_selected_owned_candidate(self):
         pairs = int(os.environ.get("ERISTAVI_U1B_BENCH_PAIRS", "0"))
         if pairs not in (1,5):
             self.skipTest("opt-in U1b pilot 1 pair or qualification 5 pairs")
