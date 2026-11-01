@@ -9,7 +9,8 @@ public type Page { w0 Int; w1 Int; w2 Int; w3 Int; w4 Int; w5 Int; w6 Int; w7 In
 public type Node { c0 maybe identity Node; c1 maybe identity Node; c2 maybe identity Node; c3 maybe identity Node; c4 maybe identity Node; c5 maybe identity Node; c6 maybe identity Node; c7 maybe identity Node; c8 maybe identity Node; c9 maybe identity Node; c10 maybe identity Node; c11 maybe identity Node; c12 maybe identity Node; c13 maybe identity Node; c14 maybe identity Node; c15 maybe identity Node; page maybe identity Page; charge maybe identity budget.Allocation; }
 public type Words { owner identity budget.Owner; root maybe identity Node; length Int; limit Int; closed Bool; frozen Bool; control identity budget.Allocation; }
 function context(words identity Words,phase identity budget.Phase,write Bool) fails budget.LimitError {
-    try budget.poll(words.owner); try budget.poll(phase.owner);
+    try budget.poll(words.owner);
+    if words.owner != phase.owner { try budget.poll(phase.owner); }
     if words.closed { try budget.reject("closed U1a word store"); }
     if write { if words.frozen or words.owner != phase.owner { try budget.reject("immutable or foreign U1a word store"); } }
     else { if words.owner != phase.owner { if words.owner.kind != 1 or words.owner.parent != phase.owner.parent { try budget.reject("foreign U1a word store"); } } }
