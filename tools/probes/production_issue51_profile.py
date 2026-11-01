@@ -145,12 +145,13 @@ def assemble_link(root, application, runtime, name):
     return binary
 
 
-def invoke(command, output, error, cap):
+def invoke(command, output, error, cap, pass_fds=()):
     start = time.monotonic()
     with output.open("wb") as stdout, error.open("wb") as stderr:
         try:
             p = subprocess.run(list(map(str, command)), stdout=stdout,
-                               stderr=stderr, timeout=cap)
+                               stderr=stderr, timeout=cap,
+                               pass_fds=pass_fds)
             return {"status": "completed" if p.returncode == 0 else "failed",
                     "returncode": p.returncode,
                     "wall_seconds": time.monotonic() - start}
@@ -254,7 +255,8 @@ def main():
                     result = invoke([executable, "emit-asm", target,
                                      "--source-root", ROOT/"src",
                                      "--target", "x86_64-linux", "--trace-phases"],
-                                    app_out, app_err, args.cap)
+                                    app_out, app_err, args.cap,
+                                    pass_fds=(stream.fileno(),) if name == "instrumented" else ())
                     if result["status"] == "completed":
                         result["output_sha256"] = digest(app_out)
                         result["exact_reference_parity"] = app_out.read_bytes() == reference_path.read_bytes()
