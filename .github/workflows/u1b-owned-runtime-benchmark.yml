@@ -1,16 +1,12 @@
 name: U1b owned-runtime matched optimization pilot (opt-in)
 on:
-  pull_request:
-    paths:
-      - tests/test_u1b_owned_runtime_benchmark.py
-      - .github/workflows/u1b-owned-runtime-benchmark.yml
   workflow_dispatch:
     inputs:
       candidate:
         description: "Which non-production generated-assembly experiment?"
         type: choice
         options: [safepoint, graph_find, positive_cache, positive_table]
-        default: positive_cache
+        default: positive_table
       pairs:
         description: "One exploratory pair or five qualifying pairs?"
         type: choice
@@ -28,8 +24,8 @@ jobs:
     env:
       CC: clang
       CFLAGS: -O2
-      ERISTAVI_U1B_BENCH_PAIRS: ${{ inputs.pairs || '5' }}
-      ERISTAVI_U1B_CANDIDATE: ${{ inputs.candidate || 'positive_table' }}
+      ERISTAVI_U1B_BENCH_PAIRS: ${{ inputs.pairs }}
+      ERISTAVI_U1B_CANDIDATE: ${{ inputs.candidate }}
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
