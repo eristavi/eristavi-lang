@@ -174,82 +174,78 @@ public function block(routine identity build.Function,graph identity aggregate.R
     routine.revision=routine.revision+1;
     return result;
 }
-function checkedEdge(routine identity build.Function,graph identity aggregate.Registry,
-    target build.BlockId,values) fails budget.LimitError {
+// These helpers consume ONLY integers, never a generic List. Eristavi's
+// bootstrap specialization is guaranteed by each public concrete entry point.
+function targetParameters(routine identity build.Function,target build.BlockId,
+    count Int) returns Int fails budget.LimitError {
     if target.owner != routine.key or target.index < 2 or
        target.index > routine.blocks.length/5 {
         try budget.reject("foreign, invalid or entry-targeted U1b edge");
     }
     let offset be (target.index-1)*5;
-    let count be try words.get(routine.blocks,routine.phase,offset+1);
-    if count != values.count { try budget.reject("U1b edge arity mismatch"); }
-    let first be try words.get(routine.blocks,routine.phase,offset);
-    let item be 0;
-    while item < count {
-        let actual be try typeOf(routine,graph,values[item]);
-        let required be try words.get(routine.values,routine.phase,(first+item-1)*4);
-        if actual.index != required { try budget.reject("U1b edge type mismatch"); }
-        item=item+1;
+    if try words.get(routine.blocks,routine.phase,offset+1) != count {
+        try budget.reject("U1b edge arity mismatch");
     }
+    return try words.get(routine.blocks,routine.phase,offset);
 }
-function appendEdge(routine identity build.Function,graph identity aggregate.Registry,target build.BlockId,values)
+function beginArguments(routine identity build.Function,count Int)
     returns Int fails budget.LimitError {
     if routine.edges.length/3 >= 262144 or
-       values.count > routine.arguments.limit-routine.arguments.length {
+       count > routine.arguments.limit-routine.arguments.length {
         try budget.exceed(routine.owner,1,0);
     }
-    let start be routine.arguments.length; let item be 0;
-    while item < values.count {
-        let value be values[item];
-        let validated be try typeOf(routine,graph,value);
-        let ignored be try words.push(routine.arguments,routine.phase,value.index);
-        item=item+1;
-    }
+    return routine.arguments.length;
+}
+function edgeRecord(routine identity build.Function,target build.BlockId,
+    first Int,count Int) returns Int fails budget.LimitError {
     let ordinal be routine.edges.length/3+1;
     let ignored be try words.push(routine.edges,routine.phase,target.index);
-    ignored=try words.push(routine.edges,routine.phase,start);
-    ignored=try words.push(routine.edges,routine.phase,values.count);
+    ignored=try words.push(routine.edges,routine.phase,first);
+    ignored=try words.push(routine.edges,routine.phase,count);
     return ordinal;
 }
-function terminator(routine identity build.Function,graph identity aggregate.Registry,blockId build.BlockId,
-    op Int,inputs,loc meta.LocId,payload Int,extra Int)
+function terminalRecord(routine identity build.Function,from build.BlockId,
+    opcode Int,start Int,count Int,loc meta.LocId,payload Int,extra Int)
     fails budget.LimitError {
-    if op != 6 and op != 7 and op != 8 {
-        try budget.reject("invalid U1b terminator profile");
-    }
-    let offset be (blockId.index-1)*5;
-    if routine.instructions.length/10 >= 1048576 or
-       inputs.count > routine.operands.limit-routine.operands.length {
+    if routine.instructions.length/10 >= 1048576 {
         try budget.exceed(routine.owner,1,0);
     }
-    let first be routine.operands.length; let index be 0;
-    while index < inputs.count {
-        let value be inputs[index];
-        let checked be try typeOf(routine,graph,value);
-        let ignored be try words.push(routine.operands,routine.phase,value.index);
-        index=index+1;
-    }
-    let number be routine.instructions.length/10+1;
-    let ignored be try words.push(routine.instructions,routine.phase,op);
-    ignored=try words.push(routine.instructions,routine.phase,blockId.index);
-    ignored=try words.push(routine.instructions,routine.phase,first);
-    ignored=try words.push(routine.instructions,routine.phase,inputs.count);
+    let ordinal be routine.instructions.length/10+1;
+    let ignored be try words.push(routine.instructions,routine.phase,opcode);
+    ignored=try words.push(routine.instructions,routine.phase,from.index);
+    ignored=try words.push(routine.instructions,routine.phase,start);
+    ignored=try words.push(routine.instructions,routine.phase,count);
     ignored=try words.push(routine.instructions,routine.phase,0);
     ignored=try words.push(routine.instructions,routine.phase,0);
     ignored=try words.push(routine.instructions,routine.phase,loc.index);
     ignored=try words.push(routine.instructions,routine.phase,payload);
     ignored=try words.push(routine.instructions,routine.phase,extra);
     ignored=try words.push(routine.instructions,routine.phase,0);
-    try words.set(routine.blocks,routine.phase,offset+4,number);
+    try words.set(routine.blocks,routine.phase,(from.index-1)*5+4,ordinal);
     routine.revision=routine.revision+1;
 }
 public function jump(routine identity build.Function,graph identity aggregate.Registry,
     from build.BlockId,target build.BlockId,values,loc meta.LocId)
     fails budget.LimitError {
     let checked be try access(routine,graph,from,loc);
-    try checkedEdge(routine,graph,target,values);
-    let index be try appendEdge(routine,graph,target,values);
-    try terminator(routine,graph,from,6,[],loc,index,0);
+    let expected be try targetParameters(routine,target,values.count);
+    let item be 0;
+    while item < values.count {
+        let current be values[item];
+        let actual be try typeOf(routine,graph,current);
+        let ty be try words.get(routine.values,routine.phase,(expected+item-1)*4);
+        if actual.index != ty { try budget.reject("U1b edge type mismatch"); }
+        item=item+1;
+    }
+    let start be try beginArguments(routine,values.count);
+    item=0;
+    while item < values.count {
+        let current be values[item]; let actual be try typeOf(routine,graph,current);
+        let ignored be try words.push(routine.arguments,routine.phase,current.index);
+        item=item+1;
+    }
+    let number be try edgeRecord(routine,target,start,values.count);
+    try terminalRecord(routine,from,6,routine.operands.length,0,loc,number,0);
 }
 public function branch(routine identity build.Function,graph identity aggregate.Registry,
     from build.BlockId,test build.ValueId,
@@ -259,11 +255,41 @@ public function branch(routine identity build.Function,graph identity aggregate.
     if (try typeOf(routine,graph,test)).index != 1 {
         try budget.reject("U1b branch requires predicate");
     }
-    try checkedEdge(routine,graph,yes,yesValues);
-    try checkedEdge(routine,graph,no,noValues);
-    let left be try appendEdge(routine,graph,yes,yesValues);
-    let right be try appendEdge(routine,graph,no,noValues);
-    try terminator(routine,graph,from,7,[test],loc,left,right);
+    let yesFirst be try targetParameters(routine,yes,yesValues.count);
+    let noFirst be try targetParameters(routine,no,noValues.count);
+    let i be 0;
+    while i < yesValues.count {
+        let current be yesValues[i]; let actual be try typeOf(routine,graph,current);
+        let ty be try words.get(routine.values,routine.phase,(yesFirst+i-1)*4);
+        if actual.index != ty { try budget.reject("U1b first edge type mismatch"); }
+        i=i+1;
+    }
+    i=0;
+    while i < noValues.count {
+        let current be noValues[i]; let actual be try typeOf(routine,graph,current);
+        let ty be try words.get(routine.values,routine.phase,(noFirst+i-1)*4);
+        if actual.index != ty { try budget.reject("U1b second edge type mismatch"); }
+        i=i+1;
+    }
+    let start be try beginArguments(routine,yesValues.count+noValues.count);
+    i=0;
+    while i < yesValues.count {
+        let current be yesValues[i]; let actual be try typeOf(routine,graph,current);
+        let ignored be try words.push(routine.arguments,routine.phase,current.index);
+        i=i+1;
+    }
+    let left be try edgeRecord(routine,yes,start,yesValues.count);
+    let secondStart be routine.arguments.length;
+    i=0;
+    while i < noValues.count {
+        let current be noValues[i]; let actual be try typeOf(routine,graph,current);
+        let ignored be try words.push(routine.arguments,routine.phase,current.index);
+        i=i+1;
+    }
+    let right be try edgeRecord(routine,no,secondStart,noValues.count);
+    let operandStart be routine.operands.length;
+    let ignored be try words.push(routine.operands,routine.phase,test.index);
+    try terminalRecord(routine,from,7,operandStart,1,loc,left,right);
 }
 public function returnValues(routine identity build.Function,
     graph identity aggregate.Registry,from build.BlockId,values,loc meta.LocId)
@@ -275,16 +301,22 @@ public function returnValues(routine identity build.Function,
     let first be try words.get(routine.metadata.signatures,routine.phase,signatureOffset+4);
     let item be 0;
     while item < count {
-        let actual be try typeOf(routine,graph,values[item]);
+        let current be values[item]; let actual be try typeOf(routine,graph,current);
         let required be try words.get(routine.metadata.types,routine.phase,first+item);
         if actual.index != required { try budget.reject("U1b return type mismatch"); }
         item=item+1;
     }
-    try terminator(routine,graph,from,8,values,loc,0,0);
+    if count > routine.operands.limit-routine.operands.length {
+        try budget.exceed(routine.owner,count,0);
+    }
+    let start be routine.operands.length; item=0;
+    while item < count {
+        let current be values[item]; let actual be try typeOf(routine,graph,current);
+        let ignored be try words.push(routine.operands,routine.phase,current.index);
+        item=item+1;
+    }
+    try terminalRecord(routine,from,8,start,count,loc,0,0);
 }
-// Frozen output contains exactly the canonical U1a Function/Metadata tables.
-// This variant checks aggregate signature TypeIds without invoking scalar-only
-// meta.parameterType, and does not imply that verification already succeeded.
 public function complete(routine identity build.Function,
     graph identity aggregate.Registry) fails budget.LimitError {
     try finish.complete(routine,graph);
