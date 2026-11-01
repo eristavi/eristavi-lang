@@ -1,10 +1,17 @@
 name: U1b owned-runtime matched optimization pilot (opt-in)
 on:
-  pull_request:
-    paths:
-      - tests/test_u1b_owned_runtime_benchmark.py
-      - .github/workflows/u1b-owned-runtime-benchmark.yml
   workflow_dispatch:
+    inputs:
+      candidate:
+        description: "Which non-production generated-assembly experiment?"
+        type: choice
+        options: [safepoint, graph_find, positive_cache]
+        default: positive_cache
+      pairs:
+        description: "One exploratory pair or five qualifying pairs?"
+        type: choice
+        options: ['1', '5']
+        default: '1'
 permissions:
   contents: read
 concurrency:
@@ -13,7 +20,7 @@ concurrency:
 jobs:
   compare:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     env:
       CC: clang
       CFLAGS: -O2
@@ -25,7 +32,7 @@ jobs:
         with:
           python-version: '3.11'
       - run: python -m pip install -e .
-      - name: Identical-source GC-invalidated positive graph lookup cache pilot
+      - name: Identical-source selected original-owned versus candidate paired benchmark
         shell: bash
         run: |
           set -o pipefail
