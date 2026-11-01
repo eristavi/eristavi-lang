@@ -2,10 +2,6 @@ name: U1b dynamic-frame physical and performance (opt-in)
 
 # One x86-64 focused run only. Not part of routine full/production CI.
 on:
-  pull_request:
-    paths:
-      - tests/test_u1b_frame_performance.py
-      - .github/workflows/u1b-frame-performance.yml
   workflow_dispatch:
 
 permissions:
