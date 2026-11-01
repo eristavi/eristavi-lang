@@ -123,6 +123,63 @@ def candidate_cached_lookup_runtime(runtime):
     return runtime
 
 
+def candidate_indexed_positive_cache_runtime(runtime):
+    """Bounded direct-mapped 64-line exact positive graph identity cache.
+
+    Key is complete pointer; index is pointer bits. No negative caching or
+    graph retention. Entire table cleared BEFORE every sweep can free blocks.
+    All misses fall back to the unchanged exact hash/collision implementation.
+    """
+    key=".Lu1b_graph_cache64_keys"
+    if key in runtime: raise AssertionError("already instrumented")
+    old=(
+        "erist_rt_graph_find:\n"
+        "    subq $8,%rsp\n"
+        "    call .Lg_bucket\n"
+        "    addq $8,%rsp\n")
+    new=(
+        "erist_rt_graph_find:\n"
+        "    movq %rdi,%rax\n"
+        "    shrq $4,%rax\n"
+        "    andq $63,%rax\n"
+        "    leaq .Lu1b_graph_cache64_keys(%rip),%rcx\n"
+        "    cmpq %rdi,(%rcx,%rax,8)\n"
+        "    jne .Lu1b_graph_cache64_miss\n"
+        "    movq %rdi,%rax\n"
+        "    ret\n"
+        ".Lu1b_graph_cache64_miss:\n"
+        "    subq $8,%rsp\n"
+        "    call .Lg_bucket\n"
+        "    addq $8,%rsp\n")
+    if runtime.count(old)!=1:raise AssertionError("find entry changed")
+    runtime=runtime.replace(old,new,1)
+    done=".Lg_find_done:\n    ret\n"
+    record=(
+        ".Lg_find_done:\n"
+        "    testq %rax,%rax\n"
+        "    je .Lu1b_graph_cache64_return\n"
+        "    movq %rdi,%rcx\n"
+        "    shrq $4,%rcx\n"
+        "    andq $63,%rcx\n"
+        "    leaq .Lu1b_graph_cache64_keys(%rip),%r8\n"
+        "    movq %rdi,(%r8,%rcx,8)\n"
+        ".Lu1b_graph_cache64_return:\n"
+        "    ret\n")
+    if runtime.count(done)!=1:raise AssertionError("find done changed")
+    runtime=runtime.replace(done,record,1)
+    sweep="erist_rt_graph_sweep:\n"
+    clear=(
+        "erist_rt_graph_sweep:\n"
+        "    leaq .Lu1b_graph_cache64_keys(%rip),%rdi\n"
+        "    movl $64,%ecx\n"
+        "    xorl %eax,%eax\n"
+        "    cld\n"
+        "    rep stosq\n")
+    if runtime.count(sweep)!=1:raise AssertionError("sweep changed")
+    runtime=runtime.replace(sweep,clear,1)
+    return runtime+"\n.bss\n.p2align 3\n"+key+":\n.zero 512\n"
+
+
 def digest(value):
     return hashlib.sha256(value.encode()).hexdigest()
 
@@ -158,10 +215,11 @@ class U1BOwnedRuntimeBenchmark(unittest.TestCase):
                 text=True,timeout=120)
             self.assertEqual((runtime.returncode,runtime.stderr),(0,""))
             variant = os.environ.get("ERISTAVI_U1B_CANDIDATE", "safepoint")
-            self.assertIn(variant, ("safepoint", "graph_find", "positive_cache"))
+            self.assertIn(variant, ("safepoint", "graph_find", "positive_cache", "positive_table"))
             candidate = (candidate_runtime(runtime.stdout) if variant == "safepoint"
                          else candidate_lookup_runtime(runtime.stdout) if variant == "graph_find"
-                         else candidate_cached_lookup_runtime(runtime.stdout))
+                         else candidate_cached_lookup_runtime(runtime.stdout) if variant=="positive_cache"
+                         else candidate_indexed_positive_cache_runtime(runtime.stdout))
             (root/"app.s").write_text(compiled.stdout)
             subprocess.run(["as","--64",str(root/"app.s"),"-o",str(root/"app.o")],
                 capture_output=True,check=True,timeout=60)
@@ -215,7 +273,10 @@ class U1BOwnedRuntimeBenchmark(unittest.TestCase):
                     "into erist_rt_graph_find, preserve all collisions/identity"
                     if variant == "graph_find" else
                     "cache positive exact graph pointer, invalidate at GC sweep; "
-                    "fall back to original collision-safe lookup on misses"),
+                    "fall back to original collision-safe lookup on misses"
+                    if variant=="positive_cache" else
+                    "64-line direct-mapped positive exact-pointer cache; entire "
+                    "table cleared at GC sweep; original miss path unchanged"),
             },sort_keys=True),flush=True)
 
 
