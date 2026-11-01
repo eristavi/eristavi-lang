@@ -1,6 +1,6 @@
 # U1b full-fixture owned-runtime hotspot investigation — 2026-11-01
 
-**Status:** Diagnostic profiling **PASS**. Four isolated runtime micro-optimization pilots **PASS output parity**; the fourth, 64-entry exact positive-pointer lookup cache showed a small positive one-pair pilot, but its completed **five alternating matched pairs** were **ALL PARITY PASS** and **2.65% SLOWER** at the candidate median. All four private candidates **REJECTED / NOT PROMOTED**. No production compiler, runtime, UIR algorithm, GC policy, ABI, quota, test oracle or source semantics was changed during this investigation. PR [#106](https://github.com/eristavi/eristavi-lang/pull/106) remains draft pending explicit reference-runtime performance-risk disposition. [Issue #51](https://github.com/eristavi/eristavi-lang/issues/51) tracks deeper performance work.
+**Status:** U1b full-fixture phase profiling **PASS**. Four initial private generated-runtime micro-candidates **rejected** (the final 64-entry graph cache was **2.65% slower** across five paired native trials). A **fifth distinct, source-level** narrowly scoped `u1_words.context` optimization eliminating a duplicate pure `budget.poll` for an identical owner **PASSED** one pilot and **five alternating matched owned-native pairs (5/5 lower runtime, 6.24% lower median)** with strict independent C-bootstrap parity. The exact source change was committed to draft PR #106 at `dc756a4ef09166b7faf29a49ce8526cd4933659e` with a focused same/different-owner cancellation/work-credit regression; smoke [41303300082](https://github.com/eristavi/eristavi-lang/actions/runs/41303300082) **PASS**. **Final full four-platform CI/completed-batch qualification still PENDING** for the new production source revision. No claim that this incremental improvement resolved the earlier ~830× C/owned reference disparity or made the reference runtime ready for production. See the follow-up section at the end, which supersedes early four-candidate-only conclusions.
 
 ## Governing constraints and architecture
 
@@ -54,7 +54,7 @@ These are **one-pair exploratory pilots**, not performance qualification. The un
 
 **Decision: REJECT and do not promote this fourth bounded cache.** Despite its GC-sweep invalidation, it is not independently qualified for forced-collision, allocation refusal, reclamation and stale-object stress; its measured performance also fails the optimization gate. No private assembly cache or other candidate has been added to the production runtime. No new full four-platform CI is justified for a non-production candidate rejected after focused parity and paired measurements.
 
-## Next engineering decision
+## Initial micro-candidate decision (historical, superseded by later word-store follow-up)
 
 1. **Stop low-benefit runtime graph lookup micro-optimizations**: three initial one-pair pilots and one **five-pair rejection** demonstrated no defensible latency gain. Keep the production runtime unchanged.
 2. **Attribute boxed scalar value and word-store costs at the *actual verifier hotspots*** before designing the next candidate. In particular inspect high-frequency `erist_rt_value_new`, `erist_rt_alloc`/free-list handling and the U1 radix-16 `u1_words.get` accesses. Distinguish verifier structural visits from runtime slot allocations/GC work, and avoid blaming GC for general verifier churn.
@@ -63,3 +63,40 @@ These are **one-pair exploratory pilots**, not performance qualification. The un
 5. PR #106 remains a fully correctness/build-qualified **U1b reference** slice, but its extensive owned runtime cost remains an openly tracked integration/optimization risk. Do not call these rejected micro-pilots an improvement. Do not silently promote or merge on the assumption that the 830× cross-runtime disparity disappeared. Reuse previously successful final CI only while relevant code/toolchain inputs remain identical; experimental owned full self-build is still excluded.
 
 **Disposition:** step 1 (phase/event profile) **COMPLETE**; step 2 (four bounded private optimization candidates) **TESTED AND REJECTED**; step 3 (four parity-checked one-pair pilots **PLUS full five-pair matched comparison** of fourth candidate) **COMPLETE**. The five-pair test passes correctness but finds the 64-entry candidate slower. No production optimization shipped, ABI/semantics/budgets unchanged. The remaining structural verifier and boxed-allocation performance debt is tracked in #51.
+
+
+## Follow-up: verified same-owner word-store poll reduction — source promoted to PR, final matrix pending
+
+The preceding four **generated-runtime cache/hash/safe-point** experiments were correctly rejected; that does not rule out an independent **source-level** cost removal in the actual verifier path. Source inspection found that `src/compiler/u1_words.eri`'s `context(words, phase, write)` performed `budget.poll(words.owner)` followed unconditionally by `budget.poll(phase.owner)` for every get/set/push. The actual budget API defines `poll(owner) { try active(owner); }`; `active` checks the current owner/root state, producing its existing checked cancellation/invalid-state failure without changing work, memory, traffic or ownership. Repeating this check immediately on the same owner is redundant in the current synchronous U1 reference execution. For *distinct* owner identities, both checks must remain in the original order so canceled cross-owner phases are detected before same-revision/foreign-store validation.
+
+### Exact bounded source change
+
+At committed source revision [`dc756a4`](https://github.com/eristavi/eristavi-lang/commit/dc756a4ef09166b7faf29a49ce8526cd4933659e), the only `u1_words.context` change was:
+
+```eri
+try budget.poll(words.owner);
+if words.owner != phase.owner { try budget.poll(phase.owner); }
+```
+
+Previously the second poll was unconditional; no `budget.work`, modeled reserve/traffic, word path, immutable verification logic, traps/failure categories or ABI boundary was removed. In particular, unlike a mutable page cache, this change **never substitutes stale word data** for current canonical records. It does not bypass any fresh structural verification, including same-revision malformed dead code. No scalar public ABI or GC policy changed. This is an internal U1 adapter source optimization, not a new syntax or public configuration switch.
+
+### Five paired owned-native original/candidate native runs
+
+**Pilot** [41302328469](https://github.com/eristavi/eristavi-lang/actions/runs/41302328469) **PASS** C-bootstrap exact stdout/stderr/exit parity: original-owned **45.215022287s**, private source-overlay optimized-owned **43.296282773s**, nominal **4.24%** faster (one pair, not sufficient to claim speedup). Two test-harness-only failures before the pilot were an output filename collision with the temporary baseline directory; corrected without touching semantics or production sources. A malformed YAML job display title temporarily prevented a five-pair workflow from starting; it was corrected and the test ran. These harness failures were not compiler defects.
+
+**Full same-runner five-pair** [41302564199](https://github.com/eristavi/eristavi-lang/actions/runs/41302564199), job `124836367268` **PASS all ten exact independent C-bootstrap stdout, stderr and exit comparisons**; pairs were alternated **AB/BA/AB/BA/AB**, with the **same original generated owned runtime** and one unmodified linked fixture on Linux x86-64 Clang -O2:
+
+| Pair | Order | Original owned (s) | Same-owner poll optimized owned (s) | Pair runtime saved |
+| ---: | --- | ---: | ---: | ---: |
+| 1 | original → candidate | 43.954859 | 41.212584 | 6.24% |
+| 2 | candidate → original | 44.134367 | 41.205843 | 6.64% |
+| 3 | original → candidate | 44.815934 | 43.401338 | 3.16% |
+| 4 | candidate → original | 41.820128 | 40.660818 | 2.77% |
+| 5 | original → candidate | 43.392423 | 41.575663 | 4.19% |
+| **Median** | **5 pairs** | **43.954859** | **41.212584** | **6.24% lower median** |
+
+Candidate/baseline **ratio of medians = 0.937611572**; corresponding runtime-speed factor **1.06654×**. All five individual pairs favored the candidate. This is genuine *within-owned-runtime* before/after comparison; not the older ~830× *C bootstrap vs owned* cross-runtime observation. Single workload, one platform and hosted-runner timing noise still limit generality. Raw exact timings, candidate/original module and application assembly hashes, generator hash, model scope and negative verification are preserved in [`docs/evidence/2026-11-01/u1b-words-owner-poll-five-pair.json`](../evidence/2026-11-01/u1b-words-owner-poll-five-pair.json).
+
+**Regression gates:** new no-extra-output `wordOwnerPollContracts()` in `tests/fixtures/u1_foundation.eri` verifies same-owner word reads consume **7** work units (unchanged), legal shared metadata reads from another function owner, denied function-store reads from a foreign phase, cancellation detection for both equal and different owners, exactly-once close and zero live/pending owner charges. Focused smoke [41303300082](https://github.com/eristavi/eristavi-lang/actions/runs/41303300082) passed on the production source patch + regression revision. The test-only original-versus-candidate benchmark was changed to reconstruct the **pre-optimization baseline** even when the checked-out current module is optimized, so future manual reproductions remain meaningful. Expensive five-pair benchmark workflow is now manual `workflow_dispatch` only.
+
+**Next required gate:** because this changes `src/compiler/u1_words.eri`, the scoped fast smoke is **not a merge qualification**. Run once the final source + tests + evidence + handover are stable: full four-platform CI (GCC/Clang x86-64, ARM64 Clang and macOS Clang) **plus full completed-batch bootstrap repeatability/offline and owned integration**. Keep experimental owned compiler full self-build excluded. Validate the exact head, record any platform skips and final code SHA; do not claim PASS before workflows finish. If green, accept this **bounded improvement only**, while maintaining #51 for deeper boxed scalar allocation/verifier optimization; PR #106 remains draft until the remaining reference-only performance risk receives explicit disposition.
