@@ -1,6 +1,6 @@
 # Eristavi compiler — current handover
 
-**Authoritative recovery checkpoint: 1 November 2026, Asia/Nicosia. Read section 56 for current interruption/allocator-refusal evidence and section 53 for the prior FOCUSED TESTED 45/45, section 52 for prior loop/physical evidence, and section 44 for last fully qualified U1a.**
+**Authoritative recovery checkpoint: 1 November 2026, Asia/Nicosia. Read section 57 for current linked-switch/parallel-transfer evidence and section 53 for the prior FOCUSED TESTED 45/45, section 52 for prior loop/physical evidence, and section 44 for last fully qualified U1a.**
 PR #105 is **QUALIFIED AND MERGED**. U1a's scoped physical acceptance gate passed;
 issue #77 is CLOSED/completed. Sections 1–43 preserve
 historical evidence and rejected prototypes; their pending/keep-open statements
@@ -88,7 +88,7 @@ redundant indexing, unbounded caches or unnecessarily expensive CI.
 > memory from design under correctness and safety gates. The permanent rule above
 > must be preserved in every future handover, without prompting from the user.
 >
-> Continue from **HANDOVER.md section 56** (45/45 focused-tested U1b linked
+> Continue from **HANDOVER.md section 57** (45/45 focused-tested U1b linked
 > aggregate calls; NOT full U1b qualification) and section 52,
 > retaining section 44 as the latest fully qualified release checkpoint. Section 45 is historical and superseded for the
 > current U1b code/test checkpoint. PR #105 is qualified and merged at
@@ -2774,3 +2774,37 @@ Next: linked switch/parallel-transfer and stale/malformed-body oracles, larger/
 deeper actual tagged owner-memory scaling and paired performance evidence, then
 one final coherent-head four-platform CI plus completed-batch qualification.
 Keep old qualified U1a and current production pipeline acceptance boundaries.
+
+
+## 57. Linked sparse switches and simultaneous aggregate backedge swaps — 2026-11-01
+
+Test-only continuation of draft PR #106. No compiler/runtime implementation,
+ABI, semantics, physical layouts or budget ceilings changed. Added standalone
+`tests/fixtures/u1_aggregate_switch_calls.eri` and independent Python tuple/dict
+oracle `tests/test_u1_aggregate_switch_calls.py` (full-suite discoverable; run
+explicitly during this slice; ordinary smoke selection unchanged).
+
+A main function calls a separately linked function that switches on input bits.
+Cases are zero, signed maximum and signed minimum in canonical unsigned order;
+two further selectors exercise default. Distinct switch edges share a target
+but carry different values (10/20/30/default40). Each selected value enters an
+aggregate loop with two distinct tuple values. The self-edge transfers
+(right,left,false), which requires simultaneous staging; exit returns scalar
+projections (100,selected). All five selections match the independent Python
+oracle; live/pending execution backing returns exactly after each run and all
+owners close at the end.
+
+A private negative control deliberately writes destination slots while source
+arguments are still being gathered. It completes but produces different output,
+proving the oracle catches the destructive sequential-transfer bug. The broken
+executor exists only in a temporary directory. Initial fixture compilation
+needed an explicit structural signature-helper specialization; adding that
+fixture call resolved it without changing production code.
+
+Next remaining task group: malformed/unreachable and stale-body/signature/owner
+rejection across linked programs, then larger/deeper physical owner-memory and
+paired performance studies. Full U1b qualification and merge remain pending;
+no experimental owned compiler self-build or expensive unchanged test rerun.
+
+Focused linked-switch/swap test PASSED locally in 3.228 seconds, including the
+negative control. Evidence: `docs/evidence/2026-11-01/u1b-linked-switch-swap.json`.

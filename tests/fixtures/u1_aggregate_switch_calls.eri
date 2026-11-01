@@ -1,0 +1,100 @@
+import std.process;
+import compiler.u1_budget as budget;
+import compiler.u1_meta as meta;
+import compiler.u1_builder as build;
+import compiler.u1_aggregate as aggregate;
+import compiler.u1_aggregate_signature as signature;
+import compiler.u1_aggregate_build as ab;
+import compiler.u1_aggregate_calls as call;
+import compiler.u1_verify as verify;
+error ProbeError { message Text; }
+function check(ok Bool,message Text) fails ProbeError {
+    if not ok { fail ProbeError { message=message; }; }
+}
+function exercise() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError {
+    let root be try budget.developmentRequest();
+    let shared be try budget.metadataOwner(root);
+    let mp be try budget.constructionPhase(shared);
+    let data be try meta.create(shared,mp);
+    let graph be try aggregate.create(shared,mp);
+    let i64 be try aggregate.primitive(graph,meta.i64());
+    let pred be try aggregate.primitive(graph,meta.pred());
+    let pair be try aggregate.aggregate(graph,mp,[i64,i64]);
+    let sig be try meta.signature(data,mp,[meta.i64()],[meta.i64(),meta.i64()]);
+    let sameSig be try signature.signature(data,graph,mp,[i64],[i64,i64]);
+    let calleeId be try meta.declaration(data,mp,sig,"switch.swap",1,0,0);
+    let mainId be try meta.declaration(data,mp,sig,"switch.main",1,0,0);
+    let source be try meta.source(data,mp,"switch-calls","0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",128);
+    let loc be try meta.location(data,mp,source,0,7,1,1,1);
+    try aggregate.freeze(graph); try meta.freeze(data); try budget.finishPhase(mp);
+    let owner be try budget.functionOwner(root,false);
+    let cp be try budget.constructionPhase(owner);
+    let fn be try build.create(data,sig,owner,cp);
+    let entry be try build.block(fn,[meta.i64()]);
+    let selector be try build.parameter(fn,entry,0);
+    let selected be try build.block(fn,[meta.i64()]);
+    let ten be try build.integer(fn,entry,10,loc);
+    let twenty be try build.integer(fn,entry,20,loc);
+    let thirty be try build.integer(fn,entry,30,loc);
+    let forty be try build.integer(fn,entry,40,loc);
+    // Distinct edges to one destination must retain distinct argument vectors.
+    let e0 be try build.edge(fn,selected,[ten]);
+    let e1 be try build.edge(fn,selected,[twenty]);
+    let e2 be try build.edge(fn,selected,[thirty]);
+    let fallback be try build.edge(fn,selected,[forty]);
+    try build.switchInteger(fn,entry,selector,[0,9223372036854775807,-9223372036854775807-1],[e0,e1,e2],fallback,loc);
+    let value be try build.parameter(fn,selected,0);
+    let hundred be try build.integer(fn,selected,100,loc);
+    let on be try build.predicate(fn,selected,true,loc);
+    let off be try build.predicate(fn,selected,false,loc);
+    let first be try ab.make(fn,graph,selected,pair,[value,value],loc);
+    let second be try ab.make(fn,graph,selected,pair,[hundred,hundred],loc);
+    let loop be try ab.block(fn,graph,[pair,pair,pred]);
+    let done be try ab.block(fn,graph,[pair,pair]);
+    try ab.jump(fn,graph,selected,loop,[first,second,on],loc);
+    let left be try build.parameter(fn,loop,0);
+    let right be try build.parameter(fn,loop,1);
+    let again be try build.parameter(fn,loop,2);
+    // A sequential transfer would overwrite left before reading it for right.
+    try ab.branch(fn,graph,loop,again,loop,[right,left,off],done,[left,right],loc);
+    let finalLeft be try build.parameter(fn,done,0);
+    let finalRight be try build.parameter(fn,done,1);
+    let a be try ab.get(fn,graph,done,finalLeft,0,loc);
+    let b be try ab.get(fn,graph,done,finalRight,0,loc);
+    try ab.returnValues(fn,graph,done,[a,b],loc);
+    try ab.complete(fn,graph); try budget.finishPhase(cp);
+    let mainOwner be try budget.functionOwner(root,false);
+    cp=try budget.constructionPhase(mainOwner);
+    let main be try build.create(data,sig,mainOwner,cp);
+    let mainEntry be try build.block(main,[meta.i64()]);
+    let input be try build.parameter(main,mainEntry,0);
+    let called be try build.call(main,mainEntry,calleeId,[input],loc);
+    let x be try build.result(main,called,0);
+    let y be try build.result(main,called,1);
+    try build.returnValues(main,mainEntry,[x,y],loc);
+    try build.complete(main); try budget.finishPhase(cp);
+    let program be try call.create(data,graph);
+    let bound be try call.bind(program,calleeId,fn);
+    bound=try call.bind(program,mainId,main);
+    bound=try call.seal(program);
+    let baseline be root.live;
+    let selectors be [0,9223372036854775807,-9223372036854775807-1,1,-1];
+    for number in selectors {
+        let outcome be try call.run(program,mainId,mainOwner,[number],64,8);
+        try check(outcome.kind == 0 and outcome.count == 2,"linked switch execution");
+        output(try call.scalar(outcome,0)); output(try call.scalar(outcome,1));
+        try check(root.live == baseline and root.pending == 0,"switch and backedge scratch cleanup");
+    }
+    try call.close(program); try build.close(main); try build.close(fn);
+    try aggregate.close(graph); try meta.close(data);
+    try check(root.live == 0 and root.pending == 0,"all switch owners released");
+    try budget.close(mainOwner); try budget.close(owner); try budget.close(shared); try budget.close(root);
+    return true;
+}
+function main() {
+    let done be exercise()
+    else error budget.LimitError { output("limit:"+error.message); process.setExitCode(1); return; }
+    else error verify.InvalidIR { output("invalid:"+error.message); process.setExitCode(1); return; }
+    else error ProbeError { output("probe:"+error.message); process.setExitCode(1); return; };
+}
+main();
