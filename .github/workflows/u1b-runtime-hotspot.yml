@@ -2,10 +2,6 @@ name: U1b linked runtime hotspot profile (opt-in)
 
 # Diagnostic-only Linux x86-64 sampling. No full matrix or owned self-build.
 on:
-  pull_request:
-    paths:
-      - tests/test_u1b_runtime_hotspot.py
-      - .github/workflows/u1b-runtime-hotspot.yml
   workflow_dispatch:
 
 permissions:
