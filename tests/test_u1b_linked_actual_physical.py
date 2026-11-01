@@ -90,11 +90,10 @@ class U1BLinkedActualPhysicalTests(unittest.TestCase):
             final = after["backing"]["function"]
             self.assertGreater(function["objects"], 0)
             self.assertGreater(function["observed_bytes"], 0)
-            self.assertGreater(function["observed_bytes"], 0)
-            self.assertLessEqual(function["peak"], function["traffic"])
+            self.assertGreaterEqual(function["observed_bytes"], function["live"])
             self.assertEqual(final["live"], 0)
-            self.assertEqual(final["reclaimed_bytes"], function["traffic"])
-            self.assertEqual(final["reclaimed_objects"], function["allocations"])
+            self.assertEqual(final["reclaimed_bytes"], function["observed_bytes"])
+            self.assertEqual(final["reclaimed_objects"], function["objects"])
             print("U1B_LINKED_ACTUAL=" + __import__("json").dumps({
                 "scope": "Actual diagnostic-tagged allocator activity over linked setup, recursive frames, aggregate execution and cleanup; not isolated frame attribution or RSS",
                 "before_gc": function,
