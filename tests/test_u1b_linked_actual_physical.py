@@ -4,7 +4,8 @@ This observes actual owned-runtime graph allocation capacity and reclamation
 under diagnostic allocation tag 103. The 201..205 semantic backing counters
 are populated only by a separate graph-equality observer, not by tag 103.
 The tag spans setup, linked execution and teardown, not isolated frame bytes
-or process RSS.
+or process RSS. A reachable 4-cell graph remains marked at process exit;
+only unreachable tagged allocations are required to be reclaimed.
 """
 from pathlib import Path
 import shutil
@@ -123,9 +124,16 @@ class U1BLinkedActualPhysicalTests(unittest.TestCase):
             self.assertGreater(function["peak"], 0)
             self.assertLessEqual(function["peak"], function["traffic"])
             print("U1B_LINKED_DIAGNOSTIC=" + __import__("json").dumps({"before": before, "after": after}, sort_keys=True), flush=True)
-            self.assertEqual(final["live"], 0)
-            self.assertEqual(final["reclaimed_bytes"], function["traffic"])
-            self.assertEqual(final["reclaimed_objects"], function["allocations"])
+            # This complete-program fixture retains one reachable 4-cell
+            # graph at process exit (GC mark=1). Do not mistake a live root
+            # for an unreachable leak, or silently exempt any other object.
+            self.assertEqual(len(survivors), 1)
+            self.assertEqual((survivors[0]["allocator_bytes"],
+                              survivors[0]["cells"], survivors[0]["capacity"],
+                              survivors[0]["marked"]), (224, 4, 4, 1))
+            self.assertEqual(final["live"], sum(item["allocator_bytes"] for item in survivors))
+            self.assertEqual(final["reclaimed_bytes"] + final["live"], function["traffic"])
+            self.assertEqual(final["reclaimed_objects"] + len(survivors), function["allocations"])
             # Semantic backing requires independent 201..205 equality tagging.
             # Never mistake its zero counters for zero allocator activity.
             self.assertEqual(before["backing"]["function"]["objects"], 0)
