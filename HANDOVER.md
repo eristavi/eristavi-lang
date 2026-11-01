@@ -10,6 +10,10 @@ verification are FOCUSED TESTED (39/39). Canonical SSA reference execution
 is now FOCUSED TESTED (40/40) on draft PR #106; aggregate signatures,
 CFG handling/promotion, performance and final qualification remain incomplete. U2 #74, U3 #75 and U4 #102 remain OPEN.
 
+## Standing GitHub authorization — explicit user instruction, 2026-11-01
+
+The repository owner has **explicitly authorized ChatGPT to act on their behalf using the connected GitHub account**, without repeatedly asking permission for routine project work. Treat this as standing authorization for investigating repositories, reading files and issues, creating/editing commits and branches, updating PRs/issues/documentation, running available tests and workflows, and merging/closing completed milestones **when their documented acceptance gates actually pass**. Execute the requested work directly, provide results and evidence, and do not interrupt progress with redundant permission questions. This instruction applies to future Eristavi handovers and working sessions. Connected tool capabilities and service authorization remain binding; do not claim an action succeeded unless verified. Preserve philosophy, frozen semantics, CI/qualification rules, release safety and careful irreversible-action checks. **The standing authorization does not waive acceptance criteria or authorize previously excluded experimental full owned-compiler self-build tests.**
+
 ## Mandatory philosophy-first engineering discipline — standing user instruction
 
 **At the beginning of every new Eristavi chat, and before any material design, implementation, optimization or milestone decision, read and FOLLOW the actual governing project documents. Do not rely on the handover summary, old conversation memory or a milestone checklist as a substitute. This is a permanent user requirement; the user must not need to repeat it.**
