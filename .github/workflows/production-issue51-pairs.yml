@@ -1,0 +1,51 @@
+name: Production compiler #51 paired verification (opt-in)
+
+# Only the focused candidate and oracle; no full matrix/owned self-build.
+on:
+  pull_request:
+    paths:
+      - src/compiler/universal_verify.eri
+      - tools/probes/production_issue51_pairs.py
+      - .github/workflows/production-issue51-pairs.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: issue51-paired-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  paired-candidate:
+    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'perf/issue51-production-profile-20261101'
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    env:
+      CC: clang
+      CFLAGS: -O2
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 2
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: python -m pip install -e .
+      - name: Check bounded paired benchmark syntax
+        run: python -m py_compile tools/probes/production_issue51_pairs.py
+      - name: Oracle verification and five baseline/candidate pairs
+        shell: bash
+        run: |
+          set -o pipefail
+          python -u tools/probes/production_issue51_pairs.py \
+            --output issue51-paired 2>&1 | tee issue51-paired.log
+      - name: Retain pair measurements, parity and failure evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: issue51-paired-${{ github.run_attempt }}
+          retention-days: 14
+          path: |
+            issue51-paired/
+            issue51-paired.log
