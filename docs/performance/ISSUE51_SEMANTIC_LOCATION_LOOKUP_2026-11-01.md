@@ -1,6 +1,6 @@
 # Issue #51 — semantic source-location lookup: bounded measured optimization (1 Nov 2026)
 
-Status: **FOCUSED CORRECTNESS AND ALLOCATION COUNTS PASS; FULL FINAL QUALIFICATION PENDING**. This report records the branch-only revision of [PR #110](https://github.com/eristavi/eristavi-lang/pull/110). Issue #51 remains **OPEN**; the larger source compiler still hits the original 90 s cap. Nothing below establishes an end-to-end compiler latency win.
+Status: **QUALIFIED AND MERGED**. [PR #110](https://github.com/eristavi/eristavi-lang/pull/110) merged into main at `6b5fccecb8e79f7c9bcc8261faa9203f4c94262a`, with exact qualified/merged tree `3e3ab90714a9a608c9dafabf4740dae60049ff1d` and qualified head `1fbb5115dccc2c6b6160d511366d31d06601849d`. Final four-platform [CI 41336208716](https://github.com/eristavi/eristavi-lang/actions/runs/41336208716) and normal bootstrap/owned [qualification 41336171885](https://github.com/eristavi/eristavi-lang/actions/runs/41336171885) both SUCCESS. The experimental full owned compiler self-build was excluded. Issue #51 remains **OPEN**; the larger source compiler still hits the original 90 s cap. Nothing below establishes an end-to-end compiler latency win.
 
 ## Frozen scope and source
 
@@ -50,3 +50,8 @@ On small `typed_ir.eri` the same tag 6 direct `at` counts changed 466,398 → 42
 The left-first change is accepted **for bounded allocation and graph-lookup improvement at matched phase boundaries**, not for demonstrable compiler wall-clock reduction. It preserves error paths, mutations outside a lookup call, missing/fallback locations and read-only key comparisons; no new cache or unbounded memory.
 
 **Prior to merge:** select one exact-final-head 4-platform full CI matrix and full bootstrap/owned offline qualification per `CI_QUALIFICATION.md`, and verify source/tree identity and final job outcomes. The experimental owned full B→C/D compiler self-build stays excluded. Do not rerun heavy gates for documentation-only changes after exact qualified code inputs. Keep issue #51 OPEN for the still-censored larger production source; further upstream allocation, GC/boxing and typed-value representation optimizations need independent proofs.
+
+
+## Final qualification and merge (supersedes pending gate above)
+
+Final four-platform CI 41336208716 **SUCCESS** on exact head; 491 tests per platform: macOS/Clang skipped 127, Linux ARM64/Clang skipped 118, Linux x86-64/Clang skipped 8, Linux x86-64/GCC skipped 8. Final qualification 41336171885 **SUCCESS** with Linux x86 GCC/Clang and ARM64 Clang bootstrap C/D self-build repeatability and offline audits; owned offline/static integration success; experimental full owned compiler self-build deliberately skipped. PR #110 merged as `6b5fccecb8e79f7c9bcc8261faa9203f4c94262a`; exact tested/merged tree `3e3ab90714a9a608c9dafabf4740dae60049ff1d`. These documentation-only postqualification updates do **not** modify the tested implementation. Issue #51 remains OPEN and the original large workload remains censored at 90s; no full-compiler speedup claimed.
