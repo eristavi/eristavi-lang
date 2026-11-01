@@ -233,12 +233,29 @@ class U1BHotspotProfiler(unittest.TestCase):
             last=records[-1]
             for name in ("gc","alloc","owners","graphs","safe"):
                 self.assertGreater(last[name],0)
+            # Derived diagnostic attribution only: event counts are not bytes or
+            # time spent inside the allocator. Keep the original raw counters.
+            total_alloc = sum(stage.get("alloc", 0) for stage in stages.values())
+            total_wall = sum(stage["wall_seconds"] for stage in stages.values())
+            attribution = {}
+            for name, stage in stages.items():
+                seconds = stage["wall_seconds"]
+                allocations = stage.get("alloc", 0)
+                attribution[name] = {
+                    "allocator_entry_share": allocations / total_alloc if total_alloc else 0,
+                    "observed_wall_share": seconds / total_wall if total_wall else 0,
+                    "allocator_entries_per_second": allocations / seconds if seconds else None,
+                    "graph_finds_per_allocator_entry":
+                        stage.get("finds", 0) / allocations if allocations else None,
+                    "gc_inclusive_wall_share":
+                        stage.get("gc_seconds_inclusive", 0) / seconds if seconds else None,
+                }
             print("U1B_HOTSPOT_PROFILE="+json.dumps({
                 "scope":"FULL linked fixture, real owned-runtime diagnostic only;"
                 " phase wall from CLOCK_MONOTONIC; GC inclusive time overlaps phases;"
                 " counters instrumented; profiler speed NOT comparable to production",
                 "full_output_parity":True,"observed_process_seconds":observed_seconds,
-                "stages":stages,"cumulative":last,"snapshots":len(records),
+                "stages":stages,"attribution":attribution,\n                "cumulative":last,"snapshots":len(records),
             },sort_keys=True),flush=True)
 
 
