@@ -1,0 +1,45 @@
+// Single checked U1b completion adapter for the existing 17-field Function.
+// Isolated from U1a scalar-only builder without importing aggregate builders
+// into the legacy U1a promotion path. Construction is NOT verification.
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+import compiler.u1_meta as meta;
+import compiler.u1_builder as build;
+import compiler.u1_aggregate as aggregate;
+
+public function complete(routine identity build.Function,
+    graph identity aggregate.Registry) fails budget.LimitError {
+    try budget.poll(routine.owner);
+    if routine.state != 0 or graph.state != 1 or
+       graph.owner != routine.metadata.owner {
+        try budget.reject("U1b complete requires a frozen owned graph");
+    }
+    if routine.blocks.length == 0 { try budget.reject("missing U1b entry"); }
+    let count be try meta.parameterCount(routine.metadata,routine.phase,routine.signature);
+    if try words.get(routine.blocks,routine.phase,1) != count {
+        try budget.reject("U1b entry arity mismatch");
+    }
+    let first be try words.get(routine.blocks,routine.phase,0);
+    let signatureOffset be (routine.signature.index-1)*6;
+    let start be try words.get(routine.metadata.signatures,routine.phase,signatureOffset+2);
+    let index be 0;
+    while index < count {
+        let actual be try words.get(routine.values,routine.phase,(first+index-1)*4);
+        let required be try words.get(routine.metadata.types,routine.phase,start+index);
+        if actual != required { try budget.reject("U1b entry type mismatch"); }
+        index=index+1;
+    }
+    index=0;
+    while index < routine.blocks.length/5 {
+        if try words.get(routine.blocks,routine.phase,index*5+4) == 0 {
+            try budget.reject("unterminated U1b block");
+        }
+        index=index+1;
+    }
+    try words.freeze(routine.blocks); try words.freeze(routine.values);
+    try words.freeze(routine.instructions); try words.freeze(routine.operands);
+    try words.freeze(routine.edges); try words.freeze(routine.arguments);
+    try words.freeze(routine.cells); try words.freeze(routine.switches);
+    try words.freeze(routine.cases);
+    routine.state=1;
+}

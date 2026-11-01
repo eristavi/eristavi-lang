@@ -5,7 +5,7 @@ import compiler.u1_builder as build;
 import compiler.u1_ops as ops;
 import compiler.u1_verify as verify;
 import compiler.u1_aggregate as aggregate;
-import compiler.u1_aggregate_build as aggregateBuild;
+import compiler.u1_aggregate_finish as aggregateFinish;
 import compiler.u1_dominance as dom;
 import compiler.u1_successors as succ;
 public type Result {
@@ -460,7 +460,7 @@ function rebuild(state identity State,registry maybe identity aggregate.Registry
         block=block+1;
     }
     try rewrite(state,output.operands); try rewrite(state,output.arguments); output.revision=state.input.revision+1;
-    if registry != none { try aggregateBuild.complete(output,registry); }
+    if registry != none { try aggregateFinish.complete(output,registry); }
     else { try build.complete(output); }
 }
 function closeScratch(state identity State) fails budget.LimitError {
