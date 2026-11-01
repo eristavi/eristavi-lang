@@ -1,6 +1,6 @@
 # Eristavi compiler — current handover
 
-**Authoritative recovery checkpoint: 1 November 2026, Asia/Nicosia. Read section 51 for the currently unqualified U1b aggregate oracle, signature/CFG and promotion batch, section 50 for prior CFG history, section 44 for last qualified U1a.**
+**Authoritative recovery checkpoint: 1 November 2026, Asia/Nicosia. Read section 52 for the newest verified 43/43 U1b evidence and pending loop acceptance, section 51 for its construction history, section 44 for the last fully qualified U1a.**
 PR #105 is **QUALIFIED AND MERGED**. U1a's scoped physical acceptance gate passed;
 issue #77 is CLOSED/completed. Sections 1–43 preserve
 historical evidence and rejected prototypes; their pending/keep-open statements
@@ -84,8 +84,8 @@ redundant indexing, unbounded caches or unnecessarily expensive CI.
 > memory from design under correctness and safety gates. The permanent rule above
 > must be preserved in every future handover, without prompting from the user.
 >
-> Continue from **HANDOVER.md section 47** (focused-tested canonical aggregate
-> SSA reference execution, 40/40, not full U1b qualification) and section 46,
+> Continue from **HANDOVER.md section 52** (43/43 previous green U1b and
+> loop/re-entry candidate; NOT fully qualified) and section 51,
 > retaining section 44 as the latest fully qualified release checkpoint. Section 45 is historical and superseded for the
 > current U1b code/test checkpoint. PR #105 is qualified and merged at
 > `8c625b1ece6a229844def93e2bf9563c14e9e273`, tested head `f1fba11ff5e11791ad8c5d635fbf90873c686fa9`,
@@ -122,12 +122,12 @@ redundant indexing, unbounded caches or unnecessarily expensive CI.
 | Current independent C evidence | Refreshed 20/20 whole C-managed samples passed; source-hashed C inputs unchanged during later owned-only collision tuning. Not per-owner C allocation attribution |
 | Performance | Five final-code AB/BA worker0 pairs: 8.135968 → 8.254257 s (0.9857×), roughly flat amid host variance. **No whole-compiler speedup claim**; #51 full compiler phase profiling remains open |
 | U1a | Scalar/SSA/calls/recursion/effects/switches/strict native f64/provenance/bounded simplification plus scoped physical acceptance **COMPLETE within the adopted U1a boundary** |
-| U1b #73 | Narrow i8/i16/i32 qualified/merged (#101). Draft PR #106: canonical aggregate SSA construction, independent verification, and **bounded canonical reference execution FOCUSED TESTED 40/40**, exact code head `bc743faf135927fa59b172cab2f151173fd07565`, [run 41278535614](https://github.com/eristavi/eristavi-lang/actions/runs/41278535614). Aggregate signatures/calls/CFG execution, promotion, physical-performance acceptance and final full qualification remain **PENDING**. Draft/unmerged; #73 OPEN |
+| U1b #73 | Narrow i8/i16/i32 qualified/merged (#101). Draft PR #106 **43/43 focused PASSED**, exact code head `1382dc899c7a930507786269a2d5afa3dae65bfe`, [run 41281956706](https://github.com/eristavi/eristavi-lang/actions/runs/41281956706): independent canonical 2/9/32-field oracle, structural signatures, aggregate typed edges, scalar SSA promotion, checked direct-call construction and scoped physical backing. Next loop re-entry change is UNTESTED; aggregate call execution, larger stress and complete qualification PENDING. Draft/unmerged; #73 OPEN |
 | U2 #74 | New UIR managed Text/List/identity, checked failures, root maps and deterministic cleanup **NOT IMPLEMENTED** |
 | U3 #75 | Direct frozen frontend → new UIR → production native target/artifact/cache integration **NOT IMPLEMENTED**. Existing adapter is isolated; #104 is test-only reference parity |
 | U4 #102 | Redesigned UIR machine/legalization/artifact migration **NOT IMPLEMENTED / NOT QUALIFIED** |
 | Production | Existing source language and default compiler pipeline retained; no new-UIR backend promotion |
-| Environment / next stage | Latest recovery checkpoint reports workspace restored with a clean worktree; reverify current branch, HEAD and execution environment before development. U1b aggregate implementation has not started. All prior implementation, qualification evidence and checkpoints are preserved in GitHub |
+| Environment / next stage | GitHub draft PR #106 active on `compiler/u1b-owned-aggregate-graph-20261031`; latest verified code is `1382dc8`. No local checkout available; hosted CI is executable evidence. U1b aggregation is actively developed, not merged |
 
 **Reading rule:** section 44 is authoritative. Earlier keep-open and pending
 statements describe their historical revisions. U1a acceptance does not certify
@@ -2538,3 +2538,58 @@ measured baseline. Only after all U1b gates pass run one full four-platform
 CI plus completed-batch qualification and decide release/closure. Follow
 mandatory philosophy → semantics → architecture → implementation and retain
 performance/safety and precise owner/fault/ABI boundaries.
+
+## 52. Latest verified U1b physical/signature/oracle checkpoint and loop re-entry slice — 2026-11-01
+
+**Previous exact tested head:** `1382dc899c7a930507786269a2d5afa3dae65bfe`.
+[Focused Linux Clang CI 41281956706](https://github.com/eristavi/eristavi-lang/actions/runs/41281956706)
+**SUCCESS 43/43**, 162.479 seconds. This supersedes section 51's
+`008e702` NOT YET PASSING state. Tests included independent
+2/9/32-field and nested canonical-value oracle; both CFG arms;
+structural type/signature interning; typed aggregate CFG and verified
+scalar-cell promotion; checked aggregate direct-call construction
+(**NOT** runtime execution); and the actual U1b physical backing probe.
+
+**Scoped real physical backing, actual tagged owned-runtime blocks:**
+metadata aggregate registry **44,448 B across 116 allocated objects** and
+function aggregate value engine **22,720 B across 60 objects**; the observed
+GC reclaimed all **67,168 B / 176 objects**, leaving zero live backing
+for those owner tags. Structural backing and ledger values were
+respectively metadata 36,992 B / 129,632 B peak and traffic,
+function 18,720 B / 45,408 B peak and 68,128 B traffic.
+These observations are separate: do NOT conflate physical tagged actual
+backing, logical owner ledger, full process RSS, or whole-compiler heap.
+No canonical multi-function runtime physical acceptance is implied.
+The exact fixture and tests remain committed:
+`tests/fixtures/u1b_aggregate_physical.eri`,
+`tests/test_u1b_actual_physical.py`.
+The 15.642-second private test is currently included in the 43-test smoke,
+so monitor CI cost and consider moving heavier scale studies to an opt-in
+profile; do not remove existing assertions to improve timings.
+
+**New implementation candidate (NOT YET TESTED):** a single-copy SSA
+runtime-slot fix in `u1_aggregate_execute.eri` replaces each dynamic
+execution's value token in its static SSA slot, as required for CFG
+backedge re-entry. The independently verified canonical SSA stream
+guarantees each static value definition's uniqueness; repeated loop
+visits produce new immutable runtime values and must NOT fail as
+duplicate publication. The prior per-save duplicate test incorrectly
+rejected every second loop visit and did an avoidable per-result read.
+No UIR schema, source syntax, Function/Metadata object, public ABI
+or production backend changed.
+
+`tests/fixtures/u1_aggregate_loops.eri` and
+`tests/test_u1_aggregate_loops.py` independently check two dynamic
+iterations of a typed aggregate/predicate loop, immutable old/new
+result snapshots, parallel backedge arguments, fuel refusal with exact
+source LocId, and complete owner reclamation against a Python tuple oracle.
+This is a **candidate**, not tested or qualified until CI succeeds on
+the new exact code head. Keep PR #106 DRAFT and #73 OPEN.
+
+**Remaining:** aggregate *direct call execution*, full multi-function
+aggregates (including recursive/fault tracing), aggregate signature entry
+value/return interoperability, more aggressive quota/cancellation/OOM and
+large/deep physical owner/performance scaling, and final exact-head
+four-platform CI + completed-batch qualification. Preserve philosophy,
+frozen semantics, independent verifier, and one coherent final expensive
+gate; no experimental full owned compiler self-build.

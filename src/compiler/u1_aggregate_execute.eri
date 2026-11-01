@@ -71,9 +71,11 @@ function save(engine identity av.Engine,slots identity words.Words,
     let actual be try av.typeOf(engine,token);
     let expected be try words.get(routine.values,phase,(index-1)*4);
     if actual.index != expected { try budget.reject("U1b executor result TypeId mismatch"); }
-    if try words.get(slots,phase,index-1) != 0 {
-        try budget.reject("duplicate U1b SSA value publication");
-    }
+    // An SSA definition is statically unique, but its *dynamic* value changes
+    // on each backedge visit. Independent canonical verification proves the
+    // sole definition and all uses; overwriting the runtime slot is essential
+    // for correct loops and avoids an unnecessary per-result read.
+    // Immutable values themselves are never overwritten in the Engine.
     try words.set(slots,phase,index-1,token.index);
 }
 
