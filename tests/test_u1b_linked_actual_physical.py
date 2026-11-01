@@ -93,6 +93,7 @@ class U1BLinkedActualPhysicalTests(unittest.TestCase):
             self.assertGreater(function["traffic"], 0)
             self.assertGreater(function["peak"], 0)
             self.assertLessEqual(function["peak"], function["traffic"])
+            print("U1B_LINKED_DIAGNOSTIC=" + __import__("json").dumps({"before": before, "after": after}, sort_keys=True), flush=True)
             self.assertEqual(final["live"], 0)
             self.assertEqual(final["reclaimed_bytes"], function["traffic"])
             self.assertEqual(final["reclaimed_objects"], function["allocations"])
