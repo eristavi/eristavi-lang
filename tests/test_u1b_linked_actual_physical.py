@@ -76,8 +76,20 @@ class U1BLinkedActualPhysicalTests(unittest.TestCase):
             self.assertEqual((owned.returncode, owned.stderr, owned.stdout),
                              (0, "", baseline.stdout))
             with (root / "actual.bin").open("wb") as dump:
-                observed = link("linked-observed", _instrument_owned_runtime(
-                    runtime.stdout, dump.fileno(), force_identity_collisions=True))
+                instrumented = _instrument_owned_runtime(
+                    runtime.stdout, dump.fileno(), force_identity_collisions=True)
+                # Diagnose whether the final 224-byte survivor is a stale
+                # conservative root released by one more quiescent collection.
+                tail = ("    call erist_rt_text_collect\n"
+                        "    call .Ltest_owner_write\n"
+                        "    movq .Lprocess_exit_code")
+                self.assertEqual(instrumented.count(tail), 1)
+                instrumented = instrumented.replace(tail,
+                    "    call erist_rt_text_collect\n"
+                    "    call erist_rt_text_collect\n"
+                    "    call .Ltest_owner_write\n"
+                    "    movq .Lprocess_exit_code", 1)
+                observed = link("linked-observed", instrumented)
                 result = subprocess.run([str(observed)], pass_fds=(dump.fileno(),),
                                         capture_output=True, text=True, timeout=180,
                                         check=False)
