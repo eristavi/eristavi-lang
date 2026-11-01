@@ -29,6 +29,7 @@ SMOKE_TESTS=(
     'test_u1_aggregate_values.U1AggregateValuesTests.test_immutable_make_get_set_against_python_value_copy_oracle',
     'test_u1_aggregate_ssa.U1AggregateSSATests.test_canonical_aggregate_operations_and_independent_dead_code_verifier',
     'test_u1_aggregate_execution.U1AggregateExecutionTests.test_verified_canonical_ssa_immutable_execution',
+    'test_u1_aggregate_canonical_oracle.U1CanonicalAggregateOracleTests.test_native_verified_canonical_aggregate_oracle',
     # U1a #77 acceptance: exact owner-partition backing under both the C bootstrap
     # and freestanding owned runtime, independently predicted large radix/scratch
     # shapes, and the retained PR #103 C-heap evidence boundary.
