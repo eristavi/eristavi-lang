@@ -87,39 +87,6 @@ jobs:
             ${{ runner.temp }}/test-results.json
             ${{ runner.temp }}/test-results.log
 
-  u1b_hotspot_profile:
-    name: U1b opt-in hotspot profile
-    needs: scope
-    if: >-
-      github.event_name == 'pull_request' &&
-      github.event.action == 'synchronize' &&
-      github.head_ref == 'compiler/u1b-owned-aggregate-graph-20261031' &&
-      needs.scope.outputs.code == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    env:
-      CC: clang
-      CFLAGS: -O2
-      ERISTAVI_U1B_HOTSPOT: '1'
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.11'
-      - name: Install bootstrap toolchain
-        run: python -m pip install -e .
-      - name: Profile complete U1b linked fixture
-        run: |
-          set -o pipefail
-          PYTHONPATH=tests python -u -m unittest -v test_u1b_runtime_hotspot 2>&1 | tee "$RUNNER_TEMP/u1b-hotspot.log"
-      - name: Preserve profiling evidence
-        if: always()
-        uses: actions/upload-artifact@v6
-        with:
-          name: u1b-hotspot-${{ github.run_attempt }}
-          retention-days: 14
-          path: ${{ runner.temp }}/u1b-hotspot.log
-
   test:
     name: test (${{ matrix.os }}, ${{ matrix.cc }})
     needs: scope

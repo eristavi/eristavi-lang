@@ -1,10 +1,28 @@
 # Eristavi compiler — current handover
 
-**Authoritative recovery checkpoint: 1 November 2026, Asia/Nicosia. Read §73 FIRST for the complete handover review, newly observed current-head profiler failure, and the ordered optimization plan.** §72 records the last successful exact-revision full CI/qualification; §71 the 6.24% one-workload source improvement; §§69–70 the earlier profile and rejected micro-candidates.
+**Authoritative recovery checkpoint: 1 November 2026, Asia/Nicosia. Read §74 FIRST for active optimization execution, the corrected current-source profile and the fixed-depth word-read candidate.** §73 is the plan; §72 is the last full U1b source qualification, not qualification of the new candidate.
 
-PR #105 is **MERGED**, U1a #77 **CLOSED**. PR #106 remains **DRAFT/OPEN/UNMERGED**, #73 and performance #51 remain **OPEN**. Source/test/workflow revision `0a2ba59472a9571b9f352255c62957594ebacc68` passed [four-platform CI 41303717634](https://github.com/eristavi/eristavi-lang/actions/runs/41303717634) and [completed-batch qualification 41303717596](https://github.com/eristavi/eristavi-lang/actions/runs/41303717596), experimental owned full compiler self-build intentionally skipped. **Later current head `c2423d5b6211c4999a116e541fb11c67dfa2357d` is not entirely green:** [CI 41307434281](https://github.com/eristavi/eristavi-lang/actions/runs/41307434281) passed smoke but FAILED its new hotspot profiler. The diff after the qualified head changes only a diagnostic test, CI workflow and this handover; compiler/runtime source is unchanged. The profiler converts/removes per-stage `gc_time_ns` before a later raw-nanosecond reconciliation, causing a demonstrated zero-versus-positive assertion. A new branch-specific CI selector also reintroduces automatic expensive profiling on PR code synchronization. Both need a focused correction; no compiler defect is established by that failure.
+PR #106 remains DRAFT/OPEN/unmerged, #73/#51 OPEN. Work starts from documentation
+PR #107 head `d2bb747`, on `compiler/u1b-optimization-execution-20261101`. The
+original #106 head is still `c2423d5` until integration. The profiler raw-unit
+reconciliation is fixed locally, three cheap decoder/trace tests pass, and the
+expanded native profile PASSes exact C/owned parity and all 231-snapshot counter
+checks. Automatic expensive PR profiling has been removed from the candidate CI;
+the explicit manual workflow remains. No source semantics/ABI/budgets changed.
 
-The qualified same-owner redundant poll optimization remains measured at **43.954859 → 41.212584 seconds median (6.24% lower)** in five paired owned-native runs on one fixture. The much larger verifier/boxed scalar overhead and historical cross-runtime ~830× disparity remain unresolved. **Next: repair diagnostic counter units/retention and explicit profiling selection, then one current-source attribution run and a bounded verified record-read pilot if the profile supports it.** Full plan: [U1B_OPTIMIZATION_PLAN_2026-11-01.md](docs/performance/U1B_OPTIMIZATION_PLAN_2026-11-01.md). No merge or performance waiver is made by this review. U2 → U3 → U4 remain downstream. Do not rerun full CI for documentation alone or start experimental owned full self-build.
+The new profile confirms boxed value and word/budget amplification, not GC as
+the main cause: about 951M successful allocations and 920M boxed values, with
+0.614s inclusive GC. A private fixed-depth noncreating radix path preserved the
+complete linked fixture and ran 61.4445 → 55.2858 seconds in ONE pilot pair
+(10.02% nominal lower; NOT performance qualification). The candidate is now in
+the local source for focused safety tests; targeted validation is in progress,
+five pairs and final exact-head qualification remain PENDING. Keep #106 draft.
+The older 6.24% same-owner poll improvement remains a separate accepted result;
+no whole-compiler speedup or cure of the historic cross-runtime disparity is
+claimed. Next: finish exact radix/refusal/current-corruption regressions, run
+five paired trials if safe, then physical/smoke gates and one final required
+qualification for an adopted batch. U2 → U3 → U4 remain downstream; no full
+experimental owned compiler self-build.
 
 ## Standing GitHub authorization — explicit user instruction, 2026-11-01
 
@@ -3128,3 +3146,96 @@ planning review. U1b's functional scope does not require solving every #51
 problem, but subsequent reference-only acceptance must be explicit, accurately
 measured and based on applicable passing gates. No repeated expensive
 qualification is justified by this documentation-only plan.
+
+## 74. Optimization execution active — 2026-11-01
+
+User authorized all possible optimization-plan steps and automatic handover
+maintenance. Local branch `compiler/u1b-optimization-execution-20261101` starts
+from plan PR #107 head `d2bb747`; #106 source head remains `c2423d5` until the
+coherent repair/candidate is published. Repository shell access is now restored.
+
+Implemented locally: retain raw per-stage GC nanoseconds for exact reconciliation,
+reject incomplete/unknown/nonmonotonic profile records, add cheap decoder/trace
+mapping checks, persist raw records/summary through an explicit output directory,
+and remove the accidental automatic expensive profiling job from ordinary CI.
+Expanded private instrumentation attributes word/budget function entries via
+compiler-emitted function-name traces, scalar allocation helpers and successful
+allocator capacity traffic. Production compiler/runtime semantics unchanged.
+Two initial focused executions stopped during diagnostic trace parsing before
+native profiling because the unnamed entry trace uses `entry`; the parser now
+handles that documented source marker. These are diagnostic harness failures,
+not performance measurements or compiler regressions. Corrected full profile is
+running locally under GCC -O2; do not claim its result before completion.
+
+Next: inspect the corrected profile, choose ONE bounded structural word-read
+pilot from actual counts, reject or prove it in five fresh-process pairs, run
+focused safety/physical gates and representative compiler inputs, then qualify
+the final adopted production batch once. No full owned compiler self-build.
+
+### §74 measurement repair and current-source attribution — PASS locally
+
+Three cheap decoder/trace tests pass. The expanded actual native profile passed
+1/1 in 166.526 seconds total under local Linux x86-64 GCC -O2; 231 snapshots
+reconcile exactly, stdout/stderr/exit match C bootstrap, zero allocator failures.
+Raw per-stage nanoseconds remain present alongside derived seconds. Compiler
+function-ID traces include an unnamed `entry` and `$type` specialization suffixes;
+the diagnostic parser handles both, with a cheap regression. Three earlier
+trace-mapping setup failures ended before collecting native profile evidence.
+
+Current-source instrumented counters: 951,197,434 successful allocator entries,
+919,544,101 boxed value creations, 531,056,690 evn_copy entries, 183,711,138
+binary helpers, 392,601 word gets, 538,206 radix traversals, 3,229,200 current
+child reads, 3,794,180 budget.work and 8,278,710 active checks. Whole-fixture
+successful capacity traffic is 76,185,950,512 B (cumulative actual allocator
+capacity incl. 32-byte headers, NOT live memory or a single UIR owner charge);
+requested traffic is 38,099,750,224 B. Type-graph allocations are only 232,021.
+Instrumented stage wall: seal 17.1383s, ingress 44.8880s, engine/type 4.0061s,
+linked execution 2.4643s; GC inclusive 0.6138s, overlapping phases. Instrumented
+process 88.4914s is not compared to uninstrumented speed measurements. Raw summary
+committed at docs/evidence/2026-11-01/u1b-word-boxing-profile.json.
+
+This confirms six-level word traversal and boxed scalar/helper amplification,
+not a GC policy problem. A private fixed-depth noncreating word-read pilot is
+now building/running via tools/probes/u1b_words_path.py. It preserves all six
+current child reads and seven total work units per get/set; removes only loop
+control/divisor updates/create branches, with no page cache or record layout
+change. The source candidate is private; production source not yet promoted.
+
+### §74 private word-path pilot — parity PASS, initial 10.02% lower wall
+
+One serialized same-host original/candidate pair on the unchanged full linked
+fixture passed exact C-bootstrap stdout/stderr/exit: baseline 61.444488s, fixed
+noncreating path 55.285836s (10.02% nominal lower). User/system CPU and RSS are
+recorded; this one-pair signal is NOT accepted performance proof. Both use the
+same generated owned runtime and source baseline `c2423d5` already containing
+the qualified same-owner poll change. Reproducer tools/probes/u1b_words_path.py
+retains source/app/runtime/binary hashes, CPU/wall/RSS and complete outputs.
+
+The candidate has now been copied into local src/compiler/u1_words.eri for
+FOCUSED VALIDATION ONLY. It adds readPath() with six explicitly charged current
+child reads; get/set use it, push retains original creating pageAt(). No layout,
+ABI, work-credit, ownership, root/GC or quota changes. A new independent sparse
+radix fixture covers all level/digit boundaries through index 33,554,431, current
+root/child/page corruption/restoration, work charges at every refusal 0–6,
+closed/frozen reads and cleanup on both native runtimes. Targeted tests are
+running; do not claim them passing or ship before observing their results.
+If safe, run the requested five alternating pairs on the already pinned binaries.
+
+### §74 focused validation status during candidate preparation
+
+The first local targeted batch passed 11/12 checks: foundation on C/owned,
+linked stale/signature/dead-code rejection, bootstrap terminal malloc refusal
+and mid-execution cancellation passed. The new sparse-path fixture alone failed
+to compile after its temporary corruption helper invalidated optional-flow
+narrowing; the fixture now retains explicit identity Node aliases. Its focused
+rerun is pending. No production regression was established by the fixture error.
+
+### §74 corrected sparse-path contract PASS; five-pair study RUNNING
+
+The corrected independent radix fixture passed 1/1 in 12.541s, including C
+bootstrap and actual owned-native execution. Together with the unchanged-code
+11 passing checks in the preceding batch, all 12 targeted checks now pass.
+The fixed-depth source exactly matches the already parity-checked pilot
+candidate hash. Five AB/BA/AB/BA/AB pairs have started using the pinned existing
+binaries, serialized without concurrent native builds. Raw wall/CPU/RSS and
+output hashes are saved after each execution. A running study is not a pass.
