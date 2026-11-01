@@ -63,8 +63,8 @@ function run() returns Bool fails budget.LimitError,graphVerify.InvalidGraph,Pro
     let before be try values.bits(engine,try values.get(engine,original,1));
     try check(after == 17 and before == 11,"U1b immutable reference snapshots");
     process.setExitCode(0);
-    let graphBacking be try observer.typeGraph(graph,shared,102);
-    let engineBacking be try observer.valueEngine(engine,fnOwner,103);
+    let graphBacking be try observer.typeGraph(graph,shared,202);
+    let engineBacking be try observer.valueEngine(engine,fnOwner,203);
     display("metadata",graphBacking); display("function",engineBacking);
     output("u1b-ledger:metadata:"+format.integer(shared.peak)+
         ":"+format.integer(shared.traffic));
