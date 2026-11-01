@@ -1,9 +1,5 @@
 name: U1b word-store duplicate owner poll study (opt-in)
 on:
-  pull_request:
-    paths:
-      - tests/test_u1b_words_owner_poll_benchmark.py
-      - .github/workflows/u1b-words-owner-poll.yml
   workflow_dispatch:
 permissions:
   contents: read
