@@ -1,6 +1,6 @@
 # Eristavi compiler — current handover
 
-**Authoritative recovery checkpoint: 1 November 2026, Asia/Nicosia. Read section 52 for the newest verified 43/43 U1b evidence and pending loop acceptance, section 51 for its construction history, section 44 for the last fully qualified U1a.**
+**Authoritative recovery checkpoint: 1 November 2026, Asia/Nicosia. Read section 52 for latest focused-tested U1b aggregate loop acceptance (44/44, code `d2f2b63`) and physical evidence, section 51 for prior construction, section 44 for last fully qualified U1a.**
 PR #105 is **QUALIFIED AND MERGED**. U1a's scoped physical acceptance gate passed;
 issue #77 is CLOSED/completed. Sections 1–43 preserve
 historical evidence and rejected prototypes; their pending/keep-open statements
@@ -122,7 +122,7 @@ redundant indexing, unbounded caches or unnecessarily expensive CI.
 | Current independent C evidence | Refreshed 20/20 whole C-managed samples passed; source-hashed C inputs unchanged during later owned-only collision tuning. Not per-owner C allocation attribution |
 | Performance | Five final-code AB/BA worker0 pairs: 8.135968 → 8.254257 s (0.9857×), roughly flat amid host variance. **No whole-compiler speedup claim**; #51 full compiler phase profiling remains open |
 | U1a | Scalar/SSA/calls/recursion/effects/switches/strict native f64/provenance/bounded simplification plus scoped physical acceptance **COMPLETE within the adopted U1a boundary** |
-| U1b #73 | Narrow i8/i16/i32 qualified/merged (#101). Draft PR #106 **43/43 focused PASSED**, exact code head `1382dc899c7a930507786269a2d5afa3dae65bfe`, [run 41281956706](https://github.com/eristavi/eristavi-lang/actions/runs/41281956706): independent canonical 2/9/32-field oracle, structural signatures, aggregate typed edges, scalar SSA promotion, checked direct-call construction and scoped physical backing. Next loop re-entry change is UNTESTED; aggregate call execution, larger stress and complete qualification PENDING. Draft/unmerged; #73 OPEN |
+| U1b #73 | Narrow i8/i16/i32 qualified/merged (#101). Draft PR #106 **43/43 focused PASSED**, exact code head `1382dc899c7a930507786269a2d5afa3dae65bfe`, [run 41281956706](https://github.com/eristavi/eristavi-lang/actions/runs/41281956706): independent canonical 2/9/32-field oracle, structural signatures, aggregate typed edges, scalar SSA promotion, checked direct-call construction and scoped physical backing. Loop re-entry focused TESTED 44/44 on `d2f2b63`; aggregate call execution, larger stress and complete qualification PENDING. Draft/unmerged; #73 OPEN |
 | U2 #74 | New UIR managed Text/List/identity, checked failures, root maps and deterministic cleanup **NOT IMPLEMENTED** |
 | U3 #75 | Direct frozen frontend → new UIR → production native target/artifact/cache integration **NOT IMPLEMENTED**. Existing adapter is isolated; #104 is test-only reference parity |
 | U4 #102 | Redesigned UIR machine/legalization/artifact migration **NOT IMPLEMENTED / NOT QUALIFIED** |
@@ -2567,7 +2567,7 @@ The 15.642-second private test is currently included in the 43-test smoke,
 so monitor CI cost and consider moving heavier scale studies to an opt-in
 profile; do not remove existing assertions to improve timings.
 
-**New implementation candidate (NOT YET TESTED):** a single-copy SSA
+**New implementation candidate (FOCUSED TESTED 44/44; NOT FULLY QUALIFIED):** a single-copy SSA
 runtime-slot fix in `u1_aggregate_execute.eri` replaces each dynamic
 execution's value token in its static SSA slot, as required for CFG
 backedge re-entry. The independently verified canonical SSA stream
@@ -2583,8 +2583,17 @@ or production backend changed.
 iterations of a typed aggregate/predicate loop, immutable old/new
 result snapshots, parallel backedge arguments, fuel refusal with exact
 source LocId, and complete owner reclamation against a Python tuple oracle.
-This is a **candidate**, not tested or qualified until CI succeeds on
-the new exact code head. Keep PR #106 DRAFT and #73 OPEN.
+This candidate passed focused CI on the exact code revision; it is NOT
+full U1b qualification. Keep PR #106 DRAFT and #73 OPEN.
+
+**Exact-head result:** new code commit `d2f2b637e0ffca25ee870f18768c5dc1866433eb`
+[focused run 41282767784](https://github.com/eristavi/eristavi-lang/actions/runs/41282767784)
+**PASSED 44/44 tests in 166.395 seconds**, including
+`test_canonical_aggregate_loop_reentry_and_fuel`. The full four-platform
+CI was **SKIPPED**, so this is not final U1b acceptance or issue closure.
+The previous physical/owner evidence remains independently grounded in the
+prior 43/43 code. Exact SSA runtime result-slot updates were tested with a
+re-entered aggregate loop without relaxing static verifier rules.
 
 **Remaining:** aggregate *direct call execution*, full multi-function
 aggregates (including recursive/fault tracing), aggregate signature entry
