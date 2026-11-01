@@ -1,6 +1,6 @@
 # Eristavi compiler — current handover
 
-**Authoritative recovery checkpoint: 1 November 2026, Asia/Nicosia. Read §77 FIRST. The optimization batch is QUALIFIED / MERGED.** §§73–76 preserve the plan, implementation and superseded pending states.
+**Authoritative recovery checkpoint: 1 November 2026, Asia/Nicosia. Read §78 FIRST for active #51 performance work.** §77 is the finalized, QUALIFIED / MERGED reference-U1b batch; §§73–76 preserve historical planning and superseded pending states. PR #108 is a DISTINCT, not-yet-merged production verifier optimization candidate.
 
 [PR #106](https://github.com/eristavi/eristavi-lang/pull/106) is confirmed MERGED at
 `b86d54f2f6268d12831bb0b09f3016b1dd3c1f67`; bounded reference U1b #73 is CLOSED/completed.
@@ -20,7 +20,7 @@ temporaries and 2.62GB less cumulative allocator capacity traffic, with identica
 checks/work/polls. Local smoke 49/49, original 8MiB/64MiB forced-collision physical
 gates and five independent width/depth points passed.
 
-**Next work is #51:** bounded attribution of the larger current production
+**Current #51:** bounded attribution of the larger current production
 universal-optimizer path. typed_ir source parity passed; ir_verify reached its
 unchanged 90s diagnostic cap during universal-optimize. No whole-compiler speedup
 is claimed; this U1 storage change is absent from the default frontend import
@@ -100,7 +100,7 @@ redundant indexing, unbounded caches or unnecessarily expensive CI.
 
 > **MANDATORY:** Read complete governing philosophy/semantics, applicable architecture/IR and CI contracts and this handover. Follow Philosophy → Semantics → Architecture → Implementation, optimization-first after correctness/safety. Standing GitHub authorization does not waive acceptance or select experimental owned full self-build.
 >
-> **Resume at §77.** PR #106 is qualified/merged at b86d54f2f6268d12831bb0b09f3016b1dd3c1f67; #73 is closed/completed. Exact tested head bd0a159975d73239f87300debce89c453a59ebb1, tested/merged tree e81f594294f4c0700a0a572ec4434742199d4573. Final four-platform CI 41313784760 and full bootstrap/offline plus owned integration 41313784884 passed; full owned self-build intentionally skipped. Profiler repair, manual-only expensive selection and fixed-depth current word reads are merged. Five correct pairs all improved (11.0158% lower median on one reference fixture); 32.69M fewer boxes with identical checks/work. Local smoke 49/49 and original physical gates passed. #51 stays open: current larger ir_verify source attempt censored at 90s during old universal-optimize; next is bounded current hot-path attribution, not an assumed fix or production U3 promotion. Preserve philosophy/semantics, ABI/budgets, fresh malformed/dead/uncalled checks, cleanup/faults and independent oracles. Do not rerun expensive qualification for status documentation.
+> **Resume at §78 for issue #51 and PR #108, then §77 for the fully merged U1b checkpoint.** PR #106 is qualified/merged at b86d54f2f6268d12831bb0b09f3016b1dd3c1f67; #73 is closed/completed. Exact tested head bd0a159975d73239f87300debce89c453a59ebb1, tested/merged tree e81f594294f4c0700a0a572ec4434742199d4573. Final four-platform CI 41313784760 and full bootstrap/offline plus owned integration 41313784884 passed; full owned self-build intentionally skipped. Profiler repair, manual-only expensive selection and fixed-depth current word reads are merged. Five correct pairs all improved (11.0158% lower median on one reference fixture); 32.69M fewer boxes with identical checks/work. Local smoke 49/49 and original physical gates passed. #51 stays open: current larger ir_verify source attempt censored at 90s during old universal-optimize; next is bounded current hot-path attribution, not an assumed fix or production U3 promotion. Preserve philosophy/semantics, ABI/budgets, fresh malformed/dead/uncalled checks, cleanup/faults and independent oracles. Do not rerun expensive qualification for status documentation.
 
 ## Current verified status — read before historical sections
 
@@ -125,7 +125,7 @@ redundant indexing, unbounded caches or unnecessarily expensive CI.
 | U3 #75 | Direct frozen frontend → new UIR → production native target/artifact/cache integration **NOT IMPLEMENTED**. Existing adapter is isolated; #104 is test-only reference parity |
 | U4 #102 | Redesigned UIR machine/legalization/artifact migration **NOT IMPLEMENTED / NOT QUALIFIED** |
 | Production | Existing source language and default compiler pipeline retained; no new-UIR backend promotion |
-| Environment / next stage | Main includes qualified merge #106 and plan #107. Completed implementation branches: compiler/u1b-owned-aggregate-graph-20261031 and compiler/u1b-optimization-execution-20261101. No running gate; next #51 bounded production universal-optimizer attribution. U2/U3/U4 remain separate |
+| Environment / next stage | Main includes qualified merge #106 and plan #107. **Active** draft [PR #108](https://github.com/eristavi/eristavi-lang/pull/108) branch `perf/issue51-production-profile-20261101` profiles current production #51 and contains a single verifier loop hoist. Paired oracles and latest focused smoke PASS; final four-platform CI + qualification PENDING. #51 remains OPEN. U2/U3/U4 separate |
 
 **Reading rule:** the opening and newest checkpoint (§77) govern current status; section 44 governs the accepted U1a boundary. Earlier keep-open and pending
 statements describe their historical revisions. U1a acceptance does not certify
@@ -3483,3 +3483,20 @@ See the fixed-depth report, executed plan and raw docs/evidence/2026-11-01 input
 No process or qualification is left pending for #106. The status-only postmerge
 reconciliation is the final action of this optimization batch. Handover maintenance
 and standing authorization/philosophy-first requirements above remain mandatory.
+
+
+## 78. #51 production-compiler attribution and bounded verifier loop candidate — 2026-11-01
+
+**LATEST ACTIVE CHECKPOINT.** Main remains at `816368bad5b24087d2b9d266eda9e57702dd3e33`, with fully qualified/merged U1b PR #106 as summarized by §77. This section is **a separate active PR #108**, not a post-merge success claim. The earlier completed-batch statements in §77 concern #106 only.
+
+- Branch: `perf/issue51-production-profile-20261101`, [draft PR #108](https://github.com/eristavi/eristavi-lang/pull/108). Latest source modification commit `c7e355fa252dda22b462c9af3eaabe33cbcfa2cc`, one production `src/compiler/universal_verify.eri` local mask snapshot. Profiler/paired tools are private diagnostics; public ABI and Eristavi source semantics untouched.
+- Completed **unmodified-source baseline profiler** [41320275379](https://github.com/eristavi/eristavi-lang/actions/runs/41320275379): current owned B emitted by C bootstrap, baseline `typed_ir.eri` exact independent assembly parity SHA `172769263e830e6bb555926612972f8b807b8a6f9261e0ca88087165f135cfb7`; larger `ir_verify.eri` censored at the unchanged 90-second cap. End-of-first-verifier boundary: 84,886,703 boxes, 90,464,539 allocator entries, 137,044,962 graph finds, 7,951,909,040 B cumulative capacity traffic, 1,650 GC invocations; verifier 5,358 intersections, 7,433 transfer entries. 47.279 s instrumented inclusive GC elapsed overlaps phase wall, not a CPU/speedup measure.
+- Completed **candidate profiler** [41320917830](https://github.com/eristavi/eristavi-lang/actions/runs/41320917830): same first-verification boundary has **79,066 fewer boxes, 79,065 fewer allocation entries, 170,572 fewer graph finds and 8,901,232 B less capacity traffic**; 5,358 intersections, 7,433 transfers, original defined/define checks and 1,650 GC invocations unchanged. Candidate large `ir_verify.eri` **still censored at 90s**. Both noninstrumented and instrumented `typed_ir.eri` exact independent assembly parity, but cross-run instrumented times are not comparable speedups.
+- Completed **five-pair independent oracle** [41320917846](https://github.com/eristavi/eristavi-lang/actions/runs/41320917846): full public `universal_verifier_cases.regression_program()` accepted under baseline/candidate and C/owned runtimes, including malformed/bit-boundary/modified CFG checks. Five Linux Clang same-host uninstrumented alternating pairs: repeated owned verifier median `0.154674→0.153581s` (**0.706% lower**, 4/5 pairs favorable), current production owned B compiling `typed_ir.eri` median `1.394536→1.344058s` (**3.620% lower**, 4/5 favorable). All independent stdout/stderr/status/output parity PASS. Small/noisy scoped effect only, not proven whole-compiler gain.
+- Focused Linux smoke [41320917837](https://github.com/eristavi/eristavi-lang/actions/runs/41320917837) **SUCCESS** at the tested candidate. The **final four-platform full CI and required bootstrap/owned-integration qualification are PENDING**. The expensive experimental owned B→C→D selfbuild remains explicitly **NOT SELECTED**. Any final gate must use one immutable final code/tree revision, not stale earlier successes.
+- Detailed analysis and raw artifact links: [docs/performance/PRODUCTION_COMPILER_ISSUE51_2026-11-01.md](docs/performance/PRODUCTION_COMPILER_ISSUE51_2026-11-01.md). Artifacts are 14-day retention; essential counts and pairs remain in that document.
+
+**Specific engineering decision:** cache `current.value` as a local within the verifier's 62-bit intersection loop because the identity word is not mutated until after intersection. Do **not** remove either required verification pass, disable faults/GC/work limits, introduce unsafe scalar unboxing, share mutable type validation, or reintroduce old rejected registry caches. The delta is reversible, narrowly evidenced, and only merits merge after exact-final code and independent gates.
+
+**Next:** (1) finish final revised PR #108 documentation and exact-source patch QA, (2) run **one** final full four-platform matrix plus bootstrap C/D and owned static integration; no excluded experimental owned selfbuild, (3) only if all gates pass, merge and reconcile exact merge/tree/handover in a docs-only follow-up, (4) leave #51 OPEN for the still-censored larger production source and pursue allocation/GC/graph optimization only with independent semantic/ownership/resource proofs, then separate U2→U3→U4. If a gate fails, keep PR draft and record the real blocker; do not claim qualified or merged.
+
