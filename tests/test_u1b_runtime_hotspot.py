@@ -255,7 +255,8 @@ class U1BHotspotProfiler(unittest.TestCase):
                 " phase wall from CLOCK_MONOTONIC; GC inclusive time overlaps phases;"
                 " counters instrumented; profiler speed NOT comparable to production",
                 "full_output_parity":True,"observed_process_seconds":observed_seconds,
-                "stages":stages,"attribution":attribution,\n                "cumulative":last,"snapshots":len(records),
+                "stages":stages,"attribution":attribution,
+                "cumulative":last,"snapshots":len(records),
             },sort_keys=True),flush=True)
 
 
