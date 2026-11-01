@@ -4,7 +4,7 @@ name: Production compiler #51 paired verification (opt-in)
 on:
   pull_request:
     paths:
-      - src/compiler/universal_verify.eri
+      - src/compiler/semantic_model.eri
       - tools/probes/production_issue51_pairs.py
       - .github/workflows/production-issue51-pairs.yml
   workflow_dispatch:
@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   paired-candidate:
-    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'perf/issue51-production-profile-20261101'
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.head_ref, 'perf/issue51-')
     runs-on: ubuntu-latest
     timeout-minutes: 18
     env:
