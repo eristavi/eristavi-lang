@@ -211,7 +211,7 @@ function appendEdge(routine identity build.Function,graph identity aggregate.Reg
     ignored=try words.push(routine.edges,routine.phase,values.count);
     return ordinal;
 }
-function terminator(routine identity build.Function,blockId build.BlockId,
+function terminator(routine identity build.Function,graph identity aggregate.Registry,blockId build.BlockId,
     op Int,inputs,loc meta.LocId,payload Int,extra Int)
     fails budget.LimitError {
     if op != 6 and op != 7 and op != 8 {
@@ -225,6 +225,7 @@ function terminator(routine identity build.Function,blockId build.BlockId,
     let first be routine.operands.length; let index be 0;
     while index < inputs.count {
         let value be inputs[index];
+        let checked be try typeOf(routine,graph,value);
         let ignored be try words.push(routine.operands,routine.phase,value.index);
         index=index+1;
     }
@@ -248,7 +249,7 @@ public function jump(routine identity build.Function,graph identity aggregate.Re
     let checked be try access(routine,graph,from,loc);
     try checkedEdge(routine,graph,target,values);
     let index be try appendEdge(routine,graph,target,values);
-    try terminator(routine,from,6,[],loc,index,0);
+    try terminator(routine,graph,from,6,[],loc,index,0);
 }
 public function branch(routine identity build.Function,graph identity aggregate.Registry,
     from build.BlockId,test build.ValueId,
@@ -262,7 +263,7 @@ public function branch(routine identity build.Function,graph identity aggregate.
     try checkedEdge(routine,graph,no,noValues);
     let left be try appendEdge(routine,graph,yes,yesValues);
     let right be try appendEdge(routine,graph,no,noValues);
-    try terminator(routine,from,7,[test],loc,left,right);
+    try terminator(routine,graph,from,7,[test],loc,left,right);
 }
 public function returnValues(routine identity build.Function,
     graph identity aggregate.Registry,from build.BlockId,values,loc meta.LocId)
@@ -279,7 +280,7 @@ public function returnValues(routine identity build.Function,
         if actual.index != required { try budget.reject("U1b return type mismatch"); }
         item=item+1;
     }
-    try terminator(routine,from,8,values,loc,0,0);
+    try terminator(routine,graph,from,8,values,loc,0,0);
 }
 // Frozen output contains exactly the canonical U1a Function/Metadata tables.
 // This variant checks aggregate signature TypeIds without invoking scalar-only
