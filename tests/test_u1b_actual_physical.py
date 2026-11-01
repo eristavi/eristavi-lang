@@ -7,6 +7,7 @@ backing, owner ledger and whole-process RSS. No production runtime change.
 import json
 from pathlib import Path
 import shutil
+import platform
 import subprocess
 import tempfile
 import unittest
@@ -49,6 +50,8 @@ def inspect(stdout):
 
 class U1BAggregatePhysicalTests(unittest.TestCase):
     def test_actual_aggregate_owner_backing_and_gc_reclamation(self):
+        if platform.system() != "Linux" or platform.machine().lower() not in ("x86_64", "amd64"):
+            self.skipTest("freestanding x86-64 allocator observer requires Linux x86-64")
         for exe in ("as","ld"):
             if shutil.which(exe) is None:
                 self.skipTest(f"{exe} unavailable")
