@@ -125,7 +125,8 @@ STAGE = {1: "start", 3: "semantic_project_entry",
 # The existing owned-runtime observer is extended only in this disposable
 # diagnostic process. All published U1b profile formats remain unchanged.
 u1b_hotspot.EXTRA_COUNTERS += tuple(SOURCE_COUNTERS.values()) + SCOPE_FIELDS
-u1b_hotspot.FIELDS = u1b_hotspot.FIELDS[:-1] + tuple(SOURCE_COUNTERS.values()) + ("live_graphs",)
+u1b_hotspot.FIELDS = (u1b_hotspot.FIELDS[:-1] + tuple(SOURCE_COUNTERS.values())
+                      + SCOPE_FIELDS + ("live_graphs",))
 u1b_hotspot.SIZE = len(u1b_hotspot.FIELDS) * 8
 FIELDS, SIZE = u1b_hotspot.FIELDS, u1b_hotspot.SIZE
 
