@@ -1,9 +1,10 @@
 """Opt-in actual allocator/GC evidence for linked U1b recursive frames.
 
-This observes real owned-runtime graph allocations made during the complete
-linked fixture, not merely the modeled owner ledger. The 103 diagnostic tag
-covers setup, linked frame allocation, aggregate execution, and teardown;
-it does NOT isolate individual frame bytes or process RSS.
+This observes actual owned-runtime graph allocation capacity and reclamation
+under diagnostic allocation tag 103. The 201..205 semantic backing counters
+are populated only by a separate graph-equality observer, not by tag 103.
+The tag spans setup, linked execution and teardown, not isolated frame bytes
+or process RSS.
 """
 from pathlib import Path
 import shutil
@@ -86,16 +87,20 @@ class U1BLinkedActualPhysicalTests(unittest.TestCase):
             self.assertEqual((before["error"], after["error"]), (0, 0))
             # The diagnostic tag is active for every linked request, including
             # recursive execution and all bounded failure paths.
-            function = before["backing"]["function"]
-            final = after["backing"]["function"]
-            self.assertGreater(function["objects"], 0)
-            self.assertGreater(function["observed_bytes"], 0)
-            self.assertGreaterEqual(function["observed_bytes"], function["live"])
+            function = before["owners"]["function"]
+            final = after["owners"]["function"]
+            self.assertGreater(function["allocations"], 0)
+            self.assertGreater(function["traffic"], 0)
+            self.assertGreater(function["peak"], 0)
+            self.assertLessEqual(function["peak"], function["traffic"])
             self.assertEqual(final["live"], 0)
-            self.assertEqual(final["reclaimed_bytes"], function["observed_bytes"])
-            self.assertEqual(final["reclaimed_objects"], function["objects"])
+            self.assertEqual(final["reclaimed_bytes"], function["traffic"])
+            self.assertEqual(final["reclaimed_objects"], function["allocations"])
+            # Semantic backing requires independent 201..205 equality tagging.
+            # Never mistake its zero counters for zero allocator activity.
+            self.assertEqual(before["backing"]["function"]["objects"], 0)
             print("U1B_LINKED_ACTUAL=" + __import__("json").dumps({
-                "scope": "Actual diagnostic-tagged allocator activity over linked setup, recursive frames, aggregate execution and cleanup; not isolated frame attribution or RSS",
+                "scope": "Actual allocation-history capacity (tag 103) over linked setup, recursive frames, aggregate execution and cleanup; not semantic backing (tags 201..205), isolated frame attribution or RSS",
                 "before_gc": function,
                 "after_gc": final,
                 "original_owner_gates": {"peak_bytes": 8388608, "traffic_bytes": 67108864},
