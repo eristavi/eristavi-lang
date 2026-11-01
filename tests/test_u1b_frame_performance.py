@@ -124,8 +124,8 @@ def widen_diagnostic(instrumented):
         instrumented, ".Ltest_owner_stats:\n    .zero 240",
         f".Ltest_owner_stats:\n    .zero {OWNER_STATS_BYTES}")
     instrumented = replace_once(
-        instrumented, f"    movq \${RECORD_BYTES},%rdx",
-        f"    movq \${SNAPSHOT_BYTES},%rdx")
+        instrumented, f"    movq ${RECORD_BYTES},%rdx",
+        f"    movq ${SNAPSHOT_BYTES},%rdx")
     return instrumented
 
 
