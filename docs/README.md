@@ -94,3 +94,13 @@ No full owned compiler self-build was started or established by this publication
 The handover records exact qualification and merge state. The larger source
 compiler probe can be censored at its fixed cap; a saved result is not necessarily
 a performance pass, source-compilation speedup or full owned self-build.
+
+
+## Current handover and historical snapshot — 2 November 2026
+
+[HANDOVER.md](../HANDOVER.md) is the current-only recovery/status document.
+The [complete pre-cleanup snapshot](history/2026-11-02/HANDOVER_BEFORE_CLEANUP.md)
+preserves former §§1–92, intermediate failures, measurements and publication
+identities. Its commands and pending statuses are historical, not instructions
+to restart completed or paused work. Development remains stopped at the tested
+U2 foundation pending a new user instruction.
