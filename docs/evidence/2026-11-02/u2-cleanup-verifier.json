@@ -1,0 +1,16 @@
+{
+  "status": "pass",
+  "tests": 8,
+  "seconds": 3.831030743000156,
+  "cc": "cc",
+  "cflags": "-O2",
+  "private_plan_count": 30,
+  "mutated_record_fields": 480,
+  "mutated_headers_and_contexts": 180,
+  "scope": "private plans, not canonical U2 ownership",
+  "log": "test_independent_verifier_rejects_mutated_frozen_and_unreachable_plans (test_u2_cleanup_verify.U2CleanupVerifierTests.test_independent_verifier_rejects_mutated_frozen_and_unreachable_plans) ... ok\ntest_actual_planner_matches_independent_unwind_and_refusal_oracles (test_u2_cleanup_plan.U2CleanupPlanTests.test_actual_planner_matches_independent_unwind_and_refusal_oracles) ... ok\ntest_existing_stage0_and_native_match_cleanup_failure_oracle (test_u2_resource_baseline.U2ResourceBaselineTests.test_existing_stage0_and_native_match_cleanup_failure_oracle) ... ok\ntest_native_body_failure_remains_primary_through_cleanup (test_backend_resources.BackendResourceTests.test_native_body_failure_remains_primary_through_cleanup) ... ok\ntest_native_file_open_failure_is_checked (test_backend_resources.BackendResourceTests.test_native_file_open_failure_is_checked) ... ok\ntest_native_file_read_and_return_cleanup (test_backend_resources.BackendResourceTests.test_native_file_read_and_return_cleanup) ... ok\ntest_native_file_write_then_read (test_backend_resources.BackendResourceTests.test_native_file_write_then_read) ... ok\ntest_native_nested_resources_cleanup_on_return (test_backend_resources.BackendResourceTests.test_native_nested_resources_cleanup_on_return) ... ok\n\n----------------------------------------------------------------------\nRan 8 tests in 3.831s\n\nOK\n",
+  "sha256": {
+    "src/compiler/u2_cleanup_verify.eri": "0c5c53326c041156bbb75edc2b4bfd9c075e2551f6fdaf742a54f79f7818a5f2",
+    "tests/test_u2_cleanup_verify.py": "4f13b43d28d84a260d157c72794133e2e3d2ab7635f7ffe4fd52a8c2ac5ca907"
+  }
+}

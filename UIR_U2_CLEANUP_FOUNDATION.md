@@ -5,6 +5,12 @@ postponed performance issue #51 and selected U2 #74 as the active milestone.
 Production remains qualified PR #110. This slice changes no default compiler,
 runtime, source semantics, public ABI, U1a/U1b layout or verification requirement.
 
+**Follow-up:** independent ingress verification and checked construction now
+exist in `u2_cleanup_verify.eri`; HANDOVER.md §89 records fresh mutation,
+dead-row and verification-exhaustion evidence. Canonical typed continuations
+and whole-function ownership remain pending. See
+`docs/architecture/UIR_U2_CONTINUATION_CONTRACT.md` for that integration boundary.
+
 ## Contracts and prerequisite measurements
 
 Follow DESIGN_PHILOSOPHY.md, LANGUAGE_SEMANTICS.md, RESOURCE_CLEANUP.md,

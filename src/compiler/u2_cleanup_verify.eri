@@ -1,0 +1,84 @@
+// Independent ingress check for private U2 exit plans. No builder helper,
+// cached verification flag or reachability shortcut grants admission.
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+import compiler.u1_meta as meta;
+import compiler.u2_cleanup_plan as cleanup;
+
+public error InvalidPlan { message Text; row Int; }
+function require(okay Bool,row Int,message Text) fails InvalidPlan {
+    if not okay { fail InvalidPlan { message=message; row=row; }; }
+}
+
+public function verify(data identity meta.Metadata,phase identity budget.Phase,
+    plan identity cleanup.Plan,active,survive Int,exit meta.LocId,failed Bool)
+    returns Bool fails budget.LimitError,InvalidPlan {
+    try budget.poll(plan.owner); try budget.poll(data.owner);
+    try require(phase.state == 0 and phase.owner == plan.owner and
+        plan.owner.kind == 2 and not plan.closed and not data.closed and
+        data.frozen and data.owner.kind == 1 and
+        data.owner.parent == plan.owner.parent,0,"invalid cleanup verification context");
+    try require(active.count <= 128 and survive >= 0 and survive <= active.count,
+        0,"invalid cleanup owner prefix");
+    try meta.validLocation(data,exit);
+    let previous be 0; let index be 0;
+    while index < active.count {
+        let current cleanup.Scope be active[index];
+        try budget.work(phase,1);
+        try require(current.scope > previous and current.scope <= 1048576 and
+            current.contract >= 1 and current.contract <= 1048576 and
+            current.value >= 1 and current.value <= 1048576,
+            0,"invalid cleanup scope obligation");
+        try meta.validLocation(data,current.close);
+        previous=current.scope; index=index+1;
+    }
+    let depth be active.count-survive;
+    try require(plan.depth == depth and not plan.records.closed and
+        plan.records.frozen and plan.records.owner == plan.owner and
+        plan.records.limit == 2048 and plan.records.length == depth*16,
+        0,"invalid cleanup record dimensions or ownership");
+    let entry be 0;
+    if failed { entry=0-1; }
+    if depth > 0 { entry=1; if failed { entry=depth+1; } }
+    try require(plan.entry == entry,0,"invalid cleanup entry mode");
+    // Walk ALL normal and failure records, even when entry is already failed.
+    // Verify each row against the original semantic obligations, not against
+    // another potentially forged plan row. No temporary graph is allocated.
+    index=0;
+    while index < depth*2 {
+        let mode be index/depth; let position be index%depth;
+        let obligation cleanup.Scope be active[active.count-1-position];
+        let base be index*8;
+        try require((try words.get(plan.records,phase,base)) == obligation.scope and
+            (try words.get(plan.records,phase,base+1)) == obligation.contract and
+            (try words.get(plan.records,phase,base+2)) == obligation.value,
+            index+1,"wrong cleanup owner or resource contract");
+        try require((try words.get(plan.records,phase,base+3)) == obligation.close.index and
+            (try words.get(plan.records,phase,base+4)) == exit.index,
+            index+1,"wrong cleanup or exit origin");
+        try require((try words.get(plan.records,phase,base+5)) == mode,
+            index+1,"wrong cleanup failure mode");
+        let success be 0; let failure be 0-1;
+        if position+1 < depth {
+            failure=depth+position+2;
+            if mode == 0 { success=position+2; } else { success=failure; }
+        } else { if mode == 1 { success=0-1; } }
+        try require((try words.get(plan.records,phase,base+6)) == success and
+            (try words.get(plan.records,phase,base+7)) == failure,
+            index+1,"invalid cleanup continuation or consumed-owner retry");
+        index=index+1;
+    }
+    return true;
+}
+
+// Safe private construction entry: publish no returned plan if either the
+// independent verifier or its charged work/cancellation checks refuse.
+public function prepare(data identity meta.Metadata,owner identity budget.Owner,
+    phase identity budget.Phase,active,survive Int,exit meta.LocId,failed Bool)
+    returns identity cleanup.Plan fails budget.LimitError,InvalidPlan {
+    let plan be try cleanup.create(data,owner,phase,active,survive,exit,failed);
+    let accepted be verify(data,phase,plan,active,survive,exit,failed)
+        else error InvalidPlan { try cleanup.close(plan); fail error; }
+        else error budget.LimitError { try cleanup.close(plan); fail error; };
+    return plan;
+}
