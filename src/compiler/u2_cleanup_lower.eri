@@ -36,9 +36,10 @@ public function emitOne(routine identity build.Function,graph identity aggregate
     let accepted be try planVerify.verify(routine.metadata,phase,plan,active,survive,exit,failed);
     accepted=try continuation.verify(routine,graph,phase,pair);
     let data be routine.metadata;
+    let expectedEntry be 1; if failed { expectedEntry=2; }
     try require(active.count >= 1 and active.count <= 128 and
         survive == active.count-1 and plan.depth == 1 and
-        plan.entry == (if failed { 2 } else { 1 }),
+        plan.entry == expectedEntry,
         "only a single exiting scoped owner is admitted");
     try require(routine.state == 0 and profile.state == 0 and
         profile.version == 1 and profile.owner == routine.owner and
@@ -63,12 +64,13 @@ public function emitOne(routine identity build.Function,graph identity aggregate
         "stale or mismatched checked-close registry entry");
     let ownerScope cleanup.Scope be active[active.count-1];
     let row be 0; if failed { row=8; }
+    let expectedMode be 0; if failed { expectedMode=1; }
     try require((try words.get(plan.records,phase,row)) == ownerScope.scope and
         (try words.get(plan.records,phase,row+1)) == contract.target.index and
         (try words.get(plan.records,phase,row+2)) == ownerScope.value and
         (try words.get(plan.records,phase,row+3)) == ownerScope.close.index and
         (try words.get(plan.records,phase,row+4)) == exit.index and
-        (try words.get(plan.records,phase,row+5)) == (if failed { 1 } else { 0 }),
+        (try words.get(plan.records,phase,row+5)) == expectedMode,
         "cleanup row does not identify this canonical consume");
     try require(pair.version == 2 and pair.location == ownerScope.close and
         pair.source.owner == routine.key and
