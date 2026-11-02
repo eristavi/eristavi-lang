@@ -1,0 +1,15 @@
+{
+  "status": "pass",
+  "tests": 6,
+  "seconds": 16.479594145000192,
+  "cc": "cc",
+  "cflags": "-O2",
+  "scope": "typed canonical destination binding and private cleanup linking; no executable fallible terminator",
+  "same_revision_canonical_pool_mutations_per_probe": 16,
+  "sha256": {
+    "src/compiler/u2_continuation_bind.eri": "2360bdab7e29f40dbfcc07d0250d85a07541d83f6bbef2c5b27dec0a3f8c5227",
+    "src/compiler/u2_cleanup_link.eri": "19c8b4a1f404d6a3ad475dd5bd9684ca24d0bee0fabeb83af86cd390c96021d9",
+    "tests/test_u2_continuation_bind.py": "0c4df65c5593dcb6e61ab14a8bb19f3b40f48b53380faa0970a57d5cc78fc38e"
+  },
+  "log": "test_cleanup_links_require_matching_typed_destinations_and_origins (test_u2_continuation_bind.U2ContinuationBindingTests.test_cleanup_links_require_matching_typed_destinations_and_origins) ... ok\ntest_typed_destinations_and_same_revision_negative_matrix (test_u2_continuation_bind.U2ContinuationBindingTests.test_typed_destinations_and_same_revision_negative_matrix) ... ok\ntest_independent_verifier_rejects_mutated_frozen_and_unreachable_plans (test_u2_cleanup_verify.U2CleanupVerifierTests.test_independent_verifier_rejects_mutated_frozen_and_unreachable_plans) ... ok\ntest_actual_planner_matches_independent_unwind_and_refusal_oracles (test_u2_cleanup_plan.U2CleanupPlanTests.test_actual_planner_matches_independent_unwind_and_refusal_oracles) ... ok\ntest_existing_stage0_and_native_match_cleanup_failure_oracle (test_u2_resource_baseline.U2ResourceBaselineTests.test_existing_stage0_and_native_match_cleanup_failure_oracle) ... ok\ntest_canonical_aggregate_signature_cfg_and_promotion (test_u1_aggregate_signatures.U1AggregateSignatureTests.test_canonical_aggregate_signature_cfg_and_promotion) ... ok\n\n----------------------------------------------------------------------\nRan 6 tests in 15.858s\n\nOK\n"
+}

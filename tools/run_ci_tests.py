@@ -18,6 +18,7 @@ sys.path.insert(0,str(ROOT/'tests'))
 SMOKE_TESTS=(
     'test_u2_cleanup_plan.U2CleanupPlanTests',
     'test_u2_cleanup_verify.U2CleanupVerifierTests',
+    'test_u2_continuation_bind.U2ContinuationBindingTests',
     # #51 semantic location-index optimization must retain AST identity,
     # duplicate-token collision handling and synthetic negative-token fallback.
     'test_source_fact_index.SourceFactIndexTests.test_identity_collisions_reanalysis_and_synthetic_nodes',
