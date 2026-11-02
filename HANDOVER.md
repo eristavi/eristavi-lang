@@ -25,6 +25,10 @@ No full CI or completed-batch qualification has been initiated.
 | Production | Existing frontend/default compiler, frozen source behavior and 32-byte ABI retained; no new-UIR backend promotion |
 | Full owned compiler self-build | Explicitly excluded from ordinary work; NOT CERTIFIED |
 
+## New nested-failure-mode candidate — 2 November 2026
+
+On PR #113, a new focused `test_inner_checked_close_failure_still_consumes_outer_owner` regression constructs a separate canonical failed-inner-close block, retains the surviving outer owner and typed primary error on that edge, then emits the outer checked close via `u2_cleanup_lower.emitAt` using the **failure-mode position-one row of the original depth-two verified plan**. Acquisition failure remains a separate block. The owner verifier is still mandatory and checks exactly-once resource consumption on both outcomes. The new test and contract amendment are **not tested at this checkpoint**; do not claim full multi-resource FailureContext composition, GC rooting, adapter execution or final U2 qualification. Next: inspect the exact-head focused smoke, correct failures, add negative failure-mode coverage and investigate a rooted canonical context representation.
+
 ## Current source safeguard — 2 November 2026
 
 Commit `d998da25b078ddd3e3c2a84d03571fa2acd39ba3` adds an explicit entry-mode check to `u2_cleanup_lower.emitAt`: the first close of an ordinary exit cannot be emitted in failure mode, nor vice versa. The provisional negative test transformation was removed in `3f9ce018f24003b27b18dec3cbee7c7ee2bcbf69` because its Eristavi error-expression type compatibility was not established; it is **not part of the accepted regression suite**. The new safeguard is **unqualified until latest remote smoke completes**. The prior exact-head run `41529705502` covered two-stage normal cleanup only. The next coherent slice must build both outcome branches for inner-close failure, preserve carried primary and its ordered secondary cleanup failures, and verify all records and origins. No full managed failure-context or native resource execution is claimed.

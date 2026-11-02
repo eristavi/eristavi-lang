@@ -71,3 +71,15 @@ chain, validate complete route topology and every exit, execute real file
 resource adapters, GC roots, Unicode17 managed Text/List/identity, deep
 fault/physical tests and final four-platform completed-batch qualification.
 Do not close U2 issue #74 or merge its draft PR based on this slice.
+
+## Inner close failure re-entry (incremental)
+
+A checked close of the inner resource has a distinct failed-edge block
+with one still-live outer owner and one typed structural primary failure.
+The outer resource is closed from that block using the original depth-two
+plan's failure-mode row at position one. The acquisition-failure block remains
+separate because it never owned the inner resource. Canonical block-owner
+signatures and transferred SSA parameters must validate afresh; this does NOT
+implement appending a new secondary error to a rooted FailureContext. The
+nested failure regression exercises this path while preserving previous
+negative owner mutations and the closed target/ABI boundaries.

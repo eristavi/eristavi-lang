@@ -179,6 +179,59 @@ class U2ScopedOwnerTests(unittest.TestCase):
         self.assertIn('let failedPlan be try planVerify.prepare', text)
         self.compile_probe(text)
 
+    def test_inner_checked_close_failure_still_consumes_outer_owner(self):
+        text = (ROOT / 'tests/fixtures/u2_scoped_owners.eri').read_text()
+        text = text.replace('import compiler.u2_scoped_owners as owners;',
+            'import compiler.u2_scoped_owners as owners;\n'
+            'import compiler.u2_cleanup_plan as cleanup;\n'
+            'import compiler.u2_cleanup_verify as planVerify;\n'
+            'import compiler.u2_cleanup_lower as lower;')
+        # Keep acquisition failures separate: no inner owner was acquired
+        # on that path, so the original depth-two exit plan cannot apply.
+        text = text.replace(
+            'let dead be try build.block(fn,[]); let deadTarget be try build.block(fn,[meta.i64()]);',
+            'let dead be try build.block(fn,[]); let deadTarget be try build.block(fn,[meta.i64()]);\n'
+            '    let innerCloseFailed be try ab.block(fn,graph,[failure,handle]);')
+        text = text.replace(
+            'let pendingError be try build.parameter(fn,pending,0); let pendingOwner be try build.parameter(fn,pending,1);',
+            'let pendingError be try build.parameter(fn,pending,0); let pendingOwner be try build.parameter(fn,pending,1);\n'
+            '    let closeError be try build.parameter(fn,innerCloseFailed,0); let closeOwner be try build.parameter(fn,innerCloseFailed,1);')
+        text = text.replace(
+            'try owners.block(profile,fn,phase,deadTarget,[]);',
+            'try owners.block(profile,fn,phase,deadTarget,[]);\n'
+            '    try owners.block(profile,fn,phase,innerCloseFailed,[owners.Entry { scope=outerScope; value=closeOwner; }]);')
+        text = text.replace(
+            'pair=try continuation.bindCarrying(fn,graph,phase,nested,afterInner,pending,acquireSig,pendingSig,innerLoc);\n'
+            '    let innerClose be try transfer.emit(fn,graph,consume,pair,[innerValue],[retainedOuter]);',
+            'pair=try continuation.bindCarrying(fn,graph,phase,nested,afterInner,innerCloseFailed,acquireSig,pendingSig,innerLoc);\n'
+            '    let active be [cleanup.Scope { scope=outerScope; contract=consumption.index; value=retainedOuter.index; close=loc; },'
+            'cleanup.Scope { scope=innerScope; contract=consumption.index; value=innerValue.index; close=innerLoc; }];\n'
+            '    let plan be try planVerify.prepare(data,owner,phase,active,0,innerLoc,false);\n'
+            '    let innerClose be try lower.emitAt(fn,graph,profile,table,phase,plan,active,0,innerLoc,false,0,false,consume,pair,innerValue,[retainedOuter]);')
+        text = text.replace(
+            'pair=try continuation.bind(fn,graph,phase,afterInner,done,failed,emptySig,failedSig,loc);\n'
+            '    let outerClose be try invoke.emit(fn,graph,consume,pair,[afterValue]);',
+            'pair=try continuation.bindCarrying(fn,graph,phase,afterInner,done,failed,emptySig,failedSig,loc);\n'
+            '    let outerClose be try lower.emitAt(fn,graph,profile,table,phase,plan,active,0,innerLoc,false,1,false,consume,pair,afterValue,[]);')
+        text = text.replace(
+            'let pendingClose be try transfer.emit(fn,graph,consume,pair,[pendingOwner],[pendingError]);',
+            'let pendingClose be try transfer.emit(fn,graph,consume,pair,[pendingOwner],[pendingError]);\n'
+            '    pair=try continuation.bindCarrying(fn,graph,phase,innerCloseFailed,pendingDone,doubleFailure,failedSig,doubleSig,loc);\n'
+            '    let failedInnerOuterClose be try lower.emitAt(fn,graph,profile,table,phase,plan,active,0,innerLoc,false,1,true,consume,pair,closeOwner,[closeError]);\n'
+            '    try cleanup.close(plan);')
+        text = text.replace('report.blocks == 11 and', 'report.blocks == 12 and')
+        text = text.replace('continuation.InvalidBinding,owners.InvalidOwnership,ProbeError {',
+            'continuation.InvalidBinding,owners.InvalidOwnership,'
+            'planVerify.InvalidPlan,lower.InvalidLowering,ProbeError {')
+        text = text.replace('else error ProbeError { output("probe:"+error.message);',
+            'else error planVerify.InvalidPlan { output("plan:"+error.message); process.setExitCode(1); }\n'
+            'else error lower.InvalidLowering { output("lower:"+error.message); process.setExitCode(1); }\n'
+            'else error ProbeError { output("probe:"+error.message);')
+        self.assertIn('let failedInnerOuterClose be try lower.emitAt', text)
+        self.assertIn('nested,afterInner,innerCloseFailed', text)
+        self.assertIn('report.blocks == 12', text)
+        self.compile_probe(text)
+
     def compile_probe(self, text):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
