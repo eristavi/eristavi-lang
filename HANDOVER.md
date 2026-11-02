@@ -39,6 +39,13 @@ require review before adoption. PR #111 remains draft; #74 remains open.
 Follow-up commit `61fa433aa8c21ddd011b18b935759655cd2946c6` fixes an
 identified constructor refusal path: the charged control allocation is released
 if word-store creation fails. This is a code review correction, **not tested**.
+New test fixtures in commits `c1724255540af024cde32e86d044203734a736ac`
+and `4ecfb79606e9754d2adf81e53c243db0222a2563` exercise initial
+primary/secondary order, already-active body failure, and charged owner
+reclamation through a focused native Python unittest. **Not executed:**
+this environment cannot access the repository via git/network, and the
+connected GitHub actions do not provide a workflow dispatch or remote shell.
+Do not claim these tests passed. The ledger is not a rooted FailureContext.
 Next: compile and independently test the ledger, prove refusal/cleanup behavior,
 then connect verified plans to canonical resource operations and managed roots.
 Do not merge or run full qualification until coherent acceptance gates pass.
