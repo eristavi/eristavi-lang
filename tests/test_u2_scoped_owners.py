@@ -108,6 +108,38 @@ class U2ScopedOwnerTests(unittest.TestCase):
 ''' + text[end:]
         self.compile_probe(text)
 
+    def test_verified_cleanup_plan_emits_canonical_close_on_both_exit_modes(self):
+        text = (ROOT / 'tests/fixtures/u2_scoped_owners.eri').read_text()
+        text = text.replace('import compiler.u2_scoped_owners as owners;',
+            'import compiler.u2_scoped_owners as owners;\\n'
+            'import compiler.u2_cleanup_plan as cleanup;\\n'
+            'import compiler.u2_cleanup_verify as planVerify;\\n'
+            'import compiler.u2_cleanup_lower as lower;')
+        text = text.replace(
+            'pair=try continuation.bind(fn,graph,phase,afterInner,done,failed,emptySig,failedSig,loc);\\n'
+            '    let outerClose be try invoke.emit(fn,graph,consume,pair,[afterValue]);',
+            'pair=try continuation.bindCarrying(fn,graph,phase,afterInner,done,failed,emptySig,failedSig,loc);\\n'
+            '    let active be [cleanup.Scope { scope=outerScope; contract=consumption.index; value=afterValue.index; close=loc; }];\\n'
+            '    let plan be try planVerify.prepare(data,owner,phase,active,0,loc,false);\\n'
+            '    let outerClose be try lower.emitOne(fn,graph,profile,table,phase,plan,active,0,loc,false,consume,pair,afterValue,[]);\\n'
+            '    try cleanup.close(plan);')
+        text = text.replace(
+            'let pendingClose be try transfer.emit(fn,graph,consume,pair,[pendingOwner],[pendingError]);',
+            'let failingOwners be [cleanup.Scope { scope=outerScope; contract=consumption.index; value=pendingOwner.index; close=loc; }];\\n'
+            '    let failingPlan be try planVerify.prepare(data,owner,phase,failingOwners,0,loc,true);\\n'
+            '    let pendingClose be try lower.emitOne(fn,graph,profile,table,phase,failingPlan,failingOwners,0,loc,true,consume,pair,pendingOwner,[pendingError]);\\n'
+            '    try cleanup.close(failingPlan);')
+        text = text.replace('continuation.InvalidBinding,owners.InvalidOwnership,ProbeError {',
+            'continuation.InvalidBinding,owners.InvalidOwnership,'
+            'planVerify.InvalidPlan,lower.InvalidLowering,ProbeError {')
+        text += '\\n'
+        text = text.replace('else error ProbeError { output("probe:"+error.message);',
+            'else error planVerify.InvalidPlan { output("plan:"+error.message); process.setExitCode(1); }\\n'
+            'else error lower.InvalidLowering { output("lower:"+error.message); process.setExitCode(1); }\\n'
+            'else error ProbeError { output("probe:"+error.message);')
+        self.assertIn('lower.emitOne', text)
+        self.compile_probe(text)
+
     def compile_probe(self, text):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
