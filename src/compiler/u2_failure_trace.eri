@@ -20,10 +20,9 @@ public function run(data identity meta.Metadata,phase identity budget.Phase,
     returns Report fails budget.LimitError,verify.InvalidPlan,failure.InvalidContext,InvalidTrace {
     let checked be try verify.verify(data,phase,plan,active,survive,exit,bodyFailed);
     let depth be active.count-survive;
+    let hasPrimary be context.primary != none;
     try require(context.owner == plan.owner and not context.closed and
-        context.primary == none and not bodyFailed or
-        context.owner == plan.owner and not context.closed and
-        context.primary != none and bodyFailed,
+        hasPrimary == bodyFailed and context.count == 0,
         "wrong primary failure on cleanup entry");
     try require(failures.count == depth and types.count == depth and payloads.count == depth,
         "close trace length mismatch");
