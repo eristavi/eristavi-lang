@@ -25,6 +25,10 @@ No full CI or completed-batch qualification has been initiated.
 | Production | Existing frontend/default compiler, frozen source behavior and 32-byte ABI retained; no new-UIR backend promotion |
 | Full owned compiler self-build | Explicitly excluded from ordinary work; NOT CERTIFIED |
 
+## Latest validated U2 checkpoint — 2 November 2026
+
+Remote focused test [run 41517841788](https://github.com/eristavi/eristavi-lang/actions/runs/41517841788) completed SUCCESS on PR #112 head `f7a2d60de7d812adce53bbd3662f15b4e972fa71`: **72 tests run, 69 passed, 3 intentionally skipped, 0 failed, 209.400 seconds**. Exact relevant named regressions passed: `test_verified_cleanup_plan_emits_canonical_close_on_both_exit_modes`, `test_primary_and_ordered_typed_context`, `test_primary_and_ordered_cleanup_failures`. The skipped opt-in owned runtime tests were not qualified by this run. The single-close lowering and typed-context budget fixes were copied byte-for-byte to the existing draft U2 branch, with Git blob equality verified, via implementation commits `92bde58350d3ceaf380c8b478d4bda3b4ac3e8d1`, `3cf136d70f6769b39ca321a8d8c9ce4f84a73408`, and fixture commit `59fe9579ef0cd6862d46926f840aa1d2592f637b`. This is focused cross-branch source equality, **not an exact-head full qualification**. PR #111 remains draft; #74 remains open. Next: multiple-owner canonical cleanup chains with proper primary/secondary FailureContext handling; independently verify every metadata contract and owner/edge/root at all exits, then stress/fault/physical evidence. Do not launch full CI or owned compiler self-build prematurely.
+
 ## Current U2 development checkpoint — 2 November 2026
 
 The user explicitly resumed implementation. Commit `2b39463e4be6fdb84ec119cddee3fc7b8e2eb165`
