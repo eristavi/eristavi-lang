@@ -37,6 +37,7 @@ function run() fails budget.LimitError,failure.InvalidContext,ProbeError {
     try check(a.typeId == 22 and a.payload == "close-A" and a.location == 4 and
         b.typeId == 23 and b.payload == "close-B" and b.location == 5,
         "typed secondary ordering incorrect");
+    try check(owner.traffic >= 2*512+4*256,"typed failure records did not charge owner traffic");
     try failure.close(active);
     try budget.finishPhase(phase);
     try check(owner.live == 0 and owner.pending == 0,"typed context backing leaked");
