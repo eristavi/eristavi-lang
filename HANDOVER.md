@@ -18,7 +18,7 @@ No full CI or completed-batch qualification has been initiated.
 | Latest qualified production merge | [PR #110](https://github.com/eristavi/eristavi-lang/pull/110), merge `6b5fccecb8e79f7c9bcc8261faa9203f4c94262a`; subsequent main changes are documentation/evidence/opt-in probes |
 | U1a | Complete within its adopted scalar/SSA/call/Float/provenance/physical boundary; [#77](https://github.com/eristavi/eristavi-lang/issues/77) CLOSED |
 | U1b | Bounded reference immutable aggregates/linked execution accepted through [merged #106](https://github.com/eristavi/eristavi-lang/pull/106); [#73](https://github.com/eristavi/eristavi-lang/issues/73) CLOSED |
-| U2 | Foundation implemented and focused-tested; [#74](https://github.com/eristavi/eristavi-lang/issues/74) OPEN; not complete, fully qualified or merged |
+| U2 | Foundation focused-tested; new typed-context reference and focused regression committed, NOT YET TESTED; [#74](https://github.com/eristavi/eristavi-lang/issues/74) OPEN; not complete, fully qualified or merged |
 | U2 branch / PR | `compiler/u2-cleanup-foundation-20261102`; [#111](https://github.com/eristavi/eristavi-lang/pull/111) OPEN / DRAFT |
 | U3 / U4 | [#75](https://github.com/eristavi/eristavi-lang/issues/75) / [#102](https://github.com/eristavi/eristavi-lang/issues/102) OPEN; redesigned production integration/machine migration unimplemented |
 | Optimization | [#51](https://github.com/eristavi/eristavi-lang/issues/51) OPEN / PAUSED; no whole-compiler speedup or optimization completion claimed |
@@ -51,6 +51,10 @@ then connect verified plans to canonical resource operations and managed roots.
 Do not merge or run full qualification until coherent acceptance gates pass.
 
 ## 92. Current U2 checkpoint
+
+**New 2 November continuation (unqualified):** On branch `compiler/u2-cleanup-foundation-20261102`, added `src/compiler/u2_failure_context.eri`, `tests/fixtures/u2_typed_failure_context.eri`, and `tests/test_u2_typed_failure_context.py` (commits `bf330fba3897f0d00e52868b6de4b9acda5b9aee`, `43d3493835dbbc9ecfbf1b938061f12300c5a323`, `c2d8bf3bd588304af257a971418eb35087da4b3c`). These are an **opt-in, typed and identity-linked semantic reference**, not a canonical managed FailureContext or root map. Primary typed failure and ordered secondary failure records carry type ID, Text payload and source location. Existing token-based order ledger remains unchanged. This change has **not been compiled or tested** because the local environment cannot resolve github.com for repository checkout; hosted smoke has not yet been inspected. No passing result, ABI integration, native adapter, allocation-failure/GC evidence, merge or closure is claimed. The newly added test is awaiting execution. Do not promote this implementation until actual compilation and tests confirm it.
+
+
 
 This replaces the accumulated development instructions in former §§88–92.
 The implementation is in the U2 draft branch, not `main`.
@@ -116,7 +120,7 @@ The archive retains raw logs, three owned result/hash records and 18 input
 snapshots. CRC and every input SHA-256 were verified; current inputs still match.
 Archive SHA-256: `4bea42f5648c0b2c8a3c69627fd1f612beb440405190e009d15eb673b2c6cda6`.
 
-### Remaining U2 gates — resume only when requested
+### Remaining U2 gates — actively authorized to resume
 
 1. Connect semantic cleanup plans to canonical resource operations and prove
    exit origins, pending returns and exact cleanup across the complete profile.
@@ -293,7 +297,7 @@ revisions are recorded above. Later documentation commits do not change those
 inputs. Full U2 qualification remains outstanding. No development should start
 merely because this handover lists future gates.
 
-For this documentation cleanup, the pre-cleanup file is preserved in full from
+The earlier documentation-only stop is superseded by the latest user instruction. For the preceding documentation cleanup, the pre-cleanup file is preserved in full from
 `867252d494d9dee6a7b40284b8ed4dffee88db8f`. The cleaned handover/history are published on both `main` and the U2 branch
 without merging U2 implementation. Only Markdown changes are authorized and made; compiler/tests/ABI/evidence archives are unchanged. Use a patch/link/
 archive-integrity check, reusing valid evidence; do not launch compilation or
