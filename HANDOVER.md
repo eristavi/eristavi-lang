@@ -36,6 +36,9 @@ this is not complete managed FailureContext, canonical resource lowering,
 Text/List/identity support or U2 acceptance. The implementation has not been
 compiled or run through focused tests; its API and allocation-failure behavior
 require review before adoption. PR #111 remains draft; #74 remains open.
+Follow-up commit `61fa433aa8c21ddd011b18b935759655cd2946c6` fixes an
+identified constructor refusal path: the charged control allocation is released
+if word-store creation fails. This is a code review correction, **not tested**.
 Next: compile and independently test the ledger, prove refusal/cleanup behavior,
 then connect verified plans to canonical resource operations and managed roots.
 Do not merge or run full qualification until coherent acceptance gates pass.
