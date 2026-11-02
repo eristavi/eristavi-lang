@@ -1,0 +1,58 @@
+// Private U2 checked-failure ordering ledger. This is a bounded, charged
+// semantic reference component, NOT a managed FailureContext or GC root map.
+// A positive failure token identifies a separately rooted typed payload.
+// Cleanup order is preserved; the first failure remains primary.
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+
+public type Context {
+    owner identity budget.Owner;
+    primary Int;
+    secondary identity words.Words;
+    closed Bool;
+    control identity budget.Allocation;
+}
+public error InvalidContext { message Text; }
+function require(okay Bool,message Text) fails InvalidContext {
+    if not okay { fail InvalidContext { message=message; }; }
+}
+public function create(owner identity budget.Owner,phase identity budget.Phase,
+    primary Int) returns identity Context fails budget.LimitError,InvalidContext {
+    try require(owner.kind == 2 and phase.owner == owner and phase.state == 0 and
+        primary >= 0,"invalid failure context owner or primary");
+    try budget.poll(owner);
+    let pending be try budget.reserve(owner,512);
+    let entries be words.create(owner,256)
+        else error budget.LimitError { try budget.cancelReservation(pending); fail error; };
+    let control be try budget.commit(pending);
+    return identity Context { owner=owner; primary=primary; secondary=entries;
+        closed=false; control=control; };
+}
+public function append(context identity Context,phase identity budget.Phase,
+    failure Int) fails budget.LimitError,InvalidContext {
+    try require(not context.closed and phase.owner == context.owner and
+        phase.state == 0 and failure > 0 and
+        not context.secondary.closed and context.secondary.owner == context.owner,
+        "invalid failure append");
+    try budget.poll(context.owner);
+    // A cleanup failure becomes primary only when there is no prior failure.
+    if context.primary == 0 { context.primary=failure; return; }
+    // Refuse overflow rather than losing diagnostic context.
+    if context.secondary.length >= 256 {
+        try budget.reject("U2 secondary failure ledger limit");
+    }
+    let ignored be try words.push(context.secondary,phase,failure);
+}
+public function secondaryAt(context identity Context,phase identity budget.Phase,
+    index Int) returns Int fails budget.LimitError,InvalidContext {
+    try require(not context.closed and phase.owner == context.owner and
+        phase.state == 0 and index >= 0 and index < context.secondary.length,
+        "invalid secondary failure index");
+    return try words.get(context.secondary,phase,index);
+}
+public function close(context identity Context) fails budget.LimitError,InvalidContext {
+    try require(not context.closed,"failure context already closed");
+    context.closed=true;
+    try words.close(context.secondary);
+    try budget.release(context.control);
+}
