@@ -47,17 +47,25 @@ public function append(context identity Context,phase identity budget.Phase,
         "invalid typed cleanup failure");
     try budget.poll(context.owner);
     // A bounded reference profile: refusal is explicit, never drop context.
+    // Validate an existing chain before any new allocation or publication.
     if context.count >= 256 { try budget.reject("typed cleanup failures exceed bounded profile"); }
+    try require((context.first == none and context.last == none and context.count == 0) or
+        (context.first != none and context.last != none and context.count > 0),
+        "invalid typed failure chain shape");
     try budget.work(phase,1);
+    // Charge each new retained record to the existing context lease. The
+    // control's 512-byte charge covers the Context and optional initial
+    // primary; this incremental charge models the additional failure record.
+    let pending be try budget.reserve(context.owner,256);
     let node be identity Failure { typeId=typeId; payload=payload; location=location; next=none; };
+    try budget.commitInto(pending,context.charge);
     if context.primary == none { context.primary=node; return; }
     if context.first == none {
         context.first=node; context.last=node;
     } else {
         let tail be context.last;
         if tail == none { try budget.reject("invalid typed failure tail"); }
-        let target identity Failure be node;
-        if tail != none { tail.next=target; }
+        if tail != none { tail.next=node; }
         context.last=node;
     }
     context.count=context.count+1;
@@ -69,6 +77,7 @@ public function secondaryAt(context identity Context,phase identity budget.Phase
     try budget.poll(context.owner);
     let cursor be context.first; let i be 0;
     while i < index {
+        try budget.work(phase,1);
         if cursor == none { try budget.reject("invalid typed failure chain"); }
         if cursor != none { cursor=cursor.next; }
         i=i+1;
