@@ -1,0 +1,99 @@
+// Private U2 builder planning data, NOT another executable IR or a verifier
+// capability. Canonical UIR construction/ownership checking remains subsequent.
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+import compiler.u1_meta as meta;
+
+public type Scope {
+    scope Int; contract Int; value Int; close meta.LocId;
+}
+public type Plan {
+    owner identity budget.Owner; records identity words.Words;
+    entry Int; depth Int; closed Bool; control identity budget.Allocation;
+}
+
+function inputs(data identity meta.Metadata,owner identity budget.Owner,
+    phase identity budget.Phase,active,survive Int,exit meta.LocId) fails budget.LimitError {
+    try budget.poll(owner); try budget.poll(data.owner);
+    if owner.kind != 2 or phase.owner != owner or phase.state != 0 or not data.frozen or
+       data.closed or data.owner.parent != owner.parent {
+        try budget.reject("U2 cleanup plan requires same-request frozen metadata and function owner");
+    }
+    if active.count > 128 { try budget.exceed(owner,active.count,128); }
+    if survive < 0 or survive > active.count { try budget.reject("invalid U2 surviving owner prefix"); }
+    try meta.validLocation(data,exit);
+    // Source-scope obligations use lexical preorder IDs. This private builder
+    // input convention detects repeated/unsorted scopes in one linear scan;
+    // it does not certify the later canonical owner-signature graph.
+    let previous be 0; let index be 0;
+    while index < active.count {
+        let current Scope be active[index];
+        try budget.work(phase,1);
+        if current.scope <= previous or current.scope > 1048576 or
+           current.contract < 1 or current.contract > 1048576 or
+           current.value < 1 or current.value > 1048576 {
+            try budget.reject("invalid U2 cleanup obligation");
+        }
+        try meta.validLocation(data,current.close);
+        previous=current.scope; index=index+1;
+    }
+}
+
+function emit(plan identity Plan,phase identity budget.Phase,current Scope,
+    exit meta.LocId,mode Int,success Int,failure Int) fails budget.LimitError {
+    let ignored be try words.push(plan.records,phase,current.scope);
+    ignored=try words.push(plan.records,phase,current.contract);
+    ignored=try words.push(plan.records,phase,current.value);
+    ignored=try words.push(plan.records,phase,current.close.index);
+    ignored=try words.push(plan.records,phase,exit.index);
+    ignored=try words.push(plan.records,phase,mode);
+    ignored=try words.push(plan.records,phase,success);
+    ignored=try words.push(plan.records,phase,failure);
+}
+
+function fill(plan identity Plan,phase identity budget.Phase,active,
+    exit meta.LocId) fails budget.LimitError {
+    let mode be 0;
+    while mode < 2 {
+        let index be 0;
+        while index < plan.depth {
+            let current Scope be active[active.count-1-index];
+            let success be 0; let failure be 0-1;
+            if index+1 < plan.depth {
+                failure=plan.depth+index+2;
+                if mode == 0 { success=index+2; } else { success=failure; }
+            } else { if mode == 1 { success=0-1; } }
+            // A failed close has consumed the CURRENT owner too: go to the
+            // NEXT failure-mode close, never retry/recreate this owner.
+            try emit(plan,phase,current,exit,mode,success,failure);
+            index=index+1;
+        }
+        mode=mode+1;
+    }
+}
+
+public function create(data identity meta.Metadata,owner identity budget.Owner,
+    phase identity budget.Phase,active,survive Int,exit meta.LocId,failed Bool)
+    returns identity Plan fails budget.LimitError {
+    try inputs(data,owner,phase,active,survive,exit);
+    let pending be try budget.reserve(owner,512);
+    let records be words.create(owner,2048)
+        else error budget.LimitError { try budget.cancelReservation(pending); fail error; };
+    let control be try budget.commit(pending);
+    let depth be active.count-survive;
+    let entry be 0;
+    if failed { entry=0-1; }
+    if depth > 0 { entry=1; if failed { entry=depth+1; } }
+    let plan be identity Plan { owner=owner; records=records; entry=entry; depth=depth; closed=false; control=control; };
+    fill(plan,phase,active,exit)
+        else error budget.LimitError {
+            try words.close(records); try budget.release(control); plan.closed=true; fail error;
+        };
+    try words.freeze(records);
+    return plan;
+}
+
+public function close(plan identity Plan) fails budget.LimitError {
+    if plan.closed { try budget.reject("U2 cleanup plan already closed"); }
+    plan.closed=true; try words.close(plan.records); try budget.release(plan.control);
+}
