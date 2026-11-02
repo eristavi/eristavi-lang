@@ -21,10 +21,9 @@ public function create(owner identity budget.Owner,phase identity budget.Phase,
     try require(owner.kind == 2 and phase.owner == owner and phase.state == 0 and
         primary >= 0,"invalid failure context owner or primary");
     try budget.poll(owner);
-    let pending be try budget.reserve(owner,512);
+    let control be try budget.commit(try budget.reserve(owner,512));
     let entries be words.create(owner,256)
-        else error budget.LimitError { try budget.cancelReservation(pending); fail error; };
-    let control be try budget.commit(pending);
+        else error budget.LimitError { try budget.release(control); fail error; };
     return identity Context { owner=owner; primary=primary; secondary=entries;
         closed=false; control=control; };
 }
