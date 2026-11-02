@@ -25,6 +25,10 @@ No full CI or completed-batch qualification has been initiated.
 | Production | Existing frontend/default compiler, frozen source behavior and 32-byte ABI retained; no new-UIR backend promotion |
 | Full owned compiler self-build | Explicitly excluded from ordinary work; NOT CERTIFIED |
 
+## Typed nested-failure semantic matrix candidate — 2 November 2026
+
+Isolated branch `compiler/u2-failure-semantics-20261102` derives from PR #113 head `4add6cfa139a4983db897ab4ece83b0328cba70e`. New `src/compiler/u2_failure_trace.eri` checks an entire independently verified private cleanup plan's row routing and runs a closed 3-owner / 8 failure-mask / two body-state matrix against the separately implemented typed `u2_failure_context`. The fixture checks reverse lexical order, primary preservation, ordered typed/Text secondary payloads, terminal success-vs-failure and released owner charges. This is **an unqualified semantic reference**, not a canonical rooted FailureContext, physical allocator proof, actual resource execution or U2 completion. Focused CI must pass on the exact new code head. Separate failure-routing PR #113 has its own still-pending results. No full CI or main merge selected.
+
 ## New nested-failure-mode candidate — 2 November 2026
 
 On PR #113, a new focused `test_inner_checked_close_failure_still_consumes_outer_owner` regression constructs a separate canonical failed-inner-close block, retains the surviving outer owner and typed primary error on that edge, then emits the outer checked close via `u2_cleanup_lower.emitAt` using the **failure-mode position-one row of the original depth-two verified plan**. Acquisition failure remains a separate block. The owner verifier is still mandatory and checks exactly-once resource consumption on both outcomes. The new test and contract amendment are **not tested at this checkpoint**; do not claim full multi-resource FailureContext composition, GC rooting, adapter execution or final U2 qualification. Next: inspect the exact-head focused smoke, correct failures, add negative failure-mode coverage and investigate a rooted canonical context representation.
