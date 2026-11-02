@@ -1,6 +1,6 @@
 # Eristavi compiler — current handover
 
-**Authoritative recovery checkpoint: 2 November 2026, Asia/Nicosia. Read §92 FIRST: the user PAUSED optimization #51 and selected U2 #74. U2 cleanup planning, canonical fallible calls/transport and initial scoped ownership are implemented and focused-tested, NOT qualified/merged.** §87 preserves completed verifier temporary-storage measurements; §86 records six private optimization candidates NOT ADOPTED. §84 remains the latest qualified/merged production checkpoint (#110); §78 preserves #108 and §77 reference U1b. Issue #51 remains OPEN; no new production optimization or full-performance completion is claimed.
+**Authoritative recovery checkpoint: 2 November 2026, Asia/Nicosia. Read §92 FIRST: this U2 foundation step PASSED hosted smoke; the user requested STOP after this step. Optimization #51 remains PAUSED. U2 cleanup planning, canonical fallible calls/transport and initial scoped ownership are implemented and focused-tested, NOT full-U2 qualified/merged.** §87 preserves completed verifier temporary-storage measurements; §86 records six private optimization candidates NOT ADOPTED. §84 remains the latest qualified/merged production checkpoint (#110); §78 preserves #108 and §77 reference U1b. Issue #51 remains OPEN; no new production optimization or full-performance completion is claimed.
 
 [PR #110](https://github.com/eristavi/eristavi-lang/pull/110) is **QUALIFIED / MERGED** at `6b5fccecb8e79f7c9bcc8261faa9203f4c94262a` (verified exact main). Tested head `1fbb5115dccc2c6b6160d511366d31d06601849d` and tested/merged tree `3e3ab90714a9a608c9dafabf4740dae60049ff1d` match exactly. Final [four-platform CI 41336208716](https://github.com/eristavi/eristavi-lang/actions/runs/41336208716) and [qualification 41336171885](https://github.com/eristavi/eristavi-lang/actions/runs/41336171885) PASS. Source location lookup left-first comparison reduced scoped boxes 9.88%, allocations 9.82% and graph finds 11.00%, *not* a meaningful end-to-end wall-clock gain; the 90-second large-source cap remains. Issue #51 stays OPEN.
 
@@ -114,7 +114,7 @@ redundant indexing, unbounded caches or unnecessarily expensive CI.
 
 ## Start a new chat with this
 
-> Read this complete handover and governing philosophy/semantics, applicable architecture/IR and CI contracts. Follow Philosophy → Semantics → Architecture → Implementation. Resume U2 #74 at §92 on `compiler/u2-cleanup-foundation-20261102`. User explicitly postponed optimization: keep #51 OPEN / PAUSED; do not resume §87 optimization proposals without new instruction. Private cleanup planning, canonical fallible invokes/typed edge transport and the initial scoped-owner proof are implemented and locally tested, not complete U2 or qualified production. Preserve accepted U1a/reference U1b and qualified production #110; source language, ABI, both verifier passes, resource limits and independent oracles remain binding. Next integrate semantic cleanup plans with the scoped-owner proof, extend managed type/value/context/root contracts and complete physical/deep acceptance before final qualification. No experimental owned full compiler self-build.
+> Read this complete handover and governing philosophy/semantics, applicable architecture/IR and CI contracts. Follow Philosophy → Semantics → Architecture → Implementation. Read the completed U2 foundation checkpoint at §92 on `compiler/u2-cleanup-foundation-20261102`. User explicitly postponed optimization: keep #51 OPEN / PAUSED; do not resume §87 optimization proposals without new instruction. Private cleanup planning, canonical fallible invokes/typed edge transport and the initial scoped-owner proof are implemented and locally tested, not complete U2 or qualified production. Preserve accepted U1a/reference U1b and qualified production #110; source language, ABI, both verifier passes, resource limits and independent oracles remain binding. Next integrate semantic cleanup plans with the scoped-owner proof, extend managed type/value/context/root contracts and complete physical/deep acceptance before final qualification. The latest user instruction is to STOP after this step: do not begin another implementation batch without a new user instruction. No experimental owned full compiler self-build.
 
 ## Current verified status — read before historical sections
 
@@ -135,11 +135,11 @@ redundant indexing, unbounded caches or unnecessarily expensive CI.
 | Performance | #110 source lookup reduces scoped boxes 9.88%, allocator calls 9.82% and graph finds 11.00%, with no meaningful wall-time gain. Prior #108 small-source median 3.620% lower; reference-U1b fixture 11.0158% lower. None proves whole-compiler speedup. Large source remains censored at 90s; #51 OPEN |
 | U1a | Scalar/SSA/calls/recursion/effects/switches/strict native f64/provenance/bounded simplification plus scoped physical acceptance **COMPLETE within the adopted U1a boundary** |
 | U1b #73 | **QUALIFIED / MERGED / CLOSED-completed** via #106. Immutable aggregate graph/make/get/set, linked execution, independent oracles, fresh malformed/dead/uncalled rejection, exact faults/fuel/LocId and physical/cancellation acceptance within adopted REFERENCE boundary; see §77 |
-| U2 #74 | **ACTIVE / cleanup planning, typed canonical invokes, outcome transfers and initial scoped-owner verifier implemented; focused validation in progress**, NOT qualified/merged. Managed Text/List/identity, complete failure contexts, production resource adapters and root maps remain unimplemented; see §92 |
+| U2 #74 | **FOUNDATION STEP TESTED / hosted smoke PASS; work STOPPED per latest user instruction**, NOT qualified/merged. Managed Text/List/identity, complete failure contexts, production resource adapters and root maps remain unimplemented; see §92 |
 | U3 #75 | Direct frozen frontend → new UIR → production native target/artifact/cache integration **NOT IMPLEMENTED**. Existing adapter is isolated; #104 is test-only reference parity |
 | U4 #102 | Redesigned UIR machine/legalization/artifact migration **NOT IMPLEMENTED / NOT QUALIFIED** |
 | Production | Existing source language and default compiler pipeline retained; no new-UIR backend promotion |
-| Environment / next stage | User selected **U2 #74**, branch `compiler/u2-cleanup-foundation-20261102`, baseline `59d30c18c28fa59e9793100f72b9ffd88cc603ee`. Canonical invoke/transport and initial scoped-owner slices locally tested; managed/root/runtime integration and full qualification pending. **#51 OPEN / PAUSED**; no further optimization experiments requested. U3/U4 unimplemented |
+| Environment / next stage | User selected **U2 #74**; current foundation step is tested and work STOPPED after it as requested. Branch `compiler/u2-cleanup-foundation-20261102`, baseline `59d30c18c28fa59e9793100f72b9ffd88cc603ee`. Canonical invoke/transport and initial scoped-owner slices locally tested; managed/root/runtime integration and full qualification pending. **#51 OPEN / PAUSED**; no further optimization experiments requested. U3/U4 unimplemented |
 
 **Reading rule:** the opening and §92 govern current user priority and U2 development; §87 preserves completed storage measurements and §86 rejected experiments; §84 governs qualified production status; §77 preserves the accepted reference U1b boundary and §44 the accepted U1a boundary. Earlier keep-open and pending
 statements describe their historical revisions. U1a acceptance does not certify
@@ -3781,7 +3781,7 @@ runtime, complete managed resource type support or complete cleanup context
 composition. Full depth/exit/type/GC/physical/oracle matrices, managed-local
 promotion, actual error contexts/root maps, runtime adapter execution and final
 four-platform/full qualification remain U2 gates. U2 #74 stays OPEN; #111 stays
-DRAFT/unmerged. Publication is in preparation; verify the guarded remote ref and exact tree before claiming it published.
+DRAFT/unmerged. Publication of this source/evidence batch is verified on draft #111 at head 4fea1f66fb6ea63621be419c67b8993b6f6bce07; the final hosted/stop checkpoint below supersedes earlier preparation notes.
 
 NEXT: complete focused strengthened owner/refusal validation and smoke; retain
 source-hashed evidence, publish/reconcile #111, then integrate semantic cleanup
@@ -3823,3 +3823,32 @@ Track hosted smoke independently by the published PR head; this record does not
 claim full qualification, U2 acceptance or a merge. PR #111 remains draft and
 #74 remains open; next gates are the managed/runtime and deep acceptance work
 listed above. No heavy process is left running locally.
+
+
+### §92 final hosted result and explicit user stop — 2 November 2026
+
+[Hosted smoke 41492512950](https://github.com/eristavi/eristavi-lang/actions/runs/41492512950)
+SUCCESS on exact published head `4fea1f66fb6ea63621be419c67b8993b6f6bce07`,
+tree `982b4c149fd60ac72738a9677d6defabe1d3fdc8`. Scope/patch check and
+focused Linux Clang smoke job 125438983489 PASS. Actual log: 69 collected,
+66 passed, three explicit opt-in skips, 145.442 seconds. All three skipped
+owned-native probes passed separately locally (invoke, carried outcomes and
+execution of the scoped-owner verifier). The full four-platform matrix was
+SKIPPED by design; no completed-batch qualification or experimental full owned
+compiler self-build was selected. Original physical U1 gates passed unchanged.
+
+All 27 uploaded source/evidence blobs and the complete final Git tree were
+verified against local Git hashes. Local checkout was aligned to the exact
+remote commits without changing files; all 18 archived input hashes still
+match. PR #111 and issue #74 descriptions are reconciled with implemented vs
+pending scope; PR stays DRAFT/OPEN and #74 stays OPEN. This final HANDOVER-only
+checkpoint changes no source, test, toolchain or qualification input and uses
+a lightweight patch check, reusing the verified smoke evidence above.
+
+**LATEST USER INSTRUCTION:** “When you’re done with this step, stop working.”
+This foundation implementation/publication/validation step is complete; STOP
+now. Do not start managed values, failure-context/root integration, further
+scope/physical studies or another implementation batch until the user asks.
+No implementation, test or qualification process is left running. U2 overall
+remains incomplete, with the next technical gates listed above preserved for
+future resumption; optimization #51 remains OPEN/PAUSED.
