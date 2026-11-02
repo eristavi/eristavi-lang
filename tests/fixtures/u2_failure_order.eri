@@ -1,0 +1,38 @@
+import std.process;
+import compiler.u1_budget as budget;
+import compiler.u2_failure_order as order;
+error ProbeError { message Text; }
+function check(okay Bool,message Text) fails ProbeError {
+    if not okay { fail ProbeError { message=message; }; }
+}
+function run() fails budget.LimitError,order.InvalidContext,ProbeError {
+    let root be try budget.developmentRequest();
+    let owner be try budget.functionOwner(root,true);
+    let phase be try budget.constructionPhase(owner);
+    let context be try order.create(owner,phase,0);
+    try check(context.primary == 0 and context.secondary.length == 0,"new context not empty");
+    try order.append(context,phase,11);
+    try check(context.primary == 11 and context.secondary.length == 0,"first cleanup not primary");
+    try order.append(context,phase,12);
+    try order.append(context,phase,13);
+    try check(context.primary == 11 and context.secondary.length == 2,"cleanup order length");
+    try check((try order.secondaryAt(context,phase,0)) == 12 and
+        (try order.secondaryAt(context,phase,1)) == 13,"cleanup order");
+    try order.close(context);
+    let already be try order.create(owner,phase,21);
+    try order.append(already,phase,22);
+    try order.append(already,phase,23);
+    try check(already.primary == 21 and already.secondary.length == 2,"body primary overwritten");
+    try check((try order.secondaryAt(already,phase,0)) == 22 and
+        (try order.secondaryAt(already,phase,1)) == 23,"body secondary order");
+    try order.close(already);
+    try budget.finishPhase(phase);
+    try check(owner.live == 0 and owner.pending == 0,"ledger owner backing leaked");
+    try budget.close(owner);
+    try check(root.live == 0 and root.pending == 0,"ledger root backing leaked");
+    try budget.close(root);
+    output("u2-failure-order:ok");
+}
+run() else error budget.LimitError { output("limit:"+error.message); process.setExitCode(1); }
+else error order.InvalidContext { output("context:"+error.message); process.setExitCode(1); }
+else error ProbeError { output("probe:"+error.message); process.setExitCode(1); };
