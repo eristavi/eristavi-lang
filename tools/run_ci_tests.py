@@ -23,6 +23,8 @@ SMOKE_TESTS=(
     'test_u2_fallible_registry.U2FallibleRegistryTests',
     'test_u2_invoke_transfers.U2InvokeTransferTests',
     'test_u2_scoped_owners.U2ScopedOwnerTests',
+    'test_u2_typed_failure_context.U2TypedFailureContextTests',
+    'test_u2_failure_order.U2FailureOrderTests',
     # #51 semantic location-index optimization must retain AST identity,
     # duplicate-token collision handling and synthetic negative-token fallback.
     'test_source_fact_index.SourceFactIndexTests.test_identity_collisions_reanalysis_and_synthetic_nodes',
