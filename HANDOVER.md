@@ -4,10 +4,10 @@
 instructions and accepted boundaries. Superseded checkpoints are in the
 [historical snapshot](docs/history/2026-11-02/HANDOVER_BEFORE_CLEANUP.md).
 
-**Current authorization: documentation cleanup only.** The user requested that
-compiler work STOP after the completed U2 foundation step. Do not begin another
-implementation batch until a new user instruction. Optimization #51 remains
-OPEN / PAUSED. No build, test or qualification process is running.
+**Current authorization: U2 development resumed by explicit user instruction.**
+Continue bounded U2 work under the governing philosophy, frozen semantics and
+proportional testing rules. Optimization #51 remains OPEN / PAUSED.
+No full CI or completed-batch qualification has been initiated.
 
 ## Current verified status
 
@@ -24,6 +24,21 @@ OPEN / PAUSED. No build, test or qualification process is running.
 | Optimization | [#51](https://github.com/eristavi/eristavi-lang/issues/51) OPEN / PAUSED; no whole-compiler speedup or optimization completion claimed |
 | Production | Existing frontend/default compiler, frozen source behavior and 32-byte ABI retained; no new-UIR backend promotion |
 | Full owned compiler self-build | Explicitly excluded from ordinary work; NOT CERTIFIED |
+
+## Current U2 development checkpoint — 2 November 2026
+
+The user explicitly resumed implementation. Commit `2b39463e4be6fdb84ec119cddee3fc7b8e2eb165`
+adds `src/compiler/u2_failure_order.eri`, a **private, untested** bounded
+owner-scoped ordered checked-failure token ledger. It retains an existing primary,
+promotes the first cleanup failure when none exists, and appends subsequent
+failure tokens in cleanup order. Tokens are **not rooted typed error objects**;
+this is not complete managed FailureContext, canonical resource lowering,
+Text/List/identity support or U2 acceptance. The implementation has not been
+compiled or run through focused tests; its API and allocation-failure behavior
+require review before adoption. PR #111 remains draft; #74 remains open.
+Next: compile and independently test the ledger, prove refusal/cleanup behavior,
+then connect verified plans to canonical resource operations and managed roots.
+Do not merge or run full qualification until coherent acceptance gates pass.
 
 ## 92. Current U2 checkpoint
 
@@ -272,7 +287,7 @@ For this documentation cleanup, the pre-cleanup file is preserved in full from
 `867252d494d9dee6a7b40284b8ed4dffee88db8f`. The cleaned handover/history are published on both `main` and the U2 branch
 without merging U2 implementation. Only Markdown changes are authorized and made; compiler/tests/ABI/evidence archives are unchanged. Use a patch/link/
 archive-integrity check, reusing valid evidence; do not launch compilation or
-full qualification. The user's development stop remains in force.
+full qualification. The user's former development stop was superseded by the explicit instruction to resume U2 implementation.
 
 ## Historical section references
 
