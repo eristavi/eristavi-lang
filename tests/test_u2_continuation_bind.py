@@ -66,7 +66,7 @@ function run() fails budget.LimitError,graphVerify.InvalidGraph,continuation.Inv
     let zero be try continuation.bind(fn,graph,phase,entry,emptyTarget,failure,empty,failureSig,loc);
     try check(try continuation.verify(fn,graph,phase,zero),"zero normal results");
     try check(root.live == before and root.traffic == traffic and fn.revision == revision,"binding mutates canonical pools");
-    let bad be pair; bad.version=2; try check(try rejects(fn,graph,phase,bad),"unknown version accepted");
+    let bad be pair; bad.version=3; try check(try rejects(fn,graph,phase,bad),"unknown version accepted");
     bad=pair; bad.revision=revision-1; try check(try rejects(fn,graph,phase,bad),"stale revision accepted");
     bad=pair; bad.functionKey=identity meta.Key { marker=0; }; try check(try rejects(fn,graph,phase,bad),"foreign function accepted");
     bad=pair; bad.typeOwner=identity meta.Key { marker=0; }; try check(try rejects(fn,graph,phase,bad),"foreign type graph accepted");

@@ -1,0 +1,119 @@
+// Canonical invoke with typed, predecessor-available suffix transfers.
+// Version-two destination descriptors; opcode 46 and canonical pools unchanged.
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+import compiler.u1_meta as meta;
+import compiler.u1_builder as build;
+import compiler.u1_aggregate as aggregate;
+import compiler.u1_aggregate_signature as sig;
+import compiler.u2_continuation_bind as continuation;
+import compiler.u2_invoke_contract as invokeContract;
+
+function edge(routine identity build.Function,target build.BlockId,count Int,carried)
+    returns Int fails budget.LimitError {
+    let first be routine.arguments.length; let i be 0;
+    while i < count {
+        let ignored be try words.push(routine.arguments,routine.phase,0-i-1); i=i+1;
+    }
+    i=0;
+    while i < carried.count {
+        let value build.ValueId be carried[i];
+        let ignored be try words.push(routine.arguments,routine.phase,value.index); i=i+1;
+    }
+    let id be routine.edges.length/3+1;
+    let ignored be try words.push(routine.edges,routine.phase,target.index);
+    ignored=try words.push(routine.edges,routine.phase,first);
+    ignored=try words.push(routine.edges,routine.phase,count+carried.count);
+    return id;
+}
+public function emit(routine identity build.Function,graph identity aggregate.Registry,
+    contract invokeContract.Contract,pair continuation.Pair,arguments,carried)
+    returns build.InstId fails budget.LimitError,continuation.InvalidBinding {
+    let accepted be try continuation.verify(routine,graph,routine.phase,pair);
+    if routine.state != 0 or contract.version != 1 or pair.version != 2 or
+       contract.failure.owner != routine.metadata.key {
+        try budget.reject("invalid U2 invoke construction contract");
+    }
+    let normal be try meta.functionSignature(routine.metadata,routine.phase,contract.target);
+    let count be try meta.parameterCount(routine.metadata,routine.phase,normal);
+    let results be try meta.resultCount(routine.metadata,routine.phase,normal);
+    if count != arguments.count or count > 16 or results > 16 or carried.count > 128 or
+       results+carried.count != (try meta.resultCount(routine.metadata,routine.phase,pair.normalPayload)) {
+        try budget.reject("invoke signature arity mismatch");
+    }
+    let i be 0;
+    while i < results {
+        let expected be try sig.resultType(routine.metadata,graph,routine.phase,normal,i);
+        let actual be try sig.resultType(routine.metadata,graph,routine.phase,pair.normalPayload,i);
+        if expected.index != actual.index { try budget.reject("invoke normal payload type mismatch"); }
+        i=i+1;
+    }
+    if (try meta.parameterCount(routine.metadata,routine.phase,contract.failure)) != 0 or
+       (try meta.resultCount(routine.metadata,routine.phase,contract.failure)) != 1 or
+       (try meta.resultCount(routine.metadata,routine.phase,pair.failurePayload)) != 1+carried.count {
+        try budget.reject("invalid transferred failure signature");
+    }
+    let failureType be try sig.resultType(routine.metadata,graph,routine.phase,contract.failure,0);
+    if failureType.index != (try sig.resultType(routine.metadata,graph,routine.phase,pair.failurePayload,0)).index {
+        try budget.reject("transferred failure payload type mismatch");
+    }
+    i=0;
+    while i < carried.count {
+        let value build.ValueId be carried[i];
+        if value.owner != routine.key or value.index < 1 or value.index > routine.values.length/4 {
+            try budget.reject("foreign continuation transfer");
+        }
+        let actual be try words.get(routine.values,routine.phase,(value.index-1)*4);
+        let normalType be try sig.resultType(routine.metadata,graph,routine.phase,pair.normalPayload,results+i);
+        let failedType be try sig.resultType(routine.metadata,graph,routine.phase,pair.failurePayload,1+i);
+        if actual != normalType.index or actual != failedType.index {
+            try budget.reject("continuation transfer type mismatch");
+        }
+        i=i+1;
+    }
+    i=0;
+    while i < count {
+        let value build.ValueId be arguments[i];
+        if value.owner != routine.key or value.index < 1 or value.index > routine.values.length/4 {
+            try budget.reject("foreign invoke argument");
+        }
+        let expected be try sig.parameterType(routine.metadata,graph,routine.phase,normal,i);
+        if (try words.get(routine.values,routine.phase,(value.index-1)*4)) != expected.index {
+            try budget.reject("invoke argument type mismatch");
+        }
+        i=i+1;
+    }
+    let source be (pair.source.index-1)*5;
+    if (try words.get(routine.blocks,routine.phase,source+4)) != 0 {
+        try budget.reject("invoke source already terminated");
+    }
+    if routine.instructions.length/10 >= 1048576 or routine.edges.length/3 > 262142 or
+       count > routine.operands.limit-routine.operands.length or
+       results+1+2*carried.count > routine.arguments.limit-routine.arguments.length {
+        try budget.exceed(routine.owner,1,0);
+    }
+    // Any partial storage refusal leaves a poisoned private builder. It can
+    // be closed, but cannot complete/publish or resume another construction.
+    routine.state=3;
+    let first be routine.operands.length; i=0;
+    while i < count {
+        let value build.ValueId be arguments[i];
+        let ignored be try words.push(routine.operands,routine.phase,value.index); i=i+1;
+    }
+    let normalEdge be try edge(routine,pair.normal,results,carried);
+    let failedEdge be try edge(routine,pair.failure,1,carried);
+    let id be routine.instructions.length/10+1;
+    let ignored be try words.push(routine.instructions,routine.phase,46);
+    ignored=try words.push(routine.instructions,routine.phase,pair.source.index);
+    ignored=try words.push(routine.instructions,routine.phase,first);
+    ignored=try words.push(routine.instructions,routine.phase,count);
+    ignored=try words.push(routine.instructions,routine.phase,0);
+    ignored=try words.push(routine.instructions,routine.phase,0);
+    ignored=try words.push(routine.instructions,routine.phase,pair.location.index);
+    ignored=try words.push(routine.instructions,routine.phase,contract.target.index);
+    ignored=try words.push(routine.instructions,routine.phase,normalEdge);
+    ignored=try words.push(routine.instructions,routine.phase,0);
+    try words.set(routine.blocks,routine.phase,source+4,id);
+    routine.revision=routine.revision+1; routine.state=0;
+    return build.InstId { owner=routine.key; index=id; };
+}

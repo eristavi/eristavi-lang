@@ -1,0 +1,133 @@
+import std.process;
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+import compiler.u1_meta as meta;
+import compiler.u1_builder as build;
+import compiler.u1_aggregate as aggregate;
+import compiler.u1_aggregate_signature as sig;
+import compiler.u1_aggregate_build as ab;
+import compiler.u1_verify as verify;
+import compiler.u2_invoke_contract as contracts;
+import compiler.u2_invoke_build as invoke;
+import compiler.u2_continuation_bind as continuation;
+error ProbeError { message Text; }
+function check(okay Bool,message Text) fails ProbeError {
+    if not okay { fail ProbeError { message=message; }; }
+}
+function invalid(fn identity build.Function,graph identity aggregate.Registry,table identity contracts.Registry)
+    returns Bool fails budget.LimitError,ProbeError {
+    let live be fn.owner.live; let pending be fn.owner.pending;
+    let phase be try budget.verificationPhase(fn.owner);
+    let result be verify.verifyFallibleRegistry(fn,graph,phase,table)
+        else error verify.InvalidIR {
+            try check(phase.state == 1 and fn.owner.live == live and fn.owner.pending == pending,"invalid ingress leaked scratch");
+            return true;
+        } else error budget.LimitError { fail error; };
+    return false;
+}
+function duplicate(table identity contracts.Registry,data identity meta.Metadata,graph identity aggregate.Registry,
+    phase identity budget.Phase,item contracts.Contract) returns Bool {
+    contracts.register(table,data,graph,phase,item) else error budget.LimitError { return error.category == "invalid-state"; };
+    return false;
+}
+function refused(data identity meta.Metadata,graph identity aggregate.Registry,phase identity budget.Phase)
+    returns Bool fails budget.LimitError {
+    let table be contracts.create(data,graph,phase)
+        else error budget.LimitError { return error.category == "resource-limit" or error.category == "cancelled"; };
+    try contracts.close(table); return false;
+}
+function constructorRefusal(remaining Int,traffic Bool,cancelled Bool) fails budget.LimitError,ProbeError {
+    let root be try budget.developmentRequest(); let shared be try budget.metadataOwner(root);
+    let phase be try budget.constructionPhase(shared); let data be try meta.create(shared,phase);
+    let signature be try meta.signature(data,phase,[meta.i64()],[meta.i64()]);
+    let target be try meta.declaration(data,phase,signature,"unused",2,0,1);
+    let graph be try aggregate.create(shared,phase); try aggregate.freeze(graph); try meta.freeze(data);
+    let before be shared.live; let pending be shared.pending; let oldTraffic be shared.traffic;
+    if traffic { shared.trafficLimit=shared.traffic+remaining; }
+    else { shared.workLimit=shared.work+remaining; }
+    if cancelled { budget.cancel(shared); }
+    try check(try refused(data,graph,phase),"constructor did not refuse selected limit");
+    try check(shared.live == before and shared.pending == pending and shared.traffic >= oldTraffic,
+        "partial registry construction leaked or erased traffic");
+    try budget.finishPhase(phase); try aggregate.close(graph); try meta.close(data); try budget.close(shared);
+    try check(root.live == 0 and root.pending == 0,"refusal request leaked"); try budget.close(root);
+}
+function run() fails budget.LimitError,ProbeError,verify.InvalidIR,continuation.InvalidBinding {
+    let root be try budget.developmentRequest(); let shared be try budget.metadataOwner(root);
+    let mp be try budget.constructionPhase(shared); let data be try meta.create(shared,mp);
+    let caller be try meta.signature(data,mp,[meta.i64()],[meta.i64()]);
+    let targetSig be try meta.signature(data,mp,[meta.i64()],[meta.i64(),meta.pred()]);
+    let normalSig be try meta.signature(data,mp,[],[meta.i64(),meta.pred()]);
+    let graph be try aggregate.create(shared,mp);
+    let i64 be try aggregate.primitive(graph,meta.i64()); let pred be try aggregate.primitive(graph,meta.pred());
+    let payload be try aggregate.aggregate(graph,mp,[i64,pred]);
+    let failureSig be try sig.signature(data,graph,mp,[],[payload]);
+    let first be try meta.declaration(data,mp,targetSig,"u2.test.first",2,0,1);
+    let second be try meta.declaration(data,mp,targetSig,"u2.test.second",2,0,1);
+    let unused be try meta.declaration(data,mp,targetSig,"u2.test.unused",2,0,1);
+    let ordinary be try meta.declaration(data,mp,targetSig,"u2.test.ordinary",2,0,1);
+    let source be try meta.source(data,mp,"registry.eri","0000000000000000000000000000000000000000000000000000000000000000",64);
+    let loc be try meta.location(data,mp,source,0,8,0,1,1);
+    try aggregate.freeze(graph); try meta.freeze(data);
+    let table be try contracts.create(data,graph,mp);
+    let a be contracts.Contract { version=1; target=first; failure=failureSig; };
+    let b be contracts.Contract { version=1; target=second; failure=failureSig; };
+    let c be contracts.Contract { version=1; target=unused; failure=failureSig; };
+    try contracts.register(table,data,graph,mp,a); try contracts.register(table,data,graph,mp,b);
+    try contracts.register(table,data,graph,mp,c);
+    try check(duplicate(table,data,graph,mp,a),"duplicate selected function accepted");
+    try contracts.freeze(table); try budget.finishPhase(mp);
+    let owner be try budget.functionOwner(root,true); let phase be try budget.constructionPhase(owner);
+    let fn be try build.create(data,caller,owner,phase);
+    let entry be try build.block(fn,[meta.i64()]); let input be try build.parameter(fn,entry,0);
+    let normal be try ab.block(fn,graph,[i64,pred]); let failed be try ab.block(fn,graph,[payload]);
+    let final be try ab.block(fn,graph,[i64,pred]);
+    let middle be try build.parameter(fn,normal,0); let result be try build.parameter(fn,final,0);
+    let errorValue be try build.parameter(fn,failed,0);
+    let pair be try continuation.bind(fn,graph,phase,entry,normal,failed,normalSig,failureSig,loc);
+    let callA be try invoke.emit(fn,graph,a,pair,[input]);
+    pair=try continuation.bind(fn,graph,phase,normal,final,failed,normalSig,failureSig,loc);
+    let callB be try invoke.emit(fn,graph,b,pair,[middle]);
+    try ab.returnValues(fn,graph,final,[result],loc);
+    let failedResult be try ab.get(fn,graph,failed,errorValue,0,loc);
+    try ab.returnValues(fn,graph,failed,[failedResult],loc);
+    // Retain legacy edge specialization and an independently checked dead component.
+    let dead be try build.block(fn,[]); let target be try build.block(fn,[meta.i64()]);
+    let zero be try build.integer(fn,dead,0,loc); try build.jump(fn,dead,target,[zero],loc);
+    try build.returnValues(fn,target,[try build.parameter(fn,target,0)],loc);
+    try ab.complete(fn,graph); try budget.finishPhase(phase);
+    let report be try verify.verifyFallibleRegistry(fn,graph,try budget.verificationPhase(owner),table);
+    try check(report.reachableBlocks == 4,"two-target CFG differs");
+    let mutate be try budget.constructionPhase(shared); let revision be fn.revision;
+    // Even an uncalled function's failure contract must be independently checked.
+    let slots be [(unused.index-1)*2,(unused.index-1)*2+1]; let index be 0;
+    while index < slots.count {
+        let slot be slots[index]; let saved be try words.get(table.entries,mutate,slot);
+        table.entries.frozen=false; try words.set(table.entries,mutate,slot,caller.index); table.entries.frozen=true;
+        try check(try invalid(fn,graph,table),"same-revision unused contract corruption accepted");
+        table.entries.frozen=false; try words.set(table.entries,mutate,slot,saved); table.entries.frozen=true;
+        index=index+1;
+    }
+    table.version=2; try check(try invalid(fn,graph,table),"unknown registry version accepted"); table.version=1;
+    let key be table.typeKey; table.typeKey=data.key;
+    try check(try invalid(fn,graph,table),"foreign type graph accepted"); table.typeKey=key;
+    let fp be try budget.constructionPhase(owner); let targetSlot be (callB.index-1)*10+7;
+    fn.instructions.frozen=false; try words.set(fn.instructions,fp,targetSlot,ordinary.index); fn.instructions.frozen=true;
+    try check(try invalid(fn,graph,table),"invoke with ordinary FunctionId accepted");
+    fn.instructions.frozen=false; try words.set(fn.instructions,fp,targetSlot,second.index); fn.instructions.frozen=true;
+    let restored be try verify.verifyFallibleRegistry(fn,graph,try budget.verificationPhase(owner),table);
+    try check(restored.reachableBlocks == 4 and fn.revision == revision,"restored registry failed fresh verification");
+    try budget.finishPhase(fp); try budget.finishPhase(mutate); try build.close(fn); try budget.close(owner);
+    try contracts.close(table); try aggregate.close(graph); try meta.close(data); try budget.close(shared);
+    try check(root.live == 0 and root.pending == 0,"registry lifecycle leaked backing"); try budget.close(root);
+    let workLimits be [0,1,16,64,128]; let probe be 0;
+    while probe < workLimits.count { try constructorRefusal(workLimits[probe],false,false); probe=probe+1; }
+    let trafficLimits be [0,128,256,512,1024,4096]; probe=0;
+    while probe < trafficLimits.count { try constructorRefusal(trafficLimits[probe],true,false); probe=probe+1; }
+    try constructorRefusal(0,false,true);
+    output("u2-fallible-registry:ok");
+}
+run() else error budget.LimitError { output("limit:"+error.message); process.setExitCode(1); }
+else error ProbeError { output("probe:"+error.message); process.setExitCode(1); }
+else error verify.InvalidIR { output("ir:"+error.message); process.setExitCode(1); }
+else error continuation.InvalidBinding { output("binding:"+error.message); process.setExitCode(1); };

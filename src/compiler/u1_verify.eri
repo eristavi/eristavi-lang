@@ -8,12 +8,15 @@ import compiler.u1_aggregate as aggregate;
 import compiler.u1_aggregate_verify as aggregateVerify;
 import compiler.u1_dominance as dom;
 import compiler.u1_successors as succ;
+import compiler.u2_invoke_contract as invokeContract;
 public error InvalidIR { message Text; category Text; stage Int; block Int; instruction Int; location Int; }
 public type Report { reachableBlocks Int; structuralVisits Int; dominanceVisits Int; work Int; revision Int; }
 type Context {
     routine identity build.Function; phase identity budget.Phase; graph identity dom.Graph;
     stage Int; block Int; instruction Int; location Int; visits Int; scanLimit Int;
     positions Int; buckets Int; switchClaims Int; construction Bool;
+    invokeTarget Int; failureSignature Int;
+    fallible maybe identity invokeContract.Registry;
     registry maybe identity aggregate.Registry; // opt-in U1b schema, never a trust stamp
 }
 function invalid(context identity Context,message Text) fails InvalidIR {
@@ -275,6 +278,15 @@ function valueType(context identity Context,value Int) returns Int fails budget.
     try require(context,value >= 1 and value <= context.routine.values.length/4,"invalid value use");
     let valueTypeIndex be try read(context,context.routine.values,(value-1)*4); try typeIndex(context,valueTypeIndex); return valueTypeIndex;
 }
+function failureFor(context identity Context,target Int) returns Int fails budget.LimitError,InvalidIR {
+    let table be context.fallible;
+    if table != none {
+        try require(context,target >= 1 and target <= table.entries.length/2,"invalid fallible FunctionId");
+        return try read(context,table.entries,(target-1)*2+1);
+    }
+    if target == context.invokeTarget { return context.failureSignature; }
+    return 0;
+}
 function edge(context identity Context,index Int) fails budget.LimitError,InvalidIR {
     let routine be context.routine;
     try require(context,index >= 1 and index <= routine.edges.length/3,"invalid CFG edge");
@@ -284,10 +296,29 @@ function edge(context identity Context,index Int) fails budget.LimitError,Invali
     let first be try read(context,routine.edges,offset+1); let count be try read(context,routine.edges,offset+2);
     try range(context,first,count,routine.arguments.length);
     let parameter be try read(context,routine.blocks,(target-1)*5); let expected be try read(context,routine.blocks,(target-1)*5+1);
-    try require(context,count == expected,"edge arity mismatch"); let item be 0;
+    try require(context,count == expected,"edge arity mismatch");
+    let currentOp be try read(context,routine.instructions,(context.instruction-1)*10);
+    let resultStart be 0; let resultCount be 0;
+    if currentOp == 46 {
+        let normalEdge be try read(context,routine.instructions,(context.instruction-1)*10+8);
+        let targetFunction be try read(context,routine.instructions,(context.instruction-1)*10+7);
+        let signature be try failureFor(context,targetFunction);
+        if index == normalEdge { signature=try read(context,routine.metadata.declarations,(targetFunction-1)*6); }
+        resultStart=try read(context,routine.metadata.signatures,(signature-1)*6+4);
+        resultCount=try read(context,routine.metadata.signatures,(signature-1)*6+5);
+        try require(context,count >= resultCount and count-resultCount <= 128,"invoke outcome arity or transfer limit mismatch");
+    }
+    let item be 0;
     while item < count {
-        let valueTypeIndex be try valueType(context,try read(context,routine.arguments,first+item));
-        try require(context,valueTypeIndex == try valueType(context,parameter+item),"edge type mismatch"); item=item+1;
+        let argument be try read(context,routine.arguments,first+item);
+        let expectedType be try valueType(context,parameter+item);
+        if currentOp == 46 and item < resultCount {
+            try require(context,argument == 0-item-1,"invalid invoke edge-produced payload ordinal");
+            try require(context,expectedType == try read(context,routine.metadata.types,resultStart+item),"invoke outcome type mismatch");
+        } else {
+            try require(context,(try valueType(context,argument)) == expectedType,"edge type mismatch");
+        }
+        item=item+1;
     }
     try dom.addEdge(context.graph,index,context.block,target);
 }
@@ -298,6 +329,16 @@ function instruction(context identity Context,index Int,terminal Bool,position I
     try require(context,try scratch(context,context.positions,index) == 0,"duplicate or cyclic instruction list");
     try mark(context,context.positions,index,position);
     let op be try read(context,routine.instructions,offset); try require(context,ops.known(op),"unsupported foundation operation");
+    if op == 46 {
+        try require(context,(context.invokeTarget > 0 or context.fallible != none) and context.registry != none,"invoke requires explicit U2 fallible profile");
+        let targetFunction be try read(context,routine.instructions,offset+7);
+        try require(context,(try failureFor(context,targetFunction)) > 0,"invoke FunctionId has no selected fallible contract");
+        let firstEdge be try read(context,routine.instructions,offset+8);
+        try require(context,firstEdge >= 1 and firstEdge < routine.edges.length/3,"invalid invoke edge pair");
+        let normalTarget be try read(context,routine.edges,(firstEdge-1)*3);
+        let failureTarget be try read(context,routine.edges,firstEdge*3);
+        try require(context,normalTarget != failureTarget and normalTarget != context.block and failureTarget != context.block,"invalid invoke outcome destinations");
+    }
     // The default U1a verifier rejects every aggregate opcode. Only the
     // explicit graph-verified profile below may validate their type schema.
     if ops.isAggregate(op) {
@@ -316,9 +357,10 @@ function instruction(context identity Context,index Int,terminal Bool,position I
     let first be try read(context,routine.instructions,offset+2); let count be try read(context,routine.instructions,offset+3);
     try range(context,first,count,routine.operands.length);
     let expected be ops.operands(op); let callSignature be 0;
-    if op == 34 {
+    if op == 34 or op == 46 {
         let target be try read(context,routine.instructions,offset+7);
         try require(context,target >= 1 and target <= routine.metadata.declarations.length/6,"invalid call FunctionId");
+        if op == 34 { try require(context,(try failureFor(context,target)) == 0,"fallible FunctionId used by ordinary call"); }
         callSignature=try read(context,routine.metadata.declarations,(target-1)*6);
         expected=try read(context,routine.metadata.signatures,(callSignature-1)*6+3);
     }
@@ -351,7 +393,7 @@ function instruction(context identity Context,index Int,terminal Bool,position I
         let actual be try valueType(context,try read(context,routine.operands,first+item)); let valueTypeIndex be ops.operandType(op,item);
         if ops.isCell(op) { valueTypeIndex=cellType; }
         if op == 8 { let resultStart be try read(context,routine.metadata.signatures,(routine.signature.index-1)*6+4); valueTypeIndex=try read(context,routine.metadata.types,resultStart+item); }
-        if op == 34 {
+        if op == 34 or op == 46 {
             let start be try read(context,routine.metadata.signatures,(callSignature-1)*6+2);
             valueTypeIndex=try read(context,routine.metadata.types,start+item);
         }
@@ -418,7 +460,7 @@ function instruction(context identity Context,index Int,terminal Bool,position I
         try require(context,extra >= 4 and extra <= 6,"invalid narrow division TypeId");
         try require(context,payload >= 1 and payload <= 2,"invalid narrow division signedness");
     }
-    if op != 7 and op != 36 and not ops.isAggregate(op) and (op < 37 or op > 42) {
+    if op != 7 and op != 46 and op != 36 and not ops.isAggregate(op) and (op < 37 or op > 42) {
         try require(context,extra == 0,"unsupported operation attribute");
     }
     if terminal { try require(context,try read(context,routine.instructions,offset+9) == 0,"terminator has a successor instruction"); }
@@ -543,7 +585,13 @@ function ssaInstruction(context identity Context,index Int) fails budget.LimitEr
     while item < number {
         let edge be try succ.edge(routine,context.phase,index,item);
         first=try read(context,routine.edges,(edge-1)*3+1); count=try read(context,routine.edges,(edge-1)*3+2);
-        let argument be 0; while argument < count { try use(context,try read(context,routine.arguments,first+argument),position); argument=argument+1; } item=item+1;
+        let argument be 0;
+        while argument < count {
+            let value be try read(context,routine.arguments,first+argument);
+            if op != 46 or value > 0 { try use(context,value,position); }
+            argument=argument+1;
+        }
+        item=item+1;
     }
 }
 function reachableSSA(context identity Context) fails budget.LimitError,InvalidIR {
@@ -557,9 +605,50 @@ function reachableSSA(context identity Context) fails budget.LimitError,InvalidI
         context.location=0; context.block=context.block+1;
     }
 }
+function fallibleContracts(context identity Context) fails budget.LimitError,InvalidIR {
+    let table be context.fallible;
+    if table != none {
+        let data be context.routine.metadata; let graph be context.registry;
+        try require(context,graph != none,"fallible registry requires a type graph");
+        if graph != none {
+            try require(context,table.version == 1 and table.state == 1 and table.metadataKey == data.key and
+                table.typeKey == graph.key and table.owner == data.owner,
+                "unsupported or foreign fallible registry");
+        }
+        try store(context,table.entries,data.owner,2,131072);
+        try require(context,table.entries.length/2 == data.declarations.length/6,"fallible registry declaration count mismatch");
+        // The fixed declaration ceiling makes this added scan bound safe.
+        context.scanLimit=context.scanLimit+32*(table.entries.length+1);
+        let index be 0;
+        while index < data.declarations.length/6 {
+            try require(context,(try read(context,table.entries,index*2)) ==
+                (try read(context,data.declarations,index*6)),"stale fallible normal signature");
+            let failure be try read(context,table.entries,index*2+1);
+            try require(context,failure >= 0 and failure <= data.signatures.length/6,"invalid registered failure signature");
+            if failure != 0 {
+                let base be (failure-1)*6;
+                try require(context,(try read(context,data.signatures,base+3)) == 0 and
+                    (try read(context,data.signatures,base+5)) == 1,"invalid registered failure payload arity");
+                let first be try read(context,data.signatures,base+4);
+                try require(context,(try read(context,data.types,first)) >= 7,"registered failure requires an aggregate payload");
+            }
+            index=index+1;
+        }
+    }
+}
 function inspect(context identity Context) returns Report fails budget.LimitError,InvalidIR {
     try bounds(context); try dom.prepare(context.graph,context.routine.blocks.length/5,context.routine.edges.length/3);
-    try signatures(context); try sources(context); try declarations(context); try structure(context);
+    try signatures(context); try sources(context); try declarations(context);
+    if context.invokeTarget != 0 {
+        let data be context.routine.metadata;
+        try require(context,context.invokeTarget >= 1 and context.invokeTarget <= data.declarations.length/6,"invalid fallible FunctionId");
+        try require(context,context.failureSignature >= 1 and context.failureSignature <= data.signatures.length/6,"invalid failure payload signature");
+        let offset be (context.failureSignature-1)*6;
+        try require(context,try read(context,data.signatures,offset+3) == 0 and try read(context,data.signatures,offset+5) == 1,"failure signature must have zero inputs and one payload");
+        let first be try read(context,data.signatures,offset+4);
+        try require(context,try read(context,data.types,first) >= 7,"failure payload must be a declared aggregate");
+    }
+    try fallibleContracts(context); try structure(context);
     try locations(context); try reachableSSA(context);
     if not context.construction { context.stage=5; context.block=0; context.instruction=0; context.location=0;
         try require(context,context.routine.cells.length == 0,"unpromoted cells in canonical U1"); }
@@ -567,14 +656,16 @@ function inspect(context identity Context) returns Report fails budget.LimitErro
         dominanceVisits=context.graph.visits; work=context.phase.used; revision=context.routine.revision; };
 }
 function verifyMode(routine identity build.Function,phase identity budget.Phase,
-    construction Bool,registry maybe identity aggregate.Registry)
+    construction Bool,registry maybe identity aggregate.Registry,invokeTarget Int,failureSignature Int,
+    fallible maybe identity invokeContract.Registry)
     returns Report fails budget.LimitError,InvalidIR {
     try budget.poll(routine.owner);
     if phase.owner != routine.owner or phase.used != 0 or phase.prepaid != 0 or phase.state != 0 { try budget.reject("verification requires a fresh function phase"); }
     let graph be try dom.create(routine.owner,phase);
     let context be identity Context { routine=routine; phase=phase; graph=graph; stage=0; block=0; instruction=0; location=0;
         visits=0; scanLimit=0; positions=0; buckets=0; switchClaims=0;
-        construction=construction; registry=registry; };
+        construction=construction; registry=registry; invokeTarget=invokeTarget; failureSignature=failureSignature;
+        fallible=fallible; };
     let report be inspect(context) else error InvalidIR { try dom.close(graph); try budget.finishPhase(phase); fail error; }
     else error budget.LimitError {
         try dom.close(graph); try budget.finishPhase(phase);
@@ -584,17 +675,17 @@ function verifyMode(routine identity build.Function,phase identity budget.Phase,
     // Report has no executable/verified capability. Every call derives facts anew.
 }
 public function verify(routine identity build.Function,phase identity budget.Phase) returns Report fails budget.LimitError,InvalidIR {
-    return try verifyMode(routine,phase,false,none);
+    return try verifyMode(routine,phase,false,none,0,0,none);
 }
 public function construction(routine identity build.Function,phase identity budget.Phase) returns Report fails budget.LimitError,InvalidIR {
-    return try verifyMode(routine,phase,true,none);
+    return try verifyMode(routine,phase,true,none,0,0,none);
 }
 // Explicit U1b canonical typed SSA profile: independently validate the
 // program-owned frozen type graph EVERY time, even on unchanged revisions.
 // Do not turn a builder completion, cached flag, or previous report into trust.
 function verifiedAggregateMode(routine identity build.Function,
     registry identity aggregate.Registry,phase identity budget.Phase,
-    construction Bool)
+    construction Bool,invokeTarget Int,failureSignature Int,fallible maybe identity invokeContract.Registry)
     returns Report fails budget.LimitError,InvalidIR {
     try budget.poll(routine.owner);
     if registry.owner != routine.metadata.owner or registry.state != 1 or
@@ -617,16 +708,39 @@ function verifiedAggregateMode(routine identity build.Function,
             fail error;
         };
     try budget.finishPhase(graphPhase);
-    return try verifyMode(routine,phase,construction,registry);
+    return try verifyMode(routine,phase,construction,registry,invokeTarget,failureSignature,fallible);
 }
 
 public function verifyAggregates(routine identity build.Function,
     registry identity aggregate.Registry,phase identity budget.Phase)
     returns Report fails budget.LimitError,InvalidIR {
-    return try verifiedAggregateMode(routine,registry,phase,false);
+    return try verifiedAggregateMode(routine,registry,phase,false,0,0,none);
 }
 public function constructionAggregates(routine identity build.Function,
     registry identity aggregate.Registry,phase identity budget.Phase)
     returns Report fails budget.LimitError,InvalidIR {
-    return try verifiedAggregateMode(routine,registry,phase,true);
+    return try verifiedAggregateMode(routine,registry,phase,true,0,0,none);
+}
+
+// Versioned, bounded profile: one explicitly selected fallible FunctionId per
+// request. Other ordinary calls retain their existing declared contracts.
+public function verifyFallible(routine identity build.Function,
+    registry identity aggregate.Registry,phase identity budget.Phase,contract invokeContract.Contract)
+    returns Report fails budget.LimitError,InvalidIR {
+    try budget.poll(routine.owner);
+    if phase.owner != routine.owner or phase.used != 0 or phase.prepaid != 0 or phase.state != 0 {
+        try budget.reject("fallible verification requires a fresh function phase");
+    }
+    if contract.version != 1 or contract.target.owner != routine.metadata.key or
+       contract.failure.owner != routine.metadata.key or contract.target.index < 1 or contract.failure.index < 1 {
+        try budget.finishPhase(phase);
+        fail InvalidIR { message="unsupported or foreign U2 fallible contract"; category="invalid-ir";
+            stage=0; block=0; instruction=0; location=0; };
+    }
+    return try verifiedAggregateMode(routine,registry,phase,false,contract.target.index,contract.failure.index,none);
+}
+public function verifyFallibleRegistry(routine identity build.Function,
+    registry identity aggregate.Registry,phase identity budget.Phase,table identity invokeContract.Registry)
+    returns Report fails budget.LimitError,InvalidIR {
+    return try verifiedAggregateMode(routine,registry,phase,false,0,0,table);
 }

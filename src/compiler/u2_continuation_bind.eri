@@ -23,7 +23,7 @@ function block(routine identity build.Function,phase identity budget.Phase,
     return (value.index-1)*5;
 }
 function destination(routine identity build.Function,graph identity aggregate.Registry,
-    phase identity budget.Phase,target build.BlockId,shape meta.SignatureId,failed Bool)
+    phase identity budget.Phase,target build.BlockId,shape meta.SignatureId,failed Bool,carrying Bool)
     fails budget.LimitError,InvalidBinding {
     let data be routine.metadata;
     try require(shape.owner == data.key and shape.index >= 1 and
@@ -32,10 +32,14 @@ function destination(routine identity build.Function,graph identity aggregate.Re
     let parameters be try words.get(data.signatures,phase,offset+3);
     let count be try words.get(data.signatures,phase,offset+5);
     let first be try words.get(data.signatures,phase,offset+4);
-    try require(parameters == 0 and count >= 0 and count <= 16 and
+    let maximum be 16; if carrying { maximum=144; }
+    try require(parameters == 0 and count >= 0 and count <= maximum and
         first >= 0 and first <= data.types.length and count <= data.types.length-first,
         "invalid outcome payload signature range");
-    if failed { try require(count == 1,"failure continuation requires one typed payload"); }
+    if failed {
+        if carrying { try require(count >= 1 and count <= 129,"failure continuation requires payload and bounded transfers"); }
+        else { try require(count == 1,"failure continuation requires one typed payload"); }
+    }
     let base be try block(routine,phase,target);
     try require(target.index != 1,"continuation cannot target function entry");
     let start be try words.get(routine.blocks,phase,base);
@@ -49,7 +53,7 @@ function destination(routine identity build.Function,graph identity aggregate.Re
         let typeIndex be try words.get(data.types,phase,first+index);
         try require(typeIndex >= 1 and typeIndex <= 6+graph.records.length/4,
             "unsupported continuation payload type");
-        if failed { try require(typeIndex > 6,"scalar is not a structural failure payload"); }
+        if failed and index == 0 { try require(typeIndex > 6,"scalar is not a structural failure payload"); }
         let slot be (start+index-1)*4;
         try require((try words.get(routine.values,phase,slot)) == typeIndex and
             (try words.get(routine.values,phase,slot+1)) == 0 and
@@ -63,7 +67,7 @@ public function verify(routine identity build.Function,graph identity aggregate.
     phase identity budget.Phase,pair Pair) returns Bool fails budget.LimitError,InvalidBinding {
     try budget.poll(routine.owner); try budget.poll(routine.metadata.owner);
     let data be routine.metadata;
-    try require(pair.version == 1 and pair.functionKey == routine.key and pair.typeOwner == graph.key and
+    try require((pair.version == 1 or pair.version == 2) and pair.functionKey == routine.key and pair.typeOwner == graph.key and
         pair.revision == routine.revision,"unsupported or stale continuation binding");
     try require((routine.state == 0 or routine.state == 1) and phase.state == 0 and phase.owner == routine.owner and
         routine.owner.kind == 2 and data.frozen and not data.closed and
@@ -82,8 +86,8 @@ public function verify(routine identity build.Function,graph identity aggregate.
     try require(pair.normal.index != pair.failure.index and
         pair.normal.index != pair.source.index and pair.failure.index != pair.source.index,
         "outcome destinations must be distinct from each other and source");
-    try destination(routine,graph,phase,pair.normal,pair.normalPayload,false);
-    try destination(routine,graph,phase,pair.failure,pair.failurePayload,true);
+    try destination(routine,graph,phase,pair.normal,pair.normalPayload,false,pair.version == 2);
+    try destination(routine,graph,phase,pair.failure,pair.failurePayload,true,pair.version == 2);
     return true;
 }
 public function bind(routine identity build.Function,graph identity aggregate.Registry,
@@ -95,4 +99,13 @@ public function bind(routine identity build.Function,graph identity aggregate.Re
         failurePayload=failurePayload; location=location; };
     let accepted be try verify(routine,graph,phase,pair);
     return pair;
+}
+public function bindCarrying(routine identity build.Function,graph identity aggregate.Registry,
+    phase identity budget.Phase,source build.BlockId,normal build.BlockId,failure build.BlockId,
+    normalPayload meta.SignatureId,failurePayload meta.SignatureId,location meta.LocId)
+    returns Pair fails budget.LimitError,InvalidBinding {
+    let pair be Pair { version=2; functionKey=routine.key; typeOwner=graph.key; revision=routine.revision;
+        source=source; normal=normal; failure=failure; normalPayload=normalPayload;
+        failurePayload=failurePayload; location=location; };
+    let accepted be try verify(routine,graph,phase,pair); return pair;
 }

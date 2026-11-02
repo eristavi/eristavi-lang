@@ -1,6 +1,6 @@
 # Eristavi compiler — current handover
 
-**Authoritative recovery checkpoint: 2 November 2026, Asia/Nicosia. Read §90 FIRST: the user PAUSED optimization #51 and selected U2 #74. Initial U2 cleanup planning is implemented and locally focused-tested, NOT qualified/merged.** §87 preserves completed verifier temporary-storage measurements; §86 records six private optimization candidates NOT ADOPTED. §84 remains the latest qualified/merged production checkpoint (#110); §78 preserves #108 and §77 reference U1b. Issue #51 remains OPEN; no new production optimization or full-performance completion is claimed.
+**Authoritative recovery checkpoint: 2 November 2026, Asia/Nicosia. Read §92 FIRST: the user PAUSED optimization #51 and selected U2 #74. U2 cleanup planning, canonical fallible calls/transport and initial scoped ownership are implemented and focused-tested, NOT qualified/merged.** §87 preserves completed verifier temporary-storage measurements; §86 records six private optimization candidates NOT ADOPTED. §84 remains the latest qualified/merged production checkpoint (#110); §78 preserves #108 and §77 reference U1b. Issue #51 remains OPEN; no new production optimization or full-performance completion is claimed.
 
 [PR #110](https://github.com/eristavi/eristavi-lang/pull/110) is **QUALIFIED / MERGED** at `6b5fccecb8e79f7c9bcc8261faa9203f4c94262a` (verified exact main). Tested head `1fbb5115dccc2c6b6160d511366d31d06601849d` and tested/merged tree `3e3ab90714a9a608c9dafabf4740dae60049ff1d` match exactly. Final [four-platform CI 41336208716](https://github.com/eristavi/eristavi-lang/actions/runs/41336208716) and [qualification 41336171885](https://github.com/eristavi/eristavi-lang/actions/runs/41336171885) PASS. Source location lookup left-first comparison reduced scoped boxes 9.88%, allocations 9.82% and graph finds 11.00%, *not* a meaningful end-to-end wall-clock gain; the 90-second large-source cap remains. Issue #51 stays OPEN.
 
@@ -37,8 +37,8 @@ universal-optimizer path remains censored under its unchanged diagnostic cap. ty
 unchanged 90s diagnostic cap during universal-optimize. No whole-compiler speedup
 is claimed; this U1 storage change is absent from the default frontend import
 closure. Larger scalar unboxing and shared type validation require the recorded
-safety/ownership proofs. U2 → U3 → U4 remain separate, unimplemented milestones.
-No qualification or build is left running for this completed batch.
+safety/ownership proofs. U2 is active on a separate unqualified draft; U3/U4 remain unimplemented.
+No #51 qualification or build is left running for this completed optimization batch.
 
 ## Standing GitHub authorization — explicit user instruction, 2026-11-01
 
@@ -114,7 +114,7 @@ redundant indexing, unbounded caches or unnecessarily expensive CI.
 
 ## Start a new chat with this
 
-> Read this complete handover and governing philosophy/semantics, applicable architecture/IR and CI contracts. Follow Philosophy → Semantics → Architecture → Implementation. Resume U2 #74 at §90 on `compiler/u2-cleanup-foundation-20261102`. User explicitly postponed optimization: keep #51 OPEN / PAUSED; do not resume §87 optimization proposals without new instruction. Private cleanup planning is implemented and locally tested, not canonical U2 or qualified production. Preserve accepted U1a/reference U1b and qualified production #110; source language, ABI, both verifier passes, resource limits and independent oracles remain binding. Next define the versioned managed/checked/resource operation contracts and connect typed continuations and independent scoped-owner verification. No experimental owned full compiler self-build.
+> Read this complete handover and governing philosophy/semantics, applicable architecture/IR and CI contracts. Follow Philosophy → Semantics → Architecture → Implementation. Resume U2 #74 at §92 on `compiler/u2-cleanup-foundation-20261102`. User explicitly postponed optimization: keep #51 OPEN / PAUSED; do not resume §87 optimization proposals without new instruction. Private cleanup planning, canonical fallible invokes/typed edge transport and the initial scoped-owner proof are implemented and locally tested, not complete U2 or qualified production. Preserve accepted U1a/reference U1b and qualified production #110; source language, ABI, both verifier passes, resource limits and independent oracles remain binding. Next integrate semantic cleanup plans with the scoped-owner proof, extend managed type/value/context/root contracts and complete physical/deep acceptance before final qualification. No experimental owned full compiler self-build.
 
 ## Current verified status — read before historical sections
 
@@ -135,13 +135,13 @@ redundant indexing, unbounded caches or unnecessarily expensive CI.
 | Performance | #110 source lookup reduces scoped boxes 9.88%, allocator calls 9.82% and graph finds 11.00%, with no meaningful wall-time gain. Prior #108 small-source median 3.620% lower; reference-U1b fixture 11.0158% lower. None proves whole-compiler speedup. Large source remains censored at 90s; #51 OPEN |
 | U1a | Scalar/SSA/calls/recursion/effects/switches/strict native f64/provenance/bounded simplification plus scoped physical acceptance **COMPLETE within the adopted U1a boundary** |
 | U1b #73 | **QUALIFIED / MERGED / CLOSED-completed** via #106. Immutable aggregate graph/make/get/set, linked execution, independent oracles, fresh malformed/dead/uncalled rejection, exact faults/fuel/LocId and physical/cancellation acceptance within adopted REFERENCE boundary; see §77 |
-| U2 #74 | **ACTIVE / private cleanup planner and independent ingress verifier implemented and locally focused-tested**, NOT qualified/merged. Canonical managed Text/List/identity, checked continuations, scoped-owner verification, runtime cleanup and root maps remain unimplemented; see §90 |
+| U2 #74 | **ACTIVE / cleanup planning, typed canonical invokes, outcome transfers and initial scoped-owner verifier implemented; focused validation in progress**, NOT qualified/merged. Managed Text/List/identity, complete failure contexts, production resource adapters and root maps remain unimplemented; see §92 |
 | U3 #75 | Direct frozen frontend → new UIR → production native target/artifact/cache integration **NOT IMPLEMENTED**. Existing adapter is isolated; #104 is test-only reference parity |
 | U4 #102 | Redesigned UIR machine/legalization/artifact migration **NOT IMPLEMENTED / NOT QUALIFIED** |
 | Production | Existing source language and default compiler pipeline retained; no new-UIR backend promotion |
-| Environment / next stage | User selected **U2 #74**, branch `compiler/u2-cleanup-foundation-20261102`, baseline `59d30c18c28fa59e9793100f72b9ffd88cc603ee`. Initial cleanup-plan slice locally tested; canonical U2 and full qualification pending. **#51 OPEN / PAUSED**; no further optimization experiments requested. U3/U4 unimplemented |
+| Environment / next stage | User selected **U2 #74**, branch `compiler/u2-cleanup-foundation-20261102`, baseline `59d30c18c28fa59e9793100f72b9ffd88cc603ee`. Canonical invoke/transport and initial scoped-owner slices locally tested; managed/root/runtime integration and full qualification pending. **#51 OPEN / PAUSED**; no further optimization experiments requested. U3/U4 unimplemented |
 
-**Reading rule:** the opening and §90 govern current user priority and U2 development; §87 preserves completed storage measurements and §86 rejected experiments; §84 governs qualified production status; §77 preserves the accepted reference U1b boundary and §44 the accepted U1a boundary. Earlier keep-open and pending
+**Reading rule:** the opening and §92 govern current user priority and U2 development; §87 preserves completed storage measurements and §86 rejected experiments; §84 governs qualified production status; §77 preserves the accepted reference U1b boundary and §44 the accepted U1a boundary. Earlier keep-open and pending
 statements describe their historical revisions. U1a acceptance does not certify
 U2 managed GC/cleanup, U3 durable artifacts/source integration or U4 toolchains.
 Documentation-only status reconciliation reuses unchanged implementation evidence
@@ -3674,3 +3674,141 @@ Focused probes check zero/multiple normal results; structural aggregate failure;
 **NEXT:** actual registered fallible FunctionId signatures and canonical call terminator/edge schema, then edge-only payload availability/dominance, whole-function scoped-owner verification and managed/root-safe runtime integration. Current descriptor/linked plan is private construction data, never an alternative executable IR or new public ABI. Preserve existing production compiler and both verifier passes.
 
 **Publication:** implementation/evidence commit `ecf2b64ce304e861ba7960513a5affaed74e5948`, verified local/remote tree `57d75d45ba5e69504b8d9ce30737b13b31e8ea82`, for draft PR #111. Six final focused tests PASS in 15.858 s; exact logs and source hashes are retained. Final head adds only this handover reconciliation. Hosted smoke for the new head must be checked independently; no full qualification or merge is claimed.
+
+
+## 91. U2 canonical invokes and multi-target contracts — active continuation, 2 November 2026
+
+User requested continuing all U2 work while following the complete handover,
+project philosophy and frozen contracts. Active local checkout remains
+`compiler/u2-cleanup-foundation-20261102`; published draft PR #111 head before
+this batch is `27cf0f1628f630c84d00bcf4c3d0b1770158df86`. Published hosted smoke
+41407757793 PASSED 54/54 in 179.047 seconds; full matrix was not selected.
+Optimization #51 stays OPEN / PAUSED. No experimental owned self-build.
+
+Recovered uncommitted canonical invoke work rather than discarding it:
+private opcode 46, exact FunctionId/normal/failure signatures, two typed
+outcome edges, fresh all-block structural/type/dominance verification and
+an opt-in closed reference adapter. Ordinary calls to the selected fallible
+FunctionId reject. Edge-produced tuple markers are not ordinary SSA values.
+The reference adapter supports only its exact structural test import and does
+not implement managed FailureContext, general FFI, resources or GC root maps.
+The existing local owned probe is retained as historical input evidence,
+not current-source qualification.
+
+Initial current-source tests exposed an unreachable generic-specialization
+fixture error in the partial-construction refusal probe. The fixture now
+retains a real legacy-edge specialization before poisoning, rebinds the exact
+current revision and ends at the tested refusal boundary. It still requires
+state=3, rejected publication and zero owner backing after close. Four actual
+invoke tests PASS (one opt-in owned test skipped), 16.628 seconds. No verifier
+assertion or source semantic rule was weakened.
+
+Next implemented extension under focused validation: explicit version-one
+metadata-owned dense fallible contract registry, described BEFORE implementation
+in `docs/architecture/UIR_U2_FALLIBLE_REGISTRY.md`. Two words per canonical
+declaration, capped at 65,536 declarations/131,072 words under existing quotas.
+O(1) target lookup and fresh validation of EVERY record, including uncalled
+functions; no Function/Metadata physical layout or public ABI change.
+Constructor refusal closes partial backing/control reservations. Registry
+entry tests are being developed; do not claim passing full qualification.
+
+NEXT: finish multi-target mutation/refusal/oracle probes, extend reference
+execution for selected contracts as justified, then scoped-owner and managed
+root/type/context integration under preselected budgets. U2 #74 remains OPEN;
+#111 stays DRAFT and unmerged. Current local changes are NOT yet published,
+qualified or complete U2 acceptance. Preserve all historical evidence.
+
+
+## 92. Canonical fallible registry, continuation transport and scoped ownership — active 2 November 2026
+
+Current continuation builds on the recovered invoke work in §91. Governing
+philosophy/semantics, typed UIR and U1 contracts, remaining acceptance plan,
+cleanup/value-parameter/identity/fixed and CI policies govern this batch.
+Optimization #51 remains paused. No default frontend, ABI, GC algorithm or
+resource limit changes; no experimental owned compiler self-build.
+
+Implemented canonical invokes use real FunctionIds and the existing instruction,
+edge, argument and block/value pools. All outcomes are independently checked,
+including malformed unreachable calls. A new version-one metadata-owned dense
+fallible registry supports multiple targets, exact normal signature snapshots,
+zero-input/single-aggregate checked failure contracts, and O(1) lookup. Every
+record is freshly inspected, including uncalled imports. Failed table creation
+releases partial backing/control charges and preserves consumed traffic/work.
+The original single-target entry remains a bounded compatibility profile.
+
+Version-two private continuation descriptors and `u2_invoke_transfer.eri` carry
+up to 128 predecessor-available values AFTER each fresh outcome tuple. Prefix
+markers cannot be used as ordinary values; suffixes get exact type/dominance
+checks. The opt-in structural reference adapter stages all source tokens before
+writing any destination slots, and releases transfer scratch on every outcome.
+This supplies explicit pending-value transport, not managed FailureContext.
+
+Focused actual-source U2 tests PASS 13/13 in 80.777 seconds, including actual
+owned Linux x86-64 execution for normal/failure outcomes and suffix transfers,
+exact fuel/LocIds, fresh mutation rejection and cleanup; bootstrap coverage
+additionally includes six signed boundary inputs and limits 0–3. Native evidence
+is `u2-invoke-owned-reference.json` and `u2-invoke-transfer-owned.json` under
+`docs/evidence/2026-11-02/`. The multi-target registry probe also covers five
+construction-work limits, six traffic limits, cancellation, duplicate entries,
+foreign/unknown policy and uncalled same-revision mutation/restoration.
+Earlier fixture-specialization errors and an unused generic helper were fixed
+without changing source semantics or weakening assertions.
+
+Next initial slice: `u2_scoped_owners.eri` independently checks per-block lexical
+owner signatures against canonical invokes/edges after fresh canonical ingress.
+The one selected resource contract reserves an opaque aggregate handle TypeId
+for acquisition/consumption interpretation in this OPTIONAL profile; ordinary
+construction, wrapping, return and unselected calls reject. Acquisition adds
+one owner only on success; close consumes the innermost owner before BOTH
+outcomes; every surviving owner must appear exactly on each edge. Entry is
+empty, return requires an empty owner state, all dead blocks are checked, and
+cleanup origins match the scope table. No ownership path enumeration/fixed
+point or per-block register mask is used: O(N+V+T+S) local check with reusable
+2(V+1)+(T+1)+256-word scratch, all under existing quotas.
+
+Policy documents were written before their implementations:
+`docs/architecture/UIR_U2_FALLIBLE_REGISTRY.md` and
+`docs/architecture/UIR_U2_SCOPED_OWNER_SLICE.md`. Initial four ownership probes
+PASS 4/4 in 18.747 seconds: nested acquired/failed/consumed paths, live-owner
+loop, ordinary handle construction rejection and return bypass rejection.
+Strengthened probes additionally PASS 5/5 in 24.998 seconds, including dead
+signatures, failed-close owner restoration, unselected-call escape and late
+verification-work refusal. The broad smoke result below supersedes its earlier running status.
+
+IMPORTANT BOUNDARY: the resource fixture is hand-built canonical UIR used to
+check ownership, not output of the Eristavi cleanup-chain builder, a real file
+runtime, complete managed resource type support or complete cleanup context
+composition. Full depth/exit/type/GC/physical/oracle matrices, managed-local
+promotion, actual error contexts/root maps, runtime adapter execution and final
+four-platform/full qualification remain U2 gates. U2 #74 stays OPEN; #111 stays
+DRAFT/unmerged. Publication is in preparation; verify the guarded remote ref and exact tree before claiming it published.
+
+NEXT: complete focused strengthened owner/refusal validation and smoke; retain
+source-hashed evidence, publish/reconcile #111, then integrate semantic cleanup
+plans and managed type/context/root contracts without weakening those gates.
+
+
+### §92 completed local validation and evidence preservation
+
+Broad local smoke PASS: 68 collected, 66 passed and two explicit opt-in skips,
+273.396 seconds. Both skipped invoke/transfer native probes passed separately
+in the 13/13 focused batch. The subsequently added opt-in ownership-verifier
+native test independently PASS 1/1 in 24.458 seconds; fresh hosted smoke will
+collect that extra opt-in skip (69 collected). This is owned EXECUTION OF THE
+VERIFIER, not a claim of native resource acquisition/cleanup adapter execution.
+No implementation changed after the broad smoke; only that opt-in test and
+documentation/evidence were added. Compileall and git diff --check PASS.
+
+Original forced-collision U1 regression remains under unchanged limits:
+7,830,976 B actual phase peak / 21,974,768 B actual cumulative traffic, all
+observed backing reclaimed, versus original 8,388,608 / 67,108,864 B ceilings.
+This is existing U1 acceptance evidence, NOT U2 owner-scratch physical attribution.
+
+Reproducible raw smoke JSON/log, three owned native result/hash records and 18
+source/test/tool input snapshots are in the CRC/per-file-SHA256-verified
+`docs/evidence/2026-11-02/u2-canonical-evidence.zip`; summary and archive digest:
+`docs/evidence/2026-11-02/u2-canonical-summary.json`. The old planner study is
+preserved rather than overwritten by the routine test's elapsed-time refresh.
+No full four-platform qualification, merge, issue closure or owned full compiler
+self-build was selected. This remains a tested draft foundation. Complete U2
+managed values, contexts/roots/runtime and deep physical gates before acceptance.

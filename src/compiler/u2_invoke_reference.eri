@@ -1,0 +1,181 @@
+// Bounded reference execution of canonical invoke.direct.v1. The ONLY
+// admitted import is the closed, versioned u2.test.structural_outcome adapter.
+// This is not production import trust, managed FailureContext, or general FFI.
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+import compiler.u1_meta as meta;
+import compiler.u1_builder as build;
+import compiler.u1_aggregate as aggregate;
+import compiler.u1_aggregate_values as av;
+import compiler.u1_aggregate_verify as graphVerify;
+import compiler.u1_verify as verify;
+import compiler.u2_invoke_contract as contracts;
+
+public error Unsupported { message Text; location Int; }
+public type Result { kind Int; value Int; destination Int; location Int; steps Int; }
+type Machine { engine identity av.Engine; slots identity words.Words; transfer identity words.Words; phase identity budget.Phase; }
+function refuse(message Text,location Int) fails Unsupported {
+    fail Unsupported { message=message; location=location; };
+}
+function adapter(routine identity build.Function,graph identity aggregate.Registry,
+    phase identity budget.Phase,contract contracts.Contract) returns aggregate.TypeId
+    fails budget.LimitError,Unsupported {
+    let data be routine.metadata; let base be (contract.target.index-1)*6;
+    let first be try words.get(data.declarations,phase,base+1);
+    let count be try words.get(data.declarations,phase,base+2);
+    let name be "u2.test.structural_outcome";
+    if count != name.bytes.count or (try words.get(data.declarations,phase,base+3)) != 2 or
+       (try words.get(data.declarations,phase,base+4)) != 0 or
+       (try words.get(data.declarations,phase,base+5)) != 1 {
+        try refuse("untrusted U2 reference import",0);
+    }
+    let i be 0;
+    while i < count {
+        if (try words.get(data.symbolBytes,phase,first+i)) != name.bytes[i] {
+            try refuse("untrusted U2 reference import symbol",0);
+        }
+        i=i+1;
+    }
+    let normal be try meta.functionSignature(data,phase,contract.target);
+    let nbase be (normal.index-1)*6;
+    let pfirst be try words.get(data.signatures,phase,nbase+2);
+    let rfirst be try words.get(data.signatures,phase,nbase+4);
+    if (try meta.parameterCount(data,phase,normal)) != 1 or
+       (try meta.resultCount(data,phase,normal)) != 2 or
+       (try words.get(data.types,phase,pfirst)) != 2 or
+       (try words.get(data.types,phase,rfirst)) != 2 or
+       (try words.get(data.types,phase,rfirst+1)) != 1 {
+        try refuse("unsupported U2 reference import signature",0);
+    }
+    if (try meta.parameterCount(data,phase,routine.signature)) != 1 or
+       (try meta.resultCount(data,phase,routine.signature)) != 1 or
+       (try meta.parameterType(data,phase,routine.signature,0)).index != 2 or
+       (try meta.resultType(data,phase,routine.signature,0)).index != 2 {
+        try refuse("unsupported U2 reference entry signature",0);
+    }
+    let resultFirst be try words.get(data.signatures,phase,(contract.failure.index-1)*6+4);
+    let ty be try aggregate.typeAt(graph,try words.get(data.types,phase,resultFirst));
+    if (try aggregate.fieldCount(graph,phase,ty)) != 2 or
+       (try aggregate.field(graph,phase,ty,0)).index != 2 or
+       (try aggregate.field(graph,phase,ty,1)).index != 1 {
+        try refuse("unsupported U2 structural failure payload",0);
+    }
+    return ty;
+}
+function load(machine Machine,index Int) returns av.ValueId fails budget.LimitError {
+    return av.ValueId { owner=machine.engine.key;
+        index=try words.get(machine.slots,machine.phase,index); };
+}
+function save(machine Machine,routine identity build.Function,index Int,value av.ValueId)
+    fails budget.LimitError {
+    let actual be try av.typeOf(machine.engine,value);
+    if actual.index != (try words.get(routine.values,machine.phase,(index-1)*4)) {
+        try budget.reject("reference outcome runtime type mismatch");
+    }
+    try words.set(machine.slots,machine.phase,index,value.index);
+}
+function run(routine identity build.Function,graph identity aggregate.Registry,
+    machine Machine,input Int,fuel Int,payload aggregate.TypeId)
+    returns Result fails budget.LimitError,Unsupported {
+    let i be 0;
+    while i <= routine.values.length/4 {
+        let ignored be try words.push(machine.slots,machine.phase,0); i=i+1;
+    }
+    let initial be try av.scalar(machine.engine,try aggregate.primitive(graph,meta.i64()),input);
+    try save(machine,routine,try words.get(routine.blocks,machine.phase,0),initial);
+    let block be 1; let destination be 0; let steps be 0;
+    let instruction be try words.get(routine.blocks,machine.phase,2);
+    if instruction == 0 { instruction=try words.get(routine.blocks,machine.phase,4); }
+    while steps <= fuel {
+        let base be (instruction-1)*10;
+        let op be try words.get(routine.instructions,machine.phase,base);
+        let loc be try words.get(routine.instructions,machine.phase,base+6);
+        if steps == fuel { return Result { kind=2; value=0; destination=destination; location=loc; steps=steps; }; }
+        steps=steps+1; try budget.work(machine.phase,1);
+        let first be try words.get(routine.instructions,machine.phase,base+2);
+        if op == 46 {
+            if destination != 0 { try refuse("reference slice admits one dynamic invoke",loc); }
+            let argument be try load(machine,try words.get(routine.operands,machine.phase,first));
+            let bits be try av.bits(machine.engine,argument);
+            let flag be try av.scalar(machine.engine,try aggregate.primitive(graph,meta.pred()),0);
+            let edge be try words.get(routine.instructions,machine.phase,base+8);
+            if bits < 0 { edge=edge+1; }
+            else { flag=try av.scalar(machine.engine,try aggregate.primitive(graph,meta.pred()),1); }
+            destination=try words.get(routine.edges,machine.phase,(edge-1)*3);
+            let parameter be try words.get(routine.blocks,machine.phase,(destination-1)*5);
+            let produced be 2; if bits < 0 { produced=1; }
+            let firstArgument be try words.get(routine.edges,machine.phase,(edge-1)*3+1);
+            let total be try words.get(routine.edges,machine.phase,(edge-1)*3+2);
+            let carried be 0;
+            // Capture ALL source values before assigning any destination slot.
+            while carried < total-produced {
+                let source be try words.get(routine.arguments,machine.phase,firstArgument+produced+carried);
+                let value be try load(machine,source);
+                let ignored be try words.push(machine.transfer,machine.phase,value.index); carried=carried+1;
+            }
+            if bits < 0 {
+                let failure be try av.make(machine.engine,payload,[argument,flag]);
+                try save(machine,routine,parameter,failure);
+            } else {
+                // Capture both immutable outcomes before destination writes.
+                try save(machine,routine,parameter,argument);
+                try save(machine,routine,parameter+1,flag);
+            }
+            carried=0;
+            while carried < total-produced {
+                let value be av.ValueId { owner=machine.engine.key;
+                    index=try words.get(machine.transfer,machine.phase,carried); };
+                try save(machine,routine,parameter+produced+carried,value); carried=carried+1;
+            }
+            block=destination;
+            instruction=try words.get(routine.blocks,machine.phase,(block-1)*5+2);
+            if instruction == 0 { instruction=try words.get(routine.blocks,machine.phase,(block-1)*5+4); }
+        } else {
+            if op == 8 {
+                let value be try load(machine,try words.get(routine.operands,machine.phase,first));
+                return Result { kind=0; value=try av.bits(machine.engine,value);
+                    destination=destination; location=loc; steps=steps; };
+            }
+            let result be try words.get(routine.instructions,machine.phase,base+4);
+            if op == 1 or op == 2 {
+                let ty be meta.i64(); if op == 2 { ty=meta.pred(); }
+                let value be try av.scalar(machine.engine,try aggregate.primitive(graph,ty),
+                    try words.get(routine.instructions,machine.phase,base+7));
+                try save(machine,routine,result,value);
+            } else {
+                if op != 44 { try refuse("unsupported U2 reference instruction",loc); }
+                let source be try load(machine,try words.get(routine.operands,machine.phase,first));
+                let value be try av.get(machine.engine,source,
+                    try words.get(routine.instructions,machine.phase,base+7));
+                try save(machine,routine,result,value);
+            }
+            instruction=try words.get(routine.instructions,machine.phase,base+9);
+            if instruction == 0 { instruction=try words.get(routine.blocks,machine.phase,(block-1)*5+4); }
+        }
+    }
+    try budget.reject("invalid U2 reference step accounting");
+    return Result { kind=3; value=0; destination=destination; location=0; steps=steps; };
+}
+public function execute(routine identity build.Function,graph identity aggregate.Registry,
+    contract contracts.Contract,input Int,fuel Int) returns Result
+    fails budget.LimitError,verify.InvalidIR,graphVerify.InvalidGraph,Unsupported {
+    let checked be try verify.verifyFallible(routine,graph,try budget.verificationPhase(routine.owner),contract);
+    if fuel < 0 or fuel > 1048576 { try budget.reject("invalid U2 reference fuel"); }
+    let phase be try budget.constructionPhase(routine.owner);
+    let payload be adapter(routine,graph,phase,contract)
+        else error Unsupported { try budget.finishPhase(phase); fail error; }
+        else error budget.LimitError { try budget.finishPhase(phase); fail error; };
+    let slots be words.create(routine.owner,1048577)
+        else error budget.LimitError { try budget.finishPhase(phase); fail error; };
+    let transfer be words.create(routine.owner,128)
+        else error budget.LimitError { try words.close(slots); try budget.finishPhase(phase); fail error; };
+    let engine be av.create(graph,routine.owner,phase)
+        else error graphVerify.InvalidGraph { try words.close(transfer); try words.close(slots); try budget.finishPhase(phase); fail error; }
+        else error budget.LimitError { try words.close(transfer); try words.close(slots); try budget.finishPhase(phase); fail error; };
+    let machine be Machine { engine=engine; slots=slots; transfer=transfer; phase=phase; };
+    let outcome be run(routine,graph,machine,input,fuel,payload)
+        else error Unsupported { try av.close(engine); try words.close(transfer); try words.close(slots); try budget.finishPhase(phase); fail error; }
+        else error budget.LimitError { try av.close(engine); try words.close(transfer); try words.close(slots); try budget.finishPhase(phase); fail error; };
+    try av.close(engine); try words.close(transfer); try words.close(slots); try budget.finishPhase(phase);
+    return outcome;
+}

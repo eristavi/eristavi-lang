@@ -1,0 +1,24 @@
+{
+  "status": "pass",
+  "runtime": "owned Linux x86-64, opt-in closed adapter",
+  "seconds": 25.464676856000096,
+  "input_cases": [
+    7,
+    -1
+  ],
+  "fuel_cases": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "stdout": "canonical-invoke-availability:ok\n",
+  "stderr": "",
+  "exit": 0,
+  "fixture_sha256": "004bef8eb626554eeb336e73310b231c7bcef8f9d29947580eea39d8882da113",
+  "app_assembly_sha256": "bf7365f547f5447f011fe7a87a85f2c64c355aaf65b19e363287466342cb4ea6",
+  "runtime_assembly_sha256": "dad392a24099e22d4d79090f34bbdaf5cd1ff08a50c5e93be493efafc40cad49",
+  "binary_sha256": "0c117b33cee31ab651c29f2d21cc0b47c5c9c3eced1a69b137e3ed8d51993514",
+  "cc": "cc",
+  "cflags": "-O2"
+}

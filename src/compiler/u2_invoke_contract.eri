@@ -1,0 +1,73 @@
+// Explicit opt-in version-one fallible contract for one selected FunctionId.
+// The normal signature is always reread from canonical declarations. Failure
+// is a zero-input, one-aggregate result signature, not a scalar error flag.
+import compiler.u1_meta as meta;
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+import compiler.u1_aggregate as aggregate;
+public type Contract { version Int; target meta.FunctionId; failure meta.SignatureId; }
+public type Registry {
+    version Int; metadataKey identity meta.Key; typeKey identity meta.Key;
+    owner identity budget.Owner; entries identity words.Words; state Int;
+    control identity budget.Allocation;
+}
+function fill(data identity meta.Metadata,phase identity budget.Phase,entries identity words.Words)
+    fails budget.LimitError {
+    let count be data.declarations.length/6; let index be 0;
+    while index < count {
+        let normal be try words.get(data.declarations,phase,index*6);
+        let ignored be try words.push(entries,phase,normal);
+        ignored=try words.push(entries,phase,0); index=index+1;
+    }
+}
+public function register(table identity Registry,data identity meta.Metadata,
+    graph identity aggregate.Registry,phase identity budget.Phase,item Contract) fails budget.LimitError {
+    if table.state != 0 or table.version != 1 or table.metadataKey != data.key or
+       table.typeKey != graph.key or table.owner != data.owner or phase.owner != data.owner or
+       phase.state != 0 or not data.frozen or data.closed or graph.state != 1 or graph.owner != data.owner or
+       table.entries.closed or table.entries.frozen or table.entries.owner != data.owner or
+       table.entries.length != data.declarations.length/3 {
+        try budget.reject("invalid mutable fallible registry");
+    }
+    let count be table.entries.length/2;
+    if item.version != 1 or item.target.owner != data.key or item.failure.owner != data.key or
+       item.target.index < 1 or item.target.index > count or item.failure.index < 1 or
+       item.failure.index > data.signatures.length/6 {
+        try budget.reject("invalid fallible registry contract");
+    }
+    let slot be (item.target.index-1)*2+1;
+    if (try words.get(table.entries,phase,slot)) != 0 { try budget.reject("duplicate fallible FunctionId"); }
+    let base be (item.failure.index-1)*6;
+    if (try words.get(data.signatures,phase,base+3)) != 0 or
+       (try words.get(data.signatures,phase,base+5)) != 1 {
+        try budget.reject("invalid fallible registry failure signature");
+    }
+    let first be try words.get(data.signatures,phase,base+4);
+    let ty be try words.get(data.types,phase,first);
+    if ty < 7 or ty > 6+graph.records.length/4 { try budget.reject("failure requires a declared aggregate payload"); }
+    try words.set(table.entries,phase,slot,item.failure.index);
+}
+public function freeze(table identity Registry) fails budget.LimitError {
+    if table.state != 0 { try budget.reject("immutable fallible registry"); }
+    try words.freeze(table.entries); table.state=1;
+}
+public function create(data identity meta.Metadata,graph identity aggregate.Registry,
+    phase identity budget.Phase) returns identity Registry fails budget.LimitError {
+    try budget.poll(data.owner);
+    if not data.frozen or data.closed or graph.state != 1 or graph.owner != data.owner or
+       phase.owner != data.owner or phase.state != 0 or data.declarations.length < 0 or
+       data.declarations.length > 393216 or data.declarations.length%6 != 0 {
+        try budget.reject("invalid fallible registry context");
+    }
+    let control be try budget.commit(try budget.reserve(data.owner,256));
+    let entries be words.create(data.owner,131072)
+        else error budget.LimitError { try budget.release(control); fail error; };
+    fill(data,phase,entries)
+        else error budget.LimitError { try words.close(entries); try budget.release(control); fail error; };
+    return identity Registry { version=1; metadataKey=data.key; typeKey=graph.key;
+        owner=data.owner; entries=entries; state=0; control=control; };
+}
+public function close(table identity Registry) fails budget.LimitError {
+    if table.state < 0 or table.state > 1 { try budget.reject("closed fallible registry"); }
+    table.state=2; try words.close(table.entries); try budget.release(table.control);
+}
