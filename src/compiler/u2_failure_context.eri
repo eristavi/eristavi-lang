@@ -65,7 +65,7 @@ public function append(context identity Context,phase identity budget.Phase,
     } else {
         let tail be context.last;
         if tail == none { try budget.reject("invalid typed failure tail"); }
-        tail.next=node;
+        if tail != none { tail.next=node; }
         context.last=node;
     }
     context.count=context.count+1;
