@@ -158,6 +158,13 @@ public function emitAt(routine identity build.Function,graph identity aggregate.
     try require(depth > 0 and depth <= 128 and position >= 0 and position < depth and
         (not initiallyFailed or failedMode) and pair.version == 2,
         "invalid multi-close plan stage or mode");
+    // The first close uses the exit's actual checked mode. A later stage
+    // can switch from normal to failing only after an earlier checked close
+    // produced a failure; it cannot fabricate such an earlier transition.
+    if position == 0 {
+        try require(failedMode == initiallyFailed,
+            "initial cleanup cannot enter the wrong failure mode");
+    }
     let data be routine.metadata;
     try require(routine.state == 0 and profile.state == 0 and profile.version == 1 and
         profile.owner == routine.owner and profile.functionKey == routine.key and
