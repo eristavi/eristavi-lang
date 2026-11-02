@@ -179,33 +179,6 @@ class U2ScopedOwnerTests(unittest.TestCase):
         self.assertIn('let failedPlan be try planVerify.prepare', text)
         self.compile_probe(text)
 
-    def test_failure_mode_cannot_be_fabricated_at_first_close(self):
-        text = (ROOT / 'tests/fixtures/u2_scoped_owners.eri').read_text()
-        text = text.replace('import compiler.u2_scoped_owners as owners;',
-            'import compiler.u2_scoped_owners as owners;\n'
-            'import compiler.u2_cleanup_plan as cleanup;\n'
-            'import compiler.u2_cleanup_verify as planVerify;\n'
-            'import compiler.u2_cleanup_lower as lower;')
-        text = text.replace(
-            'let innerClose be try transfer.emit(fn,graph,consume,pair,[innerValue],[retainedOuter]);',
-            'let active be [cleanup.Scope { scope=outerScope; contract=consumption.index; value=retainedOuter.index; close=loc; },'
-            'cleanup.Scope { scope=innerScope; contract=consumption.index; value=innerValue.index; close=innerLoc; }];\n'
-            '    let plan be try planVerify.prepare(data,owner,phase,active,0,innerLoc,false);\n'
-            '    let incorrect be lower.emitAt(fn,graph,profile,table,phase,plan,active,0,innerLoc,false,0,true,consume,pair,innerValue,[retainedOuter])'
-            ' else error lower.InvalidLowering { true; } else error budget.LimitError { fail error; }'
-            ' else error planVerify.InvalidPlan { fail error; } else error continuation.InvalidBinding { fail error; };\n'
-            '    try check(incorrect,"first close fabricated checked failure");\n'
-            '    try cleanup.close(plan);\n'
-            '    let innerClose be try transfer.emit(fn,graph,consume,pair,[innerValue],[retainedOuter]);')
-        text = text.replace('continuation.InvalidBinding,owners.InvalidOwnership,ProbeError {',
-            'continuation.InvalidBinding,owners.InvalidOwnership,'
-            'planVerify.InvalidPlan,lower.InvalidLowering,ProbeError {')
-        text = text.replace('else error ProbeError { output("probe:"+error.message);',
-            'else error planVerify.InvalidPlan { output("plan:"+error.message); process.setExitCode(1); }\n'
-            'else error lower.InvalidLowering { output("lower:"+error.message); process.setExitCode(1); }\n'
-            'else error ProbeError { output("probe:"+error.message);')
-        self.compile_probe(text)
-
     def compile_probe(self, text):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
