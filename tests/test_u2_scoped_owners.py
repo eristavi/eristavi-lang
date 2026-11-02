@@ -161,6 +161,12 @@ class U2ScopedOwnerTests(unittest.TestCase):
             'pair=try continuation.bindCarrying(fn,graph,phase,afterInner,done,failed,emptySig,failedSig,loc);\n'
             '    let outerClose be try lower.emitAt(fn,graph,profile,table,phase,plan,active,0,innerLoc,false,1,false,consume,pair,afterValue,[]);\n'
             '    try cleanup.close(plan);')
+        text = text.replace(
+            'let pendingClose be try transfer.emit(fn,graph,consume,pair,[pendingOwner],[pendingError]);',
+            'let pendingClose be try transfer.emit(fn,graph,consume,pair,[pendingOwner],[pendingError]);\\n'
+            '    let activeFailed be [cleanup.Scope { scope=outerScope; contract=consumption.index; value=pendingOwner.index; close=loc; }];\\n'
+            '    let failedPlan be try planVerify.prepare(data,owner,phase,activeFailed,0,loc,true);\\n'
+            '    try cleanup.close(failedPlan);')
         text = text.replace('continuation.InvalidBinding,owners.InvalidOwnership,ProbeError {',
             'continuation.InvalidBinding,owners.InvalidOwnership,'
             'planVerify.InvalidPlan,lower.InvalidLowering,ProbeError {')
@@ -170,6 +176,7 @@ class U2ScopedOwnerTests(unittest.TestCase):
             'else error ProbeError { output("probe:"+error.message);')
         self.assertIn('lower.emitAt', text)
         self.assertNotIn('let innerClose be try transfer.emit', text)
+        self.assertIn('let failedPlan be try planVerify.prepare', text)
         self.compile_probe(text)
 
     def compile_probe(self, text):
