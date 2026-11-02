@@ -1,0 +1,125 @@
+// One-step U2 semantic cleanup -> REAL canonical invoke.direct (opcode 46).
+// This opt-in construction adapter emits into the existing Function pools;
+// it is not an executable shadow IR, runtime resource helper, or verification
+// capability. Full multi-close/managed FailureContext lowering is pending.
+//
+// Admitted slice: exactly one exited scoped owner; an arbitrary valid surviving
+// lexical owner prefix may cross both outcomes. A pending value may follow that
+// prefix but never the consumed handle. The caller must connect the typed
+// continuations to an actual checked handler/propagation implementation.
+// The independent canonical/owner verifiers remain mandatory after completion.
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+import compiler.u1_meta as meta;
+import compiler.u1_builder as build;
+import compiler.u1_aggregate as aggregate;
+import compiler.u2_cleanup_plan as cleanup;
+import compiler.u2_cleanup_verify as planVerify;
+import compiler.u2_continuation_bind as continuation;
+import compiler.u2_invoke_contract as fallible;
+import compiler.u2_invoke_transfer as invoke;
+import compiler.u2_scoped_owners as owners;
+
+public error InvalidLowering { message Text; }
+function require(okay Bool,message Text) fails InvalidLowering {
+    if not okay { fail InvalidLowering { message=message; }; }
+}
+public function emitOne(routine identity build.Function,graph identity aggregate.Registry,
+    profile identity owners.Profile,contracts identity fallible.Registry,
+    phase identity budget.Phase,plan identity cleanup.Plan,active,survive Int,
+    exit meta.LocId,failed Bool,contract fallible.Contract,
+    pair continuation.Pair,handle build.ValueId,carried)
+    returns build.InstId
+    fails budget.LimitError,planVerify.InvalidPlan,continuation.InvalidBinding,InvalidLowering {
+    // Re-check the semantic plan at the consuming boundary. Same revisions
+    // and previous successful verification do not grant any privilege.
+    let accepted be try planVerify.verify(routine.metadata,phase,plan,active,survive,exit,failed);
+    accepted=try continuation.verify(routine,graph,phase,pair);
+    let data be routine.metadata;
+    try require(active.count >= 1 and active.count <= 128 and
+        survive == active.count-1 and plan.depth == 1 and
+        plan.entry == (if failed { 2 } else { 1 }),
+        "only a single exiting scoped owner is admitted");
+    try require(routine.state == 0 and profile.state == 0 and
+        profile.version == 1 and profile.owner == routine.owner and
+        profile.functionKey == routine.key and profile.typeKey == graph.key and
+        profile.handle.owner == graph.key and
+        profile.consume.owner == data.key and
+        profile.consume.index == contract.target.index,
+        "foreign or unsupported canonical owner contract");
+    try require(contracts.version == 1 and contracts.state == 1 and
+        contracts.metadataKey == data.key and contracts.typeKey == graph.key and
+        contracts.owner == data.owner and contracts.entries.owner == data.owner and
+        not contracts.entries.closed and contracts.entries.frozen and
+        contracts.entries.length == data.declarations.length/3 and
+        contract.version == 1 and contract.target.owner == data.key and
+        contract.failure.owner == data.key and contract.target.index >= 1 and
+        contract.target.index <= data.declarations.length/6,
+        "unregistered or foreign checked-close contract");
+    let expected be try meta.functionSignature(data,phase,contract.target);
+    let offset be (contract.target.index-1)*2;
+    try require((try words.get(contracts.entries,phase,offset)) == expected.index and
+        (try words.get(contracts.entries,phase,offset+1)) == contract.failure.index,
+        "stale or mismatched checked-close registry entry");
+    let ownerScope cleanup.Scope be active[active.count-1];
+    let row be 0; if failed { row=8; }
+    try require((try words.get(plan.records,phase,row)) == ownerScope.scope and
+        (try words.get(plan.records,phase,row+1)) == contract.target.index and
+        (try words.get(plan.records,phase,row+2)) == ownerScope.value and
+        (try words.get(plan.records,phase,row+3)) == ownerScope.close.index and
+        (try words.get(plan.records,phase,row+4)) == exit.index and
+        (try words.get(plan.records,phase,row+5)) == (if failed { 1 } else { 0 }),
+        "cleanup row does not identify this canonical consume");
+    try require(pair.version == 2 and pair.location == ownerScope.close and
+        pair.source.owner == routine.key and
+        handle.owner == routine.key and handle.index == ownerScope.value and
+        handle.index >= 1 and handle.index <= routine.values.length/4 and
+        ownerScope.contract == contract.target.index,
+        "cleanup handle or lexical source origin mismatch");
+    let base be (handle.index-1)*4;
+    try require((try words.get(routine.values,phase,base)) == profile.handle.index and
+        (try words.get(routine.values,phase,base+1)) == 0 and
+        (try words.get(routine.values,phase,base+2)) == pair.source.index,
+        "cleanup operand is not a live source block owner parameter");
+    try require(profile.blocks.length == routine.blocks.length/5*2 and
+        pair.source.index >= 1 and pair.source.index <= profile.blocks.length/2,
+        "missing canonical source owner signature");
+    let first be try words.get(profile.blocks,phase,(pair.source.index-1)*2);
+    let count be try words.get(profile.blocks,phase,(pair.source.index-1)*2+1);
+    try require(count == active.count and first >= 0 and
+        count <= profile.entries.length/2-first,"semantic and canonical owner depth differ");
+    let i be 0;
+    while i < active.count {
+        let item cleanup.Scope be active[i];
+        try require(item.scope >= 1 and item.scope <= profile.scopes.length/2 and
+            item.contract == contract.target.index and
+            (try words.get(profile.scopes,phase,(item.scope-1)*2+1)) == item.close.index and
+            (try words.get(profile.entries,phase,(first+i)*2)) == item.scope and
+            (try words.get(profile.entries,phase,(first+i)*2+1)) == item.value,
+            "cleanup obligation differs from lexical canonical owner signature");
+        i=i+1;
+    }
+    // Preserve the exact lexical prefix first. Additional carried SSA values
+    // may encode pending return or an existing typed error context, but no
+    // resource is silently copied or restored after close.
+    try require(carried.count >= survive and carried.count <= 128,
+        "invalid checked cleanup carried values");
+    i=0;
+    while i < carried.count {
+        let item build.ValueId be carried[i];
+        try require(item.owner == routine.key and item.index >= 1 and
+            item.index <= routine.values.length/4,
+            "invalid checked cleanup transfer value");
+        if i < survive {
+            let entry cleanup.Scope be active[i];
+            try require(item.index == entry.value,"surviving owner prefix reordered or dropped");
+        } else {
+            try require((try words.get(routine.values,phase,(item.index-1)*4)) != profile.handle.index,
+                "consumed or hidden scoped resource escaped as a pending value");
+        }
+        i=i+1;
+    }
+    // Emission is transactional at the builder level: storage refusal poisons
+    // the private Function, which must be discarded, never published.
+    return try invoke.emit(routine,graph,contract,pair,[handle],carried);
+}
