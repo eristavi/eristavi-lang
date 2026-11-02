@@ -106,6 +106,20 @@ public function emitOne(routine identity build.Function,graph identity aggregate
     // resource is silently copied or restored after close.
     try require(carried.count >= survive and carried.count <= 128,
         "invalid checked cleanup carried values");
+    // When the body is already failing, its typed primary must be carried
+    // through both outcomes. The new close failure is a separate edge result.
+    // This remains a structural aggregate placeholder until FailureContext
+    // and its pinned safe-point roots are integrated into canonical UIR.
+    if failed {
+        try require(carried.count > survive,
+            "already-failing cleanup must retain its primary");
+        let primary build.ValueId be carried[survive];
+        try require(primary.owner == routine.key and
+            primary.index >= 1 and primary.index <= routine.values.length/4,
+            "invalid pending failure value");
+        try require((try words.get(routine.values,phase,(primary.index-1)*4)) > 6,
+            "pending failure must be a typed aggregate");
+    }
     i=0;
     while i < carried.count {
         let item build.ValueId be carried[i];
