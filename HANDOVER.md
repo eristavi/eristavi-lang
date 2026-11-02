@@ -3812,3 +3812,14 @@ preserved rather than overwritten by the routine test's elapsed-time refresh.
 No full four-platform qualification, merge, issue closure or owned full compiler
 self-build was selected. This remains a tested draft foundation. Complete U2
 managed values, contexts/roots/runtime and deep physical gates before acceptance.
+
+### §92 publication identity
+
+Source/test/evidence commit `3dbc6add049c70fe6adb34bd954270f08a5ba6e7`
+has Git tree `268d79d646293fb3acded1473ad52bceeae31c63`; all 27 uploaded
+blobs and the complete remote tree exactly match the locally checked input tree.
+The final branch head adds only this handover reconciliation to that revision.
+Track hosted smoke independently by the published PR head; this record does not
+claim full qualification, U2 acceptance or a merge. PR #111 remains draft and
+#74 remains open; next gates are the managed/runtime and deep acceptance work
+listed above. No heavy process is left running locally.
