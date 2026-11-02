@@ -50,6 +50,10 @@ Next: compile and independently test the ledger, prove refusal/cleanup behavior,
 then connect verified plans to canonical resource operations and managed roots.
 Do not merge or run full qualification until coherent acceptance gates pass.
 
+## 94. Remote focused validation batch — 2 November 2026
+
+Validation-only branch `compiler/u2-focused-validation-20261102` was forked from U2 PR #111 at `55ac006583841d42e781a56affca56217d03aa98` to exercise remote smoke without a local checkout. Source changes: `u2_failure_context.eri` charges each retained appended typed failure (256 modeled bytes via the existing context lease), checks chain shape before mutation, and charges traversal work; `u2_cleanup_lower.eri` refuses an already-failing close if its typed primary is not explicitly carried. The typed context fixture checks modeled owner traffic. These are **committed but not yet compiled or tested**; memory charges are ledger estimates, not actual physical backing. No ABI, production compiler, or U2 acceptance status changes. After focused validation, reconcile successful code back into PR #111; do not merge unfinished U2 into main or claim the remote smoke is the final full qualification.
+
 ## 93. U2 cleanup-lowering validation checkpoint — 2 November 2026
 
 **Active, unqualified branch:** `compiler/u2-cleanup-foundation-20261102`, PR #111 draft. The opt-in `src/compiler/u2_cleanup_lower.eri` adapter now emits an actual canonical UIR opcode-46 checked close through `u2_invoke_transfer.emit`, after independently rechecking the current semantic cleanup plan and binding. This initial slice deliberately admits exactly one exiting owner per call; owner-prefix transfers and normal versus already-failing modes are explicit. It does not implement complete multi-close chains, return cancellation/typed FailureContext composition, GC roots or production resource execution. The independent canonical and scoped-owner verifiers remain authoritative; emission is not trusted publication.
