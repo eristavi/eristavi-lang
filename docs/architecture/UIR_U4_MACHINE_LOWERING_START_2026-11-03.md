@@ -17,3 +17,11 @@ Typed canonical UIR is source-neutral and independently verified. Legalization s
 ## Integration gate
 
 U2 root-safe-point/liveness and cleanup acceptance precede full managed machine execution; U3 source provenance and artifact manifests precede default pipeline migration. Do not close #102 or merge implementation without exact-head full CI and qualification. No experimental owned full self-build without explicit permission.
+
+## Three-step development checkpoint
+
+1. **Inspected:** `u1_ops.eri`, `u1_native.eri`, and the existing Python `x86_64_lowering_contracts.py`; the old Python x86 backend and U1 native C table adapter are not a qualified new-U1 machine backend.
+2. **Implemented (isolated):** `compiler/erist/u4_parallel_moves.py` adds a private simultaneous block-parameter copy scheduler, including cycles using a nonaliasing scratch location. It is not wired into native instruction selection.
+3. **Tests added (not yet independently confirmed):** `tests/test_u4_parallel_moves.py` includes chain/cycle, exhaustive small graph oracle and invalid input rejection. Await exact-head focused CI before claiming green.
+
+Next: connect verified canonical U1 edge arguments to target machine locations and select a target-legal scalar instruction subset; U2 managed roots remain gated.
