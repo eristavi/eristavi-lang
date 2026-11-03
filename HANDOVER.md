@@ -1,5 +1,9 @@
 # Eristavi compiler — current handover
 
+## Parallel U3/U4 foundation checkpoint — 2026-11-03
+
+The user authorized parallel U3/U4 development while U2 #74 remains open. Two independent branches were created from `main`: `compiler/u3-shadow-frontend-20261103` (architecture start commit `8e6f0d277d4d67c601de81792dc38119477feeb4`) and `compiler/u4-machine-lowering-20261103` (architecture start commit `e471f31f67abe46873b20d92d4fd2ee67e6f5cf7`). Each contains a bounded start contract in `docs/architecture/`. These are **documentation-only planning commits**; no compiler code or tests have been implemented or qualified in U3/U4. The existing production compiler and draft U2 PR #111 are unchanged. Next: inspect actual AST/UIR and target lowering code, implement narrow opt-in scalar U3/U4 slices with focused independent tests. Preserve U2 acceptance dependency for managed/failure/resource integration; no milestone closure or production merge.
+
 **Verified: 2 November 2026, Asia/Nicosia.** This file contains current recovery
 instructions and accepted boundaries. Superseded checkpoints are in the
 [historical snapshot](docs/history/2026-11-02/HANDOVER_BEFORE_CLEANUP.md).
