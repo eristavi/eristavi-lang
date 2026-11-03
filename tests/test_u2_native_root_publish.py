@@ -105,3 +105,58 @@ class U2NativeRootPublishTests(unittest.TestCase):
             self.assertEqual(
                 (execution.returncode,execution.stdout,execution.stderr),
                 (0,b"u2-emitted-root\n",b""))
+            # The same emitted frame must retain a second independent
+            # checked-root slot after the first record is released.
+            # No second compiler build or runtime generator is required.
+            second=matches[1]
+            original=(
+                "    call erist_u2_publish_7_"+first+"\n"
+                "    call erist_rt_failure_clear\n")
+            replacement=(
+                "    call erist_u2_publish_7_"+first+"\n"
+                "    call evn_saved\n"
+                "    movq %r15,%rdi\n"
+                "    movq %rax,%rsi\n"
+                "    call erist_u2_publish_7_"+second+"\n"
+                "    call erist_rt_failure_clear\n")
+            self.assertIn(original,native)
+            multi=native.replace(original,replacement,1)
+            self.assertIn("    cmpq $1,%rax\n    jne .Lgraph_test_fail\n",multi)
+            multi=multi.replace(
+                "    cmpq $1,%rax\n    jne .Lgraph_test_fail\n",
+                "    cmpq $2,%rax\n    jne .Lgraph_test_fail\n",1)
+            before=(
+                "    cmpq $0,(%r15)\n"
+                "    jne .Lgraph_test_fail\n"
+                "    call evn_void\n")
+            after=(
+                "    cmpq $0,(%r15)\n"
+                "    jne .Lgraph_test_fail\n"
+                "    xorl %edi,%edi\n"
+                "    call erist_rt_slots_collect\n"
+                "    call erist_rt_text_collect\n"
+                "    call erist_rt_live_failures\n"
+                "    cmpq $1,%rax\n"
+                "    jne .Lgraph_test_fail\n"
+                "    movq 8(%r15),%rdi\n"
+                "    movl $12,%esi\n"
+                "    call evn_error\n"
+                "    movq %rax,%rdi\n"
+                "    xorl %esi,%esi\n"
+                "    call evn_member\n"
+                "    movq %rax,%rdi\n"
+                "    call evn_output\n"
+                "    movq %r15,%rdi\n"
+                "    call erist_u2_release_7_"+second+"\n"
+                "    cmpq $0,8(%r15)\n"
+                "    jne .Lgraph_test_fail\n"
+                "    call evn_void\n")
+            self.assertIn(before,multi)
+            multi=multi.replace(before,after,1)
+            second_execution=FreestandingTextLifetimeTests._link_run(
+                self,directory,"u2-two-emitted-roots",runtime,
+                descriptors()+emission+multi+FINISH)
+            self.assertEqual(
+                (second_execution.returncode,second_execution.stdout,
+                 second_execution.stderr),
+                (0,b"u2-emitted-root\nu2-emitted-root\n",b""))
