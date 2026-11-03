@@ -36,7 +36,8 @@ class U2NativeRootPublishTests(unittest.TestCase):
             source=source.replace(
                 imports, imports+"\n"
                 "import compiler.u2_root_map as rootMap;\n"
-                "import compiler.u2_native_root_x86_64 as nativeRoot;",1)
+                "import compiler.u2_native_root_x86_64 as nativeRoot;\n"
+                "import compiler.u2_native_slots_x86_64 as machineSlots;",1)
             insertion=(
                 "let mutate be try budget.constructionPhase(owner); "
                 "let revision be fn.revision;"
@@ -45,18 +46,64 @@ class U2NativeRootPublishTests(unittest.TestCase):
             source=source.replace(
                 insertion, insertion+"\n"
                 "    let map be try rootMap.create(fn,graph,mutate);\n"
-                "    try nativeRoot.emit(map,fn,graph,mutate,7);\n"
+                "    let baseline be owner.live;\n"
+                "    let placement be try machineSlots.create(map,fn,graph,mutate);\n"
+                "    let slots be try machineSlots.verify(placement,map,fn,graph,mutate);\n"
+                "    try check(slots.roots == 5 and slots.rootBytes == 40 and slots.scopeOffset == 40 and slots.frameBytes == 48,\"native slot frame bounds\");\n"
+                "    let saved be try words.get(placement.records,mutate,1);\n"
+                "    placement.records.frozen=false; try words.set(placement.records,mutate,1,saved+1); placement.records.frozen=true;\n"
+                "    try check(try slotRejected(placement,map,fn,graph,mutate),\"misaligned native root accepted\");\n"
+                "    placement.records.frozen=false; try words.set(placement.records,mutate,1,saved); placement.records.frozen=true;\n"
+                "    let overlap be try words.get(placement.records,mutate,4);\n"
+                "    placement.records.frozen=false; try words.set(placement.records,mutate,4,saved); placement.records.frozen=true;\n"
+                "    try check(try slotRejected(placement,map,fn,graph,mutate),\"overlapping native roots accepted\");\n"
+                "    placement.records.frozen=false; try words.set(placement.records,mutate,4,overlap); placement.records.frozen=true;\n"
+                "    let rootClass be try words.get(placement.records,mutate,2);\n"
+                "    placement.records.frozen=false; try words.set(placement.records,mutate,2,4); placement.records.frozen=true;\n"
+                "    try check(try slotRejected(placement,map,fn,graph,mutate),\"wrong native root class accepted\");\n"
+                "    placement.records.frozen=false; try words.set(placement.records,mutate,2,rootClass); placement.records.frozen=true;\n"
+                "    let first be try words.get(placement.records,mutate,0);\n"
+                "    placement.records.frozen=false; try words.set(placement.records,mutate,0,first+1); placement.records.frozen=true;\n"
+                "    try check(try slotRejected(placement,map,fn,graph,mutate),\"forged instruction placement accepted\");\n"
+                "    placement.records.frozen=false; try words.set(placement.records,mutate,0,first); placement.records.frozen=true;\n"
+                "    let originalLength be placement.records.length; placement.records.length=originalLength-3;\n"
+                "    try check(try slotRejected(placement,map,fn,graph,mutate),\"missing native root accepted\");\n"
+                "    placement.records.length=originalLength;\n"
+                "    placement.revision=fn.revision+1;\n"
+                "    try check(try slotRejected(placement,map,fn,graph,mutate),\"stale slot revision accepted\");\n"
+                "    placement.revision=fn.revision;\n"
+                "    let foreign be try rootMap.create(fn,graph,mutate);\n"
+                "    try check(try slotRejected(placement,foreign,fn,graph,mutate),\"foreign root map accepted\");\n"
+                "    try rootMap.close(foreign);\n"
+                "    slots=try machineSlots.verify(placement,map,fn,graph,mutate);\n"
+                "    try nativeRoot.emitWithSlots(placement,map,fn,graph,mutate,7);\n"
+                "    try machineSlots.close(placement);\n"
+                "    try check(try slotRejected(placement,map,fn,graph,mutate),\"closed native root slots accepted\");\n"
+                "    try check(owner.live == baseline,\"slot-plan backing not released\");\n"
                 "    try rootMap.close(map);",1)
+            helper=(
+                "function slotRejected(plan identity machineSlots.Plan,"
+                "map identity rootMap.Map,fn identity build.Function,"
+                "graph identity aggregate.Registry,phase identity budget.Phase)"
+                " returns Bool fails budget.LimitError,rootMap.InvalidRoots {\\n"
+                "    let proof be machineSlots.verify(plan,map,fn,graph,phase)"
+                " else error machineSlots.InvalidSlots { return true; };\\n"
+                "    return false;\\n"
+                "}\\n"
+            )
+            self.assertIn("function run() fails",source)
+            source=source.replace("function run() fails",helper+"function run() fails",1)
             marker="continuation.InvalidBinding,owners.InvalidOwnership,ProbeError {"
             self.assertIn(marker,source)
             source=source.replace(
                 marker,"continuation.InvalidBinding,owners.InvalidOwnership,"
-                "rootMap.InvalidRoots,nativeRoot.Unsupported,ProbeError {",1)
+                "rootMap.InvalidRoots,machineSlots.InvalidSlots,nativeRoot.Unsupported,ProbeError {",1)
             errors='else error ProbeError { output("probe:"+error.message);'
             self.assertIn(errors,source)
             source=source.replace(
                 errors,
                 'else error rootMap.InvalidRoots { output("roots:"+error.message); process.setExitCode(1); }\n'
+                'else error machineSlots.InvalidSlots { output("slots:"+error.message); process.setExitCode(1); }\\n'
                 'else error nativeRoot.Unsupported { output("native:"+error.message); process.setExitCode(1); }\n'
                 +errors,1)
             closing='output("u2-scoped-owners:ok");'
@@ -79,6 +126,18 @@ class U2NativeRootPublishTests(unittest.TestCase):
                 len(re.findall(r"^    \.byte 5$",emission,re.M)),5)
             self.assertIn(".globl erist_u2_bind_7",emission)
             self.assertIn("    movq $0,32(%rsi)",emission)
+            publish=re.findall(
+                r"^erist_u2_publish_7_(\\d+):\\n    movq %rsi,(\\d+)\\(%rdi\\)\\n    ret$",
+                emission,re.M)
+            release=re.findall(
+                r"^erist_u2_release_7_(\\d+):\\n    movq \\$0,(\\d+)\\(%rdi\\)\\n    ret$",
+                emission,re.M)
+            expected=list(zip(matches,[str(i*8) for i in range(5)]))
+            self.assertEqual(publish,expected)
+            self.assertEqual(release,expected)
+            self.assertEqual(
+                re.findall(r"^    movq \\$0,(\\d+)\\(%rsi\\)$",emission,re.M),
+                [str(i*8) for i in range(5)])
             first=matches[0]
             native=(ROOT/"tests/fixtures/u2_root_publish_native.s").read_text()
             self.assertEqual(native.count("@INSTRUCTION@"),2)

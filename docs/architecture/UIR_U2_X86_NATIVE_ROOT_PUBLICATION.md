@@ -50,3 +50,27 @@ Resource runtime adapters, Unicode17/value-copy-vs-identity semantics,
 allocator/physical and fault evidence, independent reference/native parity,
 and final completed-batch four-platform qualification remain mandatory.
 No production merge or U2 issue closure follows from this development slice.
+
+## Native slot placement verifier — unqualified follow-up
+
+The private `u2_native_slots_x86_64.eri` plan binds the exact verified
+canonical root-map object, function/type keys, and source revision to a
+bounded one-word-per-checked-invoke x86-64 frame layout, including dead
+instructions. It independently checks every record before any assembly
+emission. The closed placement is contiguous at offsets `0, 8, ...`, with
+class 5 for every root, a separate scope-pointer word immediately after
+the roots, and a 16-byte-aligned frame allocation including that word.
+A missing/duplicate/overlapping/misaligned/wrong-class/foreign/stale/closed
+placement must fail rather than silently reuse another slot. The emitter
+now consumes verified offsets instead of constructing unexamined displacements.
+Its compatibility `emit` entry creates and releases that private plan.
+
+The focused test additionally checks forged instruction IDs, wrong classes,
+misalignment, overlap, missing entries, a stale revision, foreign metadata,
+closed plans and returned owner backing; a separate Python assembler oracle
+checks unique bind, publish and release offsets before native execution.
+This does **not** establish general canonical SSA live intervals, root
+publication for other managed values, recursion, arbitrary loops or
+machine lowering of complete UIR bodies. Preserve draft #111 and issue #74
+until the remaining U2 gates pass. The exact source head and CI evidence
+are recorded in HANDOVER.md after the smoke completes.

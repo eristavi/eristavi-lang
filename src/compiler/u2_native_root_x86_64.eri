@@ -6,6 +6,7 @@ import compiler.u1_words as words;
 import compiler.u1_builder as build;
 import compiler.u1_aggregate as aggregate;
 import compiler.u2_root_map as roots;
+import compiler.u2_native_slots_x86_64 as machineSlots;
 import compiler.format as format;
 
 public error Unsupported { message Text; }
@@ -13,11 +14,12 @@ public error Unsupported { message Text; }
 function require(ok Bool,message Text) fails Unsupported {
     if not ok { fail Unsupported { message=message; }; }
 }
-public function emit(map identity roots.Map,routine identity build.Function,
-    graph identity aggregate.Registry,phase identity budget.Phase,label Int)
-    fails budget.LimitError,roots.InvalidRoots,Unsupported {
-    // A fresh independent scan is a publication gate, not a trusted flag.
-    let proof be try roots.verify(map,routine,graph,phase);
+public function emitWithSlots(plan identity machineSlots.Plan,map identity roots.Map,
+    routine identity build.Function,graph identity aggregate.Registry,
+    phase identity budget.Phase,label Int)
+    fails budget.LimitError,roots.InvalidRoots,machineSlots.InvalidSlots,Unsupported {
+    // No assembler is emitted before both independent metadata checks pass.
+    let proof be try machineSlots.verify(plan,map,routine,graph,phase);
     try require(label > 0 and label <= 2147483647,
         "invalid private x86-64 root-map symbol namespace");
     try require(proof.roots > 0 and proof.roots <= 128,
@@ -56,7 +58,7 @@ public function emit(map identity roots.Map,routine identity build.Function,
         let row be index*6;
         let instruction be try words.get(map.records,phase,row);
         let id be name+"_"+format.integer(instruction);
-        let displacement be format.integer(index*8);
+        let displacement be format.integer(try words.get(plan.records,phase,index*3+1));
         // ABI: rdi = caller's live root words, rsi = saved-failure pointer.
         output(".globl erist_u2_publish_"+id);
         output(".type erist_u2_publish_"+id+",@function");
@@ -73,4 +75,28 @@ public function emit(map identity roots.Map,routine identity build.Function,
         index=index+1;
     }
     output(".section .note.GNU-stack,\"\",@progbits");
+}
+
+public function emit(map identity roots.Map,routine identity build.Function,
+    graph identity aggregate.Registry,phase identity budget.Phase,label Int)
+    fails budget.LimitError,roots.InvalidRoots,Unsupported {
+    let plan be machineSlots.create(map,routine,graph,phase)
+        else error machineSlots.InvalidSlots {
+            fail Unsupported { message=error.message; };
+        };
+    emitWithSlots(plan,map,routine,graph,phase,label)
+        else error machineSlots.InvalidSlots {
+            try machineSlots.close(plan);
+            fail Unsupported { message=error.message; };
+        }
+        else error roots.InvalidRoots {
+            try machineSlots.close(plan); fail error;
+        }
+        else error budget.LimitError {
+            try machineSlots.close(plan); fail error;
+        }
+        else error Unsupported {
+            try machineSlots.close(plan); fail error;
+        };
+    try machineSlots.close(plan);
 }

@@ -35,6 +35,18 @@ No full U2 CI or completed-batch qualification has been initiated; unverified ne
 
 **What is NOT yet proven:** the emitted native helper paths are exercised from a controlled handwritten checked-failure body, not an automatically lowered complete canonical UIR program. General machine slot allocation and live-in/liveness verification over all SSA values, allocating safe points, loops, nested unwinds and recursion remain unimplemented. So do new-UIR managed Text/List/identity with full Unicode17, real checked file/resource adapters and complete FailureContext secondary-order execution, arbitrary multi-exit cleanup/cancellation, allocator fault/physical/RSS evidence, Stage-0 vs new native execution oracle, and final completed-batch four-platform qualification. Three opt-in probes were skipped. **Do not close #74, mark U2 complete, run full owned compiler self-build or merge PR #111 into main.**
 
+### In-progress U2 native placement check — not yet CI-verified
+
+A private one-root-word-per-invoke x86-64 slot plan now binds the fresh canonical
+root-map object, owner, type and exact revision. Independent validation checks
+closed, foreign, forged, wrong-class, misaligned, overlapping or absent slots,
+including unreachable checked calls, before native helper assembly is printed.
+The native emitter consumes the verified displacements and the focused test
+adds both adversarial slot mutations and a separate assembly-offset oracle.
+The verified scope is limited to checked-failure pointer roots; it is **not**
+whole-program managed SSA liveness. Focused CI for this new source revision is
+**PENDING**, with no new green claim. Keep #111 DRAFT and #74 OPEN.
+
 ## Next U2 steps
 
 1. Independently verify actual target slot allocation and liveness for every canonical checked edge and all live managed values across allocations, returns, loops, dead blocks, recursion and cleanup failure paths. Refuse stale, foreign, overlapping, misaligned, absent or prematurely cleared roots. Keep bounded complexity and owner/work accounting.
