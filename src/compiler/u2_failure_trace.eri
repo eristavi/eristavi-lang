@@ -55,7 +55,8 @@ public function run(data identity meta.Metadata,phase identity budget.Phase,
     try require(visited == depth and cursor == ending,
         "cleanup route ended before all owners were consumed");
     let kind be 0;
-    if context.primary != none { kind=context.primary.typeId; }
+    let primary be context.primary;
+    if primary != none { kind=primary.typeId; }
     return Report { closed=visited; failed=failed; primaryType=kind;
         secondary=context.count; terminal=cursor; };
 }
