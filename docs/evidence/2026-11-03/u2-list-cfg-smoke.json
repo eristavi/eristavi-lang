@@ -1,0 +1,82 @@
+{
+  "profile": "smoke",
+  "status": "success",
+  "discovered_tests": 92,
+  "tests_run": 92,
+  "passed": 89,
+  "unsuccessful_tests": 0,
+  "failure_records": 0,
+  "skipped": [
+    {
+      "test": "test_u2_invoke.U2InvokeTests.test_owned_native_reference_outcomes_and_ingress",
+      "reason": "opt-in Linux x86-64 owned-runtime invoke reference probe"
+    },
+    {
+      "test": "test_u2_invoke_transfers.U2InvokeTransferTests.test_owned_runtime_preserves_outcome_transfers",
+      "reason": "opt-in Linux x86-64 owned-runtime transfer probe"
+    },
+    {
+      "test": "test_u2_scoped_owners.U2ScopedOwnerTests.test_owned_runtime_scoped_owner_proof_and_refusals",
+      "reason": "opt-in Linux x86-64 owned scoped-owner proof"
+    }
+  ],
+  "failures": [],
+  "errors": [],
+  "expected_failures": [],
+  "unexpected_successes": [],
+  "seconds": 255.341067458,
+  "slowest_tests": [
+    {
+      "test": "test_u1_owner_physical.U1OwnerPhysicalTests.test_owned_actual_capacity_by_owner_and_gc_reclamation",
+      "seconds": 24.555
+    },
+    {
+      "test": "test_u2_failure_root_binding.U2FailureRootBindingTests.test_owned_failure_root_reference_survives_allocation_pressure",
+      "seconds": 19.248
+    },
+    {
+      "test": "test_u1_narrow_execution.U1NarrowExecutionTests.test_independent_canonical_narrow_execution_and_faults",
+      "seconds": 14.154
+    },
+    {
+      "test": "test_u2_list_i64.U2ListI64Tests.test_canonical_list_snapshots_native_roots_and_bounds",
+      "seconds": 11.481
+    },
+    {
+      "test": "test_u1_promotion.U1PromotionTests.test_differential_execution_shapes_and_failure_cleanup",
+      "seconds": 11.304
+    },
+    {
+      "test": "test_u2_list_i64.U2ListI64Tests.test_malformed_profile_emits_no_native_assembly",
+      "seconds": 10.835
+    },
+    {
+      "test": "test_u1b_actual_physical.U1BAggregatePhysicalTests.test_actual_aggregate_owner_backing_and_gc_reclamation",
+      "seconds": 9.687
+    },
+    {
+      "test": "test_u3_stage0_parity_baseline.U3Stage0ParityBaseline.test_frozen_successful_programs_match_existing_native_compilers",
+      "seconds": 8.946
+    },
+    {
+      "test": "test_u2_list_i64.U2ListI64Tests.test_loop_carried_snapshots_and_parallel_swap",
+      "seconds": 8.652
+    },
+    {
+      "test": "test_u1_integer_execution.U1IntegerExecutionTests.test_integer_recursion_switch_promotion_and_fault_traces",
+      "seconds": 7.426
+    }
+  ],
+  "platform": "Linux-6.18.57-x86_64-with-glibc2.39",
+  "python": "3.12.14",
+  "cc": null,
+  "base_commit": "2619885a2ff7043dda4080e722ffe31c8806f495",
+  "source_sha256": {
+    "src/compiler/u2_list_i64.eri": "07ffd2b5d906599161c175f561391db56f1ffde555e76c3c2d2073978f2dddc3",
+    "tests/fixtures/u2_list_i64.eri": "a53c616790fd0aad594b7237b5e592835593f0fa86f8956de6e90e277e9e0295",
+    "tests/fixtures/u2_list_i64_loop.eri": "e7c2675dd136bbd758f15f9791236775d97c519b5ccb3e91b9c2128c60a72c3e",
+    "tests/fixtures/u2_list_i64_swap.eri": "4413f8be2a3d51c2cb9f93507710bc679db14cc38bcd706b8147b72156b62b60",
+    "tests/test_u2_list_i64.py": "7bae2c37687bcbdf97ef4228f64d5d073b0ad6d5350a7491be0b9544f3eb78ce",
+    "tools/run_ci_tests.py": "4dcf33dcae5b024d7389968f0e446a68e73ec9c08799008d812783aa8e52ef00"
+  }
+}

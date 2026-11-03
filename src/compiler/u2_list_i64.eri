@@ -8,6 +8,8 @@ import compiler.u1_aggregate as aggregate;
 import compiler.u1_aggregate_signature as signatures;
 import compiler.u1_verify as canonical;
 import compiler.format as format;
+import compiler.u2_managed_types as managed;
+import compiler.u1_aggregate_verify as graphVerify;
 public error Unsupported { message Text; }
 function require(ok Bool,message Text) fails Unsupported {
     if not ok { fail Unsupported { message=message; }; }
@@ -30,7 +32,7 @@ public function verify(fn identity build.Function,g identity aggregate.Registry,
     let proof be try canonical.verifyAggregates(fn,g,try budget.verificationPhase(fn.owner));
     try require(p.owner == fn.owner and p.state == 0 and carrier.owner == g.key and
         carrier.index > 6 and (try aggregate.fieldCount(g,p,carrier)) == 0 and
-        fn.blocks.length == 5 and fn.values.length/4 <= 128 and
+        fn.blocks.length >= 5 and fn.blocks.length/5 <= 64 and fn.edges.length/3 <= 512 and fn.values.length/4 <= 128 and
         fn.instructions.length/10 <= 256 and fn.metadata.declarations.length == 42 and
         (try meta.parameterCount(fn.metadata,p,fn.signature)) == 0 and
         (try meta.resultCount(fn.metadata,p,fn.signature)) == 1 and
@@ -69,7 +71,7 @@ public function verify(fn identity build.Function,g identity aggregate.Registry,
     let i be 1;
     while i <= fn.instructions.length/10 {
         let code be try get(fn.instructions,p,(i-1)*10);
-        try require(code == 1 or code == 34 or code == 8,
+        try require(code == 1 or code == 2 or code == 18 or code == 34 or code == 8 or code == 6 or code == 7,
             "opaque List carrier cannot be constructed/projected as an aggregate");
         i=i+1;
     }
@@ -89,19 +91,28 @@ public function emit(fn identity build.Function,g identity aggregate.Registry,
     let revision be try verify(fn,g,carrier,p);
     let total be fn.values.length/4;
     let scopeOffset be total*8; let tempOffset be scopeOffset+8;
-    let frame be ((tempOffset+8+15)/16)*16+8;
+    let scratchOffset be tempOffset+8;
+    let frame be ((scratchOffset+total*8+15)/16)*16+8;
     output(".section .rodata\nerist_u2_list_classes:");
     let i be 0;
     while i < total { output(".byte 1"); i=i+1; }
     output(".text\n.globl erist_u2_list_entry\nerist_u2_list_entry:");
+    // Validate the closed boxed runtime descriptor contract BEFORE any call.
+    line("cmpl $1,ev_types+32(%rip)"); line("jne erist_rt_value_fault_internal");
+    line("cmpl $3,ev_types+96(%rip)"); line("jne erist_rt_value_fault_internal");
+    line("cmpl $7,ev_types+224(%rip)"); line("jne erist_rt_value_fault_internal");
+    line("cmpl $1,ev_types+228(%rip)"); line("jne erist_rt_value_fault_internal");
     line("subq $"+format.integer(frame)+",%rsp");
     i=1; while i <= total { line("movq $0,"+slot(i)); i=i+1; }
     line("call evn_scope_enter"); line("movq %rax,"+format.integer(scopeOffset)+"(%rsp)");
     line("movq %rax,%rdi"); line("movq %rsp,%rsi");
     line("leaq erist_u2_list_classes(%rip),%rdx");
     line("movq $"+format.integer(total)+",%rcx"); line("call evn_bind_roots");
-    let inst be try get(fn.blocks,p,2);
-    let terminal be try get(fn.blocks,p,4);
+    let block be 1;
+    while block <= fn.blocks.length/5 {
+    output("erist_u2_block_"+format.integer(block)+":");
+    let inst be try get(fn.blocks,p,(block-1)*5+2);
+    let terminal be try get(fn.blocks,p,(block-1)*5+4);
     if inst == 0 { inst=terminal; }
     while inst != 0 {
         let off be (inst-1)*10; let code be try get(fn.instructions,p,off);
@@ -110,8 +121,43 @@ public function emit(fn identity build.Function,g identity aggregate.Registry,
             line("movabsq $"+format.integer(try get(fn.instructions,p,off+7))+",%rdi");
             line("call evn_int"); line("movq %rax,"+slot(result));
         }
+        if code == 2 {
+            line("movq $"+format.integer(try get(fn.instructions,p,off+7))+",%rdi");
+            line("call evn_bool"); line("movq %rax,"+slot(result));
+        }
+        if code == 18 {
+            try load(fn,p,inst,0,"%rdi"); try load(fn,p,inst,1,"%rsi");
+            line("movq 8(%rdi),%rdi"); line("cmpq 8(%rsi),%rdi");
+            let rel be try get(fn.instructions,p,off+7);
+            let cc be "e";
+            if rel == 2 { cc="ne"; } if rel == 3 { cc="l"; }
+            if rel == 4 { cc="le"; } if rel == 5 { cc="g"; } if rel == 6 { cc="ge"; }
+            if rel == 7 { cc="b"; } if rel == 8 { cc="be"; }
+            if rel == 9 { cc="a"; } if rel == 10 { cc="ae"; }
+            line("set"+cc+" %dil"); line("movzbl %dil,%edi");
+            line("call evn_bool"); line("movq %rax,"+slot(result));
+        }
+        if code == 6 or code == 7 {
+            let edges be 1; if code == 7 { edges=2;
+                try load(fn,p,inst,0,"%rax"); line("cmpq $0,8(%rax)");
+                line("je erist_u2_edge_"+format.integer(inst)+"_1");
+            }
+            let ordinal be 0;
+            while ordinal < edges {
+                output("erist_u2_edge_"+format.integer(inst)+"_"+format.integer(ordinal)+":");
+                let edge be try get(fn.instructions,p,off+7+ordinal);
+                try transfer(fn,p,edge,scratchOffset);
+                ordinal=ordinal+1;
+            }
+        }
         if code == 34 {
             let op be try get(fn.instructions,p,off+7);
+            if op == 4 or op == 6 {
+                try load(fn,p,inst,0,"%rdi"); line("call erist_rt_graph_object_of");
+                try load(fn,p,inst,1,"%rcx"); line("movq 8(%rcx),%rcx");
+                line("testq %rcx,%rcx"); line("js erist_u2_bounds_"+format.integer(inst));
+                line("cmpq 0(%rax),%rcx"); line("jae erist_u2_bounds_"+format.integer(inst));
+            }
             if op == 1 { line("movl $7,%edi"); line("xorl %esi,%esi"); line("call evn_object"); }
             if op == 2 { try load(fn,p,inst,0,"%rdi"); line("call evn_copy"); }
             if op == 3 or op == 4 {
@@ -142,6 +188,9 @@ public function emit(fn identity build.Function,g identity aggregate.Registry,
             line("movq "+format.integer(tempOffset)+"(%rsp),%rax");
             line("addq $"+format.integer(frame)+",%rsp"); line("ret");
         }
+        // Multi-block v1 conservatively retains all bounded SSA slots until
+        // scope exit; do NOT apply a straight-line last-use rule to backedges.
+        if fn.blocks.length == 5 {
         // Exact straight-line last-use release, including inputs of this op.
         i=1;
         while i <= total {
@@ -158,8 +207,90 @@ public function emit(fn identity build.Function,g identity aggregate.Registry,
             if not needed and code != 8 { line("movq $0,"+slot(i)); }
             i=i+1;
         }
+        }
         if inst == terminal { inst=0; }
         else { inst=try get(fn.instructions,p,off+9); if inst == 0 { inst=terminal; } }
     }
+    block=block+1;
+    }
+    i=1;
+    while i <= fn.instructions.length/10 {
+        let off be (i-1)*10;
+        if (try get(fn.instructions,p,off)) == 34 {
+            let op be try get(fn.instructions,p,off+7);
+            if op == 4 or op == 6 { try fault(fn,p,i,try get(fn.instructions,p,off+6)); }
+        }
+        i=i+1;
+    }
     output(".section .note.GNU-stack,\"\",@progbits");
+}
+
+// Simultaneous edge transfer: capture every source before overwriting any
+// destination. There are no calls/safe points while unregistered scratch lives.
+function transfer(fn identity build.Function,p identity budget.Phase,edge Int,scratch Int)
+    fails budget.LimitError {
+    let target be try get(fn.edges,p,(edge-1)*3);
+    let first be try get(fn.edges,p,(edge-1)*3+1);
+    let count be try get(fn.edges,p,(edge-1)*3+2);
+    let parameter be try get(fn.blocks,p,(target-1)*5); let i be 0;
+    while i < count {
+        let value be try get(fn.arguments,p,first+i);
+        line("movq "+slot(value)+",%rax");
+        line("movq %rax,"+format.integer(scratch+i*8)+"(%rsp)"); i=i+1;
+    }
+    i=0;
+    while i < count {
+        line("movq "+format.integer(scratch+i*8)+"(%rsp),%rax");
+        line("movq %rax,"+slot(parameter+i)); i=i+1;
+    }
+    line("jmp erist_u2_block_"+format.integer(target));
+}
+public function emitManaged(fn identity build.Function,g identity aggregate.Registry,
+    carrier aggregate.TypeId,p identity budget.Phase,table identity managed.Registry,
+    listType managed.TypeId)
+    fails budget.LimitError,canonical.InvalidIR,Unsupported,
+    managed.InvalidManagedTypes,graphVerify.InvalidGraph {
+    let phase be try budget.verificationPhase(table.owner);
+    let checked be managed.verify(table,g,phase)
+        else error budget.LimitError { try budget.finishPhase(phase); fail error; }
+        else error managed.InvalidManagedTypes { try budget.finishPhase(phase); fail error; }
+        else error graphVerify.InvalidGraph { try budget.finishPhase(phase); fail error; };
+    let description be managed.descriptor(table,phase,listType)
+        else error budget.LimitError { try budget.finishPhase(phase); fail error; };
+    try budget.finishPhase(phase);
+    try require(description.kind == 2 and description.elementDomain == 0 and
+        description.element == 2 and description.copyPolicy == 1,
+        "native List profile requires verified managed List of i64");
+    try emit(fn,g,carrier,p);
+}
+
+function fault(fn identity build.Function,p identity budget.Phase,inst Int,location Int)
+    fails budget.LimitError {
+    let data be fn.metadata; let current be location;
+    let source be try get(data.locations,p,(current-1)*7);
+    while source == 0 and (try get(data.locations,p,(current-1)*7+6)) > 0 {
+        current=try get(data.locations,p,(current-1)*7+6);
+        source=try get(data.locations,p,(current-1)*7);
+    }
+    let id be format.integer(inst); output(".section .rodata");
+    output("erist_u2_origin_"+id+":");
+    let length be 0;
+    if source > 0 {
+        let first be try get(data.sources,p,(source-1)*4);
+        length=try get(data.sources,p,(source-1)*4+1); let j be 0;
+        while j < length {
+            output(".byte "+format.integer(try get(data.bytes,p,first+j))); j=j+1;
+        }
+    }
+    let suffix be ":"+format.integer(try get(data.locations,p,(current-1)*7+4))+":"+
+        format.integer(try get(data.locations,p,(current-1)*7+5))+": ";
+    if source == 0 { suffix="synthetic UIR LocId "+format.integer(location)+": "; }
+    let j be 0;
+    while j < suffix.bytes.count { output(".byte "+format.integer(suffix.bytes[j])); j=j+1; }
+    length=length+suffix.bytes.count;
+    output(".text\nerist_u2_bounds_"+id+":");
+    line("movl $2,%edi");
+    line("leaq erist_u2_origin_"+id+"(%rip),%rsi");
+    line("movq $"+format.integer(length)+",%rdx"); line("call erist_rt_write_all");
+    line("jmp erist_rt_graph_fault_bounds");
 }

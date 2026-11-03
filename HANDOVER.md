@@ -18,14 +18,46 @@ No full U2 CI or completed-batch qualification has been initiated; unverified ne
 | Latest qualified production merge | [PR #110](https://github.com/eristavi/eristavi-lang/pull/110), merge `6b5fccecb8e79f7c9bcc8261faa9203f4c94262a`; subsequent main changes are documentation/evidence/opt-in probes |
 | U1a | Complete within its adopted scalar/SSA/call/Float/provenance/physical boundary; [#77](https://github.com/eristavi/eristavi-lang/issues/77) CLOSED |
 | U1b | Bounded reference immutable aggregates/linked execution accepted through [merged #106](https://github.com/eristavi/eristavi-lang/pull/106); [#73](https://github.com/eristavi/eristavi-lang/issues/73) CLOSED |
-| U2 | Canonical cleanup/failure and scoped roots, bounded SSA liveness, and opt-in Text/List/identity descriptor and operation contracts focused-tested; Stage-0/C/owned reference parity and a bounded single-block canonical List-i64 native execution slice passed focused checks; general managed operations/roots and full qualification OPEN; [#74](https://github.com/eristavi/eristavi-lang/issues/74) OPEN; draft/unmerged |
+| U2 | Canonical cleanup/failure and scoped roots, bounded SSA liveness, and opt-in Text/List/identity descriptor and operation contracts focused-tested; Stage-0/C/owned reference parity and a bounded canonical List-i64 native slice passed focused checks, with CFG/registry follow-up locally smoke-tested; general managed operations/roots and full qualification OPEN; [#74](https://github.com/eristavi/eristavi-lang/issues/74) OPEN; draft/unmerged |
 | U2 branch / PR | `compiler/u2-cleanup-foundation-20261102`; [#111](https://github.com/eristavi/eristavi-lang/pull/111) OPEN / DRAFT |
 | U3 / U4 | [#75](https://github.com/eristavi/eristavi-lang/issues/75) / [#102](https://github.com/eristavi/eristavi-lang/issues/102) OPEN; redesigned production integration/machine migration unimplemented |
 | Optimization | [#51](https://github.com/eristavi/eristavi-lang/issues/51) OPEN / PAUSED; no whole-compiler speedup or optimization completion claimed |
 | Production | Existing frontend/default compiler, frozen source behavior and 32-byte ABI retained; no new-UIR backend promotion |
 | Full owned compiler self-build | Explicitly excluded from ordinary work; NOT CERTIFIED |
 
-## Current U2 checkpoint — canonical List-i64 native execution
+## Active U2 checkpoint — List CFG, runtime and managed-registry integration
+
+Prior native-slice hosted workflow #41696878635 has scope and focused Linux
+smoke SUCCESS; the full platform matrix was intentionally SKIPPED.
+
+The optional List-i64 native adapter now emits canonical branches, joins and
+loop backedges with simultaneous edge moves (including cycles), within 64
+blocks/512 edges/128 values/256 instructions. Its managed entry independently
+verifies the managed List-i64 descriptor and full registry before consumption.
+Native entry checks Int/Bool/List runtime descriptor kinds and List element
+relationship. List bounds failures now retain source name/line/column.
+
+Multi-block roots use a deliberately conservative policy: every initialized
+boxed SSA slot remains registered through scope exit. This is bounded safe
+retention, NOT exact CFG liveness or general managed-local promotion. Single-
+block last-use clearing remains. A separate Python frame-layout oracle checks
+class count, zeroed root offsets, capacity and SysV alignment.
+
+Final coherent local smoke PASSED: 92 run, 89 passed, zero failures,
+three intentional skips in 255.341 seconds. Loop/snapshot and cyclic
+swap execution, descriptor mismatch, source bounds origin, managed registry
+and malformed CFG checks passed. Source-hashed outcomes and raw log:
+`docs/evidence/2026-11-03/u2-list-cfg-smoke.*`.
+Hosted exact-head smoke is pending; no full U2 qualification. Earlier fixture
+compilation failures required the existing concrete checkEdge specialization;
+they did not justify changing frozen compiler semantics.
+
+Next: exact CFG liveness/root publication with independent coverage and physical
+retention evidence; general managed type representation/local promotion,
+Text/nested List/identity and checked resource integration. PR #111 remains
+draft/unmerged and U2 #74 remains OPEN. No full owned self-build.
+
+## Earlier List-i64 native checkpoint — superseded by CFG follow-up
 
 Prior operation-shape hosted CI #41691861564 PASSED on exact head
 `4ebf6f153bd0f8f21349d25846528fe31bdbb1f3`.

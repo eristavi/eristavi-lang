@@ -7,7 +7,9 @@ import compiler.u1_aggregate_build as ab;
 import compiler.u1_aggregate_signature as sig;
 import compiler.u1_verify as verify;
 import compiler.u2_list_i64 as lists;
-function run() fails budget.LimitError,verify.InvalidIR,lists.Unsupported {
+import compiler.u2_managed_types as managed;
+import compiler.u1_aggregate_verify as graphVerify;
+function run() fails budget.LimitError,verify.InvalidIR,lists.Unsupported,managed.InvalidManagedTypes,graphVerify.InvalidGraph {
  let root be try budget.developmentRequest(); let shared be try budget.metadataOwner(root);
  let p be try budget.constructionPhase(shared); let data be try meta.create(shared,p);
  let entrySig be try meta.signature(data,p,[],[meta.i64()]);
@@ -29,7 +31,10 @@ function run() fails budget.LimitError,verify.InvalidIR,lists.Unsupported {
  let f6 be try meta.declaration(data,p,s6,lists.name(6),2,63,1);
  let s7 be try sig.signature(data,g,p,[],[]);
  let f7 be try meta.declaration(data,p,s7,lists.name(7),2,63,1);
- try aggregate.freeze(g); try meta.freeze(data); try budget.finishPhase(p);
+ try aggregate.freeze(g);
+ let managedTable be try managed.create(g,p);
+ let managedList be try managed.listOfBase(managedTable,p,intType);
+ try managed.freeze(managedTable); try meta.freeze(data); try budget.finishPhase(p);
  let owner be try budget.functionOwner(root,false); let phase be try budget.constructionPhase(owner);
  let fn be try build.create(data,entrySig,owner,phase); let b be try build.block(fn,[]);
  let zero be try build.integer(fn,b,0,loc); let one be try build.integer(fn,b,1,loc);
@@ -50,10 +55,13 @@ function run() fails budget.LimitError,verify.InvalidIR,lists.Unsupported {
  // Return the original element: native harness independently checks 10.
  try build.returnValues(fn,b,[old],loc); try ab.complete(fn,g);
  let read be try budget.constructionPhase(owner);
- try lists.emit(fn,g,carrier,read);
+ try lists.emitManaged(fn,g,carrier,read,managedTable,managedList);
  try budget.finishPhase(read); try build.close(fn); try budget.finishPhase(phase);
- try aggregate.close(g); try meta.close(data); try budget.close(owner); try budget.close(shared); try budget.close(root);
+ try managed.close(managedTable); try aggregate.close(g); try meta.close(data); try budget.close(owner); try budget.close(shared); try budget.close(root);
 }
 run() else error budget.LimitError { output(error.message); process.setExitCode(1); }
 else error verify.InvalidIR { output(error.message); process.setExitCode(1); }
+else error managed.InvalidManagedTypes { output(error.message); process.setExitCode(1); }
+else error graphVerify.InvalidGraph { output(error.message); process.setExitCode(1); }
 else error lists.Unsupported { output(error.message); process.setExitCode(1); };
+

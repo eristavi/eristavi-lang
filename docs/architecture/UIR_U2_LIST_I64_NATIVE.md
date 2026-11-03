@@ -13,7 +13,8 @@ have exact symbols, signatures, import kind, conservative effect mask 63 and
 version 1. The profile interprets one explicitly supplied empty aggregate TypeId
 as an opaque List-i64 carrier. It is NOT a generally constructible aggregate or
 universal managed type encoding. All aggregate make/get/set operations refuse.
-Only canonical i64 constants, direct calls and a scalar return are admitted.
+Canonical i64/predicate constants, integer comparisons, direct calls, typed
+jumps/branches and scalar returns are admitted. Unsupported opcodes refuse.
 
 The closed adapters are empty, copy, append, replace, count, get, and collect.
 List inputs/results use the opaque carrier; elements/index/count use i64.
@@ -21,13 +22,14 @@ Mutation adapters produce a new logical List SSA result; the owned boxed ABI is
 retained behind native adapters. This is distinct from the general managed
 registry, and is not production frontend integration or arbitrary List support.
 
-Bounds fixed before executing the candidate: one block, no parameters, one i64
+Bounds fixed before executing the candidate: up to 64 blocks and 512 edges, no entry parameters, one i64
 return, <=128 SSA values and <=256 instructions, seven exact declarations.
 Existing U1 owner/work/traffic/cancellation limits remain binding. No limit was
 raised. The deliberately simple last-use emitter scans later operand uses per
 value/instruction: O(V*N^2*P) bounded work and O(V) target frame storage, not a
 claimed scalable optimizer. Native root storage is one eight-byte word per SSA
-value, plus scope and scalar-return scratch and SysV alignment. This profile
+value, plus scope/scalar-return words and one eight-byte edge-capture word per
+SSA value, with SysV alignment. This profile
 must be redesigned/measured before lifting these bounds.
 
 ## Native execution and root lifetime
@@ -40,9 +42,11 @@ an instruction, words with no later canonical operand use are cleared. Values
 still used later survive explicit collect calls. The scope is released before
 returning the unboxed scalar, preventing abandoned stack-root access.
 
-The target adapter currently requires the owned Linux/System-V x86-64 graph
-runtime and its existing descriptor table (Int index 1, List-of-Int index 7).
-The native harness supplies that exact table. This is a closed test/runtime
+The target adapter requires the owned Linux/System-V x86-64 graph
+runtime and its descriptor table (Int index 1, Bool index 3, List-of-Int index 7).
+Native entry checks these descriptor kinds and the List element relationship
+before allocating or registering roots. The harness independently mutates the
+List descriptor to confirm rejection. This is a closed test/runtime
 boundary, not arbitrary foreign-runtime compatibility or a public ABI promise.
 
 ## Evidence and boundaries
@@ -54,10 +58,47 @@ reclamation through the existing independently checked harness. Negative List
 index and injected first graph-allocation refusal terminate; malformed import
 version/effects and malformed aggregate construction emit no native assembly.
 
-This does NOT close U2: multi-block managed types/phis/loops/recursion, managed
-local promotion, nested/Unicode/identity adapters, checked resource/failure
-integration, exact source fault reports, all allocation-failure boundaries,
+This does NOT close U2: general managed types, arbitrary CFG profiles/recursion,
+managed local promotion, nested/Unicode/identity adapters, checked resource/failure
+integration, general fault reports and all allocation-failure boundaries,
 independent machine-root proof and physical/latency qualification remain open.
 The generated path executes actual canonical UIR calls through owned runtime
 helpers; it does not route through the old source lowering. GNU as/ld and the
 bootstrap compiler remain test/build tools. Keep PR #111 draft and #74 open.
+
+
+## CFG, registry and fault-origin follow-up
+
+`emitManaged` freshly verifies the complete managed registry/structural graph,
+then requires an exact ordinary List descriptor with structural i64 elements.
+Foreign, unsupported-version or wrong-family descriptors refuse before assembly.
+The structural carrier remains the selected private legal representation; this
+is not a new generic canonical managed type encoding. The lower-level `emit`
+entry retains its explicit closed-carrier contract for compatibility.
+
+Each canonical block has its own machine label. Every edge captures its entire
+source tuple before destination stores, then jumps to its target. This handles
+cyclic parallel moves and backedges without allocating or collecting while edge
+scratch is live. No global instruction-ID execution order is assumed.
+
+For multi-block functions, all <=128 initialized SSA root slots are retained
+until scope exit. Re-executed definitions replace their previous pointers.
+This conservative, bounded policy is safe across loops but may retain dead
+snapshots longer; it is NOT an exact multi-block liveness publication proof.
+The independent Python frame oracle checks the known fixture's class count,
+zeroed nonoverlapping root offsets and SysV-aligned root/scope/edge capacity.
+The existing single-block last-use clearing remains unchanged.
+
+List get/replace perform a checked index preflight through the owned exact
+object lookup. A bounds fault prints immutable logical source name, line and
+column using the existing EINTR/partial-write-safe writer, then takes the
+existing terminal bounds path. Synthetic locations follow their primary origin
+chain or receive an explicit synthetic LocId label. No source text is reopened
+or incorrectly attached from a different revision. This covers List bounds
+origins, not every possible target fault or diagnostic origin chain.
+
+Native probes cover growing a loop-carried List while an original snapshot
+retains count 1, a cyclic swap returning 20/10, explicit GC and full reclamation.
+Wrong managed family/version, malformed CFG edge, runtime descriptor mismatch,
+source bounds origin and independent root-frame layout are tested separately.
+No full U2 qualification, production switch or milestone closure follows.
