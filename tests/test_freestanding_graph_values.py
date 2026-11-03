@@ -326,6 +326,118 @@ _start:
 '''+FINISH)
         self.assertEqual((result.returncode,result.stdout,result.stderr),(0,b'rooted\nrooted\n',b''))
 
+    def test_u2_saved_failure_root_survives_explicit_gc_and_releases(self):
+        # U2 native-adapter acceptance slice: exercise the EXISTING owned
+        # failure root/collector ABI, not the canonical UIR code generator.
+        # The secondary context is separately tested by the typed U2 oracle;
+        # this probe only proves a saved typed primary with managed Text.
+        runtime = self.runtime
+        needle = 'erist_rt_text_collect:\n'
+        self.assertEqual(runtime.count(needle), 1)
+        runtime = runtime.replace(
+            needle,
+            needle + '    incq .Lu2_forced_gc_calls(%rip)\n', 1)
+        runtime += '\n.bss\n.p2align 3\n.Lu2_forced_gc_calls:\n.quad 0\n'
+        result = self.run_probe('u2-saved-failure-explicit-gc', r'''
+.text
+.globl _start
+_start:
+    xorl %ebp,%ebp
+    call evn_scope_enter
+    movq %rax,%r12
+    movq %rax,%rdi
+    leaq .Lu2_root_key(%rip),%rsi
+    leaq .Lu2_root_class(%rip),%rdx
+    movl $1,%ecx
+    call evn_bind_roots
+    call evn_frame
+    movq %rax,%r13
+    movq %rax,%rdi
+    call setjmp
+    testq %rax,%rax
+    jne .Lu2_caught
+    # Build the typed Problem object and its owned Text payload.
+    movl $42,%edi
+    call evn_int
+    movq %rax,%r14
+    leaq .Lu2_payload(%rip),%rdi
+    movl $15,%esi
+    call evn_text
+    movq %rax,%r15
+    movl $11,%edi
+    movl $2,%esi
+    call evn_object
+    movq %rax,%rbx
+    movq %rax,%rdi
+    xorl %esi,%esi
+    movq %r14,%rdx
+    call evn_init
+    movq %rbx,%rdi
+    movl $1,%esi
+    movq %r15,%rdx
+    call evn_init
+    movq %rbx,%rdi
+    movl $1,%esi
+    call evn_fail
+    jmp .Lgraph_test_fail
+.Lu2_caught:
+    movq %r13,%rdi
+    call evn_pop
+    call evn_saved
+    # A class-5 saved-failure root must survive explicit slot and graph GC.
+    movq %rax,.Lu2_root_key(%rip)
+    call erist_rt_failure_clear
+    movl $4,%r14d
+.Lu2_collect_while_rooted:
+    xorl %edi,%edi
+    call erist_rt_slots_collect
+    call erist_rt_text_collect
+    call erist_rt_live_failures
+    cmpq $1,%rax
+    jne .Lgraph_test_fail
+    decq %r14
+    jne .Lu2_collect_while_rooted
+    movq .Lu2_root_key(%rip),%rdi
+    movl $11,%esi
+    call evn_match
+    cmpq $1,%rax
+    jne .Lgraph_test_fail
+    movq .Lu2_root_key(%rip),%rdi
+    movl $12,%esi
+    call evn_error
+    movq %rax,%rdi
+    xorl %esi,%esi
+    call evn_member
+    movq %rax,%rdi
+    call evn_output
+    # No root remains after scope exit; collector must reclaim the record.
+    movq $0,.Lu2_root_key(%rip)
+    call evn_void
+    movq %r12,%rdi
+    movq %rax,%rsi
+    call evn_scope_leave
+    xorl %edi,%edi
+    call erist_rt_slots_collect
+    call erist_rt_text_collect
+    call erist_rt_live_failures
+    testq %rax,%rax
+    jne .Lgraph_test_fail
+    cmpq $5,.Lu2_forced_gc_calls(%rip)
+    jb .Lgraph_test_fail
+    jmp .Lgraph_finish
+.bss
+.p2align 3
+.Lu2_root_key:
+.quad 0
+.section .rodata
+.Lu2_root_class:
+.byte 5
+.Lu2_payload:
+.ascii "u2-primary-text"
+'''+FINISH, runtime=runtime)
+        self.assertEqual((result.returncode,result.stdout,result.stderr),
+                         (0,b'u2-primary-text\n',b''))
+
     def test_owned_context_restores_callee_registers_stack_and_fp_control(self):
         result=self.run_probe('graph-context',r'''
 .text
