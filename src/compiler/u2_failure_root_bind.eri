@@ -20,7 +20,7 @@ public type Pin {
     target build.BlockId;
     slot build.ValueId;
     typeIndex Int;
-    context identity failure.Context;
+    context maybe identity failure.Context;
     allocation identity budget.Allocation;
     closed Bool;
 }
@@ -31,14 +31,17 @@ public function verify(routine identity build.Function,graph identity aggregate.
     phase identity budget.Phase,pair continuation.Pair,pin identity Pin)
     returns Bool fails budget.LimitError,continuation.InvalidBinding,InvalidRoot {
     let valid be try continuation.verify(routine,graph,phase,pair);
+    let pinned be pin.context;
     try require(not pin.closed and pin.owner == routine.owner and
         pin.functionKey == routine.key and pin.typeKey == graph.key and
         pin.target.owner == routine.key and pin.target.index == pair.failure.index and
-        pin.slot.owner == routine.key and
-        pin.context.owner == routine.owner and not pin.context.closed and
-        pin.context.primary != none and
+        pin.slot.owner == routine.key and pinned != none and
         pin.allocation.owner == routine.owner and pin.allocation.state == 0,
         "closed, foreign or incomplete canonical failure root");
+    if pinned != none {
+        try require(pinned.owner == routine.owner and not pinned.closed and
+            pinned.primary != none, "canonical pin lost its typed primary");
+    }
     let base be (pair.failure.index-1)*5;
     let start be try words.get(routine.blocks,phase,base);
     let count be try words.get(routine.blocks,phase,base+1);
@@ -72,13 +75,14 @@ public function create(routine identity build.Function,graph identity aggregate.
         typeKey=graph.key; target=pair.failure; slot=slot; typeIndex=expected.index;
         context=context; allocation=control; closed=false; };
     let valid be verify(routine,graph,phase,pair,pin)
-        else error InvalidRoot { try budget.release(control); pin.closed=true; fail error; }
-        else error continuation.InvalidBinding { try budget.release(control); pin.closed=true; fail error; }
-        else error budget.LimitError { try budget.release(control); pin.closed=true; fail error; };
+        else error InvalidRoot { try budget.release(control); pin.context=none; pin.closed=true; fail error; }
+        else error continuation.InvalidBinding { try budget.release(control); pin.context=none; pin.closed=true; fail error; }
+        else error budget.LimitError { try budget.release(control); pin.context=none; pin.closed=true; fail error; };
     return pin;
 }
 public function close(pin identity Pin) fails budget.LimitError,InvalidRoot {
     try require(not pin.closed,"root pin already released");
-    pin.closed=true;
     try budget.release(pin.allocation);
+    pin.context=none;
+    pin.closed=true;
 }
