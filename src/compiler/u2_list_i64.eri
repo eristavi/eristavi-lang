@@ -9,6 +9,8 @@ import compiler.u1_aggregate_signature as signatures;
 import compiler.u1_verify as canonical;
 import compiler.format as format;
 import compiler.u2_managed_types as managed;
+import compiler.u2_invoke_contract as contracts;
+import compiler.u2_ssa_liveness as ssa;
 import compiler.u1_aggregate_verify as graphVerify;
 public error Unsupported { message Text; }
 function require(ok Bool,message Text) fails Unsupported {
@@ -85,10 +87,9 @@ function load(fn identity build.Function,p identity budget.Phase,inst Int,n Int,
     let value be try get(fn.operands,p,first+n);
     line("movq "+slot(value)+","+reg);
 }
-public function emit(fn identity build.Function,g identity aggregate.Registry,
-    carrier aggregate.TypeId,p identity budget.Phase)
-    fails budget.LimitError,canonical.InvalidIR,Unsupported {
-    let revision be try verify(fn,g,carrier,p);
+function emitNative(fn identity build.Function,g identity aggregate.Registry,
+    carrier aggregate.TypeId,p identity budget.Phase,plan maybe identity ssa.Plan)
+    fails budget.LimitError,ssa.InvalidLiveness {
     let total be fn.values.length/4;
     let scopeOffset be total*8; let tempOffset be scopeOffset+8;
     let scratchOffset be tempOffset+8;
@@ -146,7 +147,7 @@ public function emit(fn identity build.Function,g identity aggregate.Registry,
             while ordinal < edges {
                 output("erist_u2_edge_"+format.integer(inst)+"_"+format.integer(ordinal)+":");
                 let edge be try get(fn.instructions,p,off+7+ordinal);
-                try transfer(fn,p,edge,scratchOffset);
+                try transfer(fn,p,edge,scratchOffset,plan);
                 ordinal=ordinal+1;
             }
         }
@@ -188,8 +189,8 @@ public function emit(fn identity build.Function,g identity aggregate.Registry,
             line("movq "+format.integer(tempOffset)+"(%rsp),%rax");
             line("addq $"+format.integer(frame)+",%rsp"); line("ret");
         }
-        // Multi-block v1 conservatively retains all bounded SSA slots until
-        // scope exit; do NOT apply a straight-line last-use rule to backedges.
+        // Multi-block intra-block values are retained until the next edge;
+        // verified successor live-in drives precise List edge release.
         if fn.blocks.length == 5 {
         // Exact straight-line last-use release, including inputs of this op.
         i=1;
@@ -225,10 +226,64 @@ public function emit(fn identity build.Function,g identity aggregate.Registry,
     output(".section .note.GNU-stack,\"\",@progbits");
 }
 
+// Private List carrier root retirement uses independently recomputed canonical
+// SSA facts. Keep the established 128-value profile: >32 tracked List values
+// use the previously validated conservative retention behavior.
+function closeProof(plan identity ssa.Plan,table identity contracts.Registry)
+    fails budget.LimitError {
+    try ssa.close(plan);
+    try contracts.close(table);
+}
+public function emit(fn identity build.Function,g identity aggregate.Registry,
+    carrier aggregate.TypeId,p identity budget.Phase)
+    fails budget.LimitError,canonical.InvalidIR,Unsupported {
+    let revision be try verify(fn,g,carrier,p);
+    let tracked be 0; let value be 1;
+    while value <= fn.values.length/4 {
+        if (try get(fn.values,p,(value-1)*4)) == carrier.index {
+            tracked=tracked+1;
+        }
+        value=value+1;
+    }
+    if tracked > 32 {
+        emitNative(fn,g,carrier,p,none)
+            else error ssa.InvalidLiveness {
+                fail Unsupported { message=error.message; };
+            };
+        return;
+    }
+    let metadataPhase be try budget.constructionPhase(fn.metadata.owner);
+    let table be contracts.create(fn.metadata,g,metadataPhase)
+        else error budget.LimitError { try budget.finishPhase(metadataPhase); fail error; };
+    contracts.freeze(table)
+        else error budget.LimitError {
+            try contracts.close(table); try budget.finishPhase(metadataPhase); fail error;
+        };
+    try budget.finishPhase(metadataPhase);
+    let plan be ssa.create(fn,g,table,p,[carrier])
+        else error ssa.InvalidLiveness {
+            try contracts.close(table); fail Unsupported { message=error.message; };
+        }
+        else error canonical.InvalidIR { try contracts.close(table); fail error; }
+        else error budget.LimitError { try contracts.close(table); fail error; };
+    let proof be ssa.verify(plan,fn,g,table,p)
+        else error ssa.InvalidLiveness {
+            try closeProof(plan,table); fail Unsupported { message=error.message; };
+        }
+        else error canonical.InvalidIR { try closeProof(plan,table); fail error; }
+        else error budget.LimitError { try closeProof(plan,table); fail error; };
+    emitNative(fn,g,carrier,p,plan)
+        else error ssa.InvalidLiveness {
+            try closeProof(plan,table); fail Unsupported { message=error.message; };
+        }
+        else error budget.LimitError { try closeProof(plan,table); fail error; };
+    try closeProof(plan,table);
+}
+
 // Simultaneous edge transfer: capture every source before overwriting any
 // destination. There are no calls/safe points while unregistered scratch lives.
-function transfer(fn identity build.Function,p identity budget.Phase,edge Int,scratch Int)
-    fails budget.LimitError {
+function transfer(fn identity build.Function,p identity budget.Phase,edge Int,scratch Int,
+    plan maybe identity ssa.Plan) fails budget.LimitError,ssa.InvalidLiveness {
     let target be try get(fn.edges,p,(edge-1)*3);
     let first be try get(fn.edges,p,(edge-1)*3+1);
     let count be try get(fn.edges,p,(edge-1)*3+2);
@@ -242,6 +297,20 @@ function transfer(fn identity build.Function,p identity budget.Phase,edge Int,sc
     while i < count {
         line("movq "+format.integer(scratch+i*8)+"(%rsp),%rax");
         line("movq %rax,"+slot(parameter+i)); i=i+1;
+    }
+    // There is no allocating call between capture, transfer and dead-root release.
+    // If the closed liveness profile is too large, retain the prior safe policy.
+    if plan != none {
+        let targetId be build.BlockId { owner=fn.key; index=target; };
+        let tracked be 0;
+        while tracked < plan.values.length/4 {
+            let value be try get(plan.values,p,tracked*4);
+            let valueId be build.ValueId { owner=fn.key; index=value; };
+            if not (try ssa.liveEntry(plan,fn,p,targetId,valueId)) {
+                line("movq $0,"+slot(value));
+            }
+            tracked=tracked+1;
+        }
     }
     line("jmp erist_u2_block_"+format.integer(target));
 }

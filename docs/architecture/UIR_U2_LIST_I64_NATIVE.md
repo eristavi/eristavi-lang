@@ -81,10 +81,27 @@ source tuple before destination stores, then jumps to its target. This handles
 cyclic parallel moves and backedges without allocating or collecting while edge
 scratch is live. No global instruction-ID execution order is assumed.
 
-For multi-block functions, all <=128 initialized SSA root slots are retained
-until scope exit. Re-executed definitions replace their previous pointers.
-This conservative, bounded policy is safe across loops but may retain dead
-snapshots longer; it is NOT an exact multi-block liveness publication proof.
+For multi-block functions with at most **32 selected List-carrier SSA values**,
+the emitted edge first captures the complete outgoing tuple and installs all
+destination parameters without any allocating call. It then reads independently
+recomputed, revision-bound canonical SSA live-in facts for that particular
+successor and emits root-word clears for List-carrier ValueIds that cannot be
+used on that successor. A backedge therefore does not retain the old List
+snapshots of previous iterations solely because they appeared earlier in the
+same function. The published root table and class/slot offsets do not change.
+Scalar boxed values and List values that die *within* a block remain
+conservatively rooted until the next edge or scope exit. The established
+128-value native profile remains available: more than 32 selected List values
+fall back to the former conservative all-block retention behavior.
+
+The plan is constructed using a private frozen non-fallible contract registry,
+then independently reverified against the exact canonical Function/revision
+before emitting machine text. It is closed after emission or on reported errors.
+The tracked carrier is legal only under the separately verified closed
+List-of-i64 managed descriptor; there is no general managed-type encoding.
+This is **successor-edge List root retirement**, NOT full per-instruction
+CFG/SSA exact release, not complete machine root-map validation, and not
+general Text/identity/cleanup root acceptance.
 The independent Python frame oracle checks the known fixture's class count,
 zeroed nonoverlapping root offsets and SysV-aligned root/scope/edge capacity.
 The existing single-block last-use clearing remains unchanged.
