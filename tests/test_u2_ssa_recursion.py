@@ -57,9 +57,9 @@ class U2SSARecursionTests(unittest.TestCase):
         self.assertGreater(end,start)
         source=source[:start]+(
             "function all() returns Bool fails budget.LimitError,"
-            "verify.InvalidIR,ssa.InvalidLiveness,ProbeError {\\n"
-            "    return try exercise(-1);\\n"
-            "}\\n"
+            "verify.InvalidIR,ssa.InvalidLiveness,ProbeError {\n"
+            "    return try exercise(-1);\n"
+            "}\n"
         )+source[end:]
         source=source.replace(
             "function all() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError {",
