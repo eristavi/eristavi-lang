@@ -74,3 +74,7 @@ saved failure retention and ordered secondary managed Text under
 explicit collector calls. This is the existing runtime's direct root
 ABI, not the canonical root-map emitter. U2 #74 remains OPEN and draft
 PR #111 must not merge until full acceptance.
+
+## Focused verification evidence — 3 November 2026
+
+[Run #41599088883](https://github.com/eristavi/eristavi-lang/actions/runs/41599088883) at exact code head `24e6b4d1e84ba7fb500bfe609534102d3467ead6` succeeded: 80 executed, 77 passed, 0 failed, 3 opt-in skips. The newly added six-invoke fixture includes a disconnected/unreachable checked acquire, checks the exact six entries, independently mutates **every record field**, removes a row, forges a revision, and verifies restored canonical map acceptance. Bounded metadata collection and its verifier are now focused-tested. Native **machine** slot publication and all-instruction live-root coverage through generated backend remain unimplemented; do not infer U2 milestone acceptance.
