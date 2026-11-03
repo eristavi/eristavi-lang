@@ -87,7 +87,9 @@ class U2NativeRootPublishTests(unittest.TestCase):
                 "graph identity aggregate.Registry,phase identity budget.Phase)"
                 " returns Bool fails budget.LimitError,rootMap.InvalidRoots {\n"
                 "    let proof be machineSlots.verify(plan,map,fn,graph,phase)"
-                " else error machineSlots.InvalidSlots { return true; };\n"
+                " else error machineSlots.InvalidSlots { return true; }"
+                " else error budget.LimitError { fail error; }"
+                " else error rootMap.InvalidRoots { fail error; };\n"
                 "    return false;\n"
                 "}\n"
             )
