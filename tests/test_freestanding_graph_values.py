@@ -552,6 +552,9 @@ _start:
     call erist_rt_live_failures
     cmpq $2,%rax
     jne .Lgraph_test_fail
+    call erist_rt_text_live_buffers
+    cmpq $2,%rax
+    jb .Lgraph_test_fail
     decq %r14
     jne .Lu2_pair_collect
     movq .Lu2_pair_root(%rip),%rdi
