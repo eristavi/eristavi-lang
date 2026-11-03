@@ -64,6 +64,7 @@ SMOKE_TESTS=(
     'test_runtime_lookup_caches.RuntimeLookupCacheTests.test_owned_slot_scratch_reuse_zeroing_nesting_and_refusal',
     'test_freestanding_text_roots.FreestandingTextRootTests.test_registered_roots_bound_loop_slots_and_preserve_pending_results',
     'test_freestanding_graph_values.FreestandingGraphValueTests.test_interior_and_saved_failure_roots_are_validated_and_collected',
+    'test_freestanding_graph_values.FreestandingGraphValueTests.test_u2_saved_failure_root_survives_explicit_gc_and_releases',
     'test_owned_runtime_allocation_failures.OwnedRuntimeAllocationFailureTests.test_text_publication_and_shared_capacity_failure_boundaries',
 
     'test_u1_verifier.U1VerifierTests.test_malformed_ir_and_budget_protocol',
