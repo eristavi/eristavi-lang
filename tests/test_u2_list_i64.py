@@ -104,11 +104,11 @@ _start:
                 # A CFG edge must clear at least one dead managed slot only
                 # after its simultaneous captures/stores and before jumping.
                 if fixture_name == 'loop' and expression == 'oldCount':
-                    parts=re.split(r'erist_u2_edge_\\d+_\\d+:\\n',emit.stdout)[1:]
+                    parts=re.split(r'erist_u2_edge_\d+_\d+:\n',emit.stdout)[1:]
                     edge_bodies=[part.split('jmp erist_u2_block_',1)[0]
                                  for part in parts if 'jmp erist_u2_block_' in part]
                     self.assertTrue(edge_bodies)
-                    self.assertTrue(any(re.search(r'movq \\$0,\\d+\\(%rsp\\)',p)
+                    self.assertTrue(any(re.search(r'movq \$0,\d+\(%rsp\)',p)
                                         for p in edge_bodies),
                                     'no dead List roots retired on CFG edges')
                     self.assertIn('call erist_rt_text_collect',emit.stdout)
