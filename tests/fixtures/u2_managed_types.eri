@@ -1,0 +1,122 @@
+// U2 managed Text/List/identity nominal relationships and corruption oracle.
+import std.process;
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+import compiler.u1_meta as meta;
+import compiler.u1_aggregate as aggregate;
+import compiler.u1_aggregate_verify as graphVerify;
+import compiler.u2_managed_types as managed;
+
+error ProbeError { message Text; }
+function check(ok Bool,message Text) fails ProbeError {
+    if not ok { fail ProbeError { message=message; }; }
+}
+function rejected(reg identity managed.Registry,graph identity aggregate.Registry,
+    phase identity budget.Phase) returns Bool
+    fails budget.LimitError,graphVerify.InvalidGraph {
+    let result be managed.verify(reg,graph,phase)
+        else error managed.InvalidManagedTypes { return true; }
+        else error budget.LimitError { fail error; }
+        else error graphVerify.InvalidGraph { fail error; };
+    return false;
+}
+function run() fails budget.LimitError,graphVerify.InvalidGraph,
+    managed.InvalidManagedTypes,ProbeError {
+    let request be try budget.developmentRequest();
+    let shared be try budget.metadataOwner(request);
+    let phase be try budget.constructionPhase(shared);
+    let graph be try aggregate.create(shared,phase);
+    let i64 be try aggregate.primitive(graph,meta.i64());
+    let primitivePair be try aggregate.aggregate(graph,phase,[i64,i64]);
+    try aggregate.freeze(graph);
+    let registry be try managed.create(graph,phase);
+    let textType be managed.text(registry);
+    let textList be try managed.listOfManaged(registry,phase,textType);
+    let textListAgain be try managed.listOfManaged(registry,phase,textType);
+    let nestedList be try managed.listOfManaged(registry,phase,textList);
+    let numberList be try managed.listOfBase(registry,phase,i64);
+    let boxed be try managed.identityOfBase(registry,phase,primitivePair);
+    let listOfHandles be try managed.listOfManaged(registry,phase,boxed);
+    let sharedList be try managed.identityOfManaged(registry,phase,textList);
+    let repeated be try managed.identityOfManaged(registry,phase,textList);
+    let kind be try managed.descriptor(registry,phase,textType);
+    let listKind be try managed.descriptor(registry,phase,textList);
+    let identityKind be try managed.descriptor(registry,phase,sharedList);
+    try check(textList.index == textListAgain.index and
+        sharedList.index == repeated.index and
+        kind.kind == 1 and kind.copyPolicy == 1 and
+        listKind.kind == 2 and listKind.elementDomain == 1 and
+        listKind.element == textType.index and listKind.copyPolicy == 1 and
+        identityKind.kind == 3 and identityKind.element == textList.index and
+        identityKind.copyPolicy == 2,
+        "incorrect canonical Text/List/identity descriptors");
+    try check(try managed.deepFixable(registry,phase,textType) and
+        try managed.deepFixable(registry,phase,textList) and
+        try managed.deepFixable(registry,phase,nestedList) and
+        try managed.deepFixable(registry,phase,numberList) and
+        not (try managed.deepFixable(registry,phase,boxed)) and
+        not (try managed.deepFixable(registry,phase,listOfHandles)) and
+        not (try managed.deepFixable(registry,phase,sharedList)),
+        "managed deep-fixability does not propagate identity");
+    try managed.freeze(registry);
+    let review be try managed.verify(registry,graph,phase);
+    try check(review.types == 7 and review.lists == 4 and
+        review.identities == 2,"incorrect managed type inventory");
+    let baseline be shared.live;
+    let changed be registry.records.frozen;
+    registry.records.frozen=false;
+    let saved be try words.get(registry.records,phase,3);
+    try words.set(registry.records,phase,3,2);
+    registry.records.frozen=true;
+    try check(try rejected(registry,graph,phase),"forged Text copy policy accepted");
+    registry.records.frozen=false;
+    try words.set(registry.records,phase,3,saved);
+    registry.records.frozen=true;
+    let pointer be (nestedList.index-1)*4+2;
+    saved=try words.get(registry.records,phase,pointer);
+    registry.records.frozen=false;
+    try words.set(registry.records,phase,pointer,review.types+1);
+    registry.records.frozen=true;
+    try check(try rejected(registry,graph,phase),"forward List element accepted");
+    registry.records.frozen=false;
+    try words.set(registry.records,phase,pointer,saved);
+    registry.records.frozen=true;
+    let row be (sharedList.index-1)*4+3;
+    saved=try words.get(registry.records,phase,row);
+    registry.records.frozen=false;
+    try words.set(registry.records,phase,row,1);
+    registry.records.frozen=true;
+    try check(try rejected(registry,graph,phase),"identity alias changed into value copy");
+    registry.records.frozen=false;
+    try words.set(registry.records,phase,row,saved);
+    registry.records.frozen=true;
+    registry.version=2;
+    try check(try rejected(registry,graph,phase),"unsupported type version accepted");
+    registry.version=1;
+    let restored be try managed.verify(registry,graph,phase);
+    try check(restored.types == review.types and shared.live == baseline,
+        "restored managed registry was rejected or leaked verification backing");
+    try managed.close(registry);
+    try aggregate.close(graph);
+    try check(shared.live == 0 and shared.pending == 0,
+        "managed type registry did not reclaim owner backing");
+    try budget.finishPhase(phase);
+    try budget.close(shared);
+    try check(request.live == 0 and request.pending == 0,
+        "managed type owner leaked into request");
+    try budget.close(request);
+    output("u2-managed-types:ok");
+}
+run()
+else error budget.LimitError {
+    output("limit:"+error.message); process.setExitCode(1);
+}
+else error graphVerify.InvalidGraph {
+    output("graph:"+error.message); process.setExitCode(1);
+}
+else error managed.InvalidManagedTypes {
+    output("managed:"+error.message); process.setExitCode(1);
+}
+else error ProbeError {
+    output("probe:"+error.message); process.setExitCode(1);
+};
