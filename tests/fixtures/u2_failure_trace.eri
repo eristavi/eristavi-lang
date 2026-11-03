@@ -49,8 +49,8 @@ function run() fails budget.LimitError,verify.InvalidPlan,failure.InvalidContext
                 }
             }
             try check(result.primaryType == expectedPrimary,"wrong retained primary");
-            let fails be mask[0]+mask[1]+mask[2]; let secondary be fails;
-            if body == 0 and fails > 0 { secondary=fails-1; }
+            let failureCount be mask[0]+mask[1]+mask[2]; let secondary be failureCount;
+            if body == 0 and failureCount > 0 { secondary=failureCount-1; }
             try check(result.secondary == secondary,"wrong secondary failure count");
             if expectedPrimary == 0 { try check(result.terminal == 0,"false failure"); }
             else { try check(result.terminal == 0-1,"false success"); }
