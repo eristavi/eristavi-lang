@@ -21,7 +21,7 @@ class U2SSALivenessTests(unittest.TestCase):
             "table identity contracts.Registry,phase identity budget.Phase)"
             " returns Bool fails budget.LimitError,canonical.InvalidIR {\n"
             "    let result be ssa.verify(plan,fn,graph,table,phase)"
-            " else error ssa.InvalidLiveness { return true; }" 
+            " else error ssa.InvalidLiveness { return true; }"
             " else error budget.LimitError { fail error; }"
             " else error canonical.InvalidIR { fail error; };\n"
             "    return false;\n"
