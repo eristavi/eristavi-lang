@@ -18,12 +18,22 @@ No full CI or completed-batch qualification has been initiated.
 | Latest qualified production merge | [PR #110](https://github.com/eristavi/eristavi-lang/pull/110), merge `6b5fccecb8e79f7c9bcc8261faa9203f4c94262a`; subsequent main changes are documentation/evidence/opt-in probes |
 | U1a | Complete within its adopted scalar/SSA/call/Float/provenance/physical boundary; [#77](https://github.com/eristavi/eristavi-lang/issues/77) CLOSED |
 | U1b | Bounded reference immutable aggregates/linked execution accepted through [merged #106](https://github.com/eristavi/eristavi-lang/pull/106); [#73](https://github.com/eristavi/eristavi-lang/issues/73) CLOSED |
-| U2 | Bounded canonical nested cleanup, typed 16-case failure matrix and canonical reference pin focused-tested; physical GC roots, managed values and final acceptance OPEN; [#74](https://github.com/eristavi/eristavi-lang/issues/74) OPEN; not complete, fully qualified or merged |
+| U2 | Canonical nested cleanup, typed 16-case matrix, reference root pin and owned-runtime allocation-pressure probe focused-tested; forced native GC roots, managed values and final acceptance OPEN; [#74](https://github.com/eristavi/eristavi-lang/issues/74) OPEN; not complete, fully qualified or merged |
 | U2 branch / PR | `compiler/u2-cleanup-foundation-20261102`; [#111](https://github.com/eristavi/eristavi-lang/pull/111) OPEN / DRAFT |
 | U3 / U4 | [#75](https://github.com/eristavi/eristavi-lang/issues/75) / [#102](https://github.com/eristavi/eristavi-lang/issues/102) OPEN; redesigned production integration/machine migration unimplemented |
 | Optimization | [#51](https://github.com/eristavi/eristavi-lang/issues/51) OPEN / PAUSED; no whole-compiler speedup or optimization completion claimed |
 | Production | Existing frontend/default compiler, frozen source behavior and 32-byte ABI retained; no new-UIR backend promotion |
 | Full owned compiler self-build | Explicitly excluded from ordinary work; NOT CERTIFIED |
+
+## Latest U2 consolidated and owned-runtime verification — 3 November 2026
+
+Two incremental exact-head focused Linux Clang CI gates now pass:
+- [Consolidated U2 validation #41593072164](https://github.com/eristavi/eristavi-lang/actions/runs/41593072164), head `bb338d651faff86005cd50ee184c81bdcea26f62`: **76 executed / 73 passed / 0 failed / 3 opt-in skipped**. Exercises the 16-case typed semantic matrix, canonical two-owner checked cleanup including inner-close failure, and independently rejects forged root type and released root pin.
+- [Owned runtime pressure #41593073584](https://github.com/eristavi/eristavi-lang/actions/runs/41593073584), head `faf6b4c9985040df7e565f48fd0222d1c4534941`: **77 executed / 74 passed / 0 failed / 3 opt-in skipped**. Builds, assembles and links a static Eristavi-owned-runtime program; preserves the reference failure-root pin through 384 temporary typed failure contexts, then closes all charged backing. Owned probe itself passed in 18.6 seconds; full focused smoke took 260.797 seconds.
+
+The tested `tests/test_u2_failure_root_binding.py` is promoted to the primary draft branch using the **exact passing Git blob** `c59ff7ca02601833874bf415a5dbf34ec3b9441a`, together with this documentation update. All other implementation/fixture files were already promoted byte-for-byte from passed PR #115 in commit `a841c38fbdc08a915e64f464b09278a372aa527f`. These are **focused branch-content equivalence checks, not exact-head four-platform qualification**. Do not confuse the owned reference pin/automatic allocation pressure with explicit forced GC traversal or a published native UIR safe-point root map. In particular, the three opt-in probes skipped by standard smoke still require separate evidence.
+
+**Remaining U2 acceptance gates:** canonical managed Text/List/identity with Unicode17 and copy/alias semantics; native rooted FailureContext with primary and ordered secondary payload survival under forced collections, allocations, unwinds and loops; real checked resource adapters and verified root-map publication; extensive negative/dead/loop/physical/RSS/failure-injection tests; Stage-0/current-native independent execution parity; four-platform completed-batch CI/qualification and explicit release review. PR #111 stays DRAFT, issue #74 stays OPEN, production main/ABI unchanged, optimization #51 paused.
 
 ## Current U2 accepted-development checkpoint — 3 November 2026
 
