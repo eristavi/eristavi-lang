@@ -443,7 +443,15 @@ _start:
     def test_u2_primary_and_secondary_survive_forced_gc_in_order(self):
         # Native runtime conformance only: this uses the pre-existing class-5
         # frame root, NOT a root table emitted by the new canonical UIR.
-        runtime = self.runtime
+        # The actual cleanup append service is provided by the resource
+        # profile, not by the graph-only runtime built for this test class.
+        generator = self.directory / 'u2-resource-runtime'
+        self.assertEqual(build_native(ROOT/'src/resource_value_runtime.eri',
+                                      generator, ROOT/'src'), 0)
+        emitted = subprocess.run([str(generator)], capture_output=True,
+                                 text=True, timeout=60)
+        self.assertEqual((emitted.returncode, emitted.stderr), (0, ''))
+        runtime = lifetime_tests.audit_slot_count(emitted.stdout)
         needle = 'erist_rt_text_collect:\n'
         self.assertEqual(runtime.count(needle), 1)
         runtime = runtime.replace(
