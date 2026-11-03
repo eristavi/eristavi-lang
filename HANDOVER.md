@@ -60,31 +60,34 @@ the standalone fixture did not instantiate the already-accepted
 uses the established U1b fixture pattern, without modifying compiler
 semantics or source/runtime ABI.
 
-**Operation-contract correction after first CI (2026-11-03):**
-[CI #41630206523](https://github.com/eristavi/eristavi-lang/actions/runs/41630206523)
-finished FAILED on source `ae33a17a25a22eb354832104f33370e7b9dff484`:
-85 run / 81 passed / 1 failed / 3 skipped. The ONLY failing
-`test_u2_managed_types` reported the parser's explicit
-`expected '{' after else` at operation-contract line 44, because this
-language does not permit the invented `else if` shorthand. All preceding
-U2 tests passed. The correction uses separate mutually exclusive `if`
-branches, conservatively considers Text copies allocating until proven
-otherwise, and rejects a mismatched copy/alias descriptor policy. The
-new combined test batch also adds old Stage-0/C-native/owned-runtime parity
-for Unicode17 Text views, List value copies and explicit identity aliases.
-**New exact-head focused CI is pending; no green claim.**
+**Managed operation contract focused verification (2026-11-03):**
+[CI #41631072215](https://github.com/eristavi/eristavi-lang/actions/runs/41631072215)
+SUCCESS at exact implementation head
+`0f7d8f8724addb1a952a0d3dc0d4a584cd39050b`:
+85 run / **82 passed / 0 failed / 3 intentionally skipped**.
+The `test_u2_managed_types` fixture exercised the closed version-one
+copy/alias/List/Text Unicode17 operation selector and negative operation
+refusals. The prior #41630206523 failed only because the new module
+used unsupported `else if` syntax; the corrected disjoint `if` branches
+compiled and passed. Text copy is conservatively classified as
+potentially allocating, requiring safe-point root preservation until
+a target proves otherwise.
 
-**New operation contract batch — unverified:** Created opt-in
-`src/compiler/u2_managed_operation_contract.eri` and augmented
-`tests/fixtures/u2_managed_types.eri` to select private version-one
-managed operation obligations. It distinguishes ordinary List value
-copy/snapshot, identity aliasing, no-value List mutations, indexed bounds
-faults, structural List equality, Text scalar-sequence equality,
-Unicode 17 grapheme/scalar/byte views and identity comparison.
-The private operation selector **only validates semantics and root/alloc
-requirements**, not executable canonical UIR opcodes or generated assembly.
-The newly changed operation-contract and independent runtime-parity code has **no passing CI yet**. Run focused smoke on
-the exact source head; fix all failures before marking green.
+**Additional parity coverage pending:** The same code revision contains
+`test_u2_managed_unicode17_list_value_and_identity_alias_parity` in
+`tests/test_freestanding_graph_values.py` but the smoke runner listed only
+selected methods of that class, so the new method was **NOT run** by
+#41631072215. The current change explicitly registers it in
+`tools/run_ci_tests.py` to compare Stage-0, C-native and Linux owned
+runtime behavior, including Unicode17 grapheme/scalar/byte counts,
+non-normalizing equality, List snapshot semantics, identity aliasing,
+and final managed heap reclamation. **The new exact-head CI remains PENDING**;
+do not claim native parity green until that test reports `ok`.
+
+The operation contract remains a private semantic/effects/root-obligation
+gate, not new executable canonical UIR opcodes or runtime adapters.
+No public ABI or frozen language behavior was changed; production `main`
+is untouched.
 
 **Phase 1 remaining:** Author versioned canonical UIR managed operation
 and value representation with independent verification; connect to real

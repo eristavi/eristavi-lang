@@ -101,5 +101,7 @@ Unicode17 grapheme/scalar/UTF-8 byte counts, stable copied List length,
 explicit identity mutation sharing and distinct-identity inequality.
 The owned runtime probe also checks final graph/Text reclamation.
 This is a prerequisite behavior oracle for future redesigned UIR lowering,
-**not** proof that the new UIR path executes managed operations. The exact
-source-head smoke outcome remains pending.
+**not** proof that the new UIR path executes managed operations. The operation-selection fixture passed focused smoke
+#41631072215 (85 run / 82 passed / 0 failed / 3 skipped), but that
+run did not select this newly added parity method. The test has now been
+explicitly added to the smoke manifest; its exact-head outcome is pending.
