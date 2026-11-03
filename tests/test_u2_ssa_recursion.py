@@ -49,6 +49,12 @@ class U2SSARecursionTests(unittest.TestCase):
         source=source.replace(
             "returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError {",
             "returns Bool fails budget.LimitError,verify.InvalidIR,ssa.InvalidLiveness,ProbeError {",1)
+        source=source.replace(
+            "let normal be try exercise(-1);",
+            "return try exercise(-1);",1)
+        source=source.replace(
+            "function all() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError {",
+            "function all() returns Bool fails budget.LimitError,verify.InvalidIR,ssa.InvalidLiveness,ProbeError {",1)
         exit_anchor="else error ProbeError {"
         self.assertIn(exit_anchor,source)
         source=source.replace(exit_anchor,
