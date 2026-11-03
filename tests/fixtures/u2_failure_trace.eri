@@ -14,6 +14,7 @@ function run() fails budget.LimitError,verify.InvalidPlan,failure.InvalidContext
     let shared be try budget.metadataOwner(root);
     let mp be try budget.constructionPhase(shared);
     let data be try meta.create(shared,mp);
+    let signature be try meta.signature(data,mp,[meta.i64()],[meta.i64()]);
     let source be try meta.source(data,mp,"trace.eri","0000000000000000000000000000000000000000000000000000000000000000",64);
     let close be try meta.location(data,mp,source,0,8,0,1,1);
     let exit be try meta.location(data,mp,source,8,16,8,2,1);
