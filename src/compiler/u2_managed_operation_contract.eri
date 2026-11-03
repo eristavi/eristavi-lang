@@ -10,6 +10,7 @@
 // Text views select 1 graphemes, 2 scalars, 3 bytes (Unicode 17).
 import compiler.u1_budget as budget;
 import compiler.u2_managed_types as managed;
+import compiler.u1_aggregate_verify as graphVerify;
 
 public type Contract {
     version Int; operation Int; typeIndex Int; kind Int;
@@ -89,4 +90,74 @@ public function select(table identity managed.Registry,
 // adapter validators prove the actual operation and live-value locations.
 public function requiresSafePoint(contract Contract) returns Bool {
     return contract.mayAllocate or contract.requiresRoot;
+}
+
+// Canonical SSA shape: a source no-value List mutation produces an internal
+// replacement List value. Earlier SSA snapshots remain immutable. This result
+// is compiler plumbing and never becomes a source-level return value.
+public type Shape {
+    operands Int; results Int;
+    firstDomain Int; firstType Int;
+    secondDomain Int; secondType Int;
+    thirdDomain Int; thirdType Int;
+    resultDomain Int; resultType Int;
+    replacesReceiver Bool;
+}
+public function shape(table identity managed.Registry,
+    phase identity budget.Phase,typeId managed.TypeId,operation Int,view Int)
+    returns Shape fails budget.LimitError,Unsupported,
+    managed.InvalidManagedTypes,graphVerify.InvalidGraph {
+    // Re-read every descriptor, including unused rows, at this boundary.
+    let checked be try managed.verify(table,table.graph,phase);
+    let contract be try select(table,phase,typeId,operation,view);
+    let descriptor be try managed.descriptor(table,phase,typeId);
+    let count be 1; let results be 1;
+    let secondDomain be 0; let secondType be 0;
+    let thirdDomain be 0; let thirdType be 0;
+    let resultDomain be 1; let resultType be typeId.index;
+    let replaces be false;
+    if operation == 2 {
+        count=2; secondDomain=descriptor.elementDomain;
+        secondType=descriptor.element; replaces=true;
+    }
+    if operation == 3 {
+        count=3; secondType=2; // canonical structural i64 index
+        thirdDomain=descriptor.elementDomain;
+        thirdType=descriptor.element; replaces=true;
+    }
+    if operation == 4 or operation == 6 or operation == 8 {
+        count=2; secondDomain=1; secondType=typeId.index;
+        resultDomain=0; resultType=1; // canonical pred
+    }
+    if operation == 7 {
+        // A view is a separate semantic kind, carrying its Text descriptor
+        // and explicit view selector; never mislabel it as Text or List.
+        resultDomain=2;
+    }
+    return Shape { operands=count; results=results;
+        firstDomain=1; firstType=typeId.index;
+        secondDomain=secondDomain; secondType=secondType;
+        thirdDomain=thirdDomain; thirdType=thirdType;
+        resultDomain=resultDomain; resultType=resultType;
+        replacesReceiver=replaces; };
+}
+
+// A stored selector is not proof. Re-derive every semantic/effect field from
+// the frozen descriptor and reject same-revision corruption before use.
+public function verifyContract(table identity managed.Registry,
+    phase identity budget.Phase,typeId managed.TypeId,value Contract)
+    returns Shape fails budget.LimitError,Unsupported,
+    managed.InvalidManagedTypes,graphVerify.InvalidGraph {
+    let expectedShape be try shape(table,phase,typeId,value.operation,value.view);
+    let expected be try select(table,phase,typeId,value.operation,value.view);
+    try require(value.version == expected.version and
+        value.typeIndex == expected.typeIndex and value.kind == expected.kind and
+        value.resultCount == expected.resultCount and
+        value.copyPolicy == expected.copyPolicy and
+        value.mayAllocate == expected.mayAllocate and
+        value.mayTrap == expected.mayTrap and
+        value.requiresRoot == expected.requiresRoot and
+        value.unicodeVersion == expected.unicodeVersion,
+        "forged managed operation contract");
+    return expectedShape;
 }

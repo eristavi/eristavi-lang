@@ -29,6 +29,16 @@ function operationRejected(reg identity managed.Registry,
         else error budget.LimitError { fail error; };
     return false;
 }
+function contractRejected(reg identity managed.Registry,
+    phase identity budget.Phase,value managed.TypeId,contract operations.Contract)
+    returns Bool fails budget.LimitError,managed.InvalidManagedTypes,graphVerify.InvalidGraph {
+    let result be operations.verifyContract(reg,phase,value,contract)
+        else error operations.Unsupported { return true; }
+        else error budget.LimitError { fail error; }
+        else error managed.InvalidManagedTypes { fail error; }
+        else error graphVerify.InvalidGraph { fail error; };
+    return false;
+}
 function run() fails budget.LimitError,graphVerify.InvalidGraph,
     managed.InvalidManagedTypes,operations.Unsupported,ProbeError {
     let request be try budget.developmentRequest();
@@ -106,6 +116,43 @@ function run() fails budget.LimitError,graphVerify.InvalidGraph,
         try operationRejected(registry,phase,textType,1,1) and
         try operationRejected(registry,phase,textType,99,0),
         "unsupported managed operation was accepted");
+    let addShape be try operations.verifyContract(registry,phase,textList,listAdd);
+    let updateShape be try operations.verifyContract(registry,phase,textList,listIndex);
+    let equalShape be try operations.verifyContract(registry,phase,textType,textEquality);
+    let viewShape be try operations.verifyContract(registry,phase,textType,bytes);
+    let copyShape be try operations.verifyContract(registry,phase,boxed,handleCopy);
+    let snapshotShape be try operations.shape(registry,phase,textList,5,0);
+    let numberShape be try operations.shape(registry,phase,numberList,2,0);
+    try check(addShape.operands == 2 and addShape.results == 1 and
+        addShape.replacesReceiver and addShape.resultDomain == 1 and
+        addShape.resultType == textList.index and addShape.secondDomain == 1 and
+        addShape.secondType == textType.index and
+        updateShape.operands == 3 and updateShape.secondDomain == 0 and
+        updateShape.secondType == 2 and updateShape.thirdDomain == 1 and
+        updateShape.thirdType == textType.index and updateShape.replacesReceiver and
+        equalShape.operands == 2 and equalShape.resultDomain == 0 and
+        equalShape.resultType == 1 and not equalShape.replacesReceiver and
+        viewShape.resultDomain == 2 and viewShape.resultType == textType.index and
+        copyShape.resultType == boxed.index and copyShape.operands == 1 and
+        snapshotShape.resultType == textList.index and
+        numberShape.secondDomain == 0 and numberShape.secondType == i64.index,
+        "canonical managed SSA shape violated typed snapshot semantics");
+    let mutation be 0;
+    while mutation < 9 {
+        let forged be listAdd;
+        if mutation == 0 { forged.version=2; }
+        if mutation == 1 { forged.typeIndex=textType.index; }
+        if mutation == 2 { forged.kind=3; }
+        if mutation == 3 { forged.resultCount=1; }
+        if mutation == 4 { forged.copyPolicy=2; }
+        if mutation == 5 { forged.mayAllocate=false; }
+        if mutation == 6 { forged.mayTrap=true; }
+        if mutation == 7 { forged.requiresRoot=false; }
+        if mutation == 8 { forged.unicodeVersion=16; }
+        try check(try contractRejected(registry,phase,textList,forged),
+            "same-revision operation contract corruption accepted");
+        mutation=mutation+1;
+    }
     let review be try managed.verify(registry,graph,phase);
     try check(review.types == 7 and review.lists == 4 and
         review.identities == 2,"incorrect managed type inventory");

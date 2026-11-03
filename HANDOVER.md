@@ -25,6 +25,25 @@ No full U2 CI or completed-batch qualification has been initiated; unverified ne
 | Production | Existing frontend/default compiler, frozen source behavior and 32-byte ABI retained; no new-UIR backend promotion |
 | Full owned compiler self-build | Explicitly excluded from ordinary work; NOT CERTIFIED |
 
+## Active U2 follow-up — managed SSA operation shapes
+
+Current work extends `u2_managed_operation_contract.eri` with exact typed operand
+and internal-result shapes and fresh stored-contract verification. List append
+and indexed replacement retain zero SOURCE results while requiring one internal
+replacement List SSA result, preserving earlier snapshots. Equality returns pred;
+Text views use an explicit distinct semantic domain, not a fabricated canonical
+Text/List TypeId. Complete native managed execution remains unfinished.
+
+The standalone managed fixture passed locally (one unittest, 1.011 seconds),
+including nine same-revision semantic/effect field corruptions. Broad local
+smoke PASSED: 86 run, 83 passed, zero failures, three intentional opt-in skips
+in 201.782 seconds. Source-hashed raw outcome/timing report:
+`docs/evidence/2026-11-03/u2-managed-ssa-shapes-smoke.json`.
+Hosted exact-head smoke is pending; local evidence is not full qualification.
+No four-platform qualification, full owned self-build, merge or U2 closure.
+Resume canonical managed type/value/instruction construction from this shape
+boundary, then actual owned adapters and automatic live-root publication.
+
 ## U2 Phase 1 managed runtime — current in-progress checkpoint
 
 **Workstream:** managed Text/List/identity type relationships. Source branch

@@ -112,3 +112,31 @@ reported `ok`. This qualifies only the opt-in semantic metadata and
 the **existing** runtime reference behavior. No new UIR Text/List/identity
 opcodes or native root publishing were executed end-to-end. Full U2
 four-platform CI and completed-batch release review remain OPEN.
+
+
+## Canonical SSA operation shapes — 3 November 2026
+
+`u2_managed_operation_contract.shape` specifies typed operand/result obligations
+for the eight selected operations. Domains are 0 for structural U1/U1b types,
+1 for the separate managed descriptor namespace, and 2 for a read-only Text view
+carrying the original Text type plus the contract's explicit view selector.
+Domain 2 is not yet a published canonical TypeId or an executable view encoding.
+Unused operand positions use zero; every admitted operation has one internal
+SSA result. Copies and iteration snapshots return their exact managed type;
+equalities consume two same-type values and return structural `pred`.
+List append consumes receiver and exact element; indexed replacement additionally
+consumes structural `i64` and may bounds-trap. Both return a replacement List
+SSA value. Their SOURCE result count stays zero: lowering updates the local
+binding/place with that replacement and never exposes an invented return value.
+This preserves old SSA snapshots and ordinary List value semantics.
+
+`verifyContract` freshly verifies all managed descriptors and the structural
+graph, then re-derives every stored effect/copy/result/version obligation.
+Frozen backing and unchanged revisions cannot authorize forged metadata.
+The focused fixture covers managed and structural List elements, copy,
+snapshot, equality, Text views, and nine independent contract-field mutations.
+
+This is the typed shape boundary for future canonical construction, NOT an
+implementation of managed instructions, machine root stores or runtime adapters.
+No new executable opcode, runtime ABI, source syntax or production routing is
+introduced. General canonical type encoding and execution remain open.
