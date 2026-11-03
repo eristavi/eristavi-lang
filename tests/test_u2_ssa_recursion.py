@@ -12,6 +12,7 @@ class U2SSARecursionTests(unittest.TestCase):
         source=(ROOT/"tests/fixtures/u1_aggregate_calls.eri").read_text()
         source=source.replace("import compiler.u1_verify as verify;",
             "import compiler.u1_verify as verify;\n"
+            "import compiler.u1_words as words;\n"
             "import compiler.u2_invoke_contract as contracts;\n"
             "import compiler.u2_ssa_liveness as ssa;",1)
         anchor="try aggregate.freeze(graph); try meta.freeze(data); try budget.finishPhase(mp);"
