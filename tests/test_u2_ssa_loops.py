@@ -50,6 +50,17 @@ class U2SSALoopsTests(unittest.TestCase):
             "    let term be build.InstId { owner=fn.key; index=termIndex; };\n"
             "    try check(try ssa.liveBefore(plan,fn,phase,term,next),"
             "\"backedge/exiting branch needs managed value\");\n"
+            "    let bound be []; let idx be 0;\n"
+            "    while idx < plan.values.length/4 {\n"
+            "        let value be build.ValueId { owner=fn.key;"
+            " index=try words.get(plan.values,phase,idx*4); };\n"
+            "        if try ssa.liveBefore(plan,fn,phase,setInstruction,value) { bound.add(value); }\n"
+            "        idx=idx+1;\n"
+            "    }\n"
+            "    let covered be try ssa.requirePublished(plan,fn,graph,table,phase,"
+            "setInstruction,bound,true);\n"
+            "    try check(covered == bound.count and covered > 0,"
+            "\"self-loop managed roots before allocation\");\n"
             "    try ssa.close(plan); try budget.finishPhase(phase);",1)
         source=source.replace("try build.close(fn);",
             "try contracts.close(table); try build.close(fn);",1)

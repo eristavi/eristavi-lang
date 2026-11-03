@@ -41,6 +41,17 @@ class U2SSARecursionTests(unittest.TestCase):
             "\"recursive result not live after call\");\n"
             "    try check(try ssa.liveExit(roots,copy,lp,recurse,recursiveResult),"
             "\"recursive result not live on return edge\");\n"
+            "    let live be []; let slot be 0;\n"
+            "    while slot < roots.values.length/4 {\n"
+            "        let value be build.ValueId { owner=copy.key;"
+            " index=try words.get(roots.values,lp,slot*4); };\n"
+            "        if try ssa.liveBefore(roots,copy,lp,recursiveCall,value) { live.add(value); }\n"
+            "        slot=slot+1;\n"
+            "    }\n"
+            "    let covered be try ssa.requirePublished(roots,copy,graph,table,lp,"
+            "recursiveCall,live,true);\n"
+            "    try check(covered == live.count and covered > 0,"
+            "\"recursive call live roots before collection\");\n"
             "    try ssa.close(roots); try budget.finishPhase(lp);",1)
         end="try aggregate.close(graph); try meta.close(data);"
         self.assertIn(end,source)
