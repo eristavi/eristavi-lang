@@ -371,24 +371,51 @@ function at(plan identity Plan,routine identity build.Function,
     let slot be try trackedSlot(plan,phase,value.index);
     try require(slot > 0,"untracked managed SSA value at safe point");
     let block be try words.get(routine.instructions,phase,(instruction.index-1)*10+1);
-    let result be (try words.get(plan.outputs,phase,
-        (block-1)*(plan.values.length/4)+slot-1)) == 1;
-    // Canonical SSA instruction IDs increase within each block. Reverse-scan
-    // to the chosen before/after boundary, killing this value at its unique
-    // definition and adding later uses. No CFG path enumeration.
-    let current be plan.instructions;
-    while current > instruction.index or (before and current == instruction.index) {
+    let definitionKind be try words.get(routine.values,phase,(value.index-1)*4+1);
+    let definition be try words.get(routine.values,phase,(value.index-1)*4+2);
+    let definitionBlock be try words.get(plan.values,phase,(slot-1)*4+3);
+    // Independently follow the canonical per-block linked instruction order.
+    // Global instruction IDs can be interleaved across different blocks.
+    let cursor be try words.get(routine.blocks,phase,(block-1)*5+2);
+    let seen be 0; let passed be false; let defined be definitionKind == 0 or
+        definitionBlock != block;
+    let usedLater be false;
+    while cursor != 0 {
         try budget.work(phase,1);
-        let row be (current-1)*10;
-        if (try words.get(routine.instructions,phase,row+1)) == block {
-            let kind be try words.get(routine.values,phase,(value.index-1)*4+1);
-            let definition be try words.get(routine.values,phase,(value.index-1)*4+2);
-            if kind == 1 and definition == current { result=false; }
-            if try usedAt(routine,phase,current,value.index) { result=true; }
+        seen=seen+1;
+        try require(seen <= plan.instructions,"cyclic native liveness instruction chain");
+        if cursor == instruction.index {
+            passed=true;
+            if not before and definitionKind == 1 and definition == cursor {
+                defined=true;
+            }
+            if before and try usedAt(routine,phase,cursor,value.index) {
+                usedLater=true;
+            }
+        } else {
+            if not passed {
+                if definitionKind == 1 and definition == cursor { defined=true; }
+            } else {
+                if try usedAt(routine,phase,cursor,value.index) { usedLater=true; }
+            }
         }
-        current=current-1;
+        cursor=try words.get(routine.instructions,phase,(cursor-1)*10+9);
     }
-    return result;
+    let term be try words.get(routine.blocks,phase,(block-1)*5+4);
+    try require(term >= 1 and term <= plan.instructions,
+        "missing canonical liveness terminator");
+    if term == instruction.index {
+        passed=true;
+        if before and try usedAt(routine,phase,term,value.index) { usedLater=true; }
+    } else {
+        if passed and try usedAt(routine,phase,term,value.index) {
+            usedLater=true;
+        }
+    }
+    try require(passed,"foreign block instruction in safe-point query");
+    let liveOut be (try words.get(plan.outputs,phase,
+        (block-1)*(plan.values.length/4)+slot-1)) == 1;
+    return defined and (usedLater or liveOut);
 }
 public function liveBefore(plan identity Plan,routine identity build.Function,
     phase identity budget.Phase,instruction build.InstId,value build.ValueId)
