@@ -25,6 +25,11 @@ function run() fails budget.LimitError,graphVerify.InvalidGraph,
     let request be try budget.developmentRequest();
     let shared be try budget.metadataOwner(request);
     let phase be try budget.constructionPhase(shared);
+    // U1a metadata has a generic TypeId-list signature specialization.
+    // Instantiate the same concrete TypeId-list profile as the accepted U1b
+    // standalone aggregate fixture, without changing compiler semantics.
+    let data be try meta.create(shared,phase);
+    let signature be try meta.signature(data,phase,[meta.i64()],[meta.i64()]);
     let graph be try aggregate.create(shared,phase);
     let i64 be try aggregate.primitive(graph,meta.i64());
     let primitivePair be try aggregate.aggregate(graph,phase,[i64,i64]);
@@ -98,6 +103,7 @@ function run() fails budget.LimitError,graphVerify.InvalidGraph,
         "restored managed registry was rejected or leaked verification backing");
     try managed.close(registry);
     try aggregate.close(graph);
+    try meta.close(data);
     try check(shared.live == 0 and shared.pending == 0,
         "managed type registry did not reclaim owner backing");
     try budget.finishPhase(phase);
