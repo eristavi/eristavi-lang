@@ -27,21 +27,47 @@ class U2RootMapTests(unittest.TestCase):
         )
         self.assertIn("function run() fails", source)
         source = source.replace("function run() fails", helper+"function run() fails",1)
+        # Dead canonical instructions must be covered by the independent map.
+        updates = (
+            (
+                'let dead be try build.block(fn,[]); let deadTarget be try build.block(fn,[meta.i64()]);',
+                'let dead be try build.block(fn,[]); let deadTarget be try build.block(fn,[meta.i64()]);\n'
+                '    let deadInvoke be try build.block(fn,[]);'
+            ),
+            (
+                'try owners.block(profile,fn,phase,deadTarget,[]);',
+                'try owners.block(profile,fn,phase,deadTarget,[]);\n'
+                '    try owners.block(profile,fn,phase,deadInvoke,[]);'
+            ),
+            (
+                'let pendingClose be try transfer.emit(fn,graph,consume,pair,[pendingOwner],[pendingError]);',
+                'let pendingClose be try transfer.emit(fn,graph,consume,pair,[pendingOwner],[pendingError]);\n'
+                '    let deadPair be try continuation.bind(fn,graph,phase,deadInvoke,outer,failed,acquireSig,failedSig,loc);\n'
+                '    let deadChecked be try invoke.emit(fn,graph,acquire,deadPair,[]);'
+            ),
+        )
+        for before, after in updates:
+            self.assertIn(before,source)
+            source=source.replace(before,after,1)
+        source=source.replace('report.blocks == 11 and','report.blocks == 12 and')
         anchor='let mutate be try budget.constructionPhase(owner); let revision be fn.revision;'
         self.assertIn(anchor,source)
         injected = (
             anchor+'\n'
             '    let map be try nativeRoots.create(fn,graph,mutate);\n'
             '    let roots be try nativeRoots.verify(map,fn,graph,mutate);\n'
-            '    try check(roots.invokes == 5 and roots.roots == 5 and '
+            '    try check(roots.invokes == 6 and roots.roots == 6 and '
             'roots.revision == revision,"incomplete canonical checked-root coverage");\n'
-            '    let savedClass be try words.get(map.records,mutate,5);\n'
-            '    map.records.frozen=false; try words.set(map.records,mutate,5,1); '
+            '    let field be 0; while field < 6 {\n'
+            '        let saved be try words.get(map.records,mutate,field);\n'
+            '        map.records.frozen=false; try words.set(map.records,mutate,field,saved+1); '
             'map.records.frozen=true;\n'
-            '    try check(try rootMapRejected(map,fn,graph,mutate),'
-            '"wrong native root class accepted");\n'
-            '    map.records.frozen=false; try words.set(map.records,mutate,5,savedClass); '
+            '        try check(try rootMapRejected(map,fn,graph,mutate),'
+            '"corrupt canonical root-map field accepted");\n'
+            '        map.records.frozen=false; try words.set(map.records,mutate,field,saved); '
             'map.records.frozen=true;\n'
+            '        field=field+1;\n'
+            '    }\n'
             '    let retainedLength be map.records.length; map.records.length=retainedLength-6;\n'
             '    try check(try rootMapRejected(map,fn,graph,mutate),'
             '"missing checked root accepted");\n'
@@ -51,7 +77,7 @@ class U2RootMapTests(unittest.TestCase):
             '"stale root map accepted");\n'
             '    map.revision=revision;\n'
             '    let restoredRoots be try nativeRoots.verify(map,fn,graph,mutate);\n'
-            '    try check(restoredRoots.roots == 5,"restored map rejected");\n'
+            '    try check(restoredRoots.roots == 6,"restored map rejected");\n'
             '    try nativeRoots.close(map);'
         )
         source=source.replace(anchor,injected,1)
