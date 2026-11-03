@@ -33,7 +33,7 @@ No full U2 CI or completed-batch qualification has been initiated; unverified ne
 
 **Implemented and verified:** canonical opcode-46 checked invokes, scoped cleanup and 16-case ordered typed primary/secondary matrix; independent bounded versioned root-map metadata over all checked instructions including dead blocks; direct owned-runtime primary/secondary Text survival through explicit GC. New opt-in src/compiler/u2_native_root_x86_64.eri verifies the canonical root map before emitting concrete Linux/System-V x86-64 helpers for a scope-bound class-5 root-word table. Bind zero-initializes 8-byte caller stack words before publishing; each verified invoke gets unique publish/release helpers. Test tests/test_u2_native_root_publish.py constructs a real five-invoke canonical UIR fixture, compiles and assembles those emitted helpers, then uses the real owned collector to test single-root retention/reclamation and **two independently published saved-failure roots**, including survival of the second record after release/collection of the first. The two-slot case passed in #41602009013. See [native publisher contract](docs/architecture/UIR_U2_X86_NATIVE_ROOT_PUBLICATION.md).
 
-**What is NOT yet proven:** the emitted native helper paths are exercised from a controlled handwritten checked-failure body, not an automatically lowered complete canonical UIR program. General machine slot allocation and live-in/liveness verification over all SSA values, allocating safe points, loops, nested unwinds and recursion remain unimplemented. So do new-UIR managed Text/List/identity with full Unicode17, real checked file/resource adapters and complete FailureContext secondary-order execution, arbitrary multi-exit cleanup/cancellation, allocator fault/physical/RSS evidence, Stage-0 vs new native execution oracle, and final completed-batch four-platform qualification. Three opt-in probes were skipped. **Do not close #74, mark U2 complete, run full owned compiler self-build or merge PR #111 into main.**
+**What is NOT yet proven:** the emitted native helper paths are exercised from a controlled handwritten checked-failure body, not an automatically lowered complete canonical UIR program. The bounded opt-in CFG live-set and declared publication-set verification is now focused-tested, but general live-in/liveness over all managed SSA values and its automatic native publication across allocating safe points, loops, nested unwinds and recursion remain unimplemented. So do new-UIR managed Text/List/identity with full Unicode17, real checked file/resource adapters and complete FailureContext secondary-order execution, arbitrary multi-exit cleanup/cancellation, allocator fault/physical/RSS evidence, Stage-0 vs new native execution oracle, and final completed-batch four-platform qualification. Three opt-in probes were skipped. **Do not close #74, mark U2 complete, run full owned compiler self-build or merge PR #111 into main.**
 
 ### In-progress U2 native placement check — not yet CI-verified
 
@@ -44,13 +44,15 @@ including unreachable checked calls, before native helper assembly is printed.
 The native emitter consumes the verified displacements and the focused test
 adds both adversarial slot mutations and a separate assembly-offset oracle.
 The verified scope is limited to checked-failure pointer roots; it is **not**
-whole-program managed SSA liveness. Latest implementation/test-fix head `1097045caf4c06ce99b9e6bc369793de99c67cc7`;
-GitHub Actions [#41615883641](https://github.com/eristavi/eristavi-lang/actions/runs/41615883641)
-is pending. The preceding run [#41615837732](https://github.com/eristavi/eristavi-lang/actions/runs/41615837732)
-was triggered on the earlier fixture revision and is not final evidence.
-Focused CI for the latest source revision is **PENDING**, with no new green claim. Keep #111 DRAFT and #74 OPEN.
+whole-program managed SSA liveness. The completed bounded slot-plan implementation, including its checked-error
+propagation fixes, passed exact-source [focused CI #41620686122](https://github.com/eristavi/eristavi-lang/actions/runs/41620686122)
+at commit `8eb2bd1f2710ca377ab0a643bcb31edb63f3b48d`.
+That same source also carries the new SSA-liveness and root-obligation tests;
+the complete focused smoke ran 84 tests, 81 passed, 0 failed and 3 intentionally
+skipped. The complete four-platform matrix was intentionally skipped.
+Keep #111 DRAFT and #74 OPEN.
 
-### New canonical SSA-liveness analysis — implementation pending focused CI
+### New canonical SSA-liveness analysis — focused smoke verified, native rooting still open
 
 The opt-in `src/compiler/u2_ssa_liveness.eri` now tracks an explicit list of
 structural-aggregate TypeIds through the *existing canonical* SSA value table.
@@ -68,7 +70,17 @@ dead blocks and recursive calls; see
 `tests/test_u2_ssa_liveness.py`, `tests/test_u2_ssa_loops.py` and
 `tests/test_u2_ssa_recursion.py`. These tests are added to Linux smoke.
 
-**Evidence is pending, not passed.** The structural TypeIds in these probes
+**Exact-head focused evidence:** [CI #41620686122](https://github.com/eristavi/eristavi-lang/actions/runs/41620686122)
+passed on source commit `8eb2bd1f2710ca377ab0a643bcb31edb63f3b48d`:
+84 run, 81 passed, 0 failed, 3 intentionally skipped. The dedicated
+checked-cleanup, loop/backedge, recursive-call, and native two-failure
+root-publishing tests all passed. Scope/patch check passed. No full matrix
+or final U2 qualification was run. The test suite explicitly verifies
+`requirePublished` at call/cleanup safe points, rejecting missing, duplicate,
+foreign, or prematurely released declared SSA roots. The root obligations are
+compiler-level proofs, **not yet automatically lowered native root words**.
+
+The structural TypeIds in these probes
 are immutable U1b aggregates; they do NOT yet have independently proven
 managed pointer classes, automatic heap root publication at each allocating
 safe point, or complete new-UIR Text/List/identity semantics. The 32-slot

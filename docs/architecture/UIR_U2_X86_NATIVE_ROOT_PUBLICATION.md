@@ -75,7 +75,7 @@ machine lowering of complete UIR bodies. Preserve draft #111 and issue #74
 until the remaining U2 gates pass. The exact source head and CI evidence
 are recorded in HANDOVER.md after the smoke completes.
 
-## Canonical SSA liveness, root-obligation analysis (unqualified)
+## Canonical SSA liveness and root-obligation analysis — focused smoke verified
 
 The private `u2_ssa_liveness.eri` analyzes the existing Function value,
 instruction and edge tables, not an alternate executable representation.
@@ -95,3 +95,19 @@ register/stack lowering must identify Text, List and identity references
 before emitted machine frames can publish the complete correct root set.
 Do not equate this liveness slice with full U2 coverage or run final CI
 for an uncompleted backend.
+
+## Focused qualification evidence — 3 November 2026
+
+[GitHub Actions #41620686122](https://github.com/eristavi/eristavi-lang/actions/runs/41620686122)
+completed SUCCESS on exact source commit
+`8eb2bd1f2710ca377ab0a643bcb31edb63f3b48d`: **84 tests run,
+81 passed, zero failed, three intentionally skipped**. The canonical
+nested checked-cleanup, SSA loop/backedge, recursive-call, and existing
+emitted x86-64 two-saved-failure-root tests all passed; the patch scope
+job succeeded. The four-platform test matrix was intentionally skipped.
+The new `requirePublished` API validates exactly declared ValueId root
+obligations at explicit SSA safe-point boundaries, including negative
+corruption probes. It does **not** emit those native root stores or prove
+the currently unsupported Text/List/identity type classifications; the
+native saved-failure class-5 publisher remains a separate bounded slice.
+Do not merge PR #111 or close #74 on this evidence.
