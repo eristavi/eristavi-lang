@@ -85,11 +85,11 @@ class U2NativeRootPublishTests(unittest.TestCase):
                 "function slotRejected(plan identity machineSlots.Plan,"
                 "map identity rootMap.Map,fn identity build.Function,"
                 "graph identity aggregate.Registry,phase identity budget.Phase)"
-                " returns Bool fails budget.LimitError,rootMap.InvalidRoots {\\n"
+                " returns Bool fails budget.LimitError,rootMap.InvalidRoots {\n"
                 "    let proof be machineSlots.verify(plan,map,fn,graph,phase)"
-                " else error machineSlots.InvalidSlots { return true; };\\n"
-                "    return false;\\n"
-                "}\\n"
+                " else error machineSlots.InvalidSlots { return true; };\n"
+                "    return false;\n"
+                "}\n"
             )
             self.assertIn("function run() fails",source)
             source=source.replace("function run() fails",helper+"function run() fails",1)
@@ -103,7 +103,7 @@ class U2NativeRootPublishTests(unittest.TestCase):
             source=source.replace(
                 errors,
                 'else error rootMap.InvalidRoots { output("roots:"+error.message); process.setExitCode(1); }\n'
-                'else error machineSlots.InvalidSlots { output("slots:"+error.message); process.setExitCode(1); }\\n'
+                'else error machineSlots.InvalidSlots { output("slots:"+error.message); process.setExitCode(1); }\n'
                 'else error nativeRoot.Unsupported { output("native:"+error.message); process.setExitCode(1); }\n'
                 +errors,1)
             closing='output("u2-scoped-owners:ok");'
@@ -127,16 +127,16 @@ class U2NativeRootPublishTests(unittest.TestCase):
             self.assertIn(".globl erist_u2_bind_7",emission)
             self.assertIn("    movq $0,32(%rsi)",emission)
             publish=re.findall(
-                r"^erist_u2_publish_7_(\\d+):\\n    movq %rsi,(\\d+)\\(%rdi\\)\\n    ret$",
+                r"^erist_u2_publish_7_(\d+):\n    movq %rsi,(\d+)\(%rdi\)\n    ret$",
                 emission,re.M)
             release=re.findall(
-                r"^erist_u2_release_7_(\\d+):\\n    movq \\$0,(\\d+)\\(%rdi\\)\\n    ret$",
+                r"^erist_u2_release_7_(\d+):\n    movq \$0,(\d+)\(%rdi\)\n    ret$",
                 emission,re.M)
             expected=list(zip(matches,[str(i*8) for i in range(5)]))
             self.assertEqual(publish,expected)
             self.assertEqual(release,expected)
             self.assertEqual(
-                re.findall(r"^    movq \\$0,(\\d+)\\(%rsi\\)$",emission,re.M),
+                re.findall(r"^    movq \$0,(\d+)\(%rsi\)$",emission,re.M),
                 [str(i*8) for i in range(5)])
             first=matches[0]
             native=(ROOT/"tests/fixtures/u2_root_publish_native.s").read_text()
