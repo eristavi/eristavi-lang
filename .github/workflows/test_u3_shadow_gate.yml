@@ -17,4 +17,4 @@ jobs:
       - name: Run exact focused tests
         run: |
           python -m compileall -q compiler/erist/u3_shadow_gate.py tests/test_u3_shadow_gate.py
-          PYTHONPATH=.:tests python -m unittest -v test_u3_shadow_gate
+          PYTHONPATH=.:tests python -m unittest -v test_u3_shadow_gate test_u3_construction_pilot
