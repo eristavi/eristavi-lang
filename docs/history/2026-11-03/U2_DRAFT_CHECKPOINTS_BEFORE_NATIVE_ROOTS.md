@@ -159,4 +159,3 @@ Archive SHA-256: `4bea42f5648c0b2c8a3c69627fd1f612beb440405190e009d15eb673b2c6cd
 5. Once the coherent implementation meets acceptance, run one final exact-head
    four-platform CI and required full qualification, compare tested/merged trees,
    and only then decide merge/closure. Keep #74 open until its gates pass.
-
