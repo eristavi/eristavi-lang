@@ -440,6 +440,952 @@ _start:
         self.assertEqual((result.returncode,result.stdout,result.stderr),
                          (0,b'u2-primary-text\n',b''))
 
+    def test_u2_native_root_helpers_emitted_from_verified_canonical_map(self):
+        # This fixture derives helper assembly from real canonical opcode-46
+        # metadata. Only the failure body remains handwritten in this bounded
+        # integration slice; production UIR machine lowering is still pending.
+        import re
+        source=(ROOT/'tests/fixtures/u2_scoped_owners.eri').read_text()
+        import_anchor='import compiler.u2_scoped_owners as owners;'
+        self.assertIn(import_anchor,source)
+        source=source.replace(
+            import_anchor,import_anchor+'\n'
+            'import compiler.u2_root_map as nativeRoots;\n'
+            'import compiler.u2_native_root_x86_64 as nativeX64;',1)
+        emit_anchor='let mutate be try budget.constructionPhase(owner); let revision be fn.revision;'
+        self.assertIn(emit_anchor,source)
+        source=source.replace(
+            emit_anchor,emit_anchor+'\n'
+            '    let nativeMap be try nativeRoots.create(fn,graph,mutate);\n'
+            '    try nativeX64.emit(nativeMap,fn,graph,mutate,7);\n'
+            '    try nativeRoots.close(nativeMap);',1)
+        exceptions='continuation.InvalidBinding,owners.InvalidOwnership,ProbeError {'
+        self.assertIn(exceptions,source)
+        source=source.replace(
+            exceptions,'continuation.InvalidBinding,owners.InvalidOwnership,'
+            'nativeRoots.InvalidRoots,nativeX64.Unsupported,ProbeError {',1)
+        catch_anchor='else error ProbeError { output("probe:"+error.message);'
+        self.assertIn(catch_anchor,source)
+        source=source.replace(
+            catch_anchor,
+            'else error nativeRoots.InvalidRoots { output("root-map:"+error.message); process.setExitCode(1); }\n'
+            'else error nativeX64.Unsupported { output("x64:"+error.message); process.setExitCode(1); }\n'
+            +catch_anchor,1)
+        closing='output("u2-scoped-owners:ok");'
+        self.assertIn(closing,source)
+        source=source.replace(closing,'',1)
+        file=self.directory/'u2-native-root-emitter.eri'
+        file.write_text(source,encoding='utf-8')
+        # Existing directory provides a local compiler symlink for imports.
+        compiler_link=self.directory/'compiler'
+        if not compiler_link.exists():
+            compiler_link.symlink_to(ROOT/'src/compiler',target_is_directory=True)
+        generator=self.directory/'u2-native-root-emitter'
+        self.assertEqual(build_native(file,generator,self.directory),0)
+        process=subprocess.run(
+            [str(generator)],capture_output=True,text=True,timeout=120)
+        self.assertEqual((process.returncode,process.stderr),(0,''),process.stdout[-900:])
+        emitted=process.stdout
+        names=re.findall(r'^\.globl erist_u2_publish_7_(\d+)
+        # Native runtime conformance only: this uses the pre-existing class-5
+        # frame root, NOT a root table emitted by the new canonical UIR.
+        # The actual cleanup append service is provided by the resource
+        # profile, not by the graph-only runtime built for this test class.
+        generator = self.directory / 'u2-resource-runtime'
+        self.assertEqual(build_native(ROOT/'src/resource_value_runtime.eri',
+                                      generator, ROOT/'src'), 0)
+        emitted = subprocess.run([str(generator)], capture_output=True,
+                                 text=True, timeout=60)
+        self.assertEqual((emitted.returncode, emitted.stderr), (0, ''))
+        runtime = lifetime_tests.audit_slot_count(emitted.stdout)
+        needle = 'erist_rt_text_collect:\n'
+        self.assertEqual(runtime.count(needle), 1)
+        runtime = runtime.replace(
+            needle, needle + '    incq erist_rt_u2_forced_gc_calls(%rip)\n', 1)
+        runtime += ('\n.bss\n.p2align 3\n'
+                    '.globl erist_rt_u2_forced_gc_calls\n'
+                    'erist_rt_u2_forced_gc_calls:\n.quad 0\n')
+        result = self.run_probe('u2-rooted-secondary-gc', r'''
+.text
+.globl _start
+_start:
+    xorl %ebp,%ebp
+    call evn_scope_enter
+    movq %rax,%r12
+    movq %rax,%rdi
+    leaq .Lu2_pair_root(%rip),%rsi
+    leaq .Lu2_pair_class(%rip),%rdx
+    movl $1,%ecx
+    call evn_bind_roots
+    # Produce and save a typed primary failure with a managed Text payload.
+    call evn_frame
+    movq %rax,%r13
+    movq %rax,%rdi
+    call setjmp
+    testq %rax,%rax
+    jne .Lu2_primary_caught
+    movl $42,%edi
+    call evn_int
+    movq %rax,%r14
+    leaq .Lu2_primary_text(%rip),%rdi
+    movl $12,%esi
+    call evn_text
+    movq %rax,%r15
+    movl $11,%edi
+    movl $2,%esi
+    call evn_object
+    movq %rax,%rbx
+    movq %rax,%rdi
+    xorl %esi,%esi
+    movq %r14,%rdx
+    call evn_init
+    movq %rbx,%rdi
+    movl $1,%esi
+    movq %r15,%rdx
+    call evn_init
+    movq %rbx,%rdi
+    movl $1,%esi
+    call evn_fail
+    jmp .Lgraph_test_fail
+.Lu2_primary_caught:
+    movq %r13,%rdi
+    call evn_pop
+    call evn_saved
+    movq %rax,.Lu2_pair_root(%rip)
+    call erist_rt_failure_clear
+    # Produce an independent typed cleanup failure, preserving the primary.
+    call evn_frame
+    movq %rax,%r13
+    movq %rax,%rdi
+    call setjmp
+    testq %rax,%rax
+    jne .Lu2_secondary_caught
+    movl $43,%edi
+    call evn_int
+    movq %rax,%r14
+    leaq .Lu2_secondary_text(%rip),%rdi
+    movl $17,%esi
+    call evn_text
+    movq %rax,%r15
+    movl $11,%edi
+    movl $2,%esi
+    call evn_object
+    movq %rax,%rbx
+    movq %rax,%rdi
+    xorl %esi,%esi
+    movq %r14,%rdx
+    call evn_init
+    movq %rbx,%rdi
+    movl $1,%esi
+    movq %r15,%rdx
+    call evn_init
+    movq %rbx,%rdi
+    movl $1,%esi
+    call evn_fail
+    jmp .Lgraph_test_fail
+.Lu2_secondary_caught:
+    movq %r13,%rdi
+    call evn_pop
+    call evn_saved
+    movq %rax,%rsi
+    movq .Lu2_pair_root(%rip),%rdi
+    call erist_rt_failure_append
+    call erist_rt_failure_clear
+    movq .Lu2_pair_root(%rip),%rax
+    movq 80(%rax),%rax
+    testq %rax,%rax
+    je .Lgraph_test_fail
+    cmpq $0,88(%rax)
+    jne .Lgraph_test_fail
+    # A single saved-primary root must mark both records and both Texts.
+    movl $4,%r14d
+.Lu2_pair_collect:
+    xorl %edi,%edi
+    call erist_rt_slots_collect
+    call erist_rt_text_collect
+    call erist_rt_live_failures
+    cmpq $2,%rax
+    jne .Lgraph_test_fail
+    call erist_rt_text_live_buffers
+    cmpq $2,%rax
+    jb .Lgraph_test_fail
+    decq %r14
+    jne .Lu2_pair_collect
+    movq .Lu2_pair_root(%rip),%rdi
+    movl $12,%esi
+    call evn_error
+    movq %rax,%rdi
+    xorl %esi,%esi
+    call evn_member
+    movq %rax,%rdi
+    call evn_output
+    movq .Lu2_pair_root(%rip),%rdi
+    movq 80(%rdi),%rdi
+    movl $12,%esi
+    call evn_error
+    movq %rax,%rdi
+    xorl %esi,%esi
+    call evn_member
+    movq %rax,%rdi
+    call evn_output
+    # Once the last root is removed the chain and payloads are reclaimable.
+    movq $0,.Lu2_pair_root(%rip)
+    call evn_void
+    movq %r12,%rdi
+    movq %rax,%rsi
+    call evn_scope_leave
+    xorl %edi,%edi
+    call erist_rt_slots_collect
+    call erist_rt_text_collect
+    call erist_rt_live_failures
+    testq %rax,%rax
+    jne .Lgraph_test_fail
+    cmpq $5,erist_rt_u2_forced_gc_calls(%rip)
+    jb .Lgraph_test_fail
+    jmp .Lgraph_finish
+.bss
+.p2align 3
+.Lu2_pair_root:
+.quad 0
+.section .rodata
+.Lu2_pair_class:
+.byte 5
+.Lu2_primary_text:
+.ascii "body-primary"
+.Lu2_secondary_text:
+.ascii "cleanup-secondary"
+'''+FINISH, runtime=runtime)
+        self.assertEqual((result.returncode,result.stdout,result.stderr),
+                         (0,b'body-primary\ncleanup-secondary\n',b''))
+
+    def test_owned_context_restores_callee_registers_stack_and_fp_control(self):
+        result=self.run_probe('graph-context',r'''
+.text
+.globl _start
+_start:
+    movq %rsp,.Lcontext_stack(%rip)
+    movq $11,%rbx
+    movq $22,%rbp
+    movq $33,%r12
+    movq $44,%r13
+    movq $55,%r14
+    movq $66,%r15
+    ldmxcsr .Lcontext_mxcsr(%rip)
+    fldcw .Lcontext_cw(%rip)
+    leaq .Lcontext(%rip),%rdi
+    call setjmp
+    testq %rax,%rax
+    jne .Lcontext_returned
+    xorq %rbx,%rbx
+    xorq %rbp,%rbp
+    xorq %r12,%r12
+    xorq %r13,%r13
+    xorq %r14,%r14
+    xorq %r15,%r15
+    ldmxcsr .Lcontext_other_mxcsr(%rip)
+    fldcw .Lcontext_other_cw(%rip)
+    leaq .Lcontext(%rip),%rdi
+    xorl %esi,%esi
+    jmp longjmp
+.Lcontext_returned:
+    cmpq $1,%rax
+    jne .Lgraph_test_fail
+    cmpq .Lcontext_stack(%rip),%rsp
+    jne .Lgraph_test_fail
+    cmpq $11,%rbx
+    jne .Lgraph_test_fail
+    cmpq $22,%rbp
+    jne .Lgraph_test_fail
+    cmpq $33,%r12
+    jne .Lgraph_test_fail
+    cmpq $44,%r13
+    jne .Lgraph_test_fail
+    cmpq $55,%r14
+    jne .Lgraph_test_fail
+    cmpq $66,%r15
+    jne .Lgraph_test_fail
+    stmxcsr .Lcontext_actual(%rip)
+    fnstcw .Lcontext_actual_cw(%rip)
+    cmpl $0x1f80,.Lcontext_actual(%rip)
+    jne .Lgraph_test_fail
+    cmpw $0x37f,.Lcontext_actual_cw(%rip)
+    jne .Lgraph_test_fail
+    jmp .Lgraph_finish
+.bss
+.p2align 3
+.Lcontext:
+.zero 112
+.Lcontext_stack:
+.quad 0
+.Lcontext_actual:
+.zero 4
+.Lcontext_actual_cw:
+.zero 2
+.section .rodata
+.Lcontext_mxcsr:
+.long 0x1f80
+.Lcontext_other_mxcsr:
+.long 0xffc0
+.Lcontext_cw:
+.word 0x37f
+.Lcontext_other_cw:
+.word 0x77f
+'''+FINISH)
+        self.assertEqual((result.returncode,result.stdout,result.stderr),(0,b'',b''))
+
+    def test_bounds_absence_and_managed_administration_oom_are_terminal_faults(self):
+        for name,source,message in (
+            ('negative-index','let xs be [1]; output(xs[-1]);','List index out of bounds'),
+            ('past-index','let xs be [1]; output(xs[1]);','List index out of bounds'),
+            ('ref-index','let xs be [1]; xs[1]=2;','List index out of bounds'),
+        ):
+            with self.subTest(case=name):
+                path=self.directory/(name+'.eri'); path.write_text(source)
+                app=self.compile_application(path)
+                result=self.run_probe(name,app+'\n.text\n.globl _start\n_start:\ncall erist_entry\n',types=False)
+                self.assertEqual((result.returncode,result.stdout,result.stderr),
+                                 (1,b'',f'Eristavi runtime fault: {message}\n'.encode()))
+        for name,body,failure_at,count,message in (
+            ('object-oom','movl $6,%edi\nmovl $1,%esi\ncall evn_object',1,0,'out of memory'),
+            ('object-slot-oom','movl $6,%edi\nmovl $1,%esi\ncall evn_object',2,1,'out of memory'),
+            ('handler-oom','call evn_frame',1,0,'out of memory'),
+            ('handler-object-oom','call evn_frame\nmovq %rax,%rdi\ncall setjmp\ntestq %rax,%rax\njne .Lgraph_test_fail\nmovl $6,%edi\nmovl $1,%esi\ncall evn_object',2,0,'out of memory'),
+            ('saved-oom','call evn_saved',1,0,'out of memory'),
+            ('absent','movl $8,%edi\ncall evn_none\nmovq %rax,%rdi\ncall evn_get',0,0,'optional value is absent'),
+            ('size-overflow','movl $6,%edi\nmovabsq $288230376151711743,%rsi\ncall evn_object',0,0,'value size overflow'),
+        ):
+            with self.subTest(case=name):
+                runtime=self.runtime.replace('erist_rt_alloc:\n',f'''erist_rt_alloc:
+    incq .Loom_calls(%rip)
+    cmpq ${failure_at},.Loom_calls(%rip)
+    jne .Loom_real_alloc
+    xorl %eax,%eax
+    ret
+.Loom_real_alloc:
+''',1)
+                runtime=runtime.replace('erist_rt_exit:\n',f'''erist_rt_exit:
+    cmpq ${count},.Lgraph_count(%rip)
+    jne .Loom_bad_exit
+''',1)
+                result=self.run_probe(name,'.text\n.globl _start\n_start:\n'+body+
+                    '\njmp .Lgraph_test_fail\n.Loom_bad_exit:\nmovl $99,%edi\nmovl $60,%eax\nsyscall\nud2\n.bss\n.Loom_calls:\n.quad 0\n'+FINISH,runtime)
+                self.assertEqual((result.returncode,result.stdout,result.stderr),
+                                 (1,b'',f'Eristavi runtime fault: {message}\n'.encode()))
+
+    def test_deep_graph_marking_uses_bounded_stack_and_reclaims_every_cell(self):
+        result=self.run_probe('graph-depth',r'''
+.text
+.globl _start
+_start:
+    xorl %ebp,%ebp
+    call evn_scope_enter
+    movq %rax,%r12
+    movq %rax,%rdi
+    leaq .Ldeep_key(%rip),%rsi
+    leaq .Ldeep_class(%rip),%rdx
+    movl $1,%ecx
+    call evn_bind_roots
+    # Private raw construction intentionally has no safe point until the root
+    # is fully published. Each initialized cell has the compiler-described type.
+    movl $1,%edi
+    call erist_rt_graph_new_object
+    movq %rax,%r13
+    movq 8(%rax),%rdx
+    movq $8,(%rdx)
+    movl $20000,%r14d
+.Ldeep_build:
+    movl $1,%edi
+    call erist_rt_graph_new_object
+    movq %rax,%r15
+    movl $1,%edi
+    call erist_rt_graph_new_object
+    movq %rax,%rbx
+    movq 8(%rax),%rdx
+    movq $10,(%rdx)
+    movq %r13,8(%rdx)
+    movl $1,%edi
+    call erist_rt_graph_new_object
+    movq %rax,%rcx
+    movq 8(%rax),%rdx
+    movq $9,(%rdx)
+    movq %rbx,8(%rdx)
+    movq 8(%r15),%rdx
+    movq $8,(%rdx)
+    movq %rcx,8(%rdx)
+    movq %r15,%r13
+    decq %r14
+    jne .Ldeep_build
+    movl $10,%edi
+    movq %r13,%rsi
+    call erist_rt_value_new
+    movq %rax,.Ldeep_key(%rip)
+    movq %rax,%rdi
+    call erist_rt_slots_collect
+    call erist_rt_text_collect
+    call erist_rt_graph_live_objects
+    cmpq $60001,%rax
+    jne .Lgraph_test_fail
+    movq $0,.Ldeep_key(%rip)
+    xorl %edi,%edi
+    call erist_rt_slots_collect
+    call erist_rt_text_collect
+    call erist_rt_graph_live_objects
+    testq %rax,%rax
+    jne .Lgraph_test_fail
+    call evn_void
+    movq %r12,%rdi
+    movq %rax,%rsi
+    call evn_scope_leave
+    jmp .Lgraph_finish
+.bss
+.p2align 3
+.Ldeep_key:
+.quad 0
+.section .rodata
+.Ldeep_class:
+.byte 1
+'''+FINISH)
+        self.assertEqual((result.returncode,result.stdout,result.stderr),(0,b'',b''))
+
+    def test_uncaught_failure_keeps_nonfirst_message_field_and_embedded_nul(self):
+        result=self.run_probe('graph-uncaught',r'''
+.text
+.globl _start
+_start:
+    xorl %ebp,%ebp
+    movl $11,%edi
+    movl $2,%esi
+    call evn_object
+    movq %rax,%r12
+    movl $42,%edi
+    call evn_int
+    movq %r12,%rdi
+    xorl %esi,%esi
+    movq %rax,%rdx
+    call evn_init
+    leaq .Luncaught_message(%rip),%rdi
+    movl $7,%esi
+    call evn_text
+    movq %r12,%rdi
+    movl $1,%esi
+    movq %rax,%rdx
+    call evn_init
+    movq %r12,%rdi
+    movl $1,%esi
+    call evn_fail
+    jmp .Lgraph_test_fail
+.section .rodata
+.Luncaught_message:
+.byte 98,111,111,109,0,206,178
+'''+FINISH)
+        self.assertEqual((result.returncode,result.stdout,result.stderr),
+                         (1,b'',b'Eristavi runtime fault: boom\0\xce\xb2\n'))
+,emitted,re.M)
+        self.assertEqual(len(names),5)
+        self.assertEqual(len(set(names)),5)
+        self.assertEqual(len(re.findall(r'^    \.byte 5
+        # Native runtime conformance only: this uses the pre-existing class-5
+        # frame root, NOT a root table emitted by the new canonical UIR.
+        # The actual cleanup append service is provided by the resource
+        # profile, not by the graph-only runtime built for this test class.
+        generator = self.directory / 'u2-resource-runtime'
+        self.assertEqual(build_native(ROOT/'src/resource_value_runtime.eri',
+                                      generator, ROOT/'src'), 0)
+        emitted = subprocess.run([str(generator)], capture_output=True,
+                                 text=True, timeout=60)
+        self.assertEqual((emitted.returncode, emitted.stderr), (0, ''))
+        runtime = lifetime_tests.audit_slot_count(emitted.stdout)
+        needle = 'erist_rt_text_collect:\n'
+        self.assertEqual(runtime.count(needle), 1)
+        runtime = runtime.replace(
+            needle, needle + '    incq erist_rt_u2_forced_gc_calls(%rip)\n', 1)
+        runtime += ('\n.bss\n.p2align 3\n'
+                    '.globl erist_rt_u2_forced_gc_calls\n'
+                    'erist_rt_u2_forced_gc_calls:\n.quad 0\n')
+        result = self.run_probe('u2-rooted-secondary-gc', r'''
+.text
+.globl _start
+_start:
+    xorl %ebp,%ebp
+    call evn_scope_enter
+    movq %rax,%r12
+    movq %rax,%rdi
+    leaq .Lu2_pair_root(%rip),%rsi
+    leaq .Lu2_pair_class(%rip),%rdx
+    movl $1,%ecx
+    call evn_bind_roots
+    # Produce and save a typed primary failure with a managed Text payload.
+    call evn_frame
+    movq %rax,%r13
+    movq %rax,%rdi
+    call setjmp
+    testq %rax,%rax
+    jne .Lu2_primary_caught
+    movl $42,%edi
+    call evn_int
+    movq %rax,%r14
+    leaq .Lu2_primary_text(%rip),%rdi
+    movl $12,%esi
+    call evn_text
+    movq %rax,%r15
+    movl $11,%edi
+    movl $2,%esi
+    call evn_object
+    movq %rax,%rbx
+    movq %rax,%rdi
+    xorl %esi,%esi
+    movq %r14,%rdx
+    call evn_init
+    movq %rbx,%rdi
+    movl $1,%esi
+    movq %r15,%rdx
+    call evn_init
+    movq %rbx,%rdi
+    movl $1,%esi
+    call evn_fail
+    jmp .Lgraph_test_fail
+.Lu2_primary_caught:
+    movq %r13,%rdi
+    call evn_pop
+    call evn_saved
+    movq %rax,.Lu2_pair_root(%rip)
+    call erist_rt_failure_clear
+    # Produce an independent typed cleanup failure, preserving the primary.
+    call evn_frame
+    movq %rax,%r13
+    movq %rax,%rdi
+    call setjmp
+    testq %rax,%rax
+    jne .Lu2_secondary_caught
+    movl $43,%edi
+    call evn_int
+    movq %rax,%r14
+    leaq .Lu2_secondary_text(%rip),%rdi
+    movl $17,%esi
+    call evn_text
+    movq %rax,%r15
+    movl $11,%edi
+    movl $2,%esi
+    call evn_object
+    movq %rax,%rbx
+    movq %rax,%rdi
+    xorl %esi,%esi
+    movq %r14,%rdx
+    call evn_init
+    movq %rbx,%rdi
+    movl $1,%esi
+    movq %r15,%rdx
+    call evn_init
+    movq %rbx,%rdi
+    movl $1,%esi
+    call evn_fail
+    jmp .Lgraph_test_fail
+.Lu2_secondary_caught:
+    movq %r13,%rdi
+    call evn_pop
+    call evn_saved
+    movq %rax,%rsi
+    movq .Lu2_pair_root(%rip),%rdi
+    call erist_rt_failure_append
+    call erist_rt_failure_clear
+    movq .Lu2_pair_root(%rip),%rax
+    movq 80(%rax),%rax
+    testq %rax,%rax
+    je .Lgraph_test_fail
+    cmpq $0,88(%rax)
+    jne .Lgraph_test_fail
+    # A single saved-primary root must mark both records and both Texts.
+    movl $4,%r14d
+.Lu2_pair_collect:
+    xorl %edi,%edi
+    call erist_rt_slots_collect
+    call erist_rt_text_collect
+    call erist_rt_live_failures
+    cmpq $2,%rax
+    jne .Lgraph_test_fail
+    call erist_rt_text_live_buffers
+    cmpq $2,%rax
+    jb .Lgraph_test_fail
+    decq %r14
+    jne .Lu2_pair_collect
+    movq .Lu2_pair_root(%rip),%rdi
+    movl $12,%esi
+    call evn_error
+    movq %rax,%rdi
+    xorl %esi,%esi
+    call evn_member
+    movq %rax,%rdi
+    call evn_output
+    movq .Lu2_pair_root(%rip),%rdi
+    movq 80(%rdi),%rdi
+    movl $12,%esi
+    call evn_error
+    movq %rax,%rdi
+    xorl %esi,%esi
+    call evn_member
+    movq %rax,%rdi
+    call evn_output
+    # Once the last root is removed the chain and payloads are reclaimable.
+    movq $0,.Lu2_pair_root(%rip)
+    call evn_void
+    movq %r12,%rdi
+    movq %rax,%rsi
+    call evn_scope_leave
+    xorl %edi,%edi
+    call erist_rt_slots_collect
+    call erist_rt_text_collect
+    call erist_rt_live_failures
+    testq %rax,%rax
+    jne .Lgraph_test_fail
+    cmpq $5,erist_rt_u2_forced_gc_calls(%rip)
+    jb .Lgraph_test_fail
+    jmp .Lgraph_finish
+.bss
+.p2align 3
+.Lu2_pair_root:
+.quad 0
+.section .rodata
+.Lu2_pair_class:
+.byte 5
+.Lu2_primary_text:
+.ascii "body-primary"
+.Lu2_secondary_text:
+.ascii "cleanup-secondary"
+'''+FINISH, runtime=runtime)
+        self.assertEqual((result.returncode,result.stdout,result.stderr),
+                         (0,b'body-primary\ncleanup-secondary\n',b''))
+
+    def test_owned_context_restores_callee_registers_stack_and_fp_control(self):
+        result=self.run_probe('graph-context',r'''
+.text
+.globl _start
+_start:
+    movq %rsp,.Lcontext_stack(%rip)
+    movq $11,%rbx
+    movq $22,%rbp
+    movq $33,%r12
+    movq $44,%r13
+    movq $55,%r14
+    movq $66,%r15
+    ldmxcsr .Lcontext_mxcsr(%rip)
+    fldcw .Lcontext_cw(%rip)
+    leaq .Lcontext(%rip),%rdi
+    call setjmp
+    testq %rax,%rax
+    jne .Lcontext_returned
+    xorq %rbx,%rbx
+    xorq %rbp,%rbp
+    xorq %r12,%r12
+    xorq %r13,%r13
+    xorq %r14,%r14
+    xorq %r15,%r15
+    ldmxcsr .Lcontext_other_mxcsr(%rip)
+    fldcw .Lcontext_other_cw(%rip)
+    leaq .Lcontext(%rip),%rdi
+    xorl %esi,%esi
+    jmp longjmp
+.Lcontext_returned:
+    cmpq $1,%rax
+    jne .Lgraph_test_fail
+    cmpq .Lcontext_stack(%rip),%rsp
+    jne .Lgraph_test_fail
+    cmpq $11,%rbx
+    jne .Lgraph_test_fail
+    cmpq $22,%rbp
+    jne .Lgraph_test_fail
+    cmpq $33,%r12
+    jne .Lgraph_test_fail
+    cmpq $44,%r13
+    jne .Lgraph_test_fail
+    cmpq $55,%r14
+    jne .Lgraph_test_fail
+    cmpq $66,%r15
+    jne .Lgraph_test_fail
+    stmxcsr .Lcontext_actual(%rip)
+    fnstcw .Lcontext_actual_cw(%rip)
+    cmpl $0x1f80,.Lcontext_actual(%rip)
+    jne .Lgraph_test_fail
+    cmpw $0x37f,.Lcontext_actual_cw(%rip)
+    jne .Lgraph_test_fail
+    jmp .Lgraph_finish
+.bss
+.p2align 3
+.Lcontext:
+.zero 112
+.Lcontext_stack:
+.quad 0
+.Lcontext_actual:
+.zero 4
+.Lcontext_actual_cw:
+.zero 2
+.section .rodata
+.Lcontext_mxcsr:
+.long 0x1f80
+.Lcontext_other_mxcsr:
+.long 0xffc0
+.Lcontext_cw:
+.word 0x37f
+.Lcontext_other_cw:
+.word 0x77f
+'''+FINISH)
+        self.assertEqual((result.returncode,result.stdout,result.stderr),(0,b'',b''))
+
+    def test_bounds_absence_and_managed_administration_oom_are_terminal_faults(self):
+        for name,source,message in (
+            ('negative-index','let xs be [1]; output(xs[-1]);','List index out of bounds'),
+            ('past-index','let xs be [1]; output(xs[1]);','List index out of bounds'),
+            ('ref-index','let xs be [1]; xs[1]=2;','List index out of bounds'),
+        ):
+            with self.subTest(case=name):
+                path=self.directory/(name+'.eri'); path.write_text(source)
+                app=self.compile_application(path)
+                result=self.run_probe(name,app+'\n.text\n.globl _start\n_start:\ncall erist_entry\n',types=False)
+                self.assertEqual((result.returncode,result.stdout,result.stderr),
+                                 (1,b'',f'Eristavi runtime fault: {message}\n'.encode()))
+        for name,body,failure_at,count,message in (
+            ('object-oom','movl $6,%edi\nmovl $1,%esi\ncall evn_object',1,0,'out of memory'),
+            ('object-slot-oom','movl $6,%edi\nmovl $1,%esi\ncall evn_object',2,1,'out of memory'),
+            ('handler-oom','call evn_frame',1,0,'out of memory'),
+            ('handler-object-oom','call evn_frame\nmovq %rax,%rdi\ncall setjmp\ntestq %rax,%rax\njne .Lgraph_test_fail\nmovl $6,%edi\nmovl $1,%esi\ncall evn_object',2,0,'out of memory'),
+            ('saved-oom','call evn_saved',1,0,'out of memory'),
+            ('absent','movl $8,%edi\ncall evn_none\nmovq %rax,%rdi\ncall evn_get',0,0,'optional value is absent'),
+            ('size-overflow','movl $6,%edi\nmovabsq $288230376151711743,%rsi\ncall evn_object',0,0,'value size overflow'),
+        ):
+            with self.subTest(case=name):
+                runtime=self.runtime.replace('erist_rt_alloc:\n',f'''erist_rt_alloc:
+    incq .Loom_calls(%rip)
+    cmpq ${failure_at},.Loom_calls(%rip)
+    jne .Loom_real_alloc
+    xorl %eax,%eax
+    ret
+.Loom_real_alloc:
+''',1)
+                runtime=runtime.replace('erist_rt_exit:\n',f'''erist_rt_exit:
+    cmpq ${count},.Lgraph_count(%rip)
+    jne .Loom_bad_exit
+''',1)
+                result=self.run_probe(name,'.text\n.globl _start\n_start:\n'+body+
+                    '\njmp .Lgraph_test_fail\n.Loom_bad_exit:\nmovl $99,%edi\nmovl $60,%eax\nsyscall\nud2\n.bss\n.Loom_calls:\n.quad 0\n'+FINISH,runtime)
+                self.assertEqual((result.returncode,result.stdout,result.stderr),
+                                 (1,b'',f'Eristavi runtime fault: {message}\n'.encode()))
+
+    def test_deep_graph_marking_uses_bounded_stack_and_reclaims_every_cell(self):
+        result=self.run_probe('graph-depth',r'''
+.text
+.globl _start
+_start:
+    xorl %ebp,%ebp
+    call evn_scope_enter
+    movq %rax,%r12
+    movq %rax,%rdi
+    leaq .Ldeep_key(%rip),%rsi
+    leaq .Ldeep_class(%rip),%rdx
+    movl $1,%ecx
+    call evn_bind_roots
+    # Private raw construction intentionally has no safe point until the root
+    # is fully published. Each initialized cell has the compiler-described type.
+    movl $1,%edi
+    call erist_rt_graph_new_object
+    movq %rax,%r13
+    movq 8(%rax),%rdx
+    movq $8,(%rdx)
+    movl $20000,%r14d
+.Ldeep_build:
+    movl $1,%edi
+    call erist_rt_graph_new_object
+    movq %rax,%r15
+    movl $1,%edi
+    call erist_rt_graph_new_object
+    movq %rax,%rbx
+    movq 8(%rax),%rdx
+    movq $10,(%rdx)
+    movq %r13,8(%rdx)
+    movl $1,%edi
+    call erist_rt_graph_new_object
+    movq %rax,%rcx
+    movq 8(%rax),%rdx
+    movq $9,(%rdx)
+    movq %rbx,8(%rdx)
+    movq 8(%r15),%rdx
+    movq $8,(%rdx)
+    movq %rcx,8(%rdx)
+    movq %r15,%r13
+    decq %r14
+    jne .Ldeep_build
+    movl $10,%edi
+    movq %r13,%rsi
+    call erist_rt_value_new
+    movq %rax,.Ldeep_key(%rip)
+    movq %rax,%rdi
+    call erist_rt_slots_collect
+    call erist_rt_text_collect
+    call erist_rt_graph_live_objects
+    cmpq $60001,%rax
+    jne .Lgraph_test_fail
+    movq $0,.Ldeep_key(%rip)
+    xorl %edi,%edi
+    call erist_rt_slots_collect
+    call erist_rt_text_collect
+    call erist_rt_graph_live_objects
+    testq %rax,%rax
+    jne .Lgraph_test_fail
+    call evn_void
+    movq %r12,%rdi
+    movq %rax,%rsi
+    call evn_scope_leave
+    jmp .Lgraph_finish
+.bss
+.p2align 3
+.Ldeep_key:
+.quad 0
+.section .rodata
+.Ldeep_class:
+.byte 1
+'''+FINISH)
+        self.assertEqual((result.returncode,result.stdout,result.stderr),(0,b'',b''))
+
+    def test_uncaught_failure_keeps_nonfirst_message_field_and_embedded_nul(self):
+        result=self.run_probe('graph-uncaught',r'''
+.text
+.globl _start
+_start:
+    xorl %ebp,%ebp
+    movl $11,%edi
+    movl $2,%esi
+    call evn_object
+    movq %rax,%r12
+    movl $42,%edi
+    call evn_int
+    movq %r12,%rdi
+    xorl %esi,%esi
+    movq %rax,%rdx
+    call evn_init
+    leaq .Luncaught_message(%rip),%rdi
+    movl $7,%esi
+    call evn_text
+    movq %r12,%rdi
+    movl $1,%esi
+    movq %rax,%rdx
+    call evn_init
+    movq %r12,%rdi
+    movl $1,%esi
+    call evn_fail
+    jmp .Lgraph_test_fail
+.section .rodata
+.Luncaught_message:
+.byte 98,111,111,109,0,206,178
+'''+FINISH)
+        self.assertEqual((result.returncode,result.stdout,result.stderr),
+                         (1,b'',b'Eristavi runtime fault: boom\0\xce\xb2\n'))
+,emitted,re.M)),5)
+        self.assertIn('.globl erist_u2_bind_7',emitted)
+        self.assertIn('    movq $0,32(%rsi)',emitted)
+        self.assertIn('.globl erist_u2_release_7_'+names[0],emitted)
+        ident=names[0]
+        # Five 8-byte roots + 8 bytes of local scope storage, SysV aligned.
+        source_asm=f'''
+.text
+.globl _start
+_start:
+    xorl %ebp,%ebp
+    subq $48,%rsp
+    movq %rsp,%r15
+    call evn_scope_enter
+    movq %rax,40(%r15)
+    movq %rax,%rdi
+    movq %r15,%rsi
+    call erist_u2_bind_7
+    call evn_frame
+    movq %rax,%r13
+    movq %rax,%rdi
+    call setjmp
+    testq %rax,%rax
+    jne .Lu2_emitted_caught
+    movl $42,%edi
+    call evn_int
+    movq %rax,%r14
+    leaq .Lu2_emitted_text(%rip),%rdi
+    movl $15,%esi
+    call evn_text
+    movq %rax,%rbx
+    movl $11,%edi
+    movl $2,%esi
+    call evn_object
+    movq %rax,%r12
+    movq %rax,%rdi
+    xorl %esi,%esi
+    movq %r14,%rdx
+    call evn_init
+    movq %r12,%rdi
+    movl $1,%esi
+    movq %rbx,%rdx
+    call evn_init
+    movq %r12,%rdi
+    movl $1,%esi
+    call evn_fail
+    jmp .Lgraph_test_fail
+.Lu2_emitted_caught:
+    movq %r13,%rdi
+    call evn_pop
+    call evn_saved
+    movq %r15,%rdi
+    movq %rax,%rsi
+    call erist_u2_publish_7_{ident}
+    call erist_rt_failure_clear
+    movl $4,%r14d
+.Lu2_emitted_collect:
+    xorl %edi,%edi
+    call erist_rt_slots_collect
+    call erist_rt_text_collect
+    call erist_rt_live_failures
+    cmpq $1,%rax
+    jne .Lgraph_test_fail
+    decq %r14
+    jne .Lu2_emitted_collect
+    movq (%r15),%rdi
+    movl $12,%esi
+    call evn_error
+    movq %rax,%rdi
+    xorl %esi,%esi
+    call evn_member
+    movq %rax,%rdi
+    call evn_output
+    movq %r15,%rdi
+    call erist_u2_release_7_{ident}
+    cmpq $0,(%r15)
+    jne .Lgraph_test_fail
+    call evn_void
+    movq 40(%r15),%rdi
+    movq %rax,%rsi
+    call evn_scope_leave
+    xorl %edi,%edi
+    call erist_rt_slots_collect
+    call erist_rt_text_collect
+    call erist_rt_live_failures
+    testq %rax,%rax
+    jne .Lgraph_test_fail
+    cmpq $5,erist_rt_u2_emitted_collect_count(%rip)
+    jb .Lgraph_test_fail
+    addq $48,%rsp
+    jmp .Lgraph_finish
+.section .rodata
+.Lu2_emitted_text:
+.ascii "u2-emitted-root"
+'''
+        runtime=self.runtime
+        marker='erist_rt_text_collect:\n'
+        self.assertEqual(runtime.count(marker),1)
+        runtime=runtime.replace(
+            marker,marker+'    incq erist_rt_u2_emitted_collect_count(%rip)\n',1)
+        runtime+=(
+            '\n.bss\n.p2align 3\n'
+            '.globl erist_rt_u2_emitted_collect_count\n'
+            'erist_rt_u2_emitted_collect_count:\n.quad 0\n')
+        result=self.run_probe(
+            'u2-generated-scoped-roots',emitted+source_asm+FINISH,runtime=runtime)
+        self.assertEqual((result.returncode,result.stdout,result.stderr),
+                         (0,b'u2-emitted-root\n',b''))
+
     def test_u2_primary_and_secondary_survive_forced_gc_in_order(self):
         # Native runtime conformance only: this uses the pre-existing class-5
         # frame root, NOT a root table emitted by the new canonical UIR.
