@@ -1,0 +1,20 @@
+name: Focused test_u4_parallel_moves qualification
+on:
+  push:
+    branches:
+      - compiler/u4-machine-lowering-20261103
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  focused:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Run exact focused tests
+        run: |
+          python -m compileall -q compiler/erist/u4_parallel_moves.py tests/test_u4_parallel_moves.py
+          PYTHONPATH=.:tests python -m unittest -v test_u4_parallel_moves
