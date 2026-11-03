@@ -1,0 +1,69 @@
+// Optional x86-64 native publication of VERIFIED U2 checked-failure roots.
+// Private generated assembler helpers; caller owns stack/frame root words.
+// This is not an executable alternate IR or an independent garbage collector.
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+import compiler.u1_builder as build;
+import compiler.u1_aggregate as aggregate;
+import compiler.u2_root_map as roots;
+import compiler.format as format;
+
+public error Unsupported { message Text; }
+
+function require(ok Bool,message Text) fails Unsupported {
+    if not ok { fail Unsupported { message=message; }; }
+}
+public function emit(map identity roots.Map,routine identity build.Function,
+    graph identity aggregate.Registry,phase identity budget.Phase,label Int)
+    fails budget.LimitError,roots.InvalidRoots,Unsupported {
+    // A fresh independent scan is a publication gate, not a trusted flag.
+    let proof be try roots.verify(map,routine,graph,phase);
+    try require(label > 0 and label <= 2147483647,
+        "invalid private x86-64 root-map symbol namespace");
+    try require(proof.roots > 0 and proof.roots <= 128,
+        "x86-64 root emitter needs one to 128 checked edges");
+    let name be format.integer(label);
+    // Root words remain caller-owned, and can live in a stack frame.
+    // Each slot points to a native saved-failure record, not a 32-byte
+    // value struct. Classes are immutable; publication is per SSA outcome.
+    output(".section .rodata");
+    output(".p2align 3");
+    output("erist_u2_classes_"+name+":");
+    let index be 0;
+    while index < proof.roots {
+        try budget.work(phase,1);
+        output("    .byte 5");
+        index=index+1;
+    }
+    output(".text");
+    output(".globl erist_u2_bind_"+name);
+    output(".type erist_u2_bind_"+name+",@function");
+    output("erist_u2_bind_"+name+":");
+    output("    leaq erist_u2_classes_"+name+"(%rip),%rdx");
+    output("    movl $"+format.integer(proof.roots)+",%ecx");
+    output("    jmp evn_bind_roots");
+    output(".size erist_u2_bind_"+name+",.-erist_u2_bind_"+name);
+    index=0;
+    while index < proof.roots {
+        try budget.work(phase,1);
+        let row be index*6;
+        let instruction be try words.get(map.records,phase,row);
+        let id be name+"_"+format.integer(instruction);
+        let displacement be format.integer(index*8);
+        // ABI: rdi = caller's live root words, rsi = saved-failure pointer.
+        output(".globl erist_u2_publish_"+id);
+        output(".type erist_u2_publish_"+id+",@function");
+        output("erist_u2_publish_"+id+":");
+        output("    movq %rsi,"+displacement+"(%rdi)");
+        output("    ret");
+        output(".size erist_u2_publish_"+id+",.-erist_u2_publish_"+id);
+        output(".globl erist_u2_release_"+id);
+        output(".type erist_u2_release_"+id+",@function");
+        output("erist_u2_release_"+id+":");
+        output("    movq $0,"+displacement+"(%rdi)");
+        output("    ret");
+        output(".size erist_u2_release_"+id+",.-erist_u2_release_"+id);
+        index=index+1;
+    }
+    output(".section .note.GNU-stack,\"\",@progbits");
+}
