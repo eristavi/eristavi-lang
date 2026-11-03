@@ -22,6 +22,7 @@ class U2FailureRootBindingTests(unittest.TestCase):
             '    let pin be try roots.create(fn,graph,phase,pair,failureParameter,context);\n'
             '    try check(try roots.verify(fn,graph,phase,pair,pin),"canonical root binding changed");\n'
             '    try roots.close(pin);\n'
+            '    try check(pin.context == none and pin.closed,"released reference pin kept context alive");\n'
             '    try failure.close(context);\n'
             '    let firstCall be try invoke.emit(fn,graph,acquire,pair,[]);'
         )
