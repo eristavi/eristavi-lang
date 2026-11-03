@@ -83,7 +83,9 @@ public function emit(map identity roots.Map,routine identity build.Function,
     let plan be machineSlots.create(map,routine,graph,phase)
         else error machineSlots.InvalidSlots {
             fail Unsupported { message=error.message; };
-        };
+        }
+        else error budget.LimitError { fail error; }
+        else error roots.InvalidRoots { fail error; };
     emitWithSlots(plan,map,routine,graph,phase,label)
         else error machineSlots.InvalidSlots {
             try machineSlots.close(plan);
