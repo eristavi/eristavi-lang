@@ -295,3 +295,7 @@ not active instructions.** Read history only when needed for a specific decision
 Future handovers should replace outdated current statements and archive history,
 not recreate the old chronological accumulation. This current file supersedes
 all archived recovery instructions while retaining the governing mandates.
+
+### U3 exact-head focused CI follow-up — 2026-11-03
+
+At U3 PR #119 head `4c05f9e0db7b391bf26c6dcf9390c7ae67506e45`, dedicated [focused run 41623250447](https://github.com/eristavi/eristavi-lang/actions/runs/41623250447) **SUCCESS**, six focused tests passed (`test_u3_shadow_gate`: 3; `test_u3_construction_pilot`: 3), no failures; [standard CI 41623258750](https://github.com/eristavi/eristavi-lang/actions/runs/41623258750) **SUCCESS**. Earlier focused failures were caused by missing bootstrap dependency `regex`; the workflow now installs the project first. Evidence is exact for that head only. This does **not** qualify native Eristavi AST→owned canonical UIR, independent execution, or production migration; U3 #75 and draft PR #119 remain open. Avoid unnecessary full CI until integrated batch is ready.
