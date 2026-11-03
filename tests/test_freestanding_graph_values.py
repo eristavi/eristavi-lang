@@ -336,8 +336,10 @@ _start:
         self.assertEqual(runtime.count(needle), 1)
         runtime = runtime.replace(
             needle,
-            needle + '    incq .Lu2_forced_gc_calls(%rip)\n', 1)
-        runtime += '\n.bss\n.p2align 3\n.Lu2_forced_gc_calls:\n.quad 0\n'
+            needle + '    incq erist_rt_u2_forced_gc_calls(%rip)\n', 1)
+        runtime += ('\n.bss\n.p2align 3\n'
+                    '.globl erist_rt_u2_forced_gc_calls\n'
+                    'erist_rt_u2_forced_gc_calls:\n.quad 0\n')
         result = self.run_probe('u2-saved-failure-explicit-gc', r'''
 .text
 .globl _start
@@ -422,7 +424,7 @@ _start:
     call erist_rt_live_failures
     testq %rax,%rax
     jne .Lgraph_test_fail
-    cmpq $5,.Lu2_forced_gc_calls(%rip)
+    cmpq $5,erist_rt_u2_forced_gc_calls(%rip)
     jb .Lgraph_test_fail
     jmp .Lgraph_finish
 .bss
@@ -437,6 +439,167 @@ _start:
 '''+FINISH, runtime=runtime)
         self.assertEqual((result.returncode,result.stdout,result.stderr),
                          (0,b'u2-primary-text\n',b''))
+
+    def test_u2_primary_and_secondary_survive_forced_gc_in_order(self):
+        # Native runtime conformance only: this uses the pre-existing class-5
+        # frame root, NOT a root table emitted by the new canonical UIR.
+        runtime = self.runtime
+        needle = 'erist_rt_text_collect:\n'
+        self.assertEqual(runtime.count(needle), 1)
+        runtime = runtime.replace(
+            needle, needle + '    incq erist_rt_u2_forced_gc_calls(%rip)\n', 1)
+        runtime += ('\n.bss\n.p2align 3\n'
+                    '.globl erist_rt_u2_forced_gc_calls\n'
+                    'erist_rt_u2_forced_gc_calls:\n.quad 0\n')
+        result = self.run_probe('u2-rooted-secondary-gc', r'''
+.text
+.globl _start
+_start:
+    xorl %ebp,%ebp
+    call evn_scope_enter
+    movq %rax,%r12
+    movq %rax,%rdi
+    leaq .Lu2_pair_root(%rip),%rsi
+    leaq .Lu2_pair_class(%rip),%rdx
+    movl $1,%ecx
+    call evn_bind_roots
+    # Produce and save a typed primary failure with a managed Text payload.
+    call evn_frame
+    movq %rax,%r13
+    movq %rax,%rdi
+    call setjmp
+    testq %rax,%rax
+    jne .Lu2_primary_caught
+    movl $42,%edi
+    call evn_int
+    movq %rax,%r14
+    leaq .Lu2_primary_text(%rip),%rdi
+    movl $12,%esi
+    call evn_text
+    movq %rax,%r15
+    movl $11,%edi
+    movl $2,%esi
+    call evn_object
+    movq %rax,%rbx
+    movq %rax,%rdi
+    xorl %esi,%esi
+    movq %r14,%rdx
+    call evn_init
+    movq %rbx,%rdi
+    movl $1,%esi
+    movq %r15,%rdx
+    call evn_init
+    movq %rbx,%rdi
+    movl $1,%esi
+    call evn_fail
+    jmp .Lgraph_test_fail
+.Lu2_primary_caught:
+    movq %r13,%rdi
+    call evn_pop
+    call evn_saved
+    movq %rax,.Lu2_pair_root(%rip)
+    call erist_rt_failure_clear
+    # Produce an independent typed cleanup failure, preserving the primary.
+    call evn_frame
+    movq %rax,%r13
+    movq %rax,%rdi
+    call setjmp
+    testq %rax,%rax
+    jne .Lu2_secondary_caught
+    movl $43,%edi
+    call evn_int
+    movq %rax,%r14
+    leaq .Lu2_secondary_text(%rip),%rdi
+    movl $17,%esi
+    call evn_text
+    movq %rax,%r15
+    movl $11,%edi
+    movl $2,%esi
+    call evn_object
+    movq %rax,%rbx
+    movq %rax,%rdi
+    xorl %esi,%esi
+    movq %r14,%rdx
+    call evn_init
+    movq %rbx,%rdi
+    movl $1,%esi
+    movq %r15,%rdx
+    call evn_init
+    movq %rbx,%rdi
+    movl $1,%esi
+    call evn_fail
+    jmp .Lgraph_test_fail
+.Lu2_secondary_caught:
+    movq %r13,%rdi
+    call evn_pop
+    call evn_saved
+    movq %rax,%rsi
+    movq .Lu2_pair_root(%rip),%rdi
+    call erist_rt_failure_append
+    call erist_rt_failure_clear
+    movq .Lu2_pair_root(%rip),%rax
+    movq 80(%rax),%rax
+    testq %rax,%rax
+    je .Lgraph_test_fail
+    cmpq $0,88(%rax)
+    jne .Lgraph_test_fail
+    # A single saved-primary root must mark both records and both Texts.
+    movl $4,%r14d
+.Lu2_pair_collect:
+    xorl %edi,%edi
+    call erist_rt_slots_collect
+    call erist_rt_text_collect
+    call erist_rt_live_failures
+    cmpq $2,%rax
+    jne .Lgraph_test_fail
+    decq %r14
+    jne .Lu2_pair_collect
+    movq .Lu2_pair_root(%rip),%rdi
+    movl $12,%esi
+    call evn_error
+    movq %rax,%rdi
+    xorl %esi,%esi
+    call evn_member
+    movq %rax,%rdi
+    call evn_output
+    movq .Lu2_pair_root(%rip),%rdi
+    movq 80(%rdi),%rdi
+    movl $12,%esi
+    call evn_error
+    movq %rax,%rdi
+    xorl %esi,%esi
+    call evn_member
+    movq %rax,%rdi
+    call evn_output
+    # Once the last root is removed the chain and payloads are reclaimable.
+    movq $0,.Lu2_pair_root(%rip)
+    call evn_void
+    movq %r12,%rdi
+    movq %rax,%rsi
+    call evn_scope_leave
+    xorl %edi,%edi
+    call erist_rt_slots_collect
+    call erist_rt_text_collect
+    call erist_rt_live_failures
+    testq %rax,%rax
+    jne .Lgraph_test_fail
+    cmpq $5,erist_rt_u2_forced_gc_calls(%rip)
+    jb .Lgraph_test_fail
+    jmp .Lgraph_finish
+.bss
+.p2align 3
+.Lu2_pair_root:
+.quad 0
+.section .rodata
+.Lu2_pair_class:
+.byte 5
+.Lu2_primary_text:
+.ascii "body-primary"
+.Lu2_secondary_text:
+.ascii "cleanup-secondary"
+'''+FINISH, runtime=runtime)
+        self.assertEqual((result.returncode,result.stdout,result.stderr),
+                         (0,b'body-primary\ncleanup-secondary\n',b''))
 
     def test_owned_context_restores_callee_registers_stack_and_fp_control(self):
         result=self.run_probe('graph-context',r'''
