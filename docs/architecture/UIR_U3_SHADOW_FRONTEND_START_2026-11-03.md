@@ -25,3 +25,13 @@ Managed Text/List/identity, checked failures, resource cleanup and GC safe point
 3. **Tests added (not yet independently confirmed):** `tests/test_u3_shadow_gate.py` exercises exact revisions, stale digest, unsupported managed type, duplicate and traversal rejection. Await exact-head focused CI before claiming green.
 
 Next: map frozen AST facts to U1 metadata/LocId and implement real shadow construction; do not confuse the ingress gate with U3 completion.
+
+## Steps 1–5 checkpoint (2026-11-03)
+
+1. **Architecture:** Reviewed governing philosophy/semantics and current U1/U2 ownership and publication gates. The old `uir` CLI remains unchanged.
+2. **Validation:** PR #119 earlier ordinary smoke CI run [41618884217](https://github.com/eristavi/eristavi-lang/actions/runs/41618884217) succeeded, but it does **not** establish the new focused U3 tests passed. Dedicated exact tests have been configured; verify their actual run separately.
+3. **AST semantic facts:** Added `u3_semantic_bridge.py` to freeze identity-checked, typed scalar facts with effect masks and source spans; it accepts an externally supplied semantic snapshot and is **not yet wired** to the Eristavi semantic analyzer.
+4. **Metadata:** Added `u3_metadata_plan.py` for deterministic source anchors, signatures and FunctionId indexes; it is a Python planning adapter, **not yet actual U1 owned Metadata/LocId publication**.
+5. **Direct scalar pilot:** Added `u3_scalar_construction.py` with a strictly bounded, fail-closed plan for `const.i64`, `const.pred`, and `return`, plus `test_u3_construction_pilot.py`. This is **not executable canonical UIR** and does not replace Typed IR or the production frontend. Unsupported control flow, calls, managed types and failure operations are rejected.
+
+**Next acceptance-critical work:** Implement the Eristavi-native AST+semantic-facts bridge, actual owner-bound U1 metadata and builder calls, independently verify all-block SSA, and run the dedicated focused test workflow. Do not merge/close #75 or claim steps 3–5 fully integrated until those gates pass.
