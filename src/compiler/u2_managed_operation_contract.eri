@@ -1,0 +1,76 @@
+// U2 private managed-operation semantic contract, not machine lowering.
+// Keep frozen source semantics and the canonical U1/U1b operation set intact.
+// Unknown mandatory managed operations fail closed; nothing silently falls back
+// to old lowering. No fake Void result is invented for mutations.
+//
+// Operation IDs (private version 1):
+// 1 copy/value.snapshot; 2 List.add; 3 List.index.update;
+// 4 List.equal; 5 List.iter.snapshot;
+// 6 Text.equal; 7 Text.view; 8 identity.equal.
+// Text views select 1 graphemes, 2 scalars, 3 bytes (Unicode 17).
+import compiler.u1_budget as budget;
+import compiler.u2_managed_types as managed;
+
+public type Contract {
+    version Int; operation Int; typeIndex Int; kind Int;
+    resultCount Int; copyPolicy Int; mayAllocate Bool;
+    mayTrap Bool; requiresRoot Bool; view Int; unicodeVersion Int;
+}
+public error Unsupported { message Text; }
+function require(ok Bool,message Text) fails Unsupported {
+    if not ok { fail Unsupported { message=message; }; }
+}
+public function select(table identity managed.Registry,
+    phase identity budget.Phase,typeId managed.TypeId,
+    operation Int,view Int) returns Contract
+    fails budget.LimitError,Unsupported {
+    try require(table.version == 1 and table.state == 1 and
+        table.graph.state == 1 and table.graph.key == table.graphKey and
+        table.records.frozen and not table.records.closed and
+        phase.owner == table.owner and phase.state == 0 and
+        typeId.owner == table.key,
+        "foreign, mutable or stale managed-operation contract");
+    let descriptor be try managed.descriptor(table,phase,typeId);
+    let resultCount be 1;
+    let alloc be false; let trap be false; let needsRoot be false;
+    try require(operation >= 1 and operation <= 8,
+        "unsupported managed operation");
+    if operation != 7 { try require(view == 0,"unexpected Text view selector"); }
+    if operation == 1 {
+        // Text is immutable and identity copies the alias. Copying a mutable
+        // List must have an independently preserved value snapshot.
+        alloc=descriptor.kind == 2;
+        needsRoot=alloc;
+    } else if operation == 2 or operation == 3 {
+        try require(descriptor.kind == 2,"mutation requires List value");
+        resultCount=0; alloc=true; needsRoot=true;
+        if operation == 3 { trap=true; }
+    } else if operation == 4 {
+        try require(descriptor.kind == 2,"List equality needs List value");
+        // Ordinary structural equality may traverse nested values/cycles.
+        // Calls may allocate temporary traversal state.
+        alloc=true; needsRoot=true;
+    } else if operation == 5 {
+        try require(descriptor.kind == 2,"List snapshot needs List value");
+        alloc=true; needsRoot=true;
+    } else if operation == 6 {
+        try require(descriptor.kind == 1,"Text equality needs Text value");
+    } else if operation == 7 {
+        try require(descriptor.kind == 1 and view >= 1 and view <= 3,
+            "Text view requires valid Unicode 17 selection");
+        alloc=true; needsRoot=true;
+    } else {
+        try require(descriptor.kind == 3,"identity equality requires identity");
+    }
+    return Contract { version=1; operation=operation; typeIndex=typeId.index;
+        kind=descriptor.kind; resultCount=resultCount;
+        copyPolicy=descriptor.copyPolicy; mayAllocate=alloc;
+        mayTrap=trap; requiresRoot=needsRoot; view=view;
+        unicodeVersion=17; };
+}
+// This describes a lowering obligation, not its satisfaction.
+// A backend must refuse to emit until its separate native root and runtime
+// adapter validators prove the actual operation and live-value locations.
+public function requiresSafePoint(contract Contract) returns Bool {
+    return contract.mayAllocate or contract.requiresRoot;
+}

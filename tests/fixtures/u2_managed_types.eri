@@ -6,6 +6,7 @@ import compiler.u1_meta as meta;
 import compiler.u1_aggregate as aggregate;
 import compiler.u1_aggregate_verify as graphVerify;
 import compiler.u2_managed_types as managed;
+import compiler.u2_managed_operation_contract as operations;
 
 error ProbeError { message Text; }
 function check(ok Bool,message Text) fails ProbeError {
@@ -20,8 +21,16 @@ function rejected(reg identity managed.Registry,graph identity aggregate.Registr
         else error graphVerify.InvalidGraph { fail error; };
     return false;
 }
+function operationRejected(reg identity managed.Registry,
+    phase identity budget.Phase,value managed.TypeId,
+    opcode Int,view Int) returns Bool fails budget.LimitError {
+    let contract be operations.select(reg,phase,value,opcode,view)
+        else error operations.Unsupported { return true; }
+        else error budget.LimitError { fail error; };
+    return false;
+}
 function run() fails budget.LimitError,graphVerify.InvalidGraph,
-    managed.InvalidManagedTypes,ProbeError {
+    managed.InvalidManagedTypes,operations.Unsupported,ProbeError {
     let request be try budget.developmentRequest();
     let shared be try budget.metadataOwner(request);
     let phase be try budget.constructionPhase(shared);
@@ -64,6 +73,37 @@ function run() fails budget.LimitError,graphVerify.InvalidGraph,
         not (try managed.deepFixable(registry,phase,sharedList)),
         "managed deep-fixability does not propagate identity");
     try managed.freeze(registry);
+    // U2 private version-one operation profile: no alternative source syntax,
+    // invented NoValue result, or silent List aliasing.
+    let listCopy be try operations.select(registry,phase,textList,1,0);
+    let handleCopy be try operations.select(registry,phase,boxed,1,0);
+    let listAdd be try operations.select(registry,phase,textList,2,0);
+    let listIndex be try operations.select(registry,phase,textList,3,0);
+    let listEquality be try operations.select(registry,phase,nestedList,4,0);
+    let textEquality be try operations.select(registry,phase,textType,6,0);
+    let graphemes be try operations.select(registry,phase,textType,7,1);
+    let scalars be try operations.select(registry,phase,textType,7,2);
+    let bytes be try operations.select(registry,phase,textType,7,3);
+    let identityEquality be try operations.select(registry,phase,boxed,8,0);
+    try check(listCopy.copyPolicy == 1 and
+        listCopy.mayAllocate and listCopy.requiresRoot and
+        handleCopy.copyPolicy == 2 and
+        not handleCopy.mayAllocate and
+        listAdd.resultCount == 0 and listAdd.mayAllocate and
+        listIndex.mayTrap and listIndex.resultCount == 0 and
+        listEquality.mayAllocate and textEquality.unicodeVersion == 17 and
+        graphemes.view == 1 and scalars.view == 2 and bytes.view == 3 and
+        graphemes.requiresRoot and
+        not identityEquality.mayAllocate and
+        identityEquality.kind == 3,
+        "managed operation contract violated value/alias/Unicode policy");
+    try check(try operationRejected(registry,phase,textList,7,1) and
+        try operationRejected(registry,phase,textType,2,0) and
+        try operationRejected(registry,phase,textList,8,0) and
+        try operationRejected(registry,phase,textType,7,4) and
+        try operationRejected(registry,phase,textType,1,1) and
+        try operationRejected(registry,phase,textType,99,0),
+        "unsupported managed operation was accepted");
     let review be try managed.verify(registry,graph,phase);
     try check(review.types == 7 and review.lists == 4 and
         review.identities == 2,"incorrect managed type inventory");
@@ -122,6 +162,9 @@ else error graphVerify.InvalidGraph {
 }
 else error managed.InvalidManagedTypes {
     output("managed:"+error.message); process.setExitCode(1);
+}
+else error operations.Unsupported {
+    output("operation:"+error.message); process.setExitCode(1);
 }
 else error ProbeError {
     output("probe:"+error.message); process.setExitCode(1);

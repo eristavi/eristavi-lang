@@ -1,6 +1,6 @@
 # U2 managed Text/List/identity semantic descriptors
 
-Status: opt-in development on draft PR #111; focused validation pending.
+Status: managed descriptors focused-tested; operation-contract follow-up unqualified.
 Locked design: `DESIGN_PHILOSOPHY.md`, `LANGUAGE_SEMANTICS.md`, `COLLECTIONS.md`, `IDENTITY_EQUALITY.md`.
 
 The first managed-runtime integration gate adds a **private semantic descriptor
@@ -47,3 +47,39 @@ calling those mechanisms from complete redesigned UIR is still pending.
 See `HANDOVER.md` for latest tested source head. Keep U2 #74
 open and PR #111 draft until all semantic, runtime and qualification gates
 are satisfied.
+
+## Focused evidence and new private operation semantics
+
+[CI #41629331699](https://github.com/eristavi/eristavi-lang/actions/runs/41629331699)
+completed SUCCESS on exact source `b57c5dfc88a1e618069a2c002f01f06e88821d26`:
+85 run, 82 passed, 0 failed, 3 intentionally skipped.
+The original standalone fixture failed in CI #41625310530 due to
+a missing U1a generic `TypeId`-list specialization, resolved by using
+the accepted U1b metadata test initialization. The frozen compiler
+and public runtime were not modified.
+
+The next **unqualified** opt-in `u2_managed_operation_contract.eri`
+selects these private version-one semantic obligations:
+
+| ID | Logical contract | Return behavior | Root/allocator obligation |
+| --- | --- | --- | --- |
+| 1 | Copy: Text immutable, List value snapshot, identity shared alias | One value | List may allocate and must root |
+| 2 | List.add | No value | Allocation and live-root preservation |
+| 3 | List indexed replacement | No value | Bounds terminal fault; allocation/root |
+| 4 | Structural List equality | Bool | Conservative temporary state/root |
+| 5 | List iteration snapshot | Snapshot value | Allocation/root |
+| 6 | Text scalar-sequence equality | Bool | No normalization or implicit allocation |
+| 7 | Unicode17 Text view | View value | Explicit grapheme/scalar/byte selector |
+| 8 | Logical identity equality | Bool | No physical-address equality |
+
+The operation selection API rejects foreign or mutable tables, wrong
+type families, invalid view selectors and unknown mandatory operations.
+`mayAllocate` is conservative, not an assertion that the machine
+lowering exists. No fake Void, new source syntax, public ABI change,
+second executable UIR or collector is introduced.
+
+**Do not confuse operation contract selection with implementation.**
+The canonical UIR backend must still encode/verify typed managed operands,
+result/no-result conventions, allocation/fault effects, physical runtime
+copy/update/view semantics and actual live-root stores. These new
+selectors are not executable and the new CI remains pending.
