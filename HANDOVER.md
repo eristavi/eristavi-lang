@@ -25,6 +25,37 @@ No full U2 CI or completed-batch qualification has been initiated; unverified ne
 | Production | Existing frontend/default compiler, frozen source behavior and 32-byte ABI retained; no new-UIR backend promotion |
 | Full owned compiler self-build | Explicitly excluded from ordinary work; NOT CERTIFIED |
 
+## U2 Phase 1 managed runtime — current in-progress checkpoint
+
+**Workstream:** managed Text/List/identity type relationships. Source branch
+`compiler/u2-cleanup-foundation-20261102`, draft PR #111; production `main`
+remains unchanged. Added opt-in `src/compiler/u2_managed_types.eri` as a
+separate, versioned owner-scoped descriptor registry (one canonical Text,
+ordered growable homogeneous List relationship and explicit shared identity
+handle relationship). Descriptors distinguish ordinary value-copy policy
+(1) from shared identity alias policy (2), intern duplicate relationships,
+reject foreign/forward/cyclic type references and unsupported identity nesting,
+and expose deep-fixability for explicitly represented managed nesting.
+The independent verifier checks frozen metadata backing, every canonical
+record including unused records, copy/alias policy, duplicate descriptors,
+and independently revalidates the unchanged structural aggregate graph.
+Existing public 32-byte value ABI, canonical U1b aggregate graph, frontend,
+owned collector and source syntax remain unchanged.
+
+`tests/fixtures/u2_managed_types.eri` and
+`tests/test_u2_managed_types.py` cover Text/List/identity descriptors,
+nested type relationships, identity-induced non-fixability, forged policy,
+forward element IDs, wrong version and owned-backing reclamation.
+The test is included in the focused smoke test list.
+
+**Qualification:** Newly implemented source has **NOT YET passed focused CI**;
+do not infer green status from preceding #41620686122 (81/0/3), which covers
+the preceding SSA/native-root implementation only. This slice is a semantic
+descriptor foundation: no new canonical UIR managed type opcodes, Text/List
+execution lowering, native managed root stores or GC integration are claimed.
+Follow with managed operation/value-copy semantics and independently verified
+runtime root class support; full Phase 1 and U2 remain OPEN. Do not merge.
+
 ## Latest U2 checkpoint — 3 November 2026
 
 **Current development:** single draft [PR #111](https://github.com/eristavi/eristavi-lang/pull/111), branch compiler/u2-cleanup-foundation-20261102. Support PRs #112–#118 are closed unmerged after reconciliation. U2 [issue #74](https://github.com/eristavi/eristavi-lang/issues/74) remains OPEN; U3/U4 open; optimization #51 remains PAUSED. Existing production main, compiler, locked source semantics, 32-byte ABI and owned runtime defaults unchanged.
