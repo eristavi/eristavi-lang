@@ -74,3 +74,24 @@ publication for other managed values, recursion, arbitrary loops or
 machine lowering of complete UIR bodies. Preserve draft #111 and issue #74
 until the remaining U2 gates pass. The exact source head and CI evidence
 are recorded in HANDOVER.md after the smoke completes.
+
+## Canonical SSA liveness, root-obligation analysis (unqualified)
+
+The private `u2_ssa_liveness.eri` analyzes the existing Function value,
+instruction and edge tables, not an alternate executable representation.
+It selects explicit structural TypeIds, bounds each analysis to 32 tracked
+values and 64 blocks, and maps predecessor edge arguments to each live
+target block parameter independently. Invoke-produced negative edge values
+are **not** predecessor SSA uses. Loop backedges converge through a monotone
+bounded fixpoint. Uses at allocating calls and checked cleanup are queried
+before the real instruction; a call's newly produced value is live only
+after its definition. Verification independently recomputes all selected
+root-obligation facts and rejects mismatches. This is the **precondition**
+for native root publication, not publication itself.
+
+These U1b aggregate TypeIds are not automatically GC pointers. A further
+closed, independently verified managed type/root-class registry and actual
+register/stack lowering must identify Text, List and identity references
+before emitted machine frames can publish the complete correct root set.
+Do not equate this liveness slice with full U2 coverage or run final CI
+for an uncompleted backend.

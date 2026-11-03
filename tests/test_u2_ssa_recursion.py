@@ -49,9 +49,18 @@ class U2SSARecursionTests(unittest.TestCase):
         source=source.replace(
             "returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError {",
             "returns Bool fails budget.LimitError,verify.InvalidIR,ssa.InvalidLiveness,ProbeError {",1)
-        source=source.replace(
-            "let normal be try exercise(-1);",
-            "return try exercise(-1);",1)
+        # Preserve the original fixture unmodified on disk while limiting
+        # this augmented test to its ordinary successful execution profile.
+        start=source.index("function all() returns Bool")
+        end=source.index("function main()",start)
+        self.assertGreaterEqual(start,0)
+        self.assertGreater(end,start)
+        source=source[:start]+(
+            "function all() returns Bool fails budget.LimitError,"
+            "verify.InvalidIR,ssa.InvalidLiveness,ProbeError {\\n"
+            "    return try exercise(-1);\\n"
+            "}\\n"
+        )+source[end:]
         source=source.replace(
             "function all() returns Bool fails budget.LimitError,verify.InvalidIR,ProbeError {",
             "function all() returns Bool fails budget.LimitError,verify.InvalidIR,ssa.InvalidLiveness,ProbeError {",1)

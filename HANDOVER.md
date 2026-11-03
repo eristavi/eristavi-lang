@@ -50,6 +50,33 @@ is pending. The preceding run [#41615837732](https://github.com/eristavi/eristav
 was triggered on the earlier fixture revision and is not final evidence.
 Focused CI for the latest source revision is **PENDING**, with no new green claim. Keep #111 DRAFT and #74 OPEN.
 
+### New canonical SSA-liveness analysis — implementation pending focused CI
+
+The opt-in `src/compiler/u2_ssa_liveness.eri` now tracks an explicit list of
+structural-aggregate TypeIds through the *existing canonical* SSA value table.
+The analysis independently invokes the U2 fallible-registry/canonical verifier,
+uses a bounded backward CFG fixpoint with predecessor-specific block-parameter
+substitution, handles negative checked-invoke edge-created results as new values,
+and exposes live entry/exit and instruction-before/after queries. The latter
+walk each block's real instruction chain (global InstIds need not be in
+execution order). Version, owner, type graph, contract identity, function
+revision, storage lengths and independently recomputed live sets are verified;
+malformed/missing/forged data must fail closed. Explicit limits are 64 blocks,
+512 instructions/values/edges, 32 selected values, and 8 selected TypeIds.
+A new test suite covers nested checked cleanup, SSA self-loop/backedges,
+dead blocks and recursive calls; see
+`tests/test_u2_ssa_liveness.py`, `tests/test_u2_ssa_loops.py` and
+`tests/test_u2_ssa_recursion.py`. These tests are added to Linux smoke.
+
+**Evidence is pending, not passed.** The structural TypeIds in these probes
+are immutable U1b aggregates; they do NOT yet have independently proven
+managed pointer classes, automatic heap root publication at each allocating
+safe point, or complete new-UIR Text/List/identity semantics. The 32-slot
+profile is intentionally bounded and must not be advertised as universal
+liveness/rooting. Full machine lowering, native GC live-set publication,
+per-recursive-frame runtime allocation, allocator refusal and physical
+measurements remain OPEN. Keep PR #111 draft, U2 #74 open, and main unchanged.
+
 ## Next U2 steps
 
 1. Independently verify actual target slot allocation and liveness for every canonical checked edge and all live managed values across allocations, returns, loops, dead blocks, recursion and cleanup failure paths. Refuse stale, foreign, overlapping, misaligned, absent or prematurely cleared roots. Keep bounded complexity and owner/work accounting.
