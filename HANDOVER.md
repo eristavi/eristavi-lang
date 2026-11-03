@@ -48,13 +48,32 @@ nested type relationships, identity-induced non-fixability, forged policy,
 forward element IDs, wrong version and owned-backing reclamation.
 The test is included in the focused smoke test list.
 
-**Qualification:** Newly implemented source has **NOT YET passed focused CI**;
-do not infer green status from preceding #41620686122 (81/0/3), which covers
-the preceding SSA/native-root implementation only. This slice is a semantic
-descriptor foundation: no new canonical UIR managed type opcodes, Text/List
-execution lowering, native managed root stores or GC integration are claimed.
-Follow with managed operation/value-copy semantics and independently verified
-runtime root class support; full Phase 1 and U2 remain OPEN. Do not merge.
+**Exact-head Phase 1 validation (FAILED, 2026-11-03):**
+[Focused CI #41625310530](https://github.com/eristavi/eristavi-lang/actions/runs/41625310530)
+at implementation head `afbde12f618430d296d8bab2fa230eaef341f3fd`
+completed 85 tests: **81 passed, 1 failed, 3 skipped**; scope/patch check
+passed. The sole failure was the new
+`test_u2_managed_types.U2ManagedTypesTests.test_versioned_text_list_identity_descriptors_and_corruption`;
+the Eristavi compiler reported a missing analyzed concrete specialization
+for `u1_meta.sequenceHash` with
+`(identity u1_budget.Phase, List of u1_meta.TypeId, Int)`.
+This is an unresolved test-fixture/bootstrap compilation blocker; it is
+**not** evidence that managed runtime behavior passed or that the
+compiler's specialization system is inherently defective. Inspect the
+source-level call/specialization path and repair the narrow root cause
+without changing frozen semantics or weakening verification. Re-run
+focused smoke on the new exact implementation head.
+
+The preceding [CI #41620686122](https://github.com/eristavi/eristavi-lang/actions/runs/41620686122)
+passed 81/0/3 for the older SSA/native-root implementation, not this batch.
+The new slice remains a semantic descriptor foundation: no canonical
+managed-operation opcodes, Text/List runtime execution lowering, native
+managed root stores or GC integration are claimed. Continue in this order:
+(1) fix specialization fixture/focused CI, (2) verify real managed operation
+copy/alias/Unicode17 contracts and integrate actual owned runtime adapters,
+(3) require independently checked root classes and safe-point publication,
+(4) forced-GC, OOM and independent Stage-0/native parity. Full Phase 1
+and U2 remain OPEN, PR #111 DRAFT; do not merge or run final full CI.
 
 ## Latest U2 checkpoint — 3 November 2026
 
