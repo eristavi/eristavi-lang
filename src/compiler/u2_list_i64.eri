@@ -246,7 +246,8 @@ public function emit(fn identity build.Function,g identity aggregate.Registry,
         value=value+1;
     }
     if tracked > 32 {
-        try emitNative(fn,g,carrier,p,none)
+        emitNative(fn,g,carrier,p,none)
+            else error budget.LimitError { fail error; }
             else error ssa.InvalidLiveness {
                 fail Unsupported { message=error.message; };
             };
@@ -272,7 +273,8 @@ public function emit(fn identity build.Function,g identity aggregate.Registry,
         }
         else error canonical.InvalidIR { try closeProof(plan,table); fail error; }
         else error budget.LimitError { try closeProof(plan,table); fail error; };
-    try emitNative(fn,g,carrier,p,plan)
+    emitNative(fn,g,carrier,p,plan)
+        else error budget.LimitError { try closeProof(plan,table); fail error; }
         else error ssa.InvalidLiveness {
             try closeProof(plan,table); fail Unsupported { message=error.message; };
         }
