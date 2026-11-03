@@ -17,3 +17,11 @@ The approved AST and frozen semantic facts construct one owned source-neutral ty
 ## Integration gate
 
 Managed Text/List/identity, checked failures, resource cleanup and GC safe points must use U2's accepted contracts. Do not promote this shadow path to default, close #75 or merge a compiler implementation batch without exact-head full CI and qualification. Maintain rollback and old backend.
+
+## Three-step development checkpoint
+
+1. **Inspected:** `src/frontend.eri`, `src/compiler/semantic_project.eri`, `u1_builder.eri`, `u1_meta.eri`, `u1_module.eri`, and existing source map ingress. Current `uir` command still lowers through `ir_lower` and old `typed_ir`, so it is **not** the new direct AST-to-canonical UIR path.
+2. **Implemented (isolated):** `compiler/erist/u3_shadow_gate.py` provides a private opt-in scalar source-revision and signature admission gate; no production routing or canonical construction has been changed.
+3. **Tests added (not yet independently confirmed):** `tests/test_u3_shadow_gate.py` exercises exact revisions, stale digest, unsupported managed type, duplicate and traversal rejection. Await exact-head focused CI before claiming green.
+
+Next: map frozen AST facts to U1 metadata/LocId and implement real shadow construction; do not confuse the ingress gate with U3 completion.
