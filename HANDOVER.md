@@ -5,18 +5,31 @@ Historical checkpoints are evidence, not instructions to restart old work.
 
 ## Resume here
 
-- **Active work:** U2, branch `compiler/u2-cleanup-foundation-20261102`,
-  [draft PR #111](https://github.com/eristavi/eristavi-lang/pull/111).
-- **Latest implementation:** `c7149aee5102b67b2a68e888776406ea01a0035e`.
-  Later documentation-only commits do not change its tested source.
-- **Immediate blocker:** [hosted run #41698723325](https://github.com/eristavi/eristavi-lang/actions/runs/41698723325)
-  FAILED in scope job `126136050633`, step “Check patch and classify changed paths”.
-  Hosted Linux smoke and the full matrix were SKIPPED. The specific patch-check
-  cause has not been established; do not report this revision as hosted-green.
-- **Next action:** inspect and resolve that patch/scope failure before extending
-  implementation. Then continue exact CFG liveness/root publication.
-- **This cleanup:** documentation only. No implementation fixes, compiler tests,
-  full qualification, self-build, U2 merge or milestone closure are part of it.
+- **Active work:** U2 on `compiler/u2-cleanup-foundation-20261102`, draft
+  [PR #111](https://github.com/eristavi/eristavi-lang/pull/111). U2 is unmerged;
+  issue #74 remains OPEN.
+- **Current tested implementation:** native CFG List-i64 successor-edge root
+  retirement, code commit `91f2703532a5b4644c25e0b0fc908d3106e7f769`;
+  final test-only revision `d2a25a82d9d8216f494118b348878e25176903d1`.
+- **Latest hosted evidence:** [CI #41718084522](https://github.com/eristavi/eristavi-lang/actions/runs/41718084522)
+  on exact `d2a25a82`: patch check SUCCESS; focused Linux Clang smoke
+  **92 run, 89 passed, 0 failed, 3 intentional skips, 382.990 seconds**.
+  Four-platform matrix intentionally SKIPPED; no full qualification.
+- **New implementation boundary:** when at most 32 List-carrier SSA values are
+  selected, verified canonical CFG live-in facts clear dead List root slots
+  after simultaneous successor edge transfers, including loops and cyclic
+  moves, before the next possible allocation. More than 32 List values retain
+  the existing conservative multi-block policy, up to 128 total native SSA
+  values. Intra-block roots remain conservative; no general exact root map.
+- **Next action:** add independent machine-root/dead-value rejection and
+  physical GC retained-capacity evidence for edge pruning; then extend exact
+  per-instruction liveness only after validating bounded work and semantics.
+  Preserve the source-neutral UIR, previous runtime/profile, ABI and fault
+  behavior. No speculative production promotion.
+- **This session:** fixed the previous three EOF fixture patch-check errors,
+  developed bounded native List edge-root retirement and observer tests, and
+  reconciled its focused CI outcome. No U2 merge, closure, full four-platform
+  qualification, owned full self-build or restart of paused #51.
 
 Read the governing documents below before design or implementation. The user has
 authorized continuing U2; historical stop instructions are superseded. A future
@@ -45,9 +58,9 @@ on main does not merge U2 implementation. Fetch current refs before continuing.
 | Checked continuations | Canonical opcode-46 invokes, versioned FunctionId contracts, edge-only results and typed carried values. |
 | Cleanup and owners | Independently verified reverse-cleanup plans, bounded canonical close construction, lexical owner signatures, success-only acquisition and consumption on both close outcomes. Complete resource adapters remain open. |
 | Failure contexts | Typed primary/ordered-secondary reference models and semantic matrix; class-5 saved-failure root metadata and bounded native publisher probes. These do not establish complete canonical checked-runtime integration. |
-| Liveness | Bounded independently recomputed CFG/SSA analysis and declared-root obligations, including loops and recursion probes. General automatic exact machine publication remains open. |
+| Liveness | Independently recomputed CFG/SSA plan and publication obligations; the native List-i64 profile now applies verified successor live-in facts to retire dead List roots after edge transfers for <=32 tracked List values. Per-instruction/all-managed-root coverage remains open. |
 | Managed types | Owner-scoped Text/List/identity descriptors, copy-versus-alias contracts and typed operation shapes; existing Stage-0/C/owned runtime parity oracle. This is not general canonical managed execution. |
-| Native List-i64 | Real canonical calls lowered by an Eristavi-written optional x86-64 adapter: empty/copy/append/replace/count/get/collection, branches, joins and backedges; simultaneous edge transfers including cycles. |
+| Native List-i64 | Eristavi-written optional x86-64 adapter for empty/copy/append/replace/count/get/collection, branches/joins/backedges/cyclic transfers; verified successor-edge root retirement now focused-tested for <=32 selected List values. |
 | Native boundaries | Managed-registry entry validation, Int/Bool/List runtime descriptor checks, List bounds source name/line/column, independent fixture frame-layout checks, GC/snapshot/reclamation and fault probes. |
 
 The native List profile is capped at **64 blocks, 512 edges, 128 SSA values and
@@ -55,34 +68,55 @@ The native List profile is capped at **64 blocks, 512 edges, 128 SSA values and
 structural carrier interpreted only by that legal profile. It is not a general
 managed-type encoding or frontend integration.
 
-Single-block roots use last-use clearing. Multi-block execution deliberately
-retains all initialized boxed SSA slots until scope exit. This is conservative
-bounded retention, **not exact CFG liveness-based release**. Managed-local
-promotion, arbitrary runtime/descriptor compatibility and general physical
-retention bounds are not established.
+Single-block roots use last-use clearing. In the closed multi-block List-i64
+profile, up to 32 selected List-carrier SSA values now receive independently
+verified successor live-in-based dead-root clears **after** simultaneous edge
+copies and before the next allocation. Other managed value families are not
+classified by this adapter. More than 32 selected List values retain bounded
+conservative all-block retention; other boxed values and deaths inside blocks
+also remain conservatively rooted. This is not general exact machine root
+publication/release. Managed-local promotion, arbitrary runtime/descriptor
+compatibility and physical retention bounds are still outstanding.
 
 ## Validation and evidence
 
 | Revision / run | Verified result |
 | --- | --- |
+| `d2a25a82d9d8216f494118b348878e25176903d1` — [hosted #41718084522](https://github.com/eristavi/eristavi-lang/actions/runs/41718084522) | **SUCCESS:** scope/patch check and Linux Clang focused smoke: 92 run, **89 passed, 0 failed, 3 intentional skips**; 382.990 s. Includes List snapshots, loop/backedge, cyclic swap, GC and added edge-clear assembly assertion. Full platform matrix SKIPPED. |
+| `5bcaf8533bedc44f0b4689c3d0cbddc2c1fc9ac3` — [hosted #41711062178](https://github.com/eristavi/eristavi-lang/actions/runs/41711062178) | **SUCCESS:** earlier fixture-only EOF repair; scope and focused Linux smoke passed. |
 | `c7149aee5102b67b2a68e888776406ea01a0035e` — local coherent smoke | 92 run, **89 passed, 0 failed, 3 intentional opt-in skips**, 255.341 s. Covers CFG List snapshots/cyclic swaps, registry/runtime rejection, bounds origins and existing regressions. |
 | Same revision — hosted #41698723325 | **FAILED scope/patch check**; smoke and full matrix skipped. Local success does not override this failure. |
 | `2619885a2ff7043dda4080e722ffe31c8806f495` — hosted #41696878635 | Scope and focused Linux smoke SUCCESS; full platform matrix skipped. Earlier single-block native slice only. |
 
-Current source hashes and raw outcomes/logs:
+Original implementation source hashes and raw outcomes/logs (unchanged by fixture-formatting repairs):
 [JSON](https://github.com/eristavi/eristavi-lang/blob/c7149aee5102b67b2a68e888776406ea01a0035e/docs/evidence/2026-11-03/u2-list-cfg-smoke.json)
 and [raw log](https://github.com/eristavi/eristavi-lang/blob/c7149aee5102b67b2a68e888776406ea01a0035e/docs/evidence/2026-11-03/u2-list-cfg-smoke.log).
 Exact native scope, algorithms and exclusions:
-[List-i64 contract](https://github.com/eristavi/eristavi-lang/blob/c7149aee5102b67b2a68e888776406ea01a0035e/docs/architecture/UIR_U2_LIST_I64_NATIVE.md).
+[List-i64 contract](https://github.com/eristavi/eristavi-lang/blob/compiler/u2-cleanup-foundation-20261102/docs/architecture/UIR_U2_LIST_I64_NATIVE.md) (U2 draft branch, not main); the earlier pinned file remains historical evidence.
 
 Three skipped probes are not passes. No full U2 four-platform CI or
-completed-batch qualification has passed. No whole-compiler speedup is claimed.
+completed-batch qualification has passed. Earlier CI #41698723325 failed
+only because three fixtures had surplus EOF blank lines; the corrected
+fixture revision and subsequent edge-retirement revision both passed hosted
+focused smoke. The final 382.990 s smoke is NOT a matched performance
+comparison with the previous 255.341 s local run; no whole-compiler speedup
+or measured physical retention improvement is claimed. Intermediate failed
+candidate CI runs #41714642589/#41715592713/#41716173164/#41716892840
+were corrected before final passing revision, and are historical failure
+evidence only.
 
 ## Remaining U2 acceptance, in order
 
-1. Resolve the current hosted scope/patch blocker and verify the resulting revision.
-2. Connect exact CFG liveness to native publication/release with independent
-   missing/stale/foreign/early-clear rejection and physical retention evidence.
+1. Extend independently verified List edge-root pruning with corruption
+   rejection (missing, prematurely cleared, stale/foreign and dead-published
+   roots), explicit collection at the destination, and actual retained-owner,
+   collector/traffic/RSS evidence; avoid interpreting assembly pattern checks
+   as full physical proof. Measure compile/emit overhead on matched inputs.
+2. Move from bounded successor-only List root retirement to exact per-instruction
+   managed-value publication/release on verified canonical CFG, preserving
+   loop/recursion, checked-failure, terminal fault and cleanup boundaries.
+   Resolve the current 32-tracked-List-value profile limit deliberately;
+   keep conservative fallback until new proof is qualified.
 3. Complete general canonical managed representation and eligible-local
    promotion; extend owned execution to Text/Unicode17, nested Lists and identity
    with value-copy/alias guarantees and identity-cycle coverage.
@@ -92,9 +126,9 @@ completed-batch qualification has passed. No whole-compiler speedup is claimed.
 5. Complete independent behavior/source-origin comparisons, deep/malformed/dead
    CFG cases, cancellation, sanitizer/allocator-refusal and actual owner/traffic/
    RSS/latency evidence under preselected limits.
-6. Once the coherent implementation satisfies acceptance, run one final exact-head
-   four-platform CI plus required qualification, compare tested/merged trees,
-   then decide merge/closure. Keep #74 open and #111 draft until then.
+6. Once coherent acceptance is met, run one exact-head four-platform CI and
+   required completed-batch qualification; compare tested/merged trees before
+   any U2 merge/closure. Keep #74 OPEN and #111 DRAFT until then.
 
 ## Governing documents and recovery
 
