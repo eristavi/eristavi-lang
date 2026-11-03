@@ -1,5 +1,9 @@
 # Eristavi compiler — current handover
 
+## U3 PR #119 merged — 2026-11-03
+
+[PR #119](https://github.com/eristavi/eristavi-lang/pull/119) was squash-merged into `main` as `f3c8764165647c2f01b44a41af3b1610e7ae408b`. Source head `037083bb9666120ded0aadc2a4fa8aad7aea69b1` had dedicated focused CI SUCCESS (six tests); earlier `4c05f9e` had standard CI SUCCESS. At merge time the exact-head standard CI was still in progress, so **do not claim final exact-head standard qualification**. Scope is isolated Python scalar shadow planning, semantic facts, metadata plans and tests; not real owned AST-to-canonical-UIR production integration. U3 issue #75 remains OPEN; U2/U4 remain separate. No production compiler switch was made.
+
 ## U3 first-five-step checkpoint — 2026-11-03
 
 U3 [draft PR #119](https://github.com/eristavi/eristavi-lang/pull/119) now contains a private frozen-semantic-fact bridge (`u3_semantic_bridge.py`), deterministic source/function metadata planner (`u3_metadata_plan.py`), fail-closed scalar construction *plan* (`u3_scalar_construction.py`), focused pilot tests and updated dedicated test workflow. Branch checkpoint commit `4317b73018adaf8e594dfe3c945453f6b1c51b0a`. Earlier ordinary smoke [41618884217](https://github.com/eristavi/eristavi-lang/actions/runs/41618884217) succeeded but did not execute these new focused tests. **No verified exact-head pilot test result yet.** These are Python bootstrap/planning modules, **not** the final Eristavi-native direct AST-to-owned-canonical-UIR integration; no production routing changed. U2 and U4 unchanged. Next: confirm focused workflow results, fix failures, wire semantic analyzer and real U1 metadata/builder, prove independent verification before promotion. Do not close U3 #75 or merge draft.
