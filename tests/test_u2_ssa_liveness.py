@@ -27,6 +27,21 @@ class U2SSALivenessTests(unittest.TestCase):
             "    return false;\n"
             "}\n"
         )
+        publication_helper=(
+            "function publicationRejected(plan identity ssa.Plan,"
+            "fn identity build.Function,graph identity aggregate.Registry,"
+            "table identity contracts.Registry,phase identity budget.Phase,"
+            "call build.InstId,roots)"
+            " returns Bool fails budget.LimitError,canonical.InvalidIR {\n"
+            "    let proof be ssa.requirePublished(plan,fn,graph,table,phase,"
+            "call,roots,true)"
+            " else error ssa.InvalidLiveness { return true; }"
+            " else error budget.LimitError { fail error; }"
+            " else error canonical.InvalidIR { fail error; };\n"
+            "    return false;\n"
+            "}\n"
+        )
+        helper=helper+publication_helper
         source=source.replace("function run() fails",helper+"function run() fails",1)
         insertion=(
             "let mutate be try budget.constructionPhase(owner); "
@@ -48,6 +63,21 @@ class U2SSALivenessTests(unittest.TestCase):
             "\"inner close operand must be rooted during invoke\");\n"
             "    try check(not (try ssa.liveAfter(plan,fn,mutate,innerClose,innerValue)),"
             "\"consumed owner incorrectly live after checked invoke\");\n"
+            "    let live be []; let slot be 0;\n"
+            "    while slot < plan.values.length/4 {\n"
+            "        let v be build.ValueId { owner=fn.key;"
+            " index=try words.get(plan.values,mutate,slot*4); };\n"
+            "        if try ssa.liveBefore(plan,fn,mutate,innerClose,v) { live.add(v); }\n"
+            "        slot=slot+1;\n"
+            "    }\n"
+            "    let count be try ssa.requirePublished(plan,fn,graph,table,mutate,"
+            "innerClose,live,true);\n"
+            "    try check(count == live.count and count >= 2,"
+            "\"checked cleanup publishes all managed SSA roots\");\n"
+            "    let missing be []; slot=1;\n"
+            "    while slot < live.count { missing.add(live[slot]); slot=slot+1; }\n"
+            "    try check(try publicationRejected(plan,fn,graph,table,mutate,"
+            "innerClose,missing),\"premature GC-root release accepted\");\n"
             "    let row be 0; let savedLive be try words.get(plan.inputs,mutate,row);\n"
             "    plan.inputs.frozen=false; try words.set(plan.inputs,mutate,row,1-savedLive);"
             " plan.inputs.frozen=true;\n"
