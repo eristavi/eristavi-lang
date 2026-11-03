@@ -15,13 +15,29 @@ class U2FailureRootBindingTests(unittest.TestCase):
             "import compiler.u2_scoped_owners as owners;\n"
             "import compiler.u2_failure_context as failure;\n"
             "import compiler.u2_failure_root_bind as roots;")
+        helper = (
+            'function rootRefused(fn identity build.Function,graph identity aggregate.Registry,'
+            'phase identity budget.Phase,pair continuation.Pair,pin identity roots.Pin)'
+            ' returns Bool fails budget.LimitError,continuation.InvalidBinding {\n'
+            '    let accepted be roots.verify(fn,graph,phase,pair,pin)'
+            ' else error roots.InvalidRoot { return true; };\n'
+            '    return false;\n'
+            '}\n'
+        )
+        self.assertIn("function run() fails",source)
+        source = source.replace("function run() fails",helper+"function run() fails",1)
         before = "let firstCall be try invoke.emit(fn,graph,acquire,pair,[]);"
         replacement = (
             'let context be try failure.create(owner,phase,21,"body-primary",loc.index);\n'
             '    let failureParameter be try build.parameter(fn,failed,0);\n'
             '    let pin be try roots.create(fn,graph,phase,pair,failureParameter,context);\n'
             '    try check(try roots.verify(fn,graph,phase,pair,pin),"canonical root binding changed");\n'
+            '    let savedType be pin.typeIndex; pin.typeIndex=0;\n'
+            '    try check(try rootRefused(fn,graph,phase,pair,pin),"wrong root type accepted");\n'
+            '    pin.typeIndex=savedType;\n'
+            '    try check(try roots.verify(fn,graph,phase,pair,pin),"restored root refused");\n'
             '    try roots.close(pin);\n'
+            '    try check(try rootRefused(fn,graph,phase,pair,pin),"closed root accepted");\n'
             '    try check(pin.context == none and pin.closed,"released reference pin kept context alive");\n'
             '    try failure.close(context);\n'
             '    let firstCall be try invoke.emit(fn,graph,acquire,pair,[]);'
