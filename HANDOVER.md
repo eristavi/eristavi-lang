@@ -1,149 +1,128 @@
 # Eristavi compiler — current handover
 
-## U3 PR #119 merged — 2026-11-03
+Reviewed 3 November 2026 (Asia/Nicosia). This is the current recovery document.
+Historical checkpoints are evidence, not instructions to restart old work.
 
-[PR #119](https://github.com/eristavi/eristavi-lang/pull/119) was squash-merged into `main` as `f3c8764165647c2f01b44a41af3b1610e7ae408b`. Source head `037083bb9666120ded0aadc2a4fa8aad7aea69b1` had dedicated focused CI SUCCESS (six tests); earlier `4c05f9e` had standard CI SUCCESS. At merge time the exact-head standard CI was still in progress, so **do not claim final exact-head standard qualification**. Scope is isolated Python scalar shadow planning, semantic facts, metadata plans and tests; not real owned AST-to-canonical-UIR production integration. U3 issue #75 remains OPEN; U2/U4 remain separate. No production compiler switch was made.
+## Resume here
 
-## U3 first-five-step checkpoint — 2026-11-03
+- **Active work:** U2, branch `compiler/u2-cleanup-foundation-20261102`,
+  [draft PR #111](https://github.com/eristavi/eristavi-lang/pull/111).
+- **Latest implementation:** `c7149aee5102b67b2a68e888776406ea01a0035e`.
+  Later documentation-only commits do not change its tested source.
+- **Immediate blocker:** [hosted run #41698723325](https://github.com/eristavi/eristavi-lang/actions/runs/41698723325)
+  FAILED in scope job `126136050633`, step “Check patch and classify changed paths”.
+  Hosted Linux smoke and the full matrix were SKIPPED. The specific patch-check
+  cause has not been established; do not report this revision as hosted-green.
+- **Next action:** inspect and resolve that patch/scope failure before extending
+  implementation. Then continue exact CFG liveness/root publication.
+- **This cleanup:** documentation only. No implementation fixes, compiler tests,
+  full qualification, self-build, U2 merge or milestone closure are part of it.
 
-U3 [draft PR #119](https://github.com/eristavi/eristavi-lang/pull/119) now contains a private frozen-semantic-fact bridge (`u3_semantic_bridge.py`), deterministic source/function metadata planner (`u3_metadata_plan.py`), fail-closed scalar construction *plan* (`u3_scalar_construction.py`), focused pilot tests and updated dedicated test workflow. Branch checkpoint commit `4317b73018adaf8e594dfe3c945453f6b1c51b0a`. Earlier ordinary smoke [41618884217](https://github.com/eristavi/eristavi-lang/actions/runs/41618884217) succeeded but did not execute these new focused tests. **No verified exact-head pilot test result yet.** These are Python bootstrap/planning modules, **not** the final Eristavi-native direct AST-to-owned-canonical-UIR integration; no production routing changed. U2 and U4 unchanged. Next: confirm focused workflow results, fix failures, wire semantic analyzer and real U1 metadata/builder, prove independent verification before promotion. Do not close U3 #75 or merge draft.
+Read the governing documents below before design or implementation. The user has
+authorized continuing U2; historical stop instructions are superseded. A future
+work list alone does not authorize unrelated development.
 
+## Milestone status
 
-## Parallel U3/U4 three-step development checkpoint — 2026-11-03
-
-User requested exactly three steps per workstream, then stop. Completed **step 1 inspection, step 2 isolated code, step 3 focused tests added** on independent branches; do not claim the full compiler pipeline or qualification. U3 draft [PR #119](https://github.com/eristavi/eristavi-lang/pull/119), branch `compiler/u3-shadow-frontend-20261103`, current checkpoint commit `c091d0cea54e06d7b7d7c2501240f94b2434007f`: `compiler/erist/u3_shadow_gate.py` validates opt-in scalar source revisions and signatures; `tests/test_u3_shadow_gate.py` added. U4 draft [PR #120](https://github.com/eristavi/eristavi-lang/pull/120), branch `compiler/u4-machine-lowering-20261103`, checkpoint commit `cc962bd107de93013e8f70bf79063894eda89b44`: `compiler/erist/u4_parallel_moves.py` schedules simultaneous SSA block-parameter moves including cycles; `tests/test_u4_parallel_moves.py` added. **Focused tests have been committed but not yet confirmed by exact-head CI**; neither slice is integrated into the production compiler. No full CI or experimental self-build authorized or run. The U3 existing `uir` CLI still passes through old `ir_lower`/typed IR, not the new direct AST path. U2 draft PR #111 remains separate and unfinished; no U2/U3/U4 merge or issue closure. Next session: inspect focused CI for both PRs, correct any failures, then implement actual U3 AST→UIR and U4 verified U1 edge→machine placement. Follow governing philosophy and frozen semantics before code.
-
-
-## Current verified status
-
-| Area | Current state |
+| Area | Current disposition |
 | --- | --- |
-| Repository | https://github.com/eristavi/eristavi-lang |
-| Main implementation baseline | `59d30c18c28fa59e9793100f72b9ffd88cc603ee`; subsequent handover cleanup is Markdown-only |
-| Latest qualified production merge | [PR #110](https://github.com/eristavi/eristavi-lang/pull/110), merge `6b5fccecb8e79f7c9bcc8261faa9203f4c94262a`; subsequent main changes are documentation/evidence/opt-in probes |
-| U1a | Complete within its adopted scalar/SSA/call/Float/provenance/physical boundary; [#77](https://github.com/eristavi/eristavi-lang/issues/77) CLOSED |
-| U1b | Bounded reference immutable aggregates/linked execution accepted through [merged #106](https://github.com/eristavi/eristavi-lang/pull/106); [#73](https://github.com/eristavi/eristavi-lang/issues/73) CLOSED |
-| U2 | Foundation implemented and focused-tested; [#74](https://github.com/eristavi/eristavi-lang/issues/74) OPEN; not complete, fully qualified or merged |
-| U2 branch / PR | `compiler/u2-cleanup-foundation-20261102`; [#111](https://github.com/eristavi/eristavi-lang/pull/111) OPEN / DRAFT |
-| U3 / U4 | [#75](https://github.com/eristavi/eristavi-lang/issues/75) / [#102](https://github.com/eristavi/eristavi-lang/issues/102) OPEN; redesigned production integration/machine migration unimplemented |
-| Optimization | [#51](https://github.com/eristavi/eristavi-lang/issues/51) OPEN / PAUSED; no whole-compiler speedup or optimization completion claimed |
-| Production | Existing frontend/default compiler, frozen source behavior and 32-byte ABI retained; no new-UIR backend promotion |
-| Full owned compiler self-build | Explicitly excluded from ordinary work; NOT CERTIFIED |
+| U1a | Accepted within its documented scalar/SSA/call/Float/provenance/physical boundary; #77 closed, qualified PR #105 merged. |
+| U1b | Bounded immutable aggregates/reference linked execution accepted; #73 closed, qualified PR #106 merged. |
+| U2 | Implemented partial foundation plus bounded native List-i64 path; #74 OPEN, #111 DRAFT/unmerged; full acceptance outstanding. |
+| U3 | Initial isolated Python shadow/planning foundation merged in #119; #75 OPEN. Direct production AST-to-owned-UIR integration remains unfinished. |
+| U4 | Initial parallel-move foundation in draft #120; #102 OPEN. Full machine migration remains unfinished. |
+| Production | Existing frontend/default compiler and 32-byte ABI retained. Latest recorded qualified production optimization is #110. No redesigned-UIR promotion. |
+| Optimization #51 | OPEN / PAUSED. Do not restart its benchmarks or rejected pilots. |
+| Full owned-compiler self-build | NOT CERTIFIED; excluded from routine work without explicit authorization. |
 
-## 92. Current U2 checkpoint
+U2 code is on its draft branch, not main. Publishing this same recovery document
+on main does not merge U2 implementation. Fetch current refs before continuing.
 
-This replaces the accumulated development instructions in former §§88–92.
-The implementation is in the U2 draft branch, not `main`.
+## What U2 currently implements
 
-| Implemented and tested foundation | Source / boundary |
+| Component | Implemented scope and boundary |
 | --- | --- |
-| Bounded reverse cleanup planning | `src/compiler/u2_cleanup_plan.eri`; private planning data, not executable IR |
-| Fresh all-row cleanup verification | `u2_cleanup_verify.eri`; includes dead rows, mutations and checked refusal cleanup |
-| Typed destinations and cleanup links | `u2_continuation_bind.eri`, `u2_cleanup_link.eri`; exact owners, revisions, signatures and source origins |
-| Canonical fallible calls | `u2_invoke_build.eri`, `u2_invoke_contract.eri`, `u1_verify.eri`, `u1_successors.eri`; real FunctionIds, private opcode 46 and the existing canonical pools |
-| Multiple checked contracts | Version-one metadata-owned table; exact normal signature snapshots, one aggregate failure payload, fresh checks of every entry including unused contracts |
-| Typed outcome transport | `u2_invoke_transfer.eri`; version-two private descriptors, up to 128 carried values, predecessor availability and exact destination types |
-| Bounded reference execution | `u2_invoke_reference.eri`; exact closed structural test adapter, outcome-only results and simultaneous source capture before destination writes |
-| Initial scoped-owner verification | `u2_scoped_owners.eri`; explicit lexical owner signatures, success-only acquisition, LIFO consumption before both close outcomes, exact surviving edge prefixes and source origins |
+| Checked continuations | Canonical opcode-46 invokes, versioned FunctionId contracts, edge-only results and typed carried values. |
+| Cleanup and owners | Independently verified reverse-cleanup plans, bounded canonical close construction, lexical owner signatures, success-only acquisition and consumption on both close outcomes. Complete resource adapters remain open. |
+| Failure contexts | Typed primary/ordered-secondary reference models and semantic matrix; class-5 saved-failure root metadata and bounded native publisher probes. These do not establish complete canonical checked-runtime integration. |
+| Liveness | Bounded independently recomputed CFG/SSA analysis and declared-root obligations, including loops and recursion probes. General automatic exact machine publication remains open. |
+| Managed types | Owner-scoped Text/List/identity descriptors, copy-versus-alias contracts and typed operation shapes; existing Stage-0/C/owned runtime parity oracle. This is not general canonical managed execution. |
+| Native List-i64 | Real canonical calls lowered by an Eristavi-written optional x86-64 adapter: empty/copy/append/replace/count/get/collection, branches, joins and backedges; simultaneous edge transfers including cycles. |
+| Native boundaries | Managed-registry entry validation, Int/Bool/List runtime descriptor checks, List bounds source name/line/column, independent fixture frame-layout checks, GC/snapshot/reclamation and fault probes. |
 
-The scoped profile currently admits **one explicit resource contract** with an
-opaque aggregate handle interpretation. It checks every block, including dead
-blocks; rejects resource construction/copy/escape, return without cleanup,
-non-LIFO or consumed-owner use, bad edges and stale/foreign profiles; permits a
-nonterminating loop to retain owners when its backedge signature matches.
-It uses O(N+V+T+S) local verification and reusable
-`2(V+1)+(T+1)+256`-word scratch under existing quotas, not path enumeration,
-per-block register masks or an ownership fixed point.
+The native List profile is capped at **64 blocks, 512 edges, 128 SSA values and
+256 instructions**, with seven exact version-one runtime imports and an opaque
+structural carrier interpreted only by that legal profile. It is not a general
+managed-type encoding or frontend integration.
 
-**Do not broaden this result:** the resource fixture is hand-built canonical
-UIR, not output of completed Eristavi cleanup-plan lowering or a real file
-runtime. A structural aggregate payload is not the complete managed
-primary/secondary FailureContext. Owned execution of the verifier is not native
-execution of resource adapters. Text/List/identity, managed-local promotion,
-root maps and complete runtime/context integration remain unfinished.
+Single-block roots use last-use clearing. Multi-block execution deliberately
+retains all initialized boxed SSA slots until scope exit. This is conservative
+bounded retention, **not exact CFG liveness-based release**. Managed-local
+promotion, arbitrary runtime/descriptor compatibility and general physical
+retention bounds are not established.
 
-### Exact revisions and validation
+## Validation and evidence
 
-| Evidence | Verified result |
+| Revision / run | Verified result |
 | --- | --- |
-| Latest implementation/evidence commit | `3dbc6add049c70fe6adb34bd954270f08a5ba6e7` |
-| Exact implementation/evidence tree | `268d79d646293fb3acded1473ad52bceeae31c63` |
-| Hosted-smoke head / tree | `4fea1f66fb6ea63621be419c67b8993b6f6bce07` / `982b4c149fd60ac72738a9677d6defabe1d3fdc8`; changes from the implementation commit are handover-only |
-| Hosted smoke | [41492512950](https://github.com/eristavi/eristavi-lang/actions/runs/41492512950) SUCCESS; 69 collected, 66 passed, 3 opt-in skips; 145.442 s; job `125438983489` |
-| Opt-in owned execution | All three skipped probes passed locally: invoke outcomes, carried outcomes and execution of the scoped-owner verifier |
-| Focused U2 / ownership checks | 13/13 in 80.777 s; strengthened bootstrap owner checks 5/5 in 24.998 s; owned owner-verifier probe 1/1 in 24.458 s |
-| Broad local smoke | 68 collected, 66 passed, 2 opt-in skips; 273.396 s; the later added owner-native test was run separately and adds the third hosted skip |
-| Prior stop checkpoint | `867252d494d9dee6a7b40284b8ed4dffee88db8f`; handover-only successor of the hosted-smoke head |
-| Qualification / merge | No new full four-platform CI, completed-batch qualification, U2 closure or merge selected; PR remains DRAFT |
+| `c7149aee5102b67b2a68e888776406ea01a0035e` — local coherent smoke | 92 run, **89 passed, 0 failed, 3 intentional opt-in skips**, 255.341 s. Covers CFG List snapshots/cyclic swaps, registry/runtime rejection, bounds origins and existing regressions. |
+| Same revision — hosted #41698723325 | **FAILED scope/patch check**; smoke and full matrix skipped. Local success does not override this failure. |
+| `2619885a2ff7043dda4080e722ffe31c8806f495` — hosted #41696878635 | Scope and focused Linux smoke SUCCESS; full platform matrix skipped. Earlier single-block native slice only. |
 
-Supporting coverage includes 150 independent legacy resource baseline cases,
-30 cleanup plans / 1,602 semantic paths, frozen/dead-row mutations, typed
-same-revision pool mutations, multiple fallible targets, unused contract
-corruption, duplicate/foreign/version rejection, exact fuel/LocIds, constructor
-work/traffic refusal, cancellation and released backing. Earlier intermediate
-fixture failures are historical, not current blockers.
+Current source hashes and raw outcomes/logs:
+[JSON](https://github.com/eristavi/eristavi-lang/blob/c7149aee5102b67b2a68e888776406ea01a0035e/docs/evidence/2026-11-03/u2-list-cfg-smoke.json)
+and [raw log](https://github.com/eristavi/eristavi-lang/blob/c7149aee5102b67b2a68e888776406ea01a0035e/docs/evidence/2026-11-03/u2-list-cfg-smoke.log).
+Exact native scope, algorithms and exclusions:
+[List-i64 contract](https://github.com/eristavi/eristavi-lang/blob/c7149aee5102b67b2a68e888776406ea01a0035e/docs/architecture/UIR_U2_LIST_I64_NATIVE.md).
 
-Current-source U1 forced-collision regression: **7,830,976 B actual phase peak /
-21,974,768 B actual allocator traffic**, within the unchanged **8,388,608 /
-67,108,864 B** gates; all tagged backing reclaimed. This is existing U1 physical
-scope, not U2 scratch attribution or process RSS. The independent U1b type/value
-backing test also reclaimed all observed metadata and function objects.
+Three skipped probes are not passes. No full U2 four-platform CI or
+completed-batch qualification has passed. No whole-compiler speedup is claimed.
 
-Evidence: [summary](https://github.com/eristavi/eristavi-lang/blob/3dbc6add049c70fe6adb34bd954270f08a5ba6e7/docs/evidence/2026-11-02/u2-canonical-summary.json),
-[local smoke](https://github.com/eristavi/eristavi-lang/blob/3dbc6add049c70fe6adb34bd954270f08a5ba6e7/docs/evidence/2026-11-02/u2-canonical-smoke.json), and
-[lossless archive](https://github.com/eristavi/eristavi-lang/blob/3dbc6add049c70fe6adb34bd954270f08a5ba6e7/docs/evidence/2026-11-02/u2-canonical-evidence.zip).
-The archive retains raw logs, three owned result/hash records and 18 input
-snapshots. CRC and every input SHA-256 were verified; current inputs still match.
-Archive SHA-256: `4bea42f5648c0b2c8a3c69627fd1f612beb440405190e009d15eb673b2c6cda6`.
+## Remaining U2 acceptance, in order
 
-### Remaining U2 gates — resume only when requested
+1. Resolve the current hosted scope/patch blocker and verify the resulting revision.
+2. Connect exact CFG liveness to native publication/release with independent
+   missing/stale/foreign/early-clear rejection and physical retention evidence.
+3. Complete general canonical managed representation and eligible-local
+   promotion; extend owned execution to Text/Unicode17, nested Lists and identity
+   with value-copy/alias guarantees and identity-cycle coverage.
+4. Connect complete checked FailureContext and real resource adapters to canonical
+   lowering: pending returns, all exits, exactly-once reverse cleanup, stable
+   primary and ordered secondary failures, roots through cleanup and recursion.
+5. Complete independent behavior/source-origin comparisons, deep/malformed/dead
+   CFG cases, cancellation, sanitizer/allocator-refusal and actual owner/traffic/
+   RSS/latency evidence under preselected limits.
+6. Once the coherent implementation satisfies acceptance, run one final exact-head
+   four-platform CI plus required qualification, compare tested/merged trees,
+   then decide merge/closure. Keep #74 open and #111 draft until then.
 
-1. Connect semantic cleanup plans to canonical resource operations and prove
-   exit origins, pending returns and exact cleanup across the complete profile.
-2. Implement complete managed Text/List/identity typing and value-copy/alias
-   semantics, pinned Unicode17 and managed-local promotion.
-3. Implement rooted primary/ordered-secondary FailureContext, root/safe-point
-   contracts and real resource/runtime adapters under the existing ABI.
-4. Complete independent depth/exit/loop/identity-cycle/malformed cases,
-   sanitizer/allocation-failure/cancellation and actual U2 physical/latency
-   evidence under preselected policies. Existing small probes do not close this.
-5. Once the coherent implementation meets acceptance, run one final exact-head
-   four-platform CI and required full qualification, compare tested/merged trees,
-   and only then decide merge/closure. Keep #74 open until its gates pass.
+## Governing documents and recovery
 
-## Qualified baselines and paused performance debt
+Read this handover, the complete [design philosophy](DESIGN_PHILOSOPHY.md),
+[language semantics](LANGUAGE_SEMANTICS.md), applicable locked rules and
+[CI qualification policy](CI_QUALIFICATION.md). Follow **Philosophy → Semantics →
+Architecture → Implementation**.
 
-- **Production #110:** tested head `1fbb5115dccc2c6b6160d511366d31d06601849d`
-  and merged tree `3e3ab90714a9a608c9dafabf4740dae60049ff1d` match.
-  [Full CI 41336208716](https://github.com/eristavi/eristavi-lang/actions/runs/41336208716)
-  and [qualification 41336171885](https://github.com/eristavi/eristavi-lang/actions/runs/41336171885)
-  PASS. Scoped lookup boxes/allocations/finds decreased; no meaningful
-  end-to-end wall-time gain was proved.
-- **Reference U1b #106:** tested head `bd0a159975d73239f87300debce89c453a59ebb1`,
-  tested/merged tree `e81f594294f4c0700a0a572ec4434742199d4573`, merge
-  `b86d54f2f6268d12831bb0b09f3016b1dd3c1f67`.
-  [Full CI 41313784760](https://github.com/eristavi/eristavi-lang/actions/runs/41313784760)
-  and [qualification 41313784884](https://github.com/eristavi/eristavi-lang/actions/runs/41313784884)
-  PASS. Accepted as bounded reference functionality, not a promoted production
-  pipeline. Its 11.0158% improvement applies to one Linux GCC fixture only.
-- **U1a #105:** merge `8c625b1ece6a229844def93e2bf9563c14e9e273`;
-  [full CI 41222506854](https://github.com/eristavi/eristavi-lang/actions/runs/41222506854)
-  and [qualification 41222506873](https://github.com/eristavi/eristavi-lang/actions/runs/41222506873)
-  PASS. #77 closed within its adopted ownership/provenance boundary.
-- Earlier #108/#99 runtime and profiler evidence is preserved in dated reports
-  and the archive; those already-merged batches are not active tasks.
+Read the typed UIR architecture/U1 contract through [the records index](docs/README.md).
+For current U2 branch contracts, use this
+[pinned architecture directory](https://github.com/eristavi/eristavi-lang/tree/c7149aee5102b67b2a68e888776406ea01a0035e/docs/architecture):
+remaining UIR acceptance, continuations, fallible registry, scoped owners,
+multi-close lowering, managed types, canonical root map, failure-root boundary,
+native-root publication and initial budget policy. Also read
+[cleanup semantics](RESOURCE_CLEANUP.md) and [owned resource runtime](OWNED_RESOURCE_RUNTIME.md).
+Dated contracts retain governing decisions; outdated status paragraphs are
+superseded by this handover, not permission to repeat completed work.
 
-#51 remains paused. The large production `ir_verify.eri` diagnostic is still
-censored at the unchanged 90-second cap. Six private round-three candidates
-were not adopted. Actual verifier-storage measurements are complete; they do
-not prove a new optimization. Do not repeat rejected pilots or capped workloads
-for a favorable timing, loosen limits or infer total duration from a timeout.
-Relevant preserved records:
-[round-three report](docs/performance/ISSUE51_ROUND3_EXPERIMENTS_2026-11-01.md),
-[storage report](docs/performance/ISSUE51_VERIFIER_STORAGE_2026-11-01.md), and
-[storage summary](docs/evidence/2026-11-01/issue51-verifier-storage-summary.json).
-Scalar unboxing and shared type-validation reuse still require their recorded
-ownership/escape/liveness/root/exhaustion/immutability proofs before adoption.
+## Historical recovery records
+
+The full pre-cleanup handover text is retained (terminal blank lines normalized):
+[U2 branch snapshot](docs/history/2026-11-03/HANDOVER_BEFORE_CURRENT_ONLY_CLEANUP_U2.md)
+and [main snapshot](docs/history/2026-11-03/HANDOVER_BEFORE_CURRENT_ONLY_CLEANUP_MAIN.md).
+Exact original bytes remain at U2 revision `c7149aee5102b67b2a68e888776406ea01a0035e`
+and main revision `0f7cd0af57777c73686f02b61b7991f68dcc8757`.
+Older archives and raw evidence remain in Git. Consult them only for a specific
+decision or measurement; old commands, stops, pending notes and “next” sections
+are historical, not active instructions.
 
 ## Architecture and working boundaries
 
@@ -248,58 +227,3 @@ restarting paused benchmarks, rejected pilots or the capped compiler workload.
 Keep this file current-only: replace superseded status rather than appending
 contradictory recovery checkpoints. Move dated history to `docs/history/`,
 retain raw evidence and link it. Preserve all standing instructions above.
-
-## Recovery and governing documents
-
-Dated records retain their original status wording. Their contracts remain
-governing; the current implementation and task state is recorded above.
-
-Read this complete current handover and [DESIGN_PHILOSOPHY.md](DESIGN_PHILOSOPHY.md),
-[LANGUAGE_SEMANTICS.md](LANGUAGE_SEMANTICS.md), applicable locked semantics, the
-relevant [architecture records](docs/README.md), and
-[CI_QUALIFICATION.md](CI_QUALIFICATION.md) before a material decision. For U2,
-include [remaining acceptance](docs/architecture/REMAINING_UIR_ACCEPTANCE_PLAN_2026-10-31.md),
-[continuations](https://github.com/eristavi/eristavi-lang/blob/3dbc6add049c70fe6adb34bd954270f08a5ba6e7/docs/architecture/UIR_U2_CONTINUATION_CONTRACT.md),
-[fallible registry](https://github.com/eristavi/eristavi-lang/blob/3dbc6add049c70fe6adb34bd954270f08a5ba6e7/docs/architecture/UIR_U2_FALLIBLE_REGISTRY.md),
-[scoped ownership](https://github.com/eristavi/eristavi-lang/blob/3dbc6add049c70fe6adb34bd954270f08a5ba6e7/docs/architecture/UIR_U2_SCOPED_OWNER_SLICE.md),
-[initial policy](https://github.com/eristavi/eristavi-lang/blob/3dbc6add049c70fe6adb34bd954270f08a5ba6e7/docs/architecture/UIR_U2_INITIAL_POLICY.json),
-[cleanup semantics](RESOURCE_CLEANUP.md) and
-[owned resource runtime](OWNED_RESOURCE_RUNTIME.md).
-
-Fetch and inspect current GitHub refs; do not trust an old scratch checkout,
-branch name or report title. Current recovery branch is
-`compiler/u2-cleanup-foundation-20261102`; the latest implementation and tested
-revisions are recorded above. Later documentation commits do not change those
-inputs. Full U2 qualification remains outstanding. No development should start
-merely because this handover lists future gates.
-
-For this documentation cleanup, the pre-cleanup file is preserved in full from
-`867252d494d9dee6a7b40284b8ed4dffee88db8f`. The cleaned handover/history are published on both `main` and the U2 branch
-without merging U2 implementation. Only Markdown changes are authorized and made; compiler/tests/ABI/evidence archives are unchanged. Use a patch/link/
-archive-integrity check, reusing valid evidence; do not launch compilation or
-full qualification. The user's development stop remains in force.
-
-## Historical section references
-
-Former §§1–92 and every original measurement/revision are retained in the
-[pre-cleanup snapshot](docs/history/2026-11-02/HANDOVER_BEFORE_CLEANUP.md).
-**Archived commands, pending statuses and next actions are historical evidence,
-not active instructions.** Read history only when needed for a specific decision.
-
-| Former reference | Historical subject |
-| --- | --- |
-| §§25, 28–29 | CI cost policy and earlier U1a execution acceptance |
-| §44 | Accepted U1a #105/#77 boundary and physical evidence |
-| §77 | Accepted reference U1b #106, exact-tree merge and closure |
-| §§78, 84 | Qualified #108/#110 production optimizations |
-| §§86–87 | Rejected optimization candidates and completed storage measurements |
-| §§88–90 | Initial U2 planner, independent verification and destination binding |
-| §§91–92 | Canonical invokes/transport/owner foundation and completed hosted smoke |
-
-Future handovers should replace outdated current statements and archive history,
-not recreate the old chronological accumulation. This current file supersedes
-all archived recovery instructions while retaining the governing mandates.
-
-### U3 exact-head focused CI follow-up — 2026-11-03
-
-At U3 PR #119 head `4c05f9e0db7b391bf26c6dcf9390c7ae67506e45`, dedicated [focused run 41623250447](https://github.com/eristavi/eristavi-lang/actions/runs/41623250447) **SUCCESS**, six focused tests passed (`test_u3_shadow_gate`: 3; `test_u3_construction_pilot`: 3), no failures; [standard CI 41623258750](https://github.com/eristavi/eristavi-lang/actions/runs/41623258750) **SUCCESS**. Earlier focused failures were caused by missing bootstrap dependency `regex`; the workflow now installs the project first. Evidence is exact for that head only. This does **not** qualify native Eristavi AST→owned canonical UIR, independent execution, or production migration; U3 #75 and draft PR #119 remain open. Avoid unnecessary full CI until integrated batch is ready.
