@@ -44,8 +44,11 @@ including unreachable checked calls, before native helper assembly is printed.
 The native emitter consumes the verified displacements and the focused test
 adds both adversarial slot mutations and a separate assembly-offset oracle.
 The verified scope is limited to checked-failure pointer roots; it is **not**
-whole-program managed SSA liveness. Focused CI for this new source revision is
-**PENDING**, with no new green claim. Keep #111 DRAFT and #74 OPEN.
+whole-program managed SSA liveness. Latest implementation/test-fix head `1097045caf4c06ce99b9e6bc369793de99c67cc7`;
+GitHub Actions [#41615883641](https://github.com/eristavi/eristavi-lang/actions/runs/41615883641)
+is pending. The preceding run [#41615837732](https://github.com/eristavi/eristavi-lang/actions/runs/41615837732)
+was triggered on the earlier fixture revision and is not final evidence.
+Focused CI for the latest source revision is **PENDING**, with no new green claim. Keep #111 DRAFT and #74 OPEN.
 
 ## Next U2 steps
 
