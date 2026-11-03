@@ -27,10 +27,18 @@ public function select(table identity managed.Registry,
     try require(table.version == 1 and table.state == 1 and
         table.graph.state == 1 and table.graph.key == table.graphKey and
         table.records.frozen and not table.records.closed and
+        table.records.owner == table.owner and
+        table.records.limit == 256 and table.records.length%4 == 0 and
+        table.graph.owner == table.owner and
+        table.control.owner == table.owner and table.control.state == 0 and
         phase.owner == table.owner and phase.state == 0 and
         typeId.owner == table.key,
         "foreign, mutable or stale managed-operation contract");
     let descriptor be try managed.descriptor(table,phase,typeId);
+    try require(((descriptor.kind == 1 or descriptor.kind == 2) and
+        descriptor.copyPolicy == 1) or
+        (descriptor.kind == 3 and descriptor.copyPolicy == 2),
+        "managed copy policy contradicts frozen type kind");
     let resultCount be 1;
     let alloc be false; let trap be false; let needsRoot be false;
     try require(operation >= 1 and operation <= 8,
@@ -39,27 +47,35 @@ public function select(table identity managed.Registry,
     if operation == 1 {
         // Text is immutable and identity copies the alias. Copying a mutable
         // List must have an independently preserved value snapshot.
-        alloc=descriptor.kind == 2;
+        // Text copy can allocate backing unless lowering proves otherwise.
+        // Identity copy only retains the existing shared handle.
+        alloc=descriptor.kind != 3;
         needsRoot=alloc;
-    } else if operation == 2 or operation == 3 {
+    }
+    if operation == 2 or operation == 3 {
         try require(descriptor.kind == 2,"mutation requires List value");
         resultCount=0; alloc=true; needsRoot=true;
         if operation == 3 { trap=true; }
-    } else if operation == 4 {
+    }
+    if operation == 4 {
         try require(descriptor.kind == 2,"List equality needs List value");
         // Ordinary structural equality may traverse nested values/cycles.
         // Calls may allocate temporary traversal state.
         alloc=true; needsRoot=true;
-    } else if operation == 5 {
+    }
+    if operation == 5 {
         try require(descriptor.kind == 2,"List snapshot needs List value");
         alloc=true; needsRoot=true;
-    } else if operation == 6 {
+    }
+    if operation == 6 {
         try require(descriptor.kind == 1,"Text equality needs Text value");
-    } else if operation == 7 {
+    }
+    if operation == 7 {
         try require(descriptor.kind == 1 and view >= 1 and view <= 3,
             "Text view requires valid Unicode 17 selection");
         alloc=true; needsRoot=true;
-    } else {
+    }
+    if operation == 8 {
         try require(descriptor.kind == 3,"identity equality requires identity");
     }
     return Contract { version=1; operation=operation; typeIndex=typeId.index;

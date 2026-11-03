@@ -75,6 +75,7 @@ function run() fails budget.LimitError,graphVerify.InvalidGraph,
     try managed.freeze(registry);
     // U2 private version-one operation profile: no alternative source syntax,
     // invented NoValue result, or silent List aliasing.
+    let textCopy be try operations.select(registry,phase,textType,1,0);
     let listCopy be try operations.select(registry,phase,textList,1,0);
     let handleCopy be try operations.select(registry,phase,boxed,1,0);
     let listAdd be try operations.select(registry,phase,textList,2,0);
@@ -85,7 +86,8 @@ function run() fails budget.LimitError,graphVerify.InvalidGraph,
     let scalars be try operations.select(registry,phase,textType,7,2);
     let bytes be try operations.select(registry,phase,textType,7,3);
     let identityEquality be try operations.select(registry,phase,boxed,8,0);
-    try check(listCopy.copyPolicy == 1 and
+    try check(textCopy.mayAllocate and textCopy.requiresRoot and
+        listCopy.copyPolicy == 1 and
         listCopy.mayAllocate and listCopy.requiresRoot and
         handleCopy.copyPolicy == 2 and
         not handleCopy.mayAllocate and

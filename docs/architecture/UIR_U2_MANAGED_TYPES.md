@@ -83,3 +83,23 @@ The canonical UIR backend must still encode/verify typed managed operands,
 result/no-result conventions, allocation/fault effects, physical runtime
 copy/update/view semantics and actual live-root stores. These new
 selectors are not executable and the new CI remains pending.
+
+## Corrected operation profile and baseline runtime-parity regression
+
+The first operation-contract CI [#41630206523](https://github.com/eristavi/eristavi-lang/actions/runs/41630206523)
+failed one new test due to unsupported `else if` syntax. The corrected
+selector uses disjoint `if` cases, validates the frozen type copy policy,
+and conservatively roots Text copies as potentially allocating until a
+backend separately proves a no-allocation implementation. No public ABI or
+frozen source semantic rule was modified.
+
+The new `test_u2_managed_unicode17_list_value_and_identity_alias_parity`
+executes a mixed regression on the existing Stage-0 reference interpreter,
+existing C-native runtime and existing owned Linux x86-64 graph runtime:
+decomposed versus composed Text equality (no implicit normalization),
+Unicode17 grapheme/scalar/UTF-8 byte counts, stable copied List length,
+explicit identity mutation sharing and distinct-identity inequality.
+The owned runtime probe also checks final graph/Text reclamation.
+This is a prerequisite behavior oracle for future redesigned UIR lowering,
+**not** proof that the new UIR path executes managed operations. The exact
+source-head smoke outcome remains pending.

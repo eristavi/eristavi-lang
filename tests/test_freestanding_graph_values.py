@@ -834,3 +834,55 @@ _start:
 '''+FINISH)
         self.assertEqual((result.returncode,result.stdout,result.stderr),
                          (1,b'',b'Eristavi runtime fault: boom\0\xce\xb2\n'))
+
+    def test_u2_managed_unicode17_list_value_and_identity_alias_parity(self):
+        # Frozen old-frontend oracle: this is NOT redesigned UIR lowering.
+        source=self.directory/'u2-unicode-value-identity.eri'
+        source.write_text("""
+        type Cell { value Int; }
+        let composed be "é";
+        let decomposed be "é";
+        let original be [decomposed,"🇨🇾"];
+        let copied be original;
+        copied.add("Z");
+        let flag be original[1];
+        let shared be identity Cell { value=1; };
+        let alias be shared;
+        alias.value=7;
+        let distinct be identity Cell { value=7; };
+        output(composed==decomposed);
+        output(decomposed.characters.count);
+        output(decomposed.scalars.count);
+        output(decomposed.bytes.count);
+        output(original.count);
+        output(copied.count);
+        output(flag.characters.count);
+        output(shared.value);
+        output(alias==shared);
+        output(distinct==shared);
+        """,encoding='utf-8')
+        expected=b'false\n1\n2\n3\n2\n3\n1\n7\ntrue\nfalse\n'
+        import sys
+        stage0=subprocess.run(
+            [sys.executable,'-m','compiler.erist','run',str(source),
+             '--source-root',str(self.directory)],
+            cwd=ROOT,capture_output=True,timeout=60)
+        self.assertEqual((stage0.returncode,stage0.stdout,stage0.stderr),
+                         (0,expected,b''))
+        reference=self.directory/'u2-parity-c'
+        self.assertEqual(build_native(source,reference,self.directory),0)
+        c_run=subprocess.run([str(reference)],capture_output=True,timeout=30)
+        self.assertEqual((c_run.returncode,c_run.stdout,c_run.stderr),
+                         (0,expected,b''))
+        app=self.compile_application(source)
+        owned=self.run_probe('u2-managed-unicode-parity',
+                             app+'''
+.text
+.globl _start
+_start:
+    xorl %ebp,%ebp
+    call erist_entry
+    jmp .Lgraph_finish
+'''+FINISH,types=False)
+        self.assertEqual((owned.returncode,owned.stdout,owned.stderr),
+                         (0,expected,b''))

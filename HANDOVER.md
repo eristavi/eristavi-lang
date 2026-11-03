@@ -60,6 +60,20 @@ the standalone fixture did not instantiate the already-accepted
 uses the established U1b fixture pattern, without modifying compiler
 semantics or source/runtime ABI.
 
+**Operation-contract correction after first CI (2026-11-03):**
+[CI #41630206523](https://github.com/eristavi/eristavi-lang/actions/runs/41630206523)
+finished FAILED on source `ae33a17a25a22eb354832104f33370e7b9dff484`:
+85 run / 81 passed / 1 failed / 3 skipped. The ONLY failing
+`test_u2_managed_types` reported the parser's explicit
+`expected '{' after else` at operation-contract line 44, because this
+language does not permit the invented `else if` shorthand. All preceding
+U2 tests passed. The correction uses separate mutually exclusive `if`
+branches, conservatively considers Text copies allocating until proven
+otherwise, and rejects a mismatched copy/alias descriptor policy. The
+new combined test batch also adds old Stage-0/C-native/owned-runtime parity
+for Unicode17 Text views, List value copies and explicit identity aliases.
+**New exact-head focused CI is pending; no green claim.**
+
 **New operation contract batch — unverified:** Created opt-in
 `src/compiler/u2_managed_operation_contract.eri` and augmented
 `tests/fixtures/u2_managed_types.eri` to select private version-one
@@ -69,7 +83,7 @@ faults, structural List equality, Text scalar-sequence equality,
 Unicode 17 grapheme/scalar/byte views and identity comparison.
 The private operation selector **only validates semantics and root/alloc
 requirements**, not executable canonical UIR opcodes or generated assembly.
-The newly changed code has **no passing CI yet**. Run focused smoke on
+The newly changed operation-contract and independent runtime-parity code has **no passing CI yet**. Run focused smoke on
 the exact source head; fix all failures before marking green.
 
 **Phase 1 remaining:** Author versioned canonical UIR managed operation
