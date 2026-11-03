@@ -1,0 +1,59 @@
+import std.process;
+import compiler.u1_budget as budget;
+import compiler.u1_meta as meta;
+import compiler.u1_builder as build;
+import compiler.u1_aggregate as aggregate;
+import compiler.u1_aggregate_build as ab;
+import compiler.u1_aggregate_signature as sig;
+import compiler.u1_verify as verify;
+import compiler.u2_list_i64 as lists;
+function run() fails budget.LimitError,verify.InvalidIR,lists.Unsupported {
+ let root be try budget.developmentRequest(); let shared be try budget.metadataOwner(root);
+ let p be try budget.constructionPhase(shared); let data be try meta.create(shared,p);
+ let entrySig be try meta.signature(data,p,[],[meta.i64()]);
+ let source be try meta.source(data,p,"list-probe","0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",64);
+ let loc be try meta.location(data,p,source,0,1,0,1,1);
+ let g be try aggregate.create(shared,p); let intType be try aggregate.primitive(g,meta.i64());
+ let carrier be try aggregate.aggregate(g,p,[]);
+ let s1 be try sig.signature(data,g,p,[],[carrier]);
+ let f1 be try meta.declaration(data,p,s1,lists.name(1),2,63,1);
+ let s2 be try sig.signature(data,g,p,[carrier],[carrier]);
+ let f2 be try meta.declaration(data,p,s2,lists.name(2),2,63,1);
+ let s3 be try sig.signature(data,g,p,[carrier,intType],[carrier]);
+ let f3 be try meta.declaration(data,p,s3,lists.name(3),2,63,1);
+ let s4 be try sig.signature(data,g,p,[carrier,intType,intType],[carrier]);
+ let f4 be try meta.declaration(data,p,s4,lists.name(4),2,63,1);
+ let s5 be try sig.signature(data,g,p,[carrier],[intType]);
+ let f5 be try meta.declaration(data,p,s5,lists.name(5),2,63,1);
+ let s6 be try sig.signature(data,g,p,[carrier,intType],[intType]);
+ let f6 be try meta.declaration(data,p,s6,lists.name(6),2,63,1);
+ let s7 be try sig.signature(data,g,p,[],[]);
+ let f7 be try meta.declaration(data,p,s7,lists.name(7),2,63,1);
+ try aggregate.freeze(g); try meta.freeze(data); try budget.finishPhase(p);
+ let owner be try budget.functionOwner(root,false); let phase be try budget.constructionPhase(owner);
+ let fn be try build.create(data,entrySig,owner,phase); let b be try build.block(fn,[]);
+ let zero be try build.integer(fn,b,0,loc); let one be try build.integer(fn,b,1,loc);
+ if false { try build.jump(fn,b,b,[zero],loc); }
+ let ten be try build.integer(fn,b,10,loc); let twenty be try build.integer(fn,b,20,loc);
+ let call be try ab.call(fn,g,b,f1,[],loc); let empty be try build.result(fn,call,0);
+ call=try ab.call(fn,g,b,f3,[empty,ten],loc); let original be try build.result(fn,call,0);
+ call=try ab.call(fn,g,b,f2,[original],loc); let copied be try build.result(fn,call,0);
+ call=try ab.call(fn,g,b,f3,[copied,twenty],loc); let extended be try build.result(fn,call,0);
+ call=try ab.call(fn,g,b,f7,[],loc);
+ call=try ab.call(fn,g,b,f4,[extended,zero,twenty],loc); let changed be try build.result(fn,call,0);
+ call=try ab.call(fn,g,b,f7,[],loc);
+ call=try ab.call(fn,g,b,f6,[original,zero],loc); let old be try build.result(fn,call,0);
+ call=try ab.call(fn,g,b,f6,[changed,one],loc); let latest be try build.result(fn,call,0);
+ call=try ab.call(fn,g,b,f5,[original],loc); let oldCount be try build.result(fn,call,0);
+ call=try ab.call(fn,g,b,f6,[changed,zero],loc); let changedZero be try build.result(fn,call,0);
+ call=try ab.call(fn,g,b,f5,[changed],loc); let changedCount be try build.result(fn,call,0);
+ // Return the original element: native harness independently checks 10.
+ try build.returnValues(fn,b,[old],loc); try ab.complete(fn,g);
+ let read be try budget.constructionPhase(owner);
+ try lists.emit(fn,g,carrier,read);
+ try budget.finishPhase(read); try build.close(fn); try budget.finishPhase(phase);
+ try aggregate.close(g); try meta.close(data); try budget.close(owner); try budget.close(shared); try budget.close(root);
+}
+run() else error budget.LimitError { output(error.message); process.setExitCode(1); }
+else error verify.InvalidIR { output(error.message); process.setExitCode(1); }
+else error lists.Unsupported { output(error.message); process.setExitCode(1); };

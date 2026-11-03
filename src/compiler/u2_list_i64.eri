@@ -1,0 +1,165 @@
+// Bounded optional List<i64> runtime-import profile in canonical Function pools.
+// The empty structural carrier is opaque under THIS profile, never aggregate data.
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+import compiler.u1_meta as meta;
+import compiler.u1_builder as build;
+import compiler.u1_aggregate as aggregate;
+import compiler.u1_aggregate_signature as signatures;
+import compiler.u1_verify as canonical;
+import compiler.format as format;
+public error Unsupported { message Text; }
+function require(ok Bool,message Text) fails Unsupported {
+    if not ok { fail Unsupported { message=message; }; }
+}
+function get(w identity words.Words,p identity budget.Phase,i Int) returns Int fails budget.LimitError {
+    return try words.get(w,p,i);
+}
+public function name(op Int) returns Text {
+    if op == 1 { return "u2.list.i64.empty"; }
+    if op == 2 { return "u2.list.i64.copy"; }
+    if op == 3 { return "u2.list.i64.append"; }
+    if op == 4 { return "u2.list.i64.replace"; }
+    if op == 5 { return "u2.list.i64.count"; }
+    if op == 6 { return "u2.list.i64.get"; }
+    return "u2.list.i64.collect";
+}
+public function verify(fn identity build.Function,g identity aggregate.Registry,
+    carrier aggregate.TypeId,p identity budget.Phase) returns Int
+    fails budget.LimitError,canonical.InvalidIR,Unsupported {
+    let proof be try canonical.verifyAggregates(fn,g,try budget.verificationPhase(fn.owner));
+    try require(p.owner == fn.owner and p.state == 0 and carrier.owner == g.key and
+        carrier.index > 6 and (try aggregate.fieldCount(g,p,carrier)) == 0 and
+        fn.blocks.length == 5 and fn.values.length/4 <= 128 and
+        fn.instructions.length/10 <= 256 and fn.metadata.declarations.length == 42 and
+        (try meta.parameterCount(fn.metadata,p,fn.signature)) == 0 and
+        (try meta.resultCount(fn.metadata,p,fn.signature)) == 1 and
+        (try signatures.resultType(fn.metadata,g,p,fn.signature,0)).index == 2,
+        "unsupported bounded List i64 profile");
+    let op be 1;
+    while op <= 7 {
+        let d be (op-1)*6; let data be fn.metadata;
+        let symbol be name(op); let first be try get(data.declarations,p,d+1);
+        try require((try get(data.declarations,p,d+2)) == symbol.bytes.count and
+            (try get(data.declarations,p,d+3)) == 2 and
+            (try get(data.declarations,p,d+4)) == 63 and
+            (try get(data.declarations,p,d+5)) == 1,"unsupported List runtime import");
+        let j be 0;
+        while j < symbol.bytes.count {
+            try require((try get(data.symbolBytes,p,first+j)) == symbol.bytes[j],"foreign List runtime symbol"); j=j+1;
+        }
+        let target be meta.FunctionId { owner=data.key; index=op; };
+        let sig be try meta.functionSignature(data,p,target);
+        let count be 1; if op == 1 or op == 7 { count=0; }
+        if op == 3 or op == 6 { count=2; } if op == 4 { count=3; }
+        let resultCount be 1; if op == 7 { resultCount=0; }
+        try require((try meta.parameterCount(data,p,sig)) == count and
+            (try meta.resultCount(data,p,sig)) == resultCount,"List import arity");
+        j=0;
+        while j < count {
+            let ty be 2; if j == 0 { ty=carrier.index; }
+            try require((try signatures.parameterType(data,g,p,sig,j)).index == ty,"List import parameter type"); j=j+1;
+        }
+        if resultCount == 1 {
+            let ty be carrier.index; if op == 5 or op == 6 { ty=2; }
+            try require((try signatures.resultType(data,g,p,sig,0)).index == ty,"List import result type");
+        }
+        op=op+1;
+    }
+    let i be 1;
+    while i <= fn.instructions.length/10 {
+        let code be try get(fn.instructions,p,(i-1)*10);
+        try require(code == 1 or code == 34 or code == 8,
+            "opaque List carrier cannot be constructed/projected as an aggregate");
+        i=i+1;
+    }
+    return proof.revision;
+}
+function line(s Text) { output("    "+s); }
+function slot(id Int) returns Text { return format.integer((id-1)*8)+"(%rsp)"; }
+function load(fn identity build.Function,p identity budget.Phase,inst Int,n Int,reg Text)
+    fails budget.LimitError {
+    let first be try get(fn.instructions,p,(inst-1)*10+2);
+    let value be try get(fn.operands,p,first+n);
+    line("movq "+slot(value)+","+reg);
+}
+public function emit(fn identity build.Function,g identity aggregate.Registry,
+    carrier aggregate.TypeId,p identity budget.Phase)
+    fails budget.LimitError,canonical.InvalidIR,Unsupported {
+    let revision be try verify(fn,g,carrier,p);
+    let total be fn.values.length/4;
+    let scopeOffset be total*8; let tempOffset be scopeOffset+8;
+    let frame be ((tempOffset+8+15)/16)*16+8;
+    output(".section .rodata\nerist_u2_list_classes:");
+    let i be 0;
+    while i < total { output(".byte 1"); i=i+1; }
+    output(".text\n.globl erist_u2_list_entry\nerist_u2_list_entry:");
+    line("subq $"+format.integer(frame)+",%rsp");
+    i=1; while i <= total { line("movq $0,"+slot(i)); i=i+1; }
+    line("call evn_scope_enter"); line("movq %rax,"+format.integer(scopeOffset)+"(%rsp)");
+    line("movq %rax,%rdi"); line("movq %rsp,%rsi");
+    line("leaq erist_u2_list_classes(%rip),%rdx");
+    line("movq $"+format.integer(total)+",%rcx"); line("call evn_bind_roots");
+    let inst be try get(fn.blocks,p,2);
+    let terminal be try get(fn.blocks,p,4);
+    if inst == 0 { inst=terminal; }
+    while inst != 0 {
+        let off be (inst-1)*10; let code be try get(fn.instructions,p,off);
+        let result be try get(fn.instructions,p,off+4);
+        if code == 1 {
+            line("movabsq $"+format.integer(try get(fn.instructions,p,off+7))+",%rdi");
+            line("call evn_int"); line("movq %rax,"+slot(result));
+        }
+        if code == 34 {
+            let op be try get(fn.instructions,p,off+7);
+            if op == 1 { line("movl $7,%edi"); line("xorl %esi,%esi"); line("call evn_object"); }
+            if op == 2 { try load(fn,p,inst,0,"%rdi"); line("call evn_copy"); }
+            if op == 3 or op == 4 {
+                try load(fn,p,inst,0,"%rdi"); line("call evn_copy");
+                // Publish the new snapshot before the mutating allocating helper.
+                line("movq %rax,"+slot(result));
+                line("movq %rax,%rdi");
+                if op == 3 { try load(fn,p,inst,1,"%rsi"); line("call evn_add"); }
+                if op == 4 {
+                    try load(fn,p,inst,1,"%rsi"); line("movq 8(%rsi),%rsi"); line("call evn_index_ref");
+                    line("movq %rax,%rdi"); try load(fn,p,inst,2,"%rsi"); line("call evn_store");
+                }
+                line("movq "+slot(result)+",%rax");
+            }
+            if op == 5 { try load(fn,p,inst,0,"%rdi"); line("call evn_count"); }
+            if op == 6 {
+                try load(fn,p,inst,0,"%rdi"); try load(fn,p,inst,1,"%rsi");
+                line("movq 8(%rsi),%rsi"); line("call evn_index");
+            }
+            if op == 7 { line("call erist_rt_text_collect"); }
+            else { line("movq %rax,"+slot(result)); }
+        }
+        if code == 8 {
+            try load(fn,p,inst,0,"%rax"); line("movq 8(%rax),%rax");
+            line("movq %rax,"+format.integer(tempOffset)+"(%rsp)");
+            line("call evn_void"); line("movq %rax,%rsi");
+            line("movq "+format.integer(scopeOffset)+"(%rsp),%rdi"); line("call evn_scope_leave");
+            line("movq "+format.integer(tempOffset)+"(%rsp),%rax");
+            line("addq $"+format.integer(frame)+",%rsp"); line("ret");
+        }
+        // Exact straight-line last-use release, including inputs of this op.
+        i=1;
+        while i <= total {
+            let later be try get(fn.instructions,p,off+9);
+            if later == 0 and code != 8 { later=terminal; }
+            let needed be false;
+            while later != 0 {
+                let first be try get(fn.instructions,p,(later-1)*10+2);
+                let count be try get(fn.instructions,p,(later-1)*10+3); let j be 0;
+                while j < count { if (try get(fn.operands,p,first+j)) == i { needed=true; } j=j+1; }
+                if later == terminal { later=0; }
+                else { later=try get(fn.instructions,p,(later-1)*10+9); if later == 0 { later=terminal; } }
+            }
+            if not needed and code != 8 { line("movq $0,"+slot(i)); }
+            i=i+1;
+        }
+        if inst == terminal { inst=0; }
+        else { inst=try get(fn.instructions,p,off+9); if inst == 0 { inst=terminal; } }
+    }
+    output(".section .note.GNU-stack,\"\",@progbits");
+}

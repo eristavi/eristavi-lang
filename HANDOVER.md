@@ -18,12 +18,41 @@ No full U2 CI or completed-batch qualification has been initiated; unverified ne
 | Latest qualified production merge | [PR #110](https://github.com/eristavi/eristavi-lang/pull/110), merge `6b5fccecb8e79f7c9bcc8261faa9203f4c94262a`; subsequent main changes are documentation/evidence/opt-in probes |
 | U1a | Complete within its adopted scalar/SSA/call/Float/provenance/physical boundary; [#77](https://github.com/eristavi/eristavi-lang/issues/77) CLOSED |
 | U1b | Bounded reference immutable aggregates/linked execution accepted through [merged #106](https://github.com/eristavi/eristavi-lang/pull/106); [#73](https://github.com/eristavi/eristavi-lang/issues/73) CLOSED |
-| U2 | Canonical cleanup/failure and scoped roots, bounded SSA liveness, and opt-in Text/List/identity descriptor and operation contracts focused-tested; Stage-0/C/owned managed-value reference parity passed; actual redesigned-UIR managed operations and native roots, full qualification OPEN; [#74](https://github.com/eristavi/eristavi-lang/issues/74) OPEN; draft/unmerged |
+| U2 | Canonical cleanup/failure and scoped roots, bounded SSA liveness, and opt-in Text/List/identity descriptor and operation contracts focused-tested; Stage-0/C/owned reference parity and a bounded single-block canonical List-i64 native execution slice passed focused checks; general managed operations/roots and full qualification OPEN; [#74](https://github.com/eristavi/eristavi-lang/issues/74) OPEN; draft/unmerged |
 | U2 branch / PR | `compiler/u2-cleanup-foundation-20261102`; [#111](https://github.com/eristavi/eristavi-lang/pull/111) OPEN / DRAFT |
 | U3 / U4 | [#75](https://github.com/eristavi/eristavi-lang/issues/75) / [#102](https://github.com/eristavi/eristavi-lang/issues/102) OPEN; redesigned production integration/machine migration unimplemented |
 | Optimization | [#51](https://github.com/eristavi/eristavi-lang/issues/51) OPEN / PAUSED; no whole-compiler speedup or optimization completion claimed |
 | Production | Existing frontend/default compiler, frozen source behavior and 32-byte ABI retained; no new-UIR backend promotion |
 | Full owned compiler self-build | Explicitly excluded from ordinary work; NOT CERTIFIED |
+
+## Current U2 checkpoint — canonical List-i64 native execution
+
+Prior operation-shape hosted CI #41691861564 PASSED on exact head
+`4ebf6f153bd0f8f21349d25846528fe31bdbb1f3`.
+
+New `src/compiler/u2_list_i64.eri` verifies and emits a closed optional canonical
+single-block List-i64 profile through the actual owned x86-64 graph runtime.
+It supports empty/copy/append/replacement/count/get and explicit collection,
+with automatic class-1 frame-root stores and straight-line last-use clearing.
+Its carrier is explicitly opaque in this legal profile; this is not general
+canonical managed type encoding or frontend routing. The compiler checks the
+exact versioned seven-import signatures, symbols and effects, and rejects
+aggregate materialization. Existing production main remains unchanged.
+
+Focused native tests PASSED: 3 tests in 23.313 seconds, covering five snapshot
+observations after GC and final reclamation, negative bounds, first graph OOM,
+and three malformed ingress cases with no native assembly emitted.
+Broader local smoke PASSED: 89 run, 86 passed, zero failures, three
+intentional skips, 218.088 seconds. Source hashes, raw log and outcomes
+are in `docs/evidence/2026-11-03/u2-list-i64-native-smoke.*`.
+Hosted exact-head CI is pending; no full qualification or merge.
+See `docs/architecture/UIR_U2_LIST_I64_NATIVE.md` for exact scope/algorithm,
+closed runtime descriptor boundary and remaining requirements.
+
+Next: independently validate target descriptor/root contracts and source-fault
+mapping; extend the bounded legal profile to typed managed CFG/loops, integrate
+managed registry and local promotion, then Text/identity and checked cleanup.
+Do not treat this single-block executable slice as full U2 acceptance.
 
 ## Active U2 follow-up — managed SSA operation shapes
 

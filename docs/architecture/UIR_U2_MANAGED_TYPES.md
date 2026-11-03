@@ -140,3 +140,9 @@ This is the typed shape boundary for future canonical construction, NOT an
 implementation of managed instructions, machine root stores or runtime adapters.
 No new executable opcode, runtime ABI, source syntax or production routing is
 introduced. General canonical type encoding and execution remain open.
+
+
+A bounded executable List-i64 legal adapter now lives in
+[UIR_U2_LIST_I64_NATIVE.md](UIR_U2_LIST_I64_NATIVE.md). It uses canonical
+Function calls, opaque carrier interpretation and real owned helpers; general
+managed descriptor integration remains unfinished. Read its exact limitations.
