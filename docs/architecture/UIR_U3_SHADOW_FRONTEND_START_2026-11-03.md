@@ -35,3 +35,7 @@ Next: map frozen AST facts to U1 metadata/LocId and implement real shadow constr
 5. **Direct scalar pilot:** Added `u3_scalar_construction.py` with a strictly bounded, fail-closed plan for `const.i64`, `const.pred`, and `return`, plus `test_u3_construction_pilot.py`. This is **not executable canonical UIR** and does not replace Typed IR or the production frontend. Unsupported control flow, calls, managed types and failure operations are rejected.
 
 **Next acceptance-critical work:** Implement the Eristavi-native AST+semantic-facts bridge, actual owner-bound U1 metadata and builder calls, independently verify all-block SSA, and run the dedicated focused test workflow. Do not merge/close #75 or claim steps 3–5 fully integrated until those gates pass.
+
+## Focused test result (2026-11-03)
+
+At exact code head `4c05f9e0db7b391bf26c6dcf9390c7ae67506e45`, [dedicated CI 41623250447](https://github.com/eristavi/eristavi-lang/actions/runs/41623250447) passed **6/6** focused tests (three shadow gate, three scalar construction pilot). [Standard CI 41623258750](https://github.com/eristavi/eristavi-lang/actions/runs/41623258750) succeeded. Previous focused failures were environment setup (`regex` dependency); fixed by installing project before tests. Both are narrow validation only, not U3 production qualification.
