@@ -1,0 +1,154 @@
+// U2 opt-in machine-neutral metadata for the EXISTING canonical Function.
+// A verified failure edge needs a class-5 native saved-failure root. This
+// immutable map is NOT an executable IR, a root stack slot, or a collector.
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+import compiler.u1_meta as meta;
+import compiler.u1_builder as build;
+import compiler.u1_aggregate as aggregate;
+
+public type Root {
+    instruction Int; target Int; slot Int; typeIndex Int; location Int;
+}
+public type Map {
+    version Int; owner identity budget.Owner;
+    functionKey identity meta.Key; typeKey identity meta.Key; revision Int;
+    records identity words.Words; control identity budget.Allocation; closed Bool;
+}
+public type Report { invokes Int; roots Int; revision Int; }
+public error InvalidRoots { message Text; }
+function require(ok Bool,message Text) fails InvalidRoots {
+    if not ok { fail InvalidRoots { message=message; }; }
+}
+function gate(routine identity build.Function,graph identity aggregate.Registry,
+    phase identity budget.Phase) fails budget.LimitError,InvalidRoots {
+    try budget.poll(routine.owner);
+    try require(routine.state == 1 and phase.owner == routine.owner and
+        phase.state == 0 and routine.owner.kind == 2 and
+        graph.state == 1 and graph.owner == routine.metadata.owner and
+        graph.owner.parent == routine.owner.parent and
+        routine.metadata.frozen and not routine.metadata.closed and
+        not routine.instructions.closed and routine.instructions.frozen and
+        not routine.edges.closed and routine.edges.frozen and
+        not routine.blocks.closed and routine.blocks.frozen and
+        not routine.values.closed and routine.values.frozen and
+        routine.instructions.length%10 == 0 and
+        routine.edges.length%3 == 0 and
+        routine.blocks.length%5 == 0 and
+        routine.values.length%4 == 0,
+        "root-map requires complete frozen canonical UIR and type graph");
+}
+function required(routine identity build.Function,graph identity aggregate.Registry,
+    phase identity budget.Phase,index Int)
+    returns Root fails budget.LimitError,InvalidRoots {
+    let off be (index-1)*10;
+    let opcode be try words.get(routine.instructions,phase,off);
+    try require(opcode == 46,"root-map target is not a checked invoke");
+    let edge be try words.get(routine.instructions,phase,off+8);
+    try require(edge >= 1 and edge < routine.edges.length/3,
+        "checked invoke has no exact failure edge");
+    let target be try words.get(routine.edges,phase,edge*3);
+    try require(target >= 2 and target <= routine.blocks.length/5,
+        "invalid checked-failure target block");
+    let start be try words.get(routine.blocks,phase,(target-1)*5);
+    let count be try words.get(routine.blocks,phase,(target-1)*5+1);
+    try require(count >= 1 and start >= 1 and start <= routine.values.length/4 and
+        count <= routine.values.length/4-start+1,
+        "failure target has no valid typed first parameter");
+    let row be (start-1)*4;
+    let valueType be try words.get(routine.values,phase,row);
+    try require(valueType > 6 and valueType <= 6+graph.records.length/4 and
+        (try words.get(routine.values,phase,row+1)) == 0 and
+        (try words.get(routine.values,phase,row+2)) == target and
+        (try words.get(routine.values,phase,row+3)) == 0,
+        "failure root is not a canonical structural parameter");
+    let loc be try words.get(routine.instructions,phase,off+6);
+    try meta.validLocation(routine.metadata,
+        meta.LocId { owner=routine.metadata.key; index=loc; });
+    return Root { instruction=index; target=target; slot=start;
+        typeIndex=valueType; location=loc; };
+}
+function fill(map identity Map,routine identity build.Function,
+    graph identity aggregate.Registry,phase identity budget.Phase)
+    fails budget.LimitError,InvalidRoots {
+    let index be 1;
+    while index <= routine.instructions.length/10 {
+        try budget.work(phase,1);
+        let op be try words.get(routine.instructions,phase,(index-1)*10);
+        if op == 46 {
+            try require(map.records.length/6 < 128,
+                "U2 root-map profile exceeds 128 checked calls");
+            let root be try required(routine,graph,phase,index);
+            let ignored be try words.push(map.records,phase,root.instruction);
+            ignored=try words.push(map.records,phase,root.target);
+            ignored=try words.push(map.records,phase,root.slot);
+            ignored=try words.push(map.records,phase,root.typeIndex);
+            ignored=try words.push(map.records,phase,root.location);
+            ignored=try words.push(map.records,phase,5);
+        }
+        index=index+1;
+    }
+}
+public function create(routine identity build.Function,graph identity aggregate.Registry,
+    phase identity budget.Phase)
+    returns identity Map fails budget.LimitError,InvalidRoots {
+    try gate(routine,graph,phase);
+    let pending be try budget.reserve(routine.owner,512);
+    let records be words.create(routine.owner,768)
+        else error budget.LimitError { try budget.cancelReservation(pending); fail error; };
+    let control be try budget.commit(pending);
+    let map be identity Map { version=1; owner=routine.owner; functionKey=routine.key;
+        typeKey=graph.key; revision=routine.revision;
+        records=records; control=control; closed=false; };
+    fill(map,routine,graph,phase)
+        else error budget.LimitError {
+            try words.close(records); try budget.release(control); map.closed=true; fail error;
+        }
+        else error InvalidRoots {
+            try words.close(records); try budget.release(control); map.closed=true; fail error;
+        };
+    try words.freeze(records);
+    return map;
+}
+public function verify(map identity Map,routine identity build.Function,
+    graph identity aggregate.Registry,phase identity budget.Phase)
+    returns Report fails budget.LimitError,InvalidRoots {
+    try gate(routine,graph,phase);
+    try require(not map.closed and map.version == 1 and
+        map.owner == routine.owner and map.functionKey == routine.key and
+        map.typeKey == graph.key and map.revision == routine.revision and
+        map.control.owner == routine.owner and map.control.state == 0 and
+        map.records.owner == routine.owner and not map.records.closed and
+        map.records.frozen and map.records.length%6 == 0 and
+        map.records.length <= 768,
+        "invalid or stale U2 checked-failure root-map backing");
+    let index be 1; let entries be 0;
+    while index <= routine.instructions.length/10 {
+        try budget.work(phase,1);
+        let op be try words.get(routine.instructions,phase,(index-1)*10);
+        if op == 46 {
+            try require(entries < map.records.length/6,
+                "missing checked-failure native root record");
+            let expected be try required(routine,graph,phase,index);
+            let row be entries*6;
+            try require((try words.get(map.records,phase,row)) == expected.instruction and
+                (try words.get(map.records,phase,row+1)) == expected.target and
+                (try words.get(map.records,phase,row+2)) == expected.slot and
+                (try words.get(map.records,phase,row+3)) == expected.typeIndex and
+                (try words.get(map.records,phase,row+4)) == expected.location and
+                (try words.get(map.records,phase,row+5)) == 5,
+                "missing, reordered, forged or wrong-class checked-failure root");
+            entries=entries+1;
+        }
+        index=index+1;
+    }
+    try require(entries == map.records.length/6,
+        "extra or duplicate checked-failure root");
+    return Report { invokes=entries; roots=entries; revision=routine.revision; };
+}
+public function close(map identity Map) fails budget.LimitError {
+    if map.closed { try budget.reject("U2 root map already closed"); }
+    map.closed=true;
+    try words.close(map.records);
+    try budget.release(map.control);
+}
