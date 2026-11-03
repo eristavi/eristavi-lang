@@ -163,9 +163,9 @@ class U2ScopedOwnerTests(unittest.TestCase):
             '    try cleanup.close(plan);')
         text = text.replace(
             'let pendingClose be try transfer.emit(fn,graph,consume,pair,[pendingOwner],[pendingError]);',
-            'let pendingClose be try transfer.emit(fn,graph,consume,pair,[pendingOwner],[pendingError]);\\n'
-            '    let activeFailed be [cleanup.Scope { scope=outerScope; contract=consumption.index; value=pendingOwner.index; close=loc; }];\\n'
-            '    let failedPlan be try planVerify.prepare(data,owner,phase,activeFailed,0,loc,true);\\n'
+            'let pendingClose be try transfer.emit(fn,graph,consume,pair,[pendingOwner],[pendingError]);\n'
+            '    let activeFailed be [cleanup.Scope { scope=outerScope; contract=consumption.index; value=pendingOwner.index; close=loc; }];\n'
+            '    let failedPlan be try planVerify.prepare(data,owner,phase,activeFailed,0,loc,true);\n'
             '    try cleanup.close(failedPlan);')
         text = text.replace('continuation.InvalidBinding,owners.InvalidOwnership,ProbeError {',
             'continuation.InvalidBinding,owners.InvalidOwnership,'
