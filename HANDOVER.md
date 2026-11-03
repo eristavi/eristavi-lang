@@ -1,17 +1,9 @@
 # Eristavi compiler — current handover
 
-## Parallel U3/U4 foundation checkpoint — 2026-11-03
+## Parallel U3/U4 three-step development checkpoint — 2026-11-03
 
-The user authorized parallel U3/U4 development while U2 #74 remains open. Two independent branches were created from `main`: `compiler/u3-shadow-frontend-20261103` (architecture start commit `8e6f0d277d4d67c601de81792dc38119477feeb4`) and `compiler/u4-machine-lowering-20261103` (architecture start commit `e471f31f67abe46873b20d92d4fd2ee67e6f5cf7`). Each contains a bounded start contract in `docs/architecture/`. These are **documentation-only planning commits**; no compiler code or tests have been implemented or qualified in U3/U4. The existing production compiler and draft U2 PR #111 are unchanged. Next: inspect actual AST/UIR and target lowering code, implement narrow opt-in scalar U3/U4 slices with focused independent tests. Preserve U2 acceptance dependency for managed/failure/resource integration; no milestone closure or production merge.
+User requested exactly three steps per workstream, then stop. Completed **step 1 inspection, step 2 isolated code, step 3 focused tests added** on independent branches; do not claim the full compiler pipeline or qualification. U3 draft [PR #119](https://github.com/eristavi/eristavi-lang/pull/119), branch `compiler/u3-shadow-frontend-20261103`, current checkpoint commit `c091d0cea54e06d7b7d7c2501240f94b2434007f`: `compiler/erist/u3_shadow_gate.py` validates opt-in scalar source revisions and signatures; `tests/test_u3_shadow_gate.py` added. U4 draft [PR #120](https://github.com/eristavi/eristavi-lang/pull/120), branch `compiler/u4-machine-lowering-20261103`, checkpoint commit `cc962bd107de93013e8f70bf79063894eda89b44`: `compiler/erist/u4_parallel_moves.py` schedules simultaneous SSA block-parameter moves including cycles; `tests/test_u4_parallel_moves.py` added. **Focused tests have been committed but not yet confirmed by exact-head CI**; neither slice is integrated into the production compiler. No full CI or experimental self-build authorized or run. The U3 existing `uir` CLI still passes through old `ir_lower`/typed IR, not the new direct AST path. U2 draft PR #111 remains separate and unfinished; no U2/U3/U4 merge or issue closure. Next session: inspect focused CI for both PRs, correct any failures, then implement actual U3 AST→UIR and U4 verified U1 edge→machine placement. Follow governing philosophy and frozen semantics before code.
 
-**Verified: 2 November 2026, Asia/Nicosia.** This file contains current recovery
-instructions and accepted boundaries. Superseded checkpoints are in the
-[historical snapshot](docs/history/2026-11-02/HANDOVER_BEFORE_CLEANUP.md).
-
-**Current authorization: documentation cleanup only.** The user requested that
-compiler work STOP after the completed U2 foundation step. Do not begin another
-implementation batch until a new user instruction. Optimization #51 remains
-OPEN / PAUSED. No build, test or qualification process is running.
 
 ## Current verified status
 
