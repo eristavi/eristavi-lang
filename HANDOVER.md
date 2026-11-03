@@ -4,10 +4,10 @@
 instructions and accepted boundaries. Superseded checkpoints are in the
 [historical snapshot](docs/history/2026-11-02/HANDOVER_BEFORE_CLEANUP.md).
 
-**Current authorization: U2 development resumed by explicit user instruction.**
+**Current authorization: user granted standing permission for GitHub development, review, tests, documentation and qualified merges.**
 Continue bounded U2 work under the governing philosophy, frozen semantics and
 proportional testing rules. Optimization #51 remains OPEN / PAUSED.
-No full CI or completed-batch qualification has been initiated.
+No full U2 CI or completed-batch qualification has been initiated; unverified new changes must not be reported as passing.
 
 ## Current verified status
 
@@ -24,6 +24,16 @@ No full CI or completed-batch qualification has been initiated.
 | Optimization | [#51](https://github.com/eristavi/eristavi-lang/issues/51) OPEN / PAUSED; no whole-compiler speedup or optimization completion claimed |
 | Production | Existing frontend/default compiler, frozen source behavior and 32-byte ABI retained; no new-UIR backend promotion |
 | Full owned compiler self-build | Explicitly excluded from ordinary work; NOT CERTIFIED |
+
+## Current reconciliation and GC-gate update — 3 November 2026
+
+**One active U2 development PR:** [#111](https://github.com/eristavi/eristavi-lang/pull/111). Supporting stacked PRs [#112](https://github.com/eristavi/eristavi-lang/pull/112) through [#117](https://github.com/eristavi/eristavi-lang/pull/117) were each closed **without merging** after comparing their source trees to #111. The newer source and owned-runtime test contents were already promoted into #111 and verified by blob identity. Retain their historical discussions and exact CI links as evidence. None is a qualified main-branch merge.
+
+**New direct development:** `tests/test_freestanding_graph_values.py::FreestandingGraphValueTests.test_u2_saved_failure_root_survives_explicit_gc_and_releases` (commit `8d3c74bcbceb1b263bf24c227396a5404e7f1056`), registered in focused smoke by `tools/run_ci_tests.py` (commit `3f01869b50f1fba02ad02af823fb162a02cc3157`). This native x86-64 probe attaches the owned runtime's class-5 saved-failure root to an actual frame map, explicitly calls both collectors four times while the typed primary Text payload is live, verifies payload/record retention, releases the root and checks reclamation, and instruments the collector entry count. **It is not yet executed or qualified.** The probe uses the existing target runtime, not a canonical UIR-generated root-map publisher; passing would prove native root/tracer behavior only.
+
+**CI execution limitation:** GitHub App direct writes and close/reopen on draft #111 have not produced a new Actions run for current source head `3f01869b50f1fba02ad02af823fb162a02cc3157`. A temporary validation-only [PR #118](https://github.com/eristavi/eristavi-lang/pull/118) was opened at the same source revision, and a separate validation-note commit/reopen was attempted; no new run was reported as of this checkpoint. Never cite previous CI as evidence for this new forced-GC probe. The `.github/workflows/ci.yml` workflow supports manual `workflow_dispatch`, but the connected GitHub tools do not expose that write action. Do not silently skip validation, mark the test green or launch full qualification prematurely.
+
+**Remaining production gates:** create target-aware canonical safe-point root-map emission and independent verification (all checked edges, primary and ordered secondaries, dead code and unwind); native managed Text/List/identity semantics and Unicode 17; actual resource adapter execution; forced GC/allocator-failure/RSS evidence with real compiler-produced root maps; complete Stage-0/native semantic parity, full four-platform suite and completed-batch qualification. These gates remain OPEN. Follow the frozen philosophy, 32-byte ABI and no-moving-GC constraint; Optimization #51 stays PAUSED. Do not promote or merge #111 until independently qualified.
 
 ## Latest U2 consolidated and owned-runtime verification — 3 November 2026
 
