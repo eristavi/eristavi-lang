@@ -1,6 +1,6 @@
 # U2 managed Text/List/identity semantic descriptors
 
-Status: managed descriptors focused-tested; operation-contract follow-up unqualified.
+Status: opt-in descriptors, operation contracts and old-runtime parity focused-tested; redesigned-UIR lowering still pending.
 Locked design: `DESIGN_PHILOSOPHY.md`, `LANGUAGE_SEMANTICS.md`, `COLLECTIONS.md`, `IDENTITY_EQUALITY.md`.
 
 The first managed-runtime integration gate adds a **private semantic descriptor
@@ -103,5 +103,12 @@ The owned runtime probe also checks final graph/Text reclamation.
 This is a prerequisite behavior oracle for future redesigned UIR lowering,
 **not** proof that the new UIR path executes managed operations. The operation-selection fixture passed focused smoke
 #41631072215 (85 run / 82 passed / 0 failed / 3 skipped), but that
-run did not select this newly added parity method. The test has now been
-explicitly added to the smoke manifest; its exact-head outcome is pending.
+run did not select this newly added parity method. The test was explicitly selected in the smoke manifest and passed
+[CI #41631707129](https://github.com/eristavi/eristavi-lang/actions/runs/41631707129)
+on exact source `d080c6fc50c72e7f86aba8cca4078437e913ae06`:
+86 run / 83 passed / 0 failed / 3 skipped (173.084 seconds).
+Both the operation-contract and Unicode17/List/identity parity cases
+reported `ok`. This qualifies only the opt-in semantic metadata and
+the **existing** runtime reference behavior. No new UIR Text/List/identity
+opcodes or native root publishing were executed end-to-end. Full U2
+four-platform CI and completed-batch release review remain OPEN.

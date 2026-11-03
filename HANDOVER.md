@@ -18,7 +18,7 @@ No full U2 CI or completed-batch qualification has been initiated; unverified ne
 | Latest qualified production merge | [PR #110](https://github.com/eristavi/eristavi-lang/pull/110), merge `6b5fccecb8e79f7c9bcc8261faa9203f4c94262a`; subsequent main changes are documentation/evidence/opt-in probes |
 | U1a | Complete within its adopted scalar/SSA/call/Float/provenance/physical boundary; [#77](https://github.com/eristavi/eristavi-lang/issues/77) CLOSED |
 | U1b | Bounded reference immutable aggregates/linked execution accepted through [merged #106](https://github.com/eristavi/eristavi-lang/pull/106); [#73](https://github.com/eristavi/eristavi-lang/issues/73) CLOSED |
-| U2 | Canonical cleanup/failure matrix, independent root metadata, native GC and opt-in generated x86-64 scoped-root helpers focused-tested; full machine liveness, managed values and qualification OPEN; [#74](https://github.com/eristavi/eristavi-lang/issues/74) OPEN; not complete, fully qualified or merged |
+| U2 | Canonical cleanup/failure and scoped roots, bounded SSA liveness, and opt-in Text/List/identity descriptor and operation contracts focused-tested; Stage-0/C/owned managed-value reference parity passed; actual redesigned-UIR managed operations and native roots, full qualification OPEN; [#74](https://github.com/eristavi/eristavi-lang/issues/74) OPEN; draft/unmerged |
 | U2 branch / PR | `compiler/u2-cleanup-foundation-20261102`; [#111](https://github.com/eristavi/eristavi-lang/pull/111) OPEN / DRAFT |
 | U3 / U4 | [#75](https://github.com/eristavi/eristavi-lang/issues/75) / [#102](https://github.com/eristavi/eristavi-lang/issues/102) OPEN; redesigned production integration/machine migration unimplemented |
 | Optimization | [#51](https://github.com/eristavi/eristavi-lang/issues/51) OPEN / PAUSED; no whole-compiler speedup or optimization completion claimed |
@@ -73,21 +73,29 @@ compiled and passed. Text copy is conservatively classified as
 potentially allocating, requiring safe-point root preservation until
 a target proves otherwise.
 
-**Additional parity coverage pending:** The same code revision contains
-`test_u2_managed_unicode17_list_value_and_identity_alias_parity` in
-`tests/test_freestanding_graph_values.py` but the smoke runner listed only
-selected methods of that class, so the new method was **NOT run** by
-#41631072215. The current change explicitly registers it in
-`tools/run_ci_tests.py` to compare Stage-0, C-native and Linux owned
-runtime behavior, including Unicode17 grapheme/scalar/byte counts,
-non-normalizing equality, List snapshot semantics, identity aliasing,
-and final managed heap reclamation. **The new exact-head CI remains PENDING**;
-do not claim native parity green until that test reports `ok`.
+**Exact-head managed operation + three-runtime parity verification — PASSED:**
+[Focused CI #41631707129](https://github.com/eristavi/eristavi-lang/actions/runs/41631707129)
+SUCCESS on implementation source
+`d080c6fc50c72e7f86aba8cca4078437e913ae06`.
+86 tests run / **83 passed / zero failed / 3 intentionally skipped**
+(173.084 seconds); scope/patch check succeeded, full four-platform
+CI intentionally skipped. In particular, the tests
+`test_versioned_text_list_identity_descriptors_and_corruption` and
+`test_u2_managed_unicode17_list_value_and_identity_alias_parity`
+both reported `ok`. The latter executed the **existing** Stage-0,
+C-native and Linux x86-64 owned runtimes on the same composite source
+and checked Unicode17 grapheme/scalar/byte views, non-normalizing Text
+equality, List value-copy isolation, identity alias/distinct equality
+and final graph/Text reclamation. This freezes reference behavior
+for the future redesigned-UIR backend: **it does NOT prove that new UIR
+executes those managed operations or publishes their native GC roots**.
 
-The operation contract remains a private semantic/effects/root-obligation
-gate, not new executable canonical UIR opcodes or runtime adapters.
-No public ABI or frozen language behavior was changed; production `main`
-is untouched.
+The new private `u2_managed_operation_contract.eri` independently
+checks semantic kind/copy-policy consistency, enforces explicit
+operation/type/view families and conservative allocator/root
+obligations; no new surface keyword, 32-byte ABI change, moving
+collector or production-backend routing was added. All three
+opt-in skips remain visible and cannot count toward final U2 release.
 
 **Phase 1 remaining:** Author versioned canonical UIR managed operation
 and value representation with independent verification; connect to real
@@ -96,7 +104,7 @@ root-class placement and publication, deep List copy/alias/Unicode17
 behavioral parity, forced-GC and OOM tests. U2 #74 and draft PR #111
 remain open; no full four-platform CI or production merge.
 
-## Latest U2 checkpoint — 3 November 2026
+## Earlier U2 native-root checkpoint — 3 November 2026 (superseded by Phase 1 above)
 
 **Current development:** single draft [PR #111](https://github.com/eristavi/eristavi-lang/pull/111), branch compiler/u2-cleanup-foundation-20261102. Support PRs #112–#118 are closed unmerged after reconciliation. U2 [issue #74](https://github.com/eristavi/eristavi-lang/issues/74) remains OPEN; U3/U4 open; optimization #51 remains PAUSED. Existing production main, compiler, locked source semantics, 32-byte ABI and owned runtime defaults unchanged.
 
