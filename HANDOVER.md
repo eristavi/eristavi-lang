@@ -25,6 +25,10 @@ No full CI or completed-batch qualification has been initiated.
 | Production | Existing frontend/default compiler, frozen source behavior and 32-byte ABI retained; no new-UIR backend promotion |
 | Full owned compiler self-build | Explicitly excluded from ordinary work; NOT CERTIFIED |
 
+## Canonical failure root boundary candidate — 3 November 2026
+
+New stacked draft validation branch `compiler/u2-canonical-failure-root-boundary-20261103` adds `u2_failure_root_bind.eri`, a reference pin that binds a live full typed `FailureContext` to the **first canonical checked-failure destination block parameter** with fresh key/revision/owner/type/LocId checks and explicitly charged pin lifetime. A focused scoped-owner fixture transformation tests the canonical destination and context pin. The contract `docs/architecture/UIR_U2_FAILURE_ROOT_BOUNDARY.md` distinguishes this staging proof from the existing native x86-64 protected-failure roots and secondary link tracer. This is **not yet tested** and does **not** implement target-level root-map publication, forced-collection preservation, Text/List/identity liveness or U2 acceptance. Prior PR #114 and #113 runs must be reconciled separately. No production compiler/runtime or ABI modification.
+
 ## Typed nested-failure semantic matrix candidate — 2 November 2026
 
 Isolated branch `compiler/u2-failure-semantics-20261102` derives from PR #113 head `4add6cfa139a4983db897ab4ece83b0328cba70e`. New `src/compiler/u2_failure_trace.eri` checks an entire independently verified private cleanup plan's row routing and runs a closed 3-owner / 8 failure-mask / two body-state matrix against the separately implemented typed `u2_failure_context`. The fixture checks reverse lexical order, primary preservation, ordered typed/Text secondary payloads, terminal success-vs-failure and released owner charges. This is **an unqualified semantic reference**, not a canonical rooted FailureContext, physical allocator proof, actual resource execution or U2 completion. Focused CI must pass on the exact new code head. Separate failure-routing PR #113 has its own still-pending results. No full CI or main merge selected.
