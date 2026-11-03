@@ -20,7 +20,9 @@ class U2FailureRootBindingTests(unittest.TestCase):
             'phase identity budget.Phase,pair continuation.Pair,pin identity roots.Pin)'
             ' returns Bool fails budget.LimitError,continuation.InvalidBinding {\n'
             '    let accepted be roots.verify(fn,graph,phase,pair,pin)'
-            ' else error roots.InvalidRoot { return true; };\n'
+            ' else error roots.InvalidRoot { return true; }\n'
+            ' else error budget.LimitError { fail error; }\n'
+            ' else error continuation.InvalidBinding { fail error; };\n'
             '    return false;\n'
             '}\n'
         )
