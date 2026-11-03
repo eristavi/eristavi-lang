@@ -427,3 +427,53 @@ public function liveAfter(plan identity Plan,routine identity build.Function,
     returns Bool fails budget.LimitError,InvalidLiveness {
     return try at(plan,routine,phase,instruction,value,false);
 }
+
+// Emitters can require an exact, independently revalidated publication set
+// before each potential allocation/call safe point. 'published' contains
+// ValueIds whose native root words the lowering promises to keep registered.
+// This validates an OBLIGATION, not the resulting machine instructions.
+public function requirePublished(plan identity Plan,routine identity build.Function,
+    graph identity aggregate.Registry,contractsTable identity contracts.Registry,
+    phase identity budget.Phase,instruction build.InstId,published,before Bool)
+    returns Int fails budget.LimitError,canonical.InvalidIR,InvalidLiveness {
+    let proof be try verify(plan,routine,graph,contractsTable,phase);
+    try require(instruction.owner == routine.key and
+        instruction.index >= 1 and instruction.index <= plan.instructions and
+        published.count <= plan.values.length/4,
+        "foreign or oversized managed root publication");
+    let i be 0;
+    while i < published.count {
+        let item build.ValueId be published[i];
+        try require(item.owner == routine.key and
+            (try trackedSlot(plan,phase,item.index)) > 0,
+            "untracked or foreign native root publication");
+        let j be 0;
+        while j < i {
+            let previous build.ValueId be published[j];
+            try require(previous.index != item.index,
+                "duplicated native root publication");
+            j=j+1;
+        }
+        i=i+1;
+    }
+    let required be 0; i=0;
+    while i < plan.values.length/4 {
+        try budget.work(phase,1);
+        let value be build.ValueId { owner=routine.key;
+            index=try words.get(plan.values,phase,i*4); };
+        let live be false;
+        if before { live=try liveBefore(plan,routine,phase,instruction,value); }
+        else { live=try liveAfter(plan,routine,phase,instruction,value); }
+        let found be false; let j be 0;
+        while j < published.count {
+            let item build.ValueId be published[j];
+            if item.index == value.index { found=true; }
+            j=j+1;
+        }
+        try require(live == found,
+            "missing, prematurely released or incorrectly retained managed root");
+        if live { required=required+1; }
+        i=i+1;
+    }
+    return required;
+}
