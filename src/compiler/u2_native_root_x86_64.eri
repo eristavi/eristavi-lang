@@ -39,6 +39,13 @@ public function emit(map identity roots.Map,routine identity build.Function,
     output(".globl erist_u2_bind_"+name);
     output(".type erist_u2_bind_"+name+",@function");
     output("erist_u2_bind_"+name+":");
+    // A newly bound frame may contain stale stack words: initialize all
+    // roots before the collector can traverse the published scope.
+    index=0;
+    while index < proof.roots {
+        output("    movq $0,"+format.integer(index*8)+"(%rsi)");
+        index=index+1;
+    }
     output("    leaq erist_u2_classes_"+name+"(%rip),%rdx");
     output("    movl $"+format.integer(proof.roots)+",%ecx");
     output("    jmp evn_bind_roots");
