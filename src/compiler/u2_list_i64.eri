@@ -277,8 +277,7 @@ public function emit(fn identity build.Function,g identity aggregate.Registry,
         else error budget.LimitError { try closeProof(plan,table); fail error; }
         else error ssa.InvalidLiveness {
             try closeProof(plan,table); fail Unsupported { message=error.message; };
-        }
-        else error budget.LimitError { try closeProof(plan,table); fail error; };
+        };
     try closeProof(plan,table);
 }
 
