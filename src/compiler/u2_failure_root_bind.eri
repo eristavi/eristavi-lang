@@ -1,0 +1,88 @@
+// U2 canonical failure-edge -> managed reference root boundary (opt-in).
+// This verifies a typed failure successor and holds the *whole* typed context
+// by identity across the reference boundary. No separate executable IR or
+// machine ABI is introduced. Physical x86-64 root-map publication and runtime
+// safe-point tracing remain a distinct acceptance gate.
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+import compiler.u1_meta as meta;
+import compiler.u1_builder as build;
+import compiler.u1_aggregate as aggregate;
+import compiler.u1_aggregate_signature as signature;
+import compiler.u2_continuation_bind as continuation;
+import compiler.u2_failure_context as failure;
+
+public error InvalidRoot { message Text; }
+public type Pin {
+    owner identity budget.Owner;
+    functionKey identity meta.Key;
+    typeKey identity meta.Key;
+    target build.BlockId;
+    slot build.ValueId;
+    typeIndex Int;
+    context maybe identity failure.Context;
+    allocation identity budget.Allocation;
+    closed Bool;
+}
+function require(ok Bool,message Text) fails InvalidRoot {
+    if not ok { fail InvalidRoot { message=message; }; }
+}
+public function verify(routine identity build.Function,graph identity aggregate.Registry,
+    phase identity budget.Phase,pair continuation.Pair,pin identity Pin)
+    returns Bool fails budget.LimitError,continuation.InvalidBinding,InvalidRoot {
+    let valid be try continuation.verify(routine,graph,phase,pair);
+    let pinned be pin.context;
+    try require(not pin.closed and pin.owner == routine.owner and
+        pin.functionKey == routine.key and pin.typeKey == graph.key and
+        pin.target.owner == routine.key and pin.target.index == pair.failure.index and
+        pin.slot.owner == routine.key and pinned != none and
+        pin.allocation.owner == routine.owner and pin.allocation.state == 0,
+        "closed, foreign or incomplete canonical failure root");
+    if pinned != none {
+        try require(pinned.owner == routine.owner and not pinned.closed and
+            pinned.primary != none, "canonical pin lost its typed primary");
+    }
+    let base be (pair.failure.index-1)*5;
+    let start be try words.get(routine.blocks,phase,base);
+    let count be try words.get(routine.blocks,phase,base+1);
+    try require(count >= 1 and start >= 1 and pin.slot.index == start and
+        start <= routine.values.length/4 and
+        (try words.get(routine.values,phase,(start-1)*4+1)) == 0 and
+        (try words.get(routine.values,phase,(start-1)*4+2)) == pair.failure.index and
+        (try words.get(routine.values,phase,(start-1)*4+3)) == 0,
+        "failure root does not pin canonical first checked-edge parameter");
+    let expected be try signature.resultType(routine.metadata,graph,phase,pair.failurePayload,0);
+    try require(expected.index > 6 and pin.typeIndex == expected.index and
+        (try words.get(routine.values,phase,(start-1)*4)) == expected.index,
+        "failure root has wrong canonical managed-payload interpretation");
+    return true;
+}
+public function create(routine identity build.Function,graph identity aggregate.Registry,
+    phase identity budget.Phase,pair continuation.Pair,slot build.ValueId,
+    context identity failure.Context)
+    returns identity Pin
+    fails budget.LimitError,continuation.InvalidBinding,InvalidRoot {
+    let checked be try continuation.verify(routine,graph,phase,pair);
+    try require(context.owner == routine.owner and not context.closed and
+        context.primary != none and slot.owner == routine.key and
+        pair.failure.owner == routine.key,
+        "cannot pin an unowned or nonfailing checked outcome");
+    let expected be try signature.resultType(routine.metadata,graph,phase,pair.failurePayload,0);
+    // Creating a reference pin only charges metadata and holds context identity.
+    // It cannot replace a native GC root slot or safe-point stack map.
+    let control be try budget.commit(try budget.reserve(routine.owner,256));
+    let pin be identity Pin { owner=routine.owner; functionKey=routine.key;
+        typeKey=graph.key; target=pair.failure; slot=slot; typeIndex=expected.index;
+        context=context; allocation=control; closed=false; };
+    let valid be verify(routine,graph,phase,pair,pin)
+        else error InvalidRoot { try budget.release(control); pin.context=none; pin.closed=true; fail error; }
+        else error continuation.InvalidBinding { try budget.release(control); pin.context=none; pin.closed=true; fail error; }
+        else error budget.LimitError { try budget.release(control); pin.context=none; pin.closed=true; fail error; };
+    return pin;
+}
+public function close(pin identity Pin) fails budget.LimitError,InvalidRoot {
+    try require(not pin.closed,"root pin already released");
+    try budget.release(pin.allocation);
+    pin.context=none;
+    pin.closed=true;
+}

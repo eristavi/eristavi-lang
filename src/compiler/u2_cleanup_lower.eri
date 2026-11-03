@@ -139,3 +139,114 @@ public function emitOne(routine identity build.Function,graph identity aggregate
     // the private Function, which must be discarded, never published.
     return try invoke.emit(routine,graph,contract,pair,[handle],carried);
 }
+
+// Bounded multi-close stage. The plan is still independently checked against
+// the ORIGINAL exit owner values. At a later canonical block the surviving
+// resource is represented by fresh typed block parameters; scope IDs, not
+// previous SSA indices, establish continuity. No secondary FailureContext
+// composition is claimed by this construction helper.
+public function emitAt(routine identity build.Function,graph identity aggregate.Registry,
+    profile identity owners.Profile,contracts identity fallible.Registry,
+    phase identity budget.Phase,plan identity cleanup.Plan,original,survive Int,
+    exit meta.LocId,initiallyFailed Bool,position Int,failedMode Bool,
+    contract fallible.Contract,pair continuation.Pair,handle build.ValueId,carried)
+    returns build.InstId
+    fails budget.LimitError,planVerify.InvalidPlan,continuation.InvalidBinding,InvalidLowering {
+    let accepted be try planVerify.verify(routine.metadata,phase,plan,original,survive,exit,initiallyFailed);
+    accepted=try continuation.verify(routine,graph,phase,pair);
+    let depth be original.count-survive;
+    try require(depth > 0 and depth <= 128 and position >= 0 and position < depth and
+        (not initiallyFailed or failedMode) and pair.version == 2,
+        "invalid multi-close plan stage or mode");
+    // The first close uses the exit's actual checked mode. A later stage
+    // can switch from normal to failing only after an earlier checked close
+    // produced a failure; it cannot fabricate such an earlier transition.
+    if position == 0 {
+        try require(failedMode == initiallyFailed,
+            "initial cleanup cannot enter the wrong failure mode");
+    }
+    let data be routine.metadata;
+    try require(routine.state == 0 and profile.state == 0 and profile.version == 1 and
+        profile.owner == routine.owner and profile.functionKey == routine.key and
+        profile.typeKey == graph.key and profile.handle.owner == graph.key and
+        profile.consume.owner == data.key and profile.consume.index == contract.target.index and
+        contracts.version == 1 and contracts.state == 1 and
+        contracts.metadataKey == data.key and contracts.typeKey == graph.key and
+        contracts.owner == data.owner and contracts.entries.owner == data.owner and
+        not contracts.entries.closed and contracts.entries.frozen and
+        contracts.entries.length == data.declarations.length/3 and
+        contract.version == 1 and contract.target.owner == data.key and
+        contract.failure.owner == data.key and contract.target.index >= 1 and
+        contract.target.index <= data.declarations.length/6,
+        "invalid multi-close owner or fallible registry");
+    let expected be try meta.functionSignature(data,phase,contract.target);
+    let slot be (contract.target.index-1)*2;
+    try require((try words.get(contracts.entries,phase,slot)) == expected.index and
+        (try words.get(contracts.entries,phase,slot+1)) == contract.failure.index,
+        "incorrect selected close contract");
+    let current cleanup.Scope be original[original.count-1-position];
+    let mode be 0; if failedMode { mode=1; }
+    let row be (mode*depth+position)*8;
+    try require((try words.get(plan.records,phase,row)) == current.scope and
+        (try words.get(plan.records,phase,row+1)) == contract.target.index and
+        (try words.get(plan.records,phase,row+2)) == current.value and
+        (try words.get(plan.records,phase,row+3)) == current.close.index and
+        (try words.get(plan.records,phase,row+4)) == exit.index and
+        (try words.get(plan.records,phase,row+5)) == mode and
+        pair.location == current.close and
+        pair.source.owner == routine.key and handle.owner == routine.key,
+        "multi-close plan row, origin or resource mismatch");
+    let count be original.count-position;
+    try require(pair.source.index >= 1 and
+        profile.blocks.length == routine.blocks.length/5*2 and
+        pair.source.index <= profile.blocks.length/2 and
+        carried.count >= count-1 and carried.count <= 128,
+        "invalid multi-close current owner signature");
+    let first be try words.get(profile.blocks,phase,(pair.source.index-1)*2);
+    let live be try words.get(profile.blocks,phase,(pair.source.index-1)*2+1);
+    try require(live == count and first >= 0 and
+        live <= profile.entries.length/2-first and
+        handle.index >= 1 and handle.index <= routine.values.length/4,
+        "wrong live lexical owner prefix");
+    let base be (handle.index-1)*4;
+    try require((try words.get(routine.values,phase,base)) == profile.handle.index and
+        (try words.get(routine.values,phase,base+1)) == 0 and
+        (try words.get(routine.values,phase,base+2)) == pair.source.index and
+        (try words.get(profile.entries,phase,(first+live-1)*2)) == current.scope and
+        (try words.get(profile.entries,phase,(first+live-1)*2+1)) == handle.index and
+        (try words.get(profile.scopes,phase,(current.scope-1)*2+1)) == current.close.index,
+        "multi-close operand is not current innermost lexical resource");
+    let index be 0;
+    while index < live {
+        let scope cleanup.Scope be original[index];
+        let matched be try words.get(profile.entries,phase,(first+index)*2);
+        try require(scope.scope == matched and
+            (try words.get(profile.scopes,phase,(matched-1)*2+1)) == scope.close.index,
+            "multi-close reordered lexical owner signature");
+        if index < live-1 {
+            let source build.ValueId be carried[index];
+            try require(source.owner == routine.key and
+                source.index == (try words.get(profile.entries,phase,(first+index)*2+1)),
+                "multi-close transfers wrong surviving owner");
+        }
+        index=index+1;
+    }
+    if failedMode {
+        try require(carried.count > live-1,"failing cleanup lost primary context");
+        let primary build.ValueId be carried[live-1];
+        try require(primary.owner == routine.key and primary.index >= 1 and
+            primary.index <= routine.values.length/4 and
+            (try words.get(routine.values,phase,(primary.index-1)*4)) > 6,
+            "failing cleanup requires typed primary");
+    }
+    index=live-1;
+    while index < carried.count {
+        let value build.ValueId be carried[index];
+        try require(value.owner == routine.key and value.index >= 1 and
+            value.index <= routine.values.length/4 and
+            (try words.get(routine.values,phase,(value.index-1)*4)) != profile.handle.index,
+            "multi-close copied or escaped a resource");
+        index=index+1;
+    }
+    return try invoke.emit(routine,graph,contract,pair,[handle],carried);
+}

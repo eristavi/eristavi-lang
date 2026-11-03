@@ -1,0 +1,62 @@
+// Bounded semantic oracle for independently verified U2 cleanup plans.
+// It executes only the PRIVATE, already verified plan routing with supplied
+// checked-close outcomes, not a resource runtime, SSA interpreter, or GC roots.
+// FailureContext keeps full typed Text payload snapshots in deterministic order.
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+import compiler.u1_meta as meta;
+import compiler.u2_cleanup_plan as cleanup;
+import compiler.u2_cleanup_verify as verify;
+import compiler.u2_failure_context as failure;
+
+public error InvalidTrace { message Text; }
+public type Report { closed Int; failed Int; primaryType Int; secondary Int; terminal Int; }
+function require(okay Bool,message Text) fails InvalidTrace {
+    if not okay { fail InvalidTrace { message=message; }; }
+}
+public function run(data identity meta.Metadata,phase identity budget.Phase,
+    plan identity cleanup.Plan,active,survive Int,exit meta.LocId,bodyFailed Bool,
+    context identity failure.Context,failures,types,payloads)
+    returns Report fails budget.LimitError,verify.InvalidPlan,failure.InvalidContext,InvalidTrace {
+    let checked be try verify.verify(data,phase,plan,active,survive,exit,bodyFailed);
+    let depth be active.count-survive;
+    let hasPrimary be context.primary != none;
+    try require(context.owner == plan.owner and not context.closed and
+        hasPrimary == bodyFailed and context.count == 0,
+        "wrong primary failure on cleanup entry");
+    try require(failures.count == depth and types.count == depth and payloads.count == depth,
+        "close trace length mismatch");
+    let index be 0;
+    while index < depth {
+        try require((failures[index] == 0 or failures[index] == 1) and
+            (failures[index] == 0 or types[index] > 0),
+            "invalid checked-close outcome");
+        index=index+1;
+    }
+    let cursor be plan.entry; let visited be 0; let failed be 0;
+    while cursor > 0 {
+        try require(visited < depth and cursor <= 2*depth,"invalid cyclic cleanup route");
+        let row be (cursor-1)*8;
+        let mode be try words.get(plan.records,phase,row+5);
+        let slot be visited;
+        let expectedMode be 0; if context.primary != none { expectedMode=1; }
+        try require(mode == expectedMode,
+            "cleanup mode disagrees with primary");
+        if failures[slot] == 1 {
+            try failure.append(context,phase,types[slot],payloads[slot],
+                try words.get(plan.records,phase,row+3));
+            cursor=try words.get(plan.records,phase,row+7); failed=failed+1;
+        } else {
+            cursor=try words.get(plan.records,phase,row+6);
+        }
+        visited=visited+1;
+    }
+    let ending be 0; if context.primary != none { ending=0-1; }
+    try require(visited == depth and cursor == ending,
+        "cleanup route ended before all owners were consumed");
+    let kind be 0;
+    let primary be context.primary;
+    if primary != none { kind=primary.typeId; }
+    return Report { closed=visited; failed=failed; primaryType=kind;
+        secondary=context.count; terminal=cursor; };
+}

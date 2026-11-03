@@ -1,6 +1,6 @@
 # Eristavi compiler — current handover
 
-**Verified: 2 November 2026, Asia/Nicosia.** This file contains current recovery
+**Current review: 3 November 2026, Asia/Nicosia.** This file contains current recovery
 instructions and accepted boundaries. Superseded checkpoints are in the
 [historical snapshot](docs/history/2026-11-02/HANDOVER_BEFORE_CLEANUP.md).
 
@@ -18,18 +18,26 @@ No full CI or completed-batch qualification has been initiated.
 | Latest qualified production merge | [PR #110](https://github.com/eristavi/eristavi-lang/pull/110), merge `6b5fccecb8e79f7c9bcc8261faa9203f4c94262a`; subsequent main changes are documentation/evidence/opt-in probes |
 | U1a | Complete within its adopted scalar/SSA/call/Float/provenance/physical boundary; [#77](https://github.com/eristavi/eristavi-lang/issues/77) CLOSED |
 | U1b | Bounded reference immutable aggregates/linked execution accepted through [merged #106](https://github.com/eristavi/eristavi-lang/pull/106); [#73](https://github.com/eristavi/eristavi-lang/issues/73) CLOSED |
-| U2 | Foundation focused-tested; new typed-context reference and focused regression committed, NOT YET TESTED; [#74](https://github.com/eristavi/eristavi-lang/issues/74) OPEN; not complete, fully qualified or merged |
+| U2 | Bounded canonical nested cleanup, typed 16-case failure matrix and canonical reference pin focused-tested; physical GC roots, managed values and final acceptance OPEN; [#74](https://github.com/eristavi/eristavi-lang/issues/74) OPEN; not complete, fully qualified or merged |
 | U2 branch / PR | `compiler/u2-cleanup-foundation-20261102`; [#111](https://github.com/eristavi/eristavi-lang/pull/111) OPEN / DRAFT |
 | U3 / U4 | [#75](https://github.com/eristavi/eristavi-lang/issues/75) / [#102](https://github.com/eristavi/eristavi-lang/issues/102) OPEN; redesigned production integration/machine migration unimplemented |
 | Optimization | [#51](https://github.com/eristavi/eristavi-lang/issues/51) OPEN / PAUSED; no whole-compiler speedup or optimization completion claimed |
 | Production | Existing frontend/default compiler, frozen source behavior and 32-byte ABI retained; no new-UIR backend promotion |
 | Full owned compiler self-build | Explicitly excluded from ordinary work; NOT CERTIFIED |
 
-## Latest validated U2 checkpoint — 2 November 2026
+## Current U2 accepted-development checkpoint — 3 November 2026
+
+**Incremental focused CI is green, not full U2 acceptance.** The three-resource typed checked-failure semantic matrix passed on PR #114 [run 41591696832](https://github.com/eristavi/eristavi-lang/actions/runs/41591696832), head `38875824f4347a50c1d4140f1a42e53f4ab4ed11`: **75 tests, 72 passed, 0 failed, 3 opt-in skipped**, including 16 body-state/close-failure combinations. The canonical failure-edge reference-root binding and pin-release lifecycle passed on PR #115 [run 41591975769](https://github.com/eristavi/eristavi-lang/actions/runs/41591975769), head `90946b8c6031c895395057518e580d7bc39b4f04`: **76 tests, 73 passed, 0 failed, 3 opt-in skipped**. Both runs also passed the tested two-stage nested close and checked inner-failure→outer-close regression.
+
+**Source-integrity promotion:** the 10 changed source/test/architecture files from the passing PR #115 head are copied to the primary U2 draft PR #111 using their exact Git blob IDs (no retyping or manual edits to these 10 files). The current HANDOVER.md is updated in the same atomic tree commit. A separate exact-head focused smoke must still validate this consolidated PR #111 tree; earlier green PRs are not exact-head release qualification. Production `main` remains untouched; optimization #51 stays paused.
+
+**Scope and blockers:** `u2_cleanup_lower.emitAt` implements checked canonical opcode-46 cleanup stages under fresh full-plan verification and independent owner checks. `u2_failure_trace` independently walks bounded private plans with complete typed primary/secondary Text payloads. `u2_failure_root_bind` binds an identity-held typed context to a canonical checked-failure block parameter, and releasing it clears the strong reference. This is a **reference pin and structural canonical binding**, NOT native GC safe-point root-map publication, retained payloads under forced physical GC, an executable real file-resource UIR adapter, U2 managed Text/List/identity values or complete multi-exit/loop conformance. Three opt-in native probes were skipped in focused smoke and require separate evidence. Final gates remain: actual safe-point roots, managed values/Unicode17/identity, physical allocator and GC evidence, exhaustive malformed/exit coverage, Stage-0/native independent parity, full four-platform CI and completed-batch qualification. Keep U2 issue #74 OPEN and PR #111 DRAFT; no merge into `main`, final acceptance, or owned compiler self-build.
+
+## Historical focused checkpoint — 2 November 2026 — 2 November 2026
 
 Remote focused test [run 41517841788](https://github.com/eristavi/eristavi-lang/actions/runs/41517841788) completed SUCCESS on PR #112 head `f7a2d60de7d812adce53bbd3662f15b4e972fa71`: **72 tests run, 69 passed, 3 intentionally skipped, 0 failed, 209.400 seconds**. Exact relevant named regressions passed: `test_verified_cleanup_plan_emits_canonical_close_on_both_exit_modes`, `test_primary_and_ordered_typed_context`, `test_primary_and_ordered_cleanup_failures`. The skipped opt-in owned runtime tests were not qualified by this run. The single-close lowering and typed-context budget fixes were copied byte-for-byte to the existing draft U2 branch, with Git blob equality verified, via implementation commits `92bde58350d3ceaf380c8b478d4bda3b4ac3e8d1`, `3cf136d70f6769b39ca321a8d8c9ce4f84a73408`, and fixture commit `59fe9579ef0cd6862d46926f840aa1d2592f637b`. This is focused cross-branch source equality, **not an exact-head full qualification**. PR #111 remains draft; #74 remains open. Next: multiple-owner canonical cleanup chains with proper primary/secondary FailureContext handling; independently verify every metadata contract and owner/edge/root at all exits, then stress/fault/physical evidence. Do not launch full CI or owned compiler self-build prematurely.
 
-## Current U2 development checkpoint — 2 November 2026
+## Historical early U2 development checkpoint — 2 November 2026
 
 The user explicitly resumed implementation. Commit `2b39463e4be6fdb84ec119cddee3fc7b8e2eb165`
 adds `src/compiler/u2_failure_order.eri`, a **private, untested** bounded
