@@ -9,14 +9,19 @@ Historical checkpoints are evidence, not instructions to restart old work.
   [draft PR #111](https://github.com/eristavi/eristavi-lang/pull/111).
 - **Latest implementation:** `c7149aee5102b67b2a68e888776406ea01a0035e`.
   Later documentation-only commits do not change its tested source.
-- **Immediate blocker:** [hosted run #41698723325](https://github.com/eristavi/eristavi-lang/actions/runs/41698723325)
-  FAILED in scope job `126136050633`, step “Check patch and classify changed paths”.
-  Hosted Linux smoke and the full matrix were SKIPPED. The specific patch-check
-  cause has not been established; do not report this revision as hosted-green.
-- **Next action:** inspect and resolve that patch/scope failure before extending
-  implementation. Then continue exact CFG liveness/root publication.
-- **This cleanup:** documentation only. No implementation fixes, compiler tests,
-  full qualification, self-build, U2 merge or milestone closure are part of it.
+- **Previous CI blocker identified and corrected:** [hosted run #41698723325](https://github.com/eristavi/eristavi-lang/actions/runs/41698723325)
+  failed `git diff --check` on one extra EOF blank line in each of the three
+  `tests/fixtures/u2_list_i64*.eri` files. Fixture-only follow-up commits
+  `e5bae5b1`, `f655b6ba`, `5bcaf853` remove those extra blank lines.
+  These are formatting repairs, not semantic changes.
+- **Current verification:** await/inspect the hosted focused Linux smoke run
+  triggered by the corrected final fixture revision `5bcaf8533bedc44f0b4689c3d0cbddc2c1fc9ac3`.
+  The earlier 89-pass local smoke does not replace fresh hosted verification.
+- **Next action:** establish hosted patch/smoke results for corrected fixture
+  revision, then connect exact CFG liveness to native root publication/release.
+- **This batch:** three one-line fixture formatting repairs and handover
+  reconciliation only. No compiler implementation change, full qualification,
+  self-build, U2 merge or milestone closure.
 
 Read the governing documents below before design or implementation. The user has
 authorized continuing U2; historical stop instructions are superseded. A future
@@ -69,18 +74,18 @@ retention bounds are not established.
 | Same revision — hosted #41698723325 | **FAILED scope/patch check**; smoke and full matrix skipped. Local success does not override this failure. |
 | `2619885a2ff7043dda4080e722ffe31c8806f495` — hosted #41696878635 | Scope and focused Linux smoke SUCCESS; full platform matrix skipped. Earlier single-block native slice only. |
 
-Current source hashes and raw outcomes/logs:
+Original implementation source hashes and raw outcomes/logs (unchanged by fixture-formatting repairs):
 [JSON](https://github.com/eristavi/eristavi-lang/blob/c7149aee5102b67b2a68e888776406ea01a0035e/docs/evidence/2026-11-03/u2-list-cfg-smoke.json)
 and [raw log](https://github.com/eristavi/eristavi-lang/blob/c7149aee5102b67b2a68e888776406ea01a0035e/docs/evidence/2026-11-03/u2-list-cfg-smoke.log).
 Exact native scope, algorithms and exclusions:
 [List-i64 contract](https://github.com/eristavi/eristavi-lang/blob/c7149aee5102b67b2a68e888776406ea01a0035e/docs/architecture/UIR_U2_LIST_I64_NATIVE.md).
 
 Three skipped probes are not passes. No full U2 four-platform CI or
-completed-batch qualification has passed. No whole-compiler speedup is claimed.
+completed-batch qualification has passed. The hosted implementation scope failure at c7149aee was caused by three additional blank EOF lines, now removed on the draft branch; the corrected head requires its own hosted focused verification. No whole-compiler speedup is claimed.
 
 ## Remaining U2 acceptance, in order
 
-1. Resolve the current hosted scope/patch blocker and verify the resulting revision.
+1. Confirm the hosted scope/patch check and focused smoke for the three EOF-formatting repairs; investigate any new failure at the exact corrected head.
 2. Connect exact CFG liveness to native publication/release with independent
    missing/stale/foreign/early-clear rejection and physical retention evidence.
 3. Complete general canonical managed representation and eligible-local
