@@ -57,3 +57,18 @@ Not covered: arbitrary Text literal UIR, view escape, multi-block
 CFG, recursion, Text-containing aggregates, complete root maps, checked
 failures/cleanup, full physical resource evidence or four-platform qualification.
 Keep PR #111 in draft and U2 #74 open.
+
+## Incremental CFG root-retention slice (development, not U2 acceptance)
+
+Canonical Text admits a bounded verified CFG with at most 64 blocks, 512 edges,
+128 SSA values and 256 instructions. The native emitter handles boxed Int/Bool
+comparisons, branches and simultaneous edge arguments, including cycles, with
+GC registered roots persisting conservatively through joins and backedges.
+An unregistered edge scratch area is used only while no allocator or safe
+point executes. A focused fixture appends combining accent Text across loop
+backedges, forces collection and later reads both an old immutable snapshot
+and the final string.
+
+This is NOT exact machine-root liveness/release, per-instruction publication,
+cross-function recursion, checked failure execution, deterministic cleanup
+or physical retained-capacity proof. Those remain required acceptance gates.

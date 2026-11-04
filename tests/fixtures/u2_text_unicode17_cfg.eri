@@ -1,0 +1,111 @@
+import std.process;
+import compiler.u1_budget as budget;
+import compiler.u1_meta as meta;
+import compiler.u1_builder as build;
+import compiler.u1_aggregate as aggregate;
+import compiler.u1_aggregate_build as ab;
+import compiler.u1_aggregate_signature as sig;
+import compiler.u1_verify as verify;
+import compiler.u1_aggregate_verify as graphVerify;
+import compiler.u2_text_native as textNative;
+import compiler.u2_managed_types as managed;
+
+function run() fails budget.LimitError,verify.InvalidIR,
+    textNative.Unsupported,managed.InvalidManagedTypes,graphVerify.InvalidGraph {
+    let request be try budget.developmentRequest();
+    let shared be try budget.metadataOwner(request);
+    let p be try budget.constructionPhase(shared);
+    let data be try meta.create(shared,p);
+    let entrySig be try meta.signature(data,p,[],[meta.i64()]);
+    let source be try meta.source(data,p,"text-probe",
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",64);
+    let loc be try meta.location(data,p,source,0,1,0,1,1);
+    let graph be try aggregate.create(shared,p);
+    let intType be try aggregate.primitive(graph,meta.i64());
+    let predType be try aggregate.primitive(graph,meta.pred());
+    let carrier be try aggregate.aggregate(graph,p,[]);
+    let fromSignature be try sig.signature(data,graph,p,[intType],[carrier]);
+    let f1 be try meta.declaration(data,p,fromSignature,textNative.name(1),2,63,1);
+    let concatSignature be try sig.signature(data,graph,p,[carrier,carrier],[carrier]);
+    let f2 be try meta.declaration(data,p,concatSignature,textNative.name(2),2,63,1);
+    let copySignature be try sig.signature(data,graph,p,[carrier],[carrier]);
+    let f3 be try meta.declaration(data,p,copySignature,textNative.name(3),2,63,1);
+    let equalSignature be try sig.signature(data,graph,p,[carrier,carrier],[predType]);
+    let f4 be try meta.declaration(data,p,equalSignature,textNative.name(4),2,63,1);
+    let countSignature be try sig.signature(data,graph,p,[carrier],[intType]);
+    let f5 be try meta.declaration(data,p,countSignature,textNative.name(5),2,63,1);
+    let f6 be try meta.declaration(data,p,countSignature,textNative.name(6),2,63,1);
+    let f7 be try meta.declaration(data,p,countSignature,textNative.name(7),2,63,1);
+    let collectSignature be try meta.signature(data,p,[],[]);
+    let f8 be try meta.declaration(data,p,collectSignature,textNative.name(8),2,63,1);
+    let byteIndexSignature be try sig.signature(data,graph,p,[carrier,intType],[intType]);
+    let f9 be try meta.declaration(data,p,byteIndexSignature,textNative.name(9),2,63,1);
+    let textIndexSignature be try sig.signature(data,graph,p,[carrier,intType],[carrier]);
+    let f10 be try meta.declaration(data,p,textIndexSignature,textNative.name(10),2,63,1);
+    let f11 be try meta.declaration(data,p,textIndexSignature,textNative.name(11),2,63,1);
+    let f12 be try meta.declaration(data,p,copySignature,textNative.name(12),2,63,1);
+    try aggregate.freeze(graph);
+    let registry be try managed.create(graph,p);
+    let textType be managed.text(registry);
+    try managed.freeze(registry);
+    try meta.freeze(data); try budget.finishPhase(p);
+    let owner be try budget.functionOwner(request,false);
+    let phase be try budget.constructionPhase(owner);
+    let fn be try build.create(data,entrySig,owner,phase);
+
+    let entryBlock be try build.block(fn,[]);
+    let loopBlock be try ab.block(fn,graph,[carrier,carrier]);
+    let bodyBlock be try ab.block(fn,graph,[carrier,carrier]);
+    let doneBlock be try ab.block(fn,graph,[carrier,carrier]);
+    let scalarE be try build.integer(fn,entryBlock,101,loc);
+    if false { try build.jump(fn,entryBlock,entryBlock,[scalarE],loc); }
+    let scalarMark be try build.integer(fn,entryBlock,769,loc);
+    let limit be try build.integer(fn,entryBlock,3,loc);
+    let call be try ab.call(fn,graph,entryBlock,f1,[scalarE],loc);
+    let original be try build.result(fn,call,0);
+    call=try ab.call(fn,graph,entryBlock,f1,[scalarMark],loc);
+    let accent be try build.result(fn,call,0);
+    try ab.jump(fn,graph,entryBlock,loopBlock,[original,original],loc);
+
+    let current be try build.parameter(fn,loopBlock,0);
+    let held be try build.parameter(fn,loopBlock,1);
+    call=try ab.call(fn,graph,loopBlock,f6,[current],loc);
+    let scalarCount be try build.result(fn,call,0);
+    let condition be try build.compareInteger(fn,loopBlock,scalarCount,limit,3,loc);
+    try ab.branch(fn,graph,loopBlock,condition,bodyBlock,[current,held],
+        doneBlock,[current,held],loc);
+
+    let growing be try build.parameter(fn,bodyBlock,0);
+    let snapshot be try build.parameter(fn,bodyBlock,1);
+    call=try ab.call(fn,graph,bodyBlock,f2,[growing,accent],loc);
+    let next be try build.result(fn,call,0);
+    call=try ab.call(fn,graph,bodyBlock,f8,[],loc);
+    try ab.jump(fn,graph,bodyBlock,loopBlock,[next,snapshot],loc);
+
+    let completed be try build.parameter(fn,doneBlock,0);
+    let originalSnapshot be try build.parameter(fn,doneBlock,1);
+    call=try ab.call(fn,graph,doneBlock,f8,[],loc);
+    call=try ab.call(fn,graph,doneBlock,f6,[originalSnapshot],loc);
+    let oldCount be try build.result(fn,call,0);
+    call=try ab.call(fn,graph,doneBlock,f6,[completed],loc);
+    let newCount be try build.result(fn,call,0);
+    try build.returnValues(fn,doneBlock,[oldCount],loc);
+    try ab.complete(fn,graph);
+    let read be try budget.constructionPhase(owner);
+    try textNative.emitManaged(fn,graph,carrier,read,registry,textType);
+    try budget.finishPhase(read);
+    try build.close(fn); try budget.finishPhase(phase);
+    try managed.close(registry); try aggregate.close(graph); try meta.close(data);
+    try budget.close(owner); try budget.close(shared); try budget.close(request);
+}
+run() else error budget.LimitError {
+    output("budget:"+error.message); process.setExitCode(1);
+} else error verify.InvalidIR {
+    output("ir:"+error.message); process.setExitCode(1);
+} else error textNative.Unsupported {
+    output("text:"+error.message); process.setExitCode(1);
+} else error managed.InvalidManagedTypes {
+    output("managed:"+error.message); process.setExitCode(1);
+} else error graphVerify.InvalidGraph {
+    output("graph:"+error.message); process.setExitCode(1);
+};

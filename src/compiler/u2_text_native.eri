@@ -43,7 +43,8 @@ function verify(fn identity build.Function,g identity aggregate.Registry,
     try require(p.owner == fn.owner and p.state == 0 and
         carrier.owner == g.key and carrier.index > 6 and
         (try aggregate.fieldCount(g,p,carrier)) == 0 and
-        fn.blocks.length == 5 and fn.edges.length == 0 and
+        fn.blocks.length >= 5 and fn.blocks.length <= 320 and
+        fn.edges.length <= 1536 and
         fn.values.length/4 <= 128 and fn.instructions.length/10 <= 256 and
         fn.metadata.declarations.length == 72 and
         (try meta.parameterCount(fn.metadata,p,fn.signature)) == 0 and
@@ -96,7 +97,8 @@ function verify(fn identity build.Function,g identity aggregate.Registry,
     let i be 1;
     while i <= fn.instructions.length/10 {
         let code be try get(fn.instructions,p,(i-1)*10);
-        try require(code == 1 or code == 34 or code == 8,
+        try require(code == 1 or code == 2 or code == 18 or
+            code == 6 or code == 7 or code == 34 or code == 8,
             "Text carrier is not an ordinary structural aggregate");
         if code == 34 {
             let instructionOp be try get(fn.instructions,p,(i-1)*10+7);
@@ -116,16 +118,17 @@ function load(fn identity build.Function,p identity budget.Phase,
     let value be try get(fn.operands,p,first+n);
     line("movq "+slot(value)+","+reg);
 }
-// Full native CFG root publication is NOT established by this single-block
-// adapter. Root all bounded SSA slots conservatively, plus one temporary
-// registered view root through potentially allocating Unicode17 view counting.
+// Preserve every canonical SSA root conservatively through CFG backedges.
+// The view temporary is also registered. This is not liveness-exact release
+// or cross-function recursive native lowering.
 function emitNative(fn identity build.Function,p identity budget.Phase)
     fails budget.LimitError {
     let total be fn.values.length/4;
     let viewSlot be total*8;
     let scopeOffset be viewSlot+8;
     let returnOffset be scopeOffset+8;
-    let frame be ((returnOffset+8+15)/16)*16+8;
+    let scratchOffset be returnOffset+8;
+    let frame be ((scratchOffset+total*8+15)/16)*16+8;
     output(".section .rodata\nerist_u2_text_classes:");
     let i be 0;
     while i <= total { output(".byte 1"); i=i+1; }
@@ -155,8 +158,11 @@ function emitNative(fn identity build.Function,p identity budget.Phase)
     line("leaq erist_u2_text_classes(%rip),%rdx");
     line("movq $"+format.integer(total+1)+",%rcx");
     line("call evn_bind_roots");
-    let inst be try get(fn.blocks,p,2);
-    let terminal be try get(fn.blocks,p,4);
+    let currentBlock be 1;
+    while currentBlock <= fn.blocks.length/5 {
+    output("erist_u2_text_block_"+format.integer(currentBlock)+":");
+    let inst be try get(fn.blocks,p,(currentBlock-1)*5+2);
+    let terminal be try get(fn.blocks,p,(currentBlock-1)*5+4);
     if inst == 0 { inst=terminal; }
     while inst != 0 {
         let off be (inst-1)*10;
@@ -166,6 +172,48 @@ function emitNative(fn identity build.Function,p identity budget.Phase)
             line("movabsq $"+format.integer(try get(fn.instructions,p,off+7))+",%rdi");
             line("call evn_int");
             line("movq %rax,"+slot(result));
+        }
+        if code == 2 {
+            line("movq $"+format.integer(try get(fn.instructions,p,off+7))+",%rdi");
+            line("call evn_bool");
+            line("movq %rax,"+slot(result));
+        }
+        if code == 18 {
+            try load(fn,p,inst,0,"%rdi");
+            try load(fn,p,inst,1,"%rsi");
+            line("movq 8(%rdi),%rdi");
+            line("cmpq 8(%rsi),%rdi");
+            let relation be try get(fn.instructions,p,off+7);
+            let condition be "e";
+            if relation == 2 { condition="ne"; }
+            if relation == 3 { condition="l"; }
+            if relation == 4 { condition="le"; }
+            if relation == 5 { condition="g"; }
+            if relation == 6 { condition="ge"; }
+            if relation == 7 { condition="b"; }
+            if relation == 8 { condition="be"; }
+            if relation == 9 { condition="a"; }
+            if relation == 10 { condition="ae"; }
+            line("set"+condition+" %dil");
+            line("movzbl %dil,%edi");
+            line("call evn_bool");
+            line("movq %rax,"+slot(result));
+        }
+        if code == 6 or code == 7 {
+            let edges be 1;
+            if code == 7 {
+                edges=2;
+                try load(fn,p,inst,0,"%rax");
+                line("cmpq $0,8(%rax)");
+                line("je erist_u2_text_edge_"+format.integer(inst)+"_1");
+            }
+            let ordinal be 0;
+            while ordinal < edges {
+                output("erist_u2_text_edge_"+format.integer(inst)+"_"+format.integer(ordinal)+":");
+                let edge be try get(fn.instructions,p,off+7+ordinal);
+                try transfer(fn,p,edge,scratchOffset);
+                ordinal=ordinal+1;
+            }
         }
         if code == 34 {
             let op be try get(fn.instructions,p,off+7);
@@ -237,7 +285,32 @@ function emitNative(fn identity build.Function,p identity budget.Phase)
             if inst == 0 { inst=terminal; }
         }
     }
+    currentBlock=currentBlock+1;
+    }
     output(".section .note.GNU-stack,\"\",@progbits");
+}
+// Simultaneous edge captures preserve SSA swaps without an allocating call
+// between raw scratch storage and destination root publication.
+function transfer(fn identity build.Function,p identity budget.Phase,
+    edge Int,scratch Int) fails budget.LimitError {
+    let target be try get(fn.edges,p,(edge-1)*3);
+    let first be try get(fn.edges,p,(edge-1)*3+1);
+    let count be try get(fn.edges,p,(edge-1)*3+2);
+    let parameter be try get(fn.blocks,p,(target-1)*5);
+    let item be 0;
+    while item < count {
+        let value be try get(fn.arguments,p,first+item);
+        line("movq "+slot(value)+",%rax");
+        line("movq %rax,"+format.integer(scratch+item*8)+"(%rsp)");
+        item=item+1;
+    }
+    item=0;
+    while item < count {
+        line("movq "+format.integer(scratch+item*8)+"(%rsp),%rax");
+        line("movq %rax,"+slot(parameter+item));
+        item=item+1;
+    }
+    line("jmp erist_u2_text_block_"+format.integer(target));
 }
 public function emit(fn identity build.Function,g identity aggregate.Registry,
     carrier aggregate.TypeId,p identity budget.Phase)

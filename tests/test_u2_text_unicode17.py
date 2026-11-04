@@ -100,6 +100,31 @@ _start:
                 self.assertNotIn('.text',emitted.stdout)
                 self.assertNotIn('.section',emitted.stdout)
 
+    def test_conservative_text_roots_survive_cfg_loop_backedges_and_gc(self):
+        original=(ROOT/'tests/fixtures/u2_text_unicode17_cfg.eri').read_text(encoding='utf-8')
+        for expression,expected in (('oldCount',1),('newCount',3)):
+            with self.subTest(expression=expression):
+                source=original.replace('[oldCount],loc);','['+expression+'],loc);')
+                emitted=self.generator('text-cfg-'+expression,source)
+                self.assertEqual((emitted.returncode,emitted.stderr),(0,''),emitted.stdout)
+                self.assertIn('erist_u2_text_block_4:',emitted.stdout)
+                self.assertIn('erist_u2_text_edge_',emitted.stdout)
+                self.assertIn('call erist_rt_text_collect',emitted.stdout)
+                start=f'''
+.text
+.globl _start
+_start:
+    call erist_u2_text_entry
+    cmpq ${expected},%rax
+    jne .Lgraph_test_fail
+    jmp .Lgraph_finish
+'''
+                result=self.run_probe('text-cfg-'+expression,
+                    emitted.stdout+start+graph.FINISH+unicode_descriptors(),
+                    types=False)
+                self.assertEqual((result.returncode,result.stdout,result.stderr),
+                                 (0,b'',b''))
+
     def test_all_text_view_bounds_are_terminal_and_exact(self):
         original=(ROOT/'tests/fixtures/u2_text_unicode17.eri').read_text(encoding='utf-8')
         # Each invalid lookup must preserve the established terminal bounds
