@@ -23,6 +23,8 @@ function run() fails budget.LimitError,verify.InvalidIR,
     let intType be try aggregate.primitive(graph,meta.i64());
     let predType be try aggregate.primitive(graph,meta.pred());
     let carrier be try aggregate.aggregate(graph,p,[]);
+    // Instantiate the accepted concrete scalar metadata signature path.
+    let scalarSig be try meta.signature(data,p,[meta.i64()],[meta.i64()]);
     let entrySig be try sig.signature(data,graph,p,
         [carrier,intType],[intType]);
     let fromSignature be try sig.signature(data,graph,p,[intType],[carrier]);
