@@ -5,7 +5,52 @@ Historical checkpoints are evidence, not instructions to restart old work.
 
 ## Resume here
 
-### 4 November 2026 — bounded native recursive Text roots verified
+### 4 November 2026 — real native File cleanup from verified U2 plans
+
+- **Current tested code revision:** `3f36fa48e473ef554f003b0c0edcdc36c44f3a73`
+  on `compiler/u2-cleanup-foundation-20261102`, draft
+  [PR #111](https://github.com/eristavi/eristavi-lang/pull/111).
+  U2 #74 remains OPEN and the compiler production path remains unchanged.
+- **Hosted exact-code Linux U2 smoke:**
+  [#41812694324](https://github.com/eristavi/eristavi-lang/actions/runs/41812694324)
+  **SUCCESS**: patch/scope success, **99 tests executed, 96 passed, 0
+  failed, 3 intentional skips**, 306.028 seconds. Four-platform matrix was
+  intentionally SKIPPED; final completed-batch acceptance is not met.
+- **Dedicated real native checked cleanup run:**
+  [#41812694413](https://github.com/eristavi/eristavi-lang/actions/runs/41812694413)
+  **SUCCESS**: one test method with four full native resource scenarios:
+  (normal/previous failure) x (clean/forced-failing File closes), verifying
+  actual reverse close order, exactly-once consumed File handles, pending
+  primary preservation, ordered secondary FileError paths, class-5 saved
+  failure/root survival through forced GC, and final no-leak shutdown.
+- **New bounded native adapter:** `src/compiler/u2_cleanup_native_x86_64.eri`
+  emits actual x86-64 close control flow from a *freshly independently
+  verified* `u2_cleanup_plan.Plan`. The private closed profile admits
+  1-8 File owners, zero surviving outer owners, caller-owned native resource
+  slots in lexical acquisition order and a caller-owned saved failure record.
+  It uses the existing `evn_cleanup_accumulate`,
+  `erist_rt_failure_append`, `evn_bind_roots` and scope-leave runtime.
+  It consumes and clears each native owner slot on both outcomes; returns
+  0 or -1 checked status. No alternative executable IR, GC, type syntax,
+  collector, Unicode17 data, public 32-byte ABI or default compiler edit.
+- **Important qualification boundary:** this adapter consumes the private
+  verified cleanup plan, **NOT a whole canonical Function opcode-46
+  machine-lowering path**. It does not yet translate arbitrary fallible
+  invocations, pending successful-return SSA values, surviving outer owners,
+  all error/handler CFG paths, recursion-aware checked unwind or mixed
+  resource types. The accepted scenarios prove bounded *real* File cleanup
+  and ordered failure composition, not complete U2 managed runtime.
+- **Next engineering gate:** bind whole-function canonical opcode-46 checked
+  continuations and `FailureContext` root maps to this native adapter.
+  Verify exact edge-only typed payloads, live/foreign/stale root rejection,
+  pending-return transport, reverse close through surviving scopes and
+  failure propagation across recursive frames. Then measure physical
+  retained-capacity/RSS and finish differential, allocator-refusal and
+  exact-head four-platform qualification.
+- **Do not merge** PR #111 or close #74; do not restart paused #51,
+  U3/U4 migrations or experimental owned compiler self-build.
+
+### Earlier 4 November 2026 checkpoint — bounded native recursive Text roots verified
 
 - **Current tested implementation source** `ec982e1d969b3144b04f5e453100b407c3a8a34b` on
   `compiler/u2-cleanup-foundation-20261102`, [draft PR #111](https://github.com/eristavi/eristavi-lang/pull/111).
@@ -65,7 +110,7 @@ work list alone does not authorize unrelated development.
 | --- | --- |
 | U1a | Accepted within its documented scalar/SSA/call/Float/provenance/physical boundary; #77 closed, qualified PR #105 merged. |
 | U1b | Bounded immutable aggregates/reference linked execution accepted; #73 closed, qualified PR #106 merged. |
-| U2 | Bounded native CFG List-i64 and Managed Text/Unicode17 indexing, NFC, conservative loop roots and verified 32-frame local Text self-recursion. Unicode failure context is reference-only. #74 OPEN, #111 DRAFT/unmerged; general recursion, native checked cleanup and complete managed-root acceptance OPEN. |
+| U2 | Bounded native CFG List-i64, Unicode17 Text/indexing/NFC, conservative roots and 32-frame local self-recursion. Native verified-plan File cleanup now executes real reverse close and ordered saved-failure composition, but arbitrary opcode-46 CFG lowering, general recursion and complete managed-root/resource acceptance remain OPEN. #74 OPEN, #111 DRAFT/unmerged. |
 | U3 | Initial isolated Python shadow/planning foundation merged in #119; #75 OPEN. Direct production AST-to-owned-UIR integration remains unfinished. |
 | U4 | Initial parallel-move foundation in draft #120; #102 OPEN. Full machine migration remains unfinished. |
 | Production | Existing frontend/default compiler and 32-byte ABI retained. Latest recorded qualified production optimization is #110. No redesigned-UIR promotion. |
@@ -81,10 +126,10 @@ on main does not merge U2 implementation. Fetch current refs before continuing.
 | --- | --- |
 | Checked continuations | Canonical opcode-46 invokes, versioned FunctionId contracts, edge-only results and typed carried values. |
 | Cleanup and owners | Independently verified reverse-cleanup plans, bounded canonical close construction, lexical owner signatures, success-only acquisition and consumption on both close outcomes. Complete resource adapters remain open. |
-| Failure contexts | Typed primary/ordered-secondary reference models now include Unicode17 primary Text and ordered emoji/flag cleanup Text payload assertions; class-5 saved-failure root metadata and bounded native publisher probes. Native checked failures and complete cleanup integration remain unimplemented. |
+| Failure contexts | Typed Unicode17 primary/ordered-secondary reference models, class-5 saved-failure publisher probes, and **new real native File close failure composition** from verified private cleanup plans. Whole canonical opcode-46 native failure dispatch, all SSA/handler exits and complete cleanup integration remain open. |
 | Liveness | Independently recomputed CFG/SSA plan and publication obligations; the native List-i64 profile now applies verified successor live-in facts to retire dead List roots after edge transfers for <=32 tracked List values. Per-instruction/all-managed-root coverage remains open. |
 | Managed types | Owner-scoped Text/List/identity descriptors, independent corruption rejection and Unicode17 copy/view contracts; expanded Stage-0/C/owned parity oracle with predeclared accent/flag/ZWJ/empty/ASCII/copy values. This is not general canonical managed execution. |
-| Native Text/Unicode17 | Twelve exact runtime imports support scalar creation, immutable concat/copy/equality, byte/scalar/grapheme counts/indexing, explicit NFC and collection. Bounded native CFG and GC roots hold Text snapshots; a separate verified local (Text, i64) -> i64 self-call profile registers/retires nested native root frames and enforces depth <=32 in a single-thread prototype. Exact 64 blocks/512 edges/128 SSA values/256 instructions; scalar return only. No general recursion, precise root retirement, native checked failure/cleanup or completed Text-surface integration. |
+| Native Text/Unicode17 | Twelve exact runtime imports support scalar creation, immutable concat/copy/equality, byte/scalar/grapheme counts/indexing, explicit NFC and collection. Bounded CFG and 32-frame local self-recursion retain managed roots. A separate native verified-plan File cleanup adapter composes real saved failures; no arbitrary opcode-46 Text checked failure, general recursion, precise root retirement or full Text integration. |
 | Native List-i64 | Eristavi-written optional x86-64 adapter for empty/copy/append/replace/count/get/collection, branches/joins/backedges/cyclic transfers; verified successor-edge root retirement now focused-tested for <=32 selected List values. |
 | Native boundaries | Managed-registry entry validation, Int/Bool/List runtime descriptor checks, List bounds source name/line/column, independent fixture frame-layout checks, GC/snapshot/reclamation and fault probes. |
 
@@ -107,6 +152,8 @@ compatibility and physical retention bounds are still outstanding.
 
 | Revision / run | Verified result |
 | --- | --- |
+| `3f36fa48e473ef554f003b0c0edcdc36c44f3a73` — [CI #41812694324](https://github.com/eristavi/eristavi-lang/actions/runs/41812694324) | **SUCCESS:** exact-code Linux Clang focused smoke 99 run / **96 passed, 0 failed, 3 intentional skips**, 306.028 s; patch check passed; four-platform test matrix intentionally skipped. |
+| `3f36fa48e473ef554f003b0c0edcdc36c44f3a73` — [dedicated #41812694413](https://github.com/eristavi/eristavi-lang/actions/runs/41812694413) | **SUCCESS:** one test method, four real native File cleanup scenarios; reverse owner ordering, primary plus secondary error payloads, forced GC, no remaining open resources and consumed slots. |
 | `ec982e1d969b3144b04f5e453100b407c3a8a34b` — [CI #41797941894](https://github.com/eristavi/eristavi-lang/actions/runs/41797941894) | **SUCCESS:** exact-head patch/scope and focused Linux Clang U2 smoke; **98 run, 95 passed, 0 failed, 3 intentional skips**. Full four-platform matrix intentionally skipped. |
 | `ec982e1d969b3144b04f5e453100b407c3a8a34b` — [Text #41797941881](https://github.com/eristavi/eristavi-lang/actions/runs/41797941881) | **SUCCESS:** seven focused native Text methods, including distinct managed root frames, GC, depth 31 and depth-limit terminal fault. |
 | `75a78d0673274373de6ff6e0651eba7d3db1d670` — [hosted #41793262699](https://github.com/eristavi/eristavi-lang/actions/runs/41793262699) | **SUCCESS:** patch/scope and Linux Clang focused U2 smoke, **97 run / 94 passed / 0 failed / 3 skips**, 354.352 s. Indexed Unicode17, native CFG roots and typed Text failure-context reference included. Full matrix skipped. |
@@ -158,11 +205,15 @@ evidence only.
    Text-containing aggregates, comprehensive API/source behavior, nested
    Lists and identity-cycle integration remain. Arbitrary Text slicing is
    deliberately postponed by frozen pre-0.1 semantics.
-4. Connect complete checked FailureContext and real resource adapters to canonical
-   native lowering: opcode-46 checked invokes, pending returns, all exits,
-   exactly-once reverse cleanup, stable primary and ordered secondary Unicode
-   Text failures, and registered machine roots through cleanup and recursion.
-   The current Unicode payload assertions remain reference-only.
+4. Connect complete checked FailureContext and resource adapters to **whole
+   canonical Function opcode-46** native lowering: the new separately verified
+   private-plan File close adapter demonstrates actual reverse-order closure,
+   GC-rooted saved primary and ordered secondary FileErrors for bounded
+   1-8 owner full exits, but has NOT lowered general checked invokes or typed
+   edge payload transport. Finish pending returns, surviving owner prefixes,
+   all exits, recursion/handlers, ordered Unicode17 Text failures, and exact
+   live machine-root publication/release. Unicode context reference tests
+   remain reference-only outside the bounded real File adapter.
 5. Complete independent behavior/source-origin comparisons, deep/malformed/dead
    CFG cases, cancellation, sanitizer/allocator-refusal and actual owner/traffic/
    RSS/latency evidence under preselected limits.

@@ -55,3 +55,15 @@ oracles, and final four-platform qualification remain required.
 No default production compiler path, source syntax, Unicode 17 tables,
 32-byte value ABI, GC, File runtime contract, ownership policy or external
 dependency is changed. Keep PR #111 draft and #74 open.
+
+## Exact November 4 qualification evidence
+
+- Tested code revision: `3f36fa48e473ef554f003b0c0edcdc36c44f3a73`.
+- [Focused native cleanup CI #41812694413](https://github.com/eristavi/eristavi-lang/actions/runs/41812694413):
+  **PASS**, all four actual File resource scenarios in one test method.
+- [Full focused Linux U2 smoke #41812694324](https://github.com/eristavi/eristavi-lang/actions/runs/41812694324):
+  **PASS**, 99 run / 96 passed / 0 failed / 3 intentional skips.
+- The four-platform final matrix was not run; no production merge and no
+  formal U2 acceptance. Next connect canonical checked invoke CFG and
+  typed FailureContext root publication to this adapter rather than
+  broadening a separate executable plan interpreter.
