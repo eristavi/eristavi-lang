@@ -67,9 +67,13 @@ _start:
     jne .Lgraph_test_fail
     jmp .Lgraph_finish
 '''
-                result=self.run_probe('text-'+expression,
-                    emitted.stdout+start+graph.FINISH+unicode_descriptors(),
-                    types=False)
+                try:
+                    result=self.run_probe('text-'+expression,
+                        emitted.stdout+start+graph.FINISH+unicode_descriptors(),
+                        types=False)
+                except subprocess.CalledProcessError as exc:
+                    self.fail('native linker error: '+(exc.stderr or b'').decode(
+                        'utf-8',errors='replace'))
                 self.assertEqual((result.returncode,result.stdout,result.stderr),
                                  (0,b'',b''))
 
