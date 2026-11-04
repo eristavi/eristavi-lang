@@ -58,6 +58,47 @@ class U2CheckedRootedTests(unittest.TestCase):
             "    try slots.close(placement); try roots.close(map); try cleanup.close(plan);"
         )
         source = source.replace(point, injection, 1)
+        # Combined ingress must reject malformed machine root metadata before
+        # the first byte of a new assembly symbol is emitted.
+        call = ("native.emit(fn,graph,profile,table,mutate,map,placement,"
+                "checkedPair,outerClose,plan,selected,0,loc,")
+        errors = [
+            "budget.LimitError", "canonical.InvalidIR",
+            "owners.InvalidOwnership", "roots.InvalidRoots",
+            "continuation.InvalidBinding", "planVerify.InvalidPlan",
+            "slots.InvalidSlots", "canonicalCleanup.Unsupported",
+            "rootEmit.Unsupported", "native.Unsupported",
+        ]
+
+        def refusal(label, expected, flag):
+            statements = [f"    {call}{label})",
+                          f"        else error {expected} {{ {flag}=true; }}"]
+            for error in errors:
+                if error != expected:
+                    statements.append(f"        else error {error} {{ fail error; }}")
+            statements[-1] += ";"
+            return "\n".join(statements) + "\n"
+
+        bad_class = (
+            "    let oldClass be try words.get(placement.records,mutate,2);\n"
+            "    placement.records.frozen=false;\n"
+            "    try words.set(placement.records,mutate,2,4);\n"
+            "    placement.records.frozen=true;\n"
+            "    let wrongClassRefused be false;\n"
+            + refusal(52, "slots.InvalidSlots", "wrongClassRefused")
+            + '    try check(wrongClassRefused,"combined wrong class admitted");\n'
+            + "    placement.records.frozen=false;\n"
+            "    try words.set(placement.records,mutate,2,oldClass);\n"
+            "    placement.records.frozen=true;\n"
+            "    let mapRevision be map.revision; map.revision=fn.revision+1;\n"
+            "    let staleMapRefused be false;\n"
+            + refusal(53, "roots.InvalidRoots", "staleMapRefused")
+            + '    try check(staleMapRefused,"combined stale map admitted");\n'
+            + "    map.revision=mapRevision;\n"
+        )
+        admission = "    try " + call + "51);"
+        self.assertIn(admission, source)
+        source = source.replace(admission, bad_class + admission, 1)
         source = source.replace('output("u2-scoped-owners:ok");', "", 1)
         folder = self.directory / "u2-checked-rooted-generator"
         folder.mkdir(exist_ok=True)
@@ -131,6 +172,10 @@ class U2CheckedRootedTests(unittest.TestCase):
         self.assertIn("call erist_u2_publish_51_4", emitted)
         self.assertIn("call erist_u2_release_51_4", emitted)
         self.assertIn("cmpq $0,24(%r14)", emitted)
+        self.assertNotIn("erist_u2_checked_52:", emitted)
+        self.assertNotIn("erist_u2_checked_53:", emitted)
+        self.assertNotIn("erist_u2_cleanup_52:", emitted)
+        self.assertNotIn("erist_u2_cleanup_53:", emitted)
         path = self.directory / "u2-checked-failure-file.txt"
         path.write_text("file", encoding="utf-8")
         for close_fails in (False, True):
