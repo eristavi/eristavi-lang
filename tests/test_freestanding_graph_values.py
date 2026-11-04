@@ -850,6 +850,14 @@ _start:
         let alias be shared;
         alias.value=7;
         let distinct be identity Cell { value=7; };
+        // Independent Unicode17 reference corpus: expected counts below
+        // are fixed Unicode scalar/UTF-8/grapheme facts, not computed by
+        // another Eristavi execution engine.
+        let emoji be "👩‍💻";
+        let twoFlags be "🇨🇾🇬🇪";
+        let wrapped be "A👩‍💻Z";
+        let emptyText be "";
+        let copiedText be decomposed;
         output(composed==decomposed);
         output(decomposed.characters.count);
         output(decomposed.scalars.count);
@@ -860,8 +868,27 @@ _start:
         output(shared.value);
         output(alias==shared);
         output(distinct==shared);
+        output(emoji.characters.count);
+        output(emoji.scalars.count);
+        output(emoji.bytes.count);
+        output(twoFlags.characters.count);
+        output(twoFlags.scalars.count);
+        output(twoFlags.bytes.count);
+        output(wrapped.characters.count);
+        output(wrapped.scalars.count);
+        output(wrapped.bytes.count);
+        output(emptyText.characters.count);
+        output(emptyText.scalars.count);
+        output(emptyText.bytes.count);
+        output(copiedText==decomposed);
+        output(copiedText==composed);
+        output(composed.bytes.count);
+        output(composed.scalars.count);
+        output(composed.characters.count);
         """,encoding='utf-8')
-        expected=b'false\n1\n2\n3\n2\n3\n1\n7\ntrue\nfalse\n'
+        expected=(b'false\n1\n2\n3\n2\n3\n1\n7\ntrue\nfalse\n'
+                  b'1\n3\n11\n2\n4\n16\n3\n5\n13\n0\n0\n0\n'
+                  b'true\nfalse\n2\n1\n1\n')
         import sys
         stage0=subprocess.run(
             [sys.executable,'-m','compiler.erist','run',str(source),

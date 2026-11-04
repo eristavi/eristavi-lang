@@ -146,3 +146,23 @@ A bounded executable List-i64 legal adapter now lives in
 [UIR_U2_LIST_I64_NATIVE.md](UIR_U2_LIST_I64_NATIVE.md). It uses canonical
 Function calls, opaque carrier interpretation and real owned helpers; general
 managed descriptor integration remains unfinished. Read its exact limitations.
+
+## 4 November 2026 — Text descriptor and Unicode17 reference strengthening
+
+The managed descriptor fixture now independently verifies the canonical Text
+type-1 row (kind/element/copy policy), value-copy and no-trap obligations,
+the allocation and root contracts of all three explicit Unicode17 views,
+and their separate read-only result domain. It corrupts each operation field
+and each canonical Text descriptor word, rejecting foreign Text TypeIds, invalid
+view selectors, stale versions, copy/identity confusion and suppressed root
+obligations. All tests use `managed.verify`/`operations.verifyContract`, not
+a stored `verified` flag.
+
+The independent Stage-0/C-native/owned reference corpus fixes expected values
+for decomposed and composed accents, emoji ZWJ, paired flags, empty Text,
+ASCII-wrapped emoji and immutable copied Text. Each runtime must match those
+predeclared Unicode 17 grapheme/scalar/UTF-8 counts without implicit
+normalization and must reclaim owned temporary storage. This is reference
+behavior, **not** the redesigned UIR native lowering passing.
+
+Current hosted outcome and exact source hash are tracked in `HANDOVER.md`.

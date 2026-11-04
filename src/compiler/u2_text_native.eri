@@ -95,8 +95,9 @@ function verify(fn identity build.Function,g identity aggregate.Registry,
         try require(code == 1 or code == 34 or code == 8,
             "Text carrier is not an ordinary structural aggregate");
         if code == 34 {
-            let op be try get(fn.instructions,p,(i-1)*10+7);
-            try require(op >= 1 and op <= 8,"unknown Text runtime call");
+            let instructionOp be try get(fn.instructions,p,(i-1)*10+7);
+            try require(instructionOp >= 1 and instructionOp <= 8,
+                "unknown Text runtime call");
         }
         i=i+1;
     }

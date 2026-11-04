@@ -96,6 +96,50 @@ function run() fails budget.LimitError,graphVerify.InvalidGraph,
     let scalars be try operations.select(registry,phase,textType,7,2);
     let bytes be try operations.select(registry,phase,textType,7,3);
     let identityEquality be try operations.select(registry,phase,boxed,8,0);
+    // U2 Text is an immutable managed value. All three explicit Unicode17
+    // views retain the Text descriptor but have their own read-only domain.
+    let textCopyShape be try operations.verifyContract(registry,phase,textType,textCopy);
+    let graphemeShape be try operations.verifyContract(registry,phase,textType,graphemes);
+    let scalarShape be try operations.verifyContract(registry,phase,textType,scalars);
+    let byteShape be try operations.verifyContract(registry,phase,textType,bytes);
+    try check(textType.index == 1 and kind.kind == 1 and
+        kind.elementDomain == 0 and kind.element == 0 and
+        kind.copyPolicy == 1 and
+        textCopy.version == 1 and textCopy.unicodeVersion == 17 and
+        textCopy.kind == 1 and textCopy.copyPolicy == 1 and
+        textCopy.mayAllocate and textCopy.requiresRoot and
+        not textCopy.mayTrap and
+        try operations.requiresSafePoint(textCopy) and
+        textCopyShape.operands == 1 and
+        textCopyShape.results == 1 and
+        textCopyShape.firstDomain == 1 and
+        textCopyShape.resultDomain == 1 and
+        textCopyShape.resultType == textType.index and
+        textEquality.kind == 1 and textEquality.resultCount == 1 and
+        not textEquality.mayAllocate and not textEquality.mayTrap and
+        not textEquality.requiresRoot and
+        not (operations.requiresSafePoint(textEquality)) and
+        graphemes.unicodeVersion == 17 and scalars.unicodeVersion == 17 and
+        bytes.unicodeVersion == 17 and
+        graphemes.copyPolicy == 1 and scalars.copyPolicy == 1 and
+        bytes.copyPolicy == 1 and
+        graphemes.mayAllocate and scalars.mayAllocate and bytes.mayAllocate and
+        graphemes.requiresRoot and scalars.requiresRoot and bytes.requiresRoot and
+        graphemeShape.firstDomain == 1 and
+        graphemeShape.resultDomain == 2 and
+        scalarShape.resultDomain == 2 and
+        byteShape.resultDomain == 2 and
+        graphemeShape.resultType == textType.index and
+        scalarShape.resultType == textType.index and
+        byteShape.resultType == textType.index,
+        "managed Text/Unicode17 descriptor or view contract is inconsistent");
+    let foreignText be managed.TypeId { owner=data.key; index=textType.index; };
+    try check(try operationRejected(registry,phase,foreignText,7,1) and
+        try operationRejected(registry,phase,textType,7,0) and
+        try operationRejected(registry,phase,textType,7,-1) and
+        try operationRejected(registry,phase,textType,7,4) and
+        try operationRejected(registry,phase,textType,6,3),
+        "foreign Text/invalid Unicode view selector accepted");
     try check(textCopy.mayAllocate and textCopy.requiresRoot and
         listCopy.copyPolicy == 1 and
         listCopy.mayAllocate and listCopy.requiresRoot and
@@ -153,6 +197,41 @@ function run() fails budget.LimitError,graphVerify.InvalidGraph,
             "same-revision operation contract corruption accepted");
         mutation=mutation+1;
     }
+    // Independently re-derive Text semantic metadata from the frozen table.
+    // A cached same-revision contract never authorizes a corrupted view.
+    let textMutation be 0;
+    while textMutation < 11 {
+        let forgedText be textCopy;
+        if textMutation == 0 { forgedText.version=2; }
+        if textMutation == 1 { forgedText.operation=7; }
+        if textMutation == 2 { forgedText.typeIndex=textList.index; }
+        if textMutation == 3 { forgedText.kind=2; }
+        if textMutation == 4 { forgedText.resultCount=0; }
+        if textMutation == 5 { forgedText.copyPolicy=2; }
+        if textMutation == 6 { forgedText.mayAllocate=false; }
+        if textMutation == 7 { forgedText.mayTrap=true; }
+        if textMutation == 8 { forgedText.requiresRoot=false; }
+        if textMutation == 9 { forgedText.view=2; }
+        if textMutation == 10 { forgedText.unicodeVersion=16; }
+        try check(try contractRejected(registry,phase,textType,forgedText),
+            "forged Text copy contract was trusted");
+        textMutation=textMutation+1;
+    }
+    textMutation=0;
+    while textMutation < 8 {
+        let forgedView be graphemes;
+        if textMutation == 0 { forgedView.version=2; }
+        if textMutation == 1 { forgedView.typeIndex=textList.index; }
+        if textMutation == 2 { forgedView.kind=3; }
+        if textMutation == 3 { forgedView.resultCount=0; }
+        if textMutation == 4 { forgedView.copyPolicy=2; }
+        if textMutation == 5 { forgedView.mayAllocate=false; }
+        if textMutation == 6 { forgedView.requiresRoot=false; }
+        if textMutation == 7 { forgedView.view=4; }
+        try check(try contractRejected(registry,phase,textType,forgedView),
+            "forged Unicode17 grapheme contract was trusted");
+        textMutation=textMutation+1;
+    }
     let review be try managed.verify(registry,graph,phase);
     try check(review.types == 7 and review.lists == 4 and
         review.identities == 2,"incorrect managed type inventory");
@@ -166,6 +245,23 @@ function run() fails budget.LimitError,graphVerify.InvalidGraph,
     registry.records.frozen=false;
     try words.set(registry.records,phase,3,saved);
     registry.records.frozen=true;
+    // Text descriptor #1 is canonical: kind=1, domain=0, element=0,
+    // value copyPolicy=1. Any changed word must fail independent verification.
+    let textWord be 0;
+    while textWord < 3 {
+        let prior be try words.get(registry.records,phase,textWord);
+        registry.records.frozen=false;
+        let corrupt be 1;
+        if textWord == 0 { corrupt=2; }
+        try words.set(registry.records,phase,textWord,corrupt);
+        registry.records.frozen=true;
+        try check(try rejected(registry,graph,phase),
+            "forged canonical Text descriptor word accepted");
+        registry.records.frozen=false;
+        try words.set(registry.records,phase,textWord,prior);
+        registry.records.frozen=true;
+        textWord=textWord+1;
+    }
     let pointer be (nestedList.index-1)*4+2;
     saved=try words.get(registry.records,phase,pointer);
     registry.records.frozen=false;
