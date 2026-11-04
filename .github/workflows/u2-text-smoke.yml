@@ -6,6 +6,8 @@ on:
       - src/compiler/u2_text_native.eri
       - tests/test_u2_text_unicode17.py
       - tests/fixtures/u2_text_unicode17.eri
+      - tests/fixtures/u2_text_unicode17_cfg.eri
+      - tests/fixtures/u2_text_unicode17_recursive.eri
       - tests/fixtures/u2_typed_failure_context.eri
       - .github/workflows/u2-text-smoke.yml
 permissions:
