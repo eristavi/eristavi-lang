@@ -84,3 +84,32 @@ Text-focused test workflow selects this fixture alongside native Text tests.
 This is **reference validation only**: native canonical Text checked invoke,
 recursive frames, scope cleanup adapters and root publication for saved
 failures remain unimplemented and must not be reported complete.
+
+## Bounded recursive native Text frames (candidate; qualification pending)
+
+An isolated canonical Text self-recursion variant admits one verified local
+declaration `u2.text.recurse` whose exact signature is
+`(Text, i64) -> i64`. The original 12 external Text imports are unchanged.
+The independent structural UIR verifier is rerun before emission; the
+new variant additionally checks the exact local declaration name, contract,
+entry parameter types, structural Text carrier, and no foreign FunctionIds.
+An ordinary Text-only profile with no entry args still uses the original
+emission path, unmodified.
+
+The self-call is a *real* x86-64 function invocation. Each invocation enters
+a separate scope, copies its inbound boxed Text and integer arguments to
+registered stack roots before collection, and keeps its caller roots alive
+while the callee allocates, collects and returns. Each return leaves its own
+scope exactly once and decrements a private, bounded, single-thread depth
+counter. The maximum number of simultaneously active frames is 32; a 33rd
+invocation takes the existing terminal internal fault, without creating a
+new source-level checked failure. The fixture exercises nested copies,
+concatenation, explicit collection and the original parent Text after a
+callee returns; its terminal depth test is deliberately isolated.
+
+This is deliberately NOT general canonical interprocedural lowering, dynamic
+dispatch, mixed managed signatures, typed checked-failure unwind,
+cancellation-safe recursion, precise per-instruction SSA root retirement, or
+physical root retention proof. The private depth counter is not thread-safe;
+parallel execution must reject this profile until it has per-thread or
+per-invocation depth administration. Do not merge U2 on this evidence alone.

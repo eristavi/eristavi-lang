@@ -32,7 +32,8 @@ public function name(op Int) returns Text {
     if op == 9 { return "u2.text.bytes.index"; }
     if op == 10 { return "u2.text.scalars.index"; }
     if op == 11 { return "u2.text.characters.index"; }
-    return "u2.text.normalizeNfc";
+    if op == 12 { return "u2.text.normalizeNfc"; }
+    return "u2.text.recurse";
 }
 function verify(fn identity build.Function,g identity aggregate.Registry,
     carrier aggregate.TypeId,p identity budget.Phase)
@@ -40,16 +41,22 @@ function verify(fn identity build.Function,g identity aggregate.Registry,
     let proof be try canonical.verifyAggregates(fn,g,
         try budget.verificationPhase(fn.owner));
     let resultType be try signatures.resultType(fn.metadata,g,p,fn.signature,0);
+    let recursive be fn.metadata.declarations.length == 78;
+    let parameters be try meta.parameterCount(fn.metadata,p,fn.signature);
+    let allowedParameters be parameters == 0;
+    if recursive { allowedParameters=parameters == 2; }
+    let allowedReturn be resultType.index == 1 or resultType.index == 2;
+    if recursive { allowedReturn=resultType.index == 2; }
     try require(p.owner == fn.owner and p.state == 0 and
         carrier.owner == g.key and carrier.index > 6 and
         (try aggregate.fieldCount(g,p,carrier)) == 0 and
         fn.blocks.length >= 5 and fn.blocks.length <= 320 and
         fn.edges.length <= 1536 and
         fn.values.length/4 <= 128 and fn.instructions.length/10 <= 256 and
-        fn.metadata.declarations.length == 72 and
-        (try meta.parameterCount(fn.metadata,p,fn.signature)) == 0 and
+        (fn.metadata.declarations.length == 72 or recursive) and
+        allowedParameters and
         (try meta.resultCount(fn.metadata,p,fn.signature)) == 1 and
-        (resultType.index == 1 or resultType.index == 2),
+        allowedReturn,
         "unsupported bounded canonical Text profile");
     let op be 1;
     while op <= 12 {
@@ -94,15 +101,46 @@ function verify(fn identity build.Function,g identity aggregate.Registry,
         }
         op=op+1;
     }
+    if recursive {
+        // Declaration 13 is a local, closed *self*-call, never an arbitrary
+        // external or fallible FunctionId. Exact signature equals this fn.
+        let symbol be name(13);
+        let d be 72;
+        let first be try get(fn.metadata.declarations,p,d+1);
+        try require((try get(fn.metadata.declarations,p,d)) == fn.signature.index and
+            (try get(fn.metadata.declarations,p,d+2)) == symbol.bytes.count and
+            (try get(fn.metadata.declarations,p,d+3)) == 1 and
+            (try get(fn.metadata.declarations,p,d+4)) == 0 and
+            (try get(fn.metadata.declarations,p,d+5)) == 0,
+            "recursive Text call must bind exact local function signature");
+        let j be 0;
+        while j < symbol.bytes.count {
+            try require((try get(fn.metadata.symbolBytes,p,first+j)) ==
+                symbol.bytes[j],"foreign recursive Text declaration");
+            j=j+1;
+        }
+        try require((try signatures.parameterType(fn.metadata,g,p,
+            fn.signature,0)).index == carrier.index and
+            (try signatures.parameterType(fn.metadata,g,p,
+            fn.signature,1)).index == 2 and
+            (try get(fn.blocks,p,0)) == 1 and
+            (try get(fn.blocks,p,1)) == 2 and
+            (try get(fn.values,p,0)) == carrier.index and
+            (try get(fn.values,p,4)) == 2,
+            "recursive Text parameters are not the verified entry roots");
+    }
     let i be 1;
     while i <= fn.instructions.length/10 {
         let code be try get(fn.instructions,p,(i-1)*10);
         try require(code == 1 or code == 2 or code == 18 or
-            code == 6 or code == 7 or code == 34 or code == 8,
+            code == 6 or code == 7 or code == 34 or code == 8 or
+            (recursive and (code == 15 or code == 16)),
             "Text carrier is not an ordinary structural aggregate");
         if code == 34 {
             let instructionOp be try get(fn.instructions,p,(i-1)*10+7);
-            try require(instructionOp >= 1 and instructionOp <= 12,
+            let maximum be 12;
+            if recursive { maximum=13; }
+            try require(instructionOp >= 1 and instructionOp <= maximum,
                 "unknown Text runtime call");
         }
         i=i+1;
@@ -118,11 +156,12 @@ function load(fn identity build.Function,p identity budget.Phase,
     let value be try get(fn.operands,p,first+n);
     line("movq "+slot(value)+","+reg);
 }
-// Preserve every canonical SSA root conservatively through CFG backedges.
-// The view temporary is also registered. This is not liveness-exact release
-// or cross-function recursive native lowering.
+// Each recursive invocation allocates its OWN frame and scope record;
+// caller roots remain registered while children allocate/collect. This does
+// not implement cross-function recursion or precise liveness root retirement.
 function emitNative(fn identity build.Function,p identity budget.Phase)
     fails budget.LimitError {
+    let recursive be fn.metadata.declarations.length == 78;
     let total be fn.values.length/4;
     let viewSlot be total*8;
     let scopeOffset be viewSlot+8;
@@ -130,6 +169,11 @@ function emitNative(fn identity build.Function,p identity budget.Phase)
     let scratchOffset be returnOffset+8;
     let frame be ((scratchOffset+total*8+15)/16)*16+8;
     output(".section .rodata\nerist_u2_text_classes:");
+    if recursive {
+        // A deliberately bounded single-thread development profile. The
+        // counter protects native stack growth even for malformed recursion.
+        output(".bss\n.p2align 3\nerist_u2_text_depth:\n.quad 0");
+    }
     let i be 0;
     while i <= total { output(".byte 1"); i=i+1; }
     output(".text\n.globl erist_u2_text_entry\nerist_u2_text_entry:");
@@ -147,9 +191,28 @@ function emitNative(fn identity build.Function,p identity budget.Phase)
     line("jne erist_rt_value_fault_internal");
     line("cmpl $12,ev_types+544(%rip)");
     line("jne erist_rt_value_fault_internal");
+    if recursive {
+        line("cmpq $32,erist_u2_text_depth(%rip)");
+        line("jae erist_rt_value_fault_internal");
+        line("testq %rdi,%rdi");
+        line("je erist_rt_value_fault_internal");
+        line("testq %rsi,%rsi");
+        line("je erist_rt_value_fault_internal");
+        line("cmpq $4,0(%rdi)");
+        line("jne erist_rt_value_fault_internal");
+        line("cmpq $1,0(%rsi)");
+        line("jne erist_rt_value_fault_internal");
+        line("incq erist_u2_text_depth(%rip)");
+    }
     line("subq $"+format.integer(frame)+",%rsp");
     i=1;
     while i <= total { line("movq $0,"+slot(i)); i=i+1; }
+    if recursive {
+        // Incoming args come from the parent frame, already rooted across
+        // evn_scope_enter allocation; register local copies before GC.
+        line("movq %rdi,"+slot(1));
+        line("movq %rsi,"+slot(2));
+    }
     line("movq $0,"+format.integer(viewSlot)+"(%rsp)");
     line("call evn_scope_enter");
     line("movq %rax,"+format.integer(scopeOffset)+"(%rsp)");
@@ -176,6 +239,15 @@ function emitNative(fn identity build.Function,p identity budget.Phase)
         if code == 2 {
             line("movq $"+format.integer(try get(fn.instructions,p,off+7))+",%rdi");
             line("call evn_bool");
+            line("movq %rax,"+slot(result));
+        }
+        if code == 15 or code == 16 {
+            try load(fn,p,inst,0,"%rdi");
+            try load(fn,p,inst,1,"%rsi");
+            line("movq 8(%rdi),%rdi");
+            if code == 15 { line("addq 8(%rsi),%rdi"); }
+            if code == 16 { line("subq 8(%rsi),%rdi"); }
+            line("call evn_int");
             line("movq %rax,"+slot(result));
         }
         if code == 18 {
@@ -259,6 +331,13 @@ function emitNative(fn identity build.Function,p identity budget.Phase)
                 try load(fn,p,inst,0,"%rdi");
                 line("call erist_rt_unicode_normalize_nfc");
             }
+            if op == 13 {
+                try load(fn,p,inst,0,"%rdi");
+                try load(fn,p,inst,1,"%rsi");
+                line("call erist_u2_text_entry");
+                line("movq %rax,%rdi");
+                line("call evn_int");
+            }
             if op == 8 {
                 line("xorl %edi,%edi");
                 line("call erist_rt_slots_collect");
@@ -276,6 +355,7 @@ function emitNative(fn identity build.Function,p identity budget.Phase)
             line("movq "+format.integer(scopeOffset)+"(%rsp),%rdi");
             line("call evn_scope_leave");
             line("movq "+format.integer(returnOffset)+"(%rsp),%rax");
+            if recursive { line("decq erist_u2_text_depth(%rip)"); }
             line("addq $"+format.integer(frame)+",%rsp");
             line("ret");
         }

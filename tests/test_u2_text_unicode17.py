@@ -125,6 +125,94 @@ _start:
                 self.assertEqual((result.returncode,result.stdout,result.stderr),
                                  (0,b'',b''))
 
+    def test_recursive_text_frames_keep_caller_roots_across_gc(self):
+        original=(ROOT/'tests/fixtures/u2_text_unicode17_recursive.eri').read_text(encoding='utf-8')
+        emitted=self.generator('recursive-text',original)
+        self.assertEqual((emitted.returncode,emitted.stderr),(0,''),emitted.stdout)
+        for fragment in ('call erist_u2_text_entry',
+                         'erist_u2_text_depth:',
+                         'incq erist_u2_text_depth(%rip)',
+                         'decq erist_u2_text_depth(%rip)',
+                         'call evn_bind_roots',
+                         'call erist_rt_text_collect'):
+            self.assertIn(fragment,emitted.stdout)
+        # Outer scope retains the initial Text while boxing the depth
+        # argument. Recursion then owns a separate registered native frame
+        # per invocation; all levels trigger collection and remain live.
+        for depth in (0,1,3,8,31):
+            with self.subTest(depth=depth):
+                start=f'''
+.text
+.globl _start
+_start:
+    subq $48,%rsp
+    movq $0,0(%rsp)
+    call evn_scope_enter
+    movq %rax,8(%rsp)
+    movq %rax,%rdi
+    movq %rsp,%rsi
+    leaq .Lu2_recursive_classes(%rip),%rdx
+    movl $1,%ecx
+    call evn_bind_roots
+    movl $101,%edi
+    call erist_rt_unicode_from_scalar
+    movq %rax,0(%rsp)
+    movl ${depth},%edi
+    call evn_int
+    movq %rax,%rsi
+    movq 0(%rsp),%rdi
+    call erist_u2_text_entry
+    cmpq ${2*depth+1},%rax
+    jne .Lgraph_test_fail
+    call evn_void
+    movq %rax,%rsi
+    movq 8(%rsp),%rdi
+    call evn_scope_leave
+    addq $48,%rsp
+    cmpq $0,erist_u2_text_depth(%rip)
+    jne .Lgraph_test_fail
+    jmp .Lgraph_finish
+.section .rodata
+.Lu2_recursive_classes:
+.byte 1
+'''
+                result=self.run_probe('recursive-text-'+str(depth),
+                    emitted.stdout+start+graph.FINISH+unicode_descriptors(),
+                    types=False)
+                self.assertEqual((result.returncode,result.stdout,result.stderr),
+                                 (0,b'',b''))
+        fault_start=r'''
+.text
+.globl _start
+_start:
+    subq $48,%rsp
+    movq $0,0(%rsp)
+    call evn_scope_enter
+    movq %rax,8(%rsp)
+    movq %rax,%rdi
+    movq %rsp,%rsi
+    leaq .Lu2_recursive_classes(%rip),%rdx
+    movl $1,%ecx
+    call evn_bind_roots
+    movl $101,%edi
+    call erist_rt_unicode_from_scalar
+    movq %rax,0(%rsp)
+    movl $32,%edi
+    call evn_int
+    movq %rax,%rsi
+    movq 0(%rsp),%rdi
+    call erist_u2_text_entry
+    movl $99,%edi
+    jmp erist_rt_exit
+.section .rodata
+.Lu2_recursive_classes:
+.byte 1
+'''
+        limit=self.run_probe('recursive-text-ceiling',
+            emitted.stdout+fault_start+unicode_descriptors(),types=False)
+        self.assertEqual(limit.returncode,1)
+        self.assertIn(b'Eristavi runtime fault:',limit.stderr)
+
     def test_all_text_view_bounds_are_terminal_and_exact(self):
         original=(ROOT/'tests/fixtures/u2_text_unicode17.eri').read_text(encoding='utf-8')
         # Each invalid lookup must preserve the established terminal bounds
