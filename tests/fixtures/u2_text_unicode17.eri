@@ -1,0 +1,114 @@
+import std.process;
+import compiler.u1_budget as budget;
+import compiler.u1_meta as meta;
+import compiler.u1_builder as build;
+import compiler.u1_aggregate as aggregate;
+import compiler.u1_aggregate_build as ab;
+import compiler.u1_aggregate_signature as sig;
+import compiler.u1_verify as verify;
+import compiler.u1_aggregate_verify as graphVerify;
+import compiler.u2_text_native as textNative;
+import compiler.u2_managed_types as managed;
+
+function run() fails budget.LimitError,verify.InvalidIR,
+    textNative.Unsupported,managed.InvalidManagedTypes,graphVerify.InvalidGraph {
+    let request be try budget.developmentRequest();
+    let shared be try budget.metadataOwner(request);
+    let p be try budget.constructionPhase(shared);
+    let data be try meta.create(shared,p);
+    let entrySig be try meta.signature(data,p,[],[meta.i64()]);
+    let source be try meta.source(data,p,"text-probe",
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",64);
+    let loc be try meta.location(data,p,source,0,1,0,1,1);
+    let graph be try aggregate.create(shared,p);
+    let intType be try aggregate.primitive(graph,meta.i64());
+    let predType be try aggregate.primitive(graph,meta.pred());
+    let carrier be try aggregate.aggregate(graph,p,[]);
+    let fromSignature be try sig.signature(data,graph,p,[intType],[carrier]);
+    let f1 be try meta.declaration(data,p,fromSignature,textNative.name(1),2,63,1);
+    let concatSignature be try sig.signature(data,graph,p,[carrier,carrier],[carrier]);
+    let f2 be try meta.declaration(data,p,concatSignature,textNative.name(2),2,63,1);
+    let copySignature be try sig.signature(data,graph,p,[carrier],[carrier]);
+    let f3 be try meta.declaration(data,p,copySignature,textNative.name(3),2,63,1);
+    let equalSignature be try sig.signature(data,graph,p,[carrier,carrier],[predType]);
+    let f4 be try meta.declaration(data,p,equalSignature,textNative.name(4),2,63,1);
+    let countSignature be try sig.signature(data,graph,p,[carrier],[intType]);
+    let f5 be try meta.declaration(data,p,countSignature,textNative.name(5),2,63,1);
+    let f6 be try meta.declaration(data,p,countSignature,textNative.name(6),2,63,1);
+    let f7 be try meta.declaration(data,p,countSignature,textNative.name(7),2,63,1);
+    let collectSignature be try meta.signature(data,p,[],[]);
+    let f8 be try meta.declaration(data,p,collectSignature,textNative.name(8),2,63,1);
+    try aggregate.freeze(graph);
+    let registry be try managed.create(graph,p);
+    let textType be managed.text(registry);
+    try managed.freeze(registry);
+    try meta.freeze(data); try budget.finishPhase(p);
+    let owner be try budget.functionOwner(request,false);
+    let phase be try budget.constructionPhase(owner);
+    let fn be try build.create(data,entrySig,owner,phase);
+    let block be try build.block(fn,[]);
+    let letter be try build.integer(fn,block,101,loc);
+    let combining be try build.integer(fn,block,769,loc);
+    let composed be try build.integer(fn,block,233,loc);
+    let woman be try build.integer(fn,block,128105,loc);
+    let joiner be try build.integer(fn,block,8205,loc);
+    let laptop be try build.integer(fn,block,128187,loc);
+    let call be try ab.call(fn,graph,block,f1,[letter],loc);
+    let e be try build.result(fn,call,0);
+    call=try ab.call(fn,graph,block,f1,[combining],loc);
+    let accent be try build.result(fn,call,0);
+    call=try ab.call(fn,graph,block,f2,[e,accent],loc);
+    let decomposed be try build.result(fn,call,0);
+    call=try ab.call(fn,graph,block,f1,[composed],loc);
+    let precomposed be try build.result(fn,call,0);
+    call=try ab.call(fn,graph,block,f3,[decomposed],loc);
+    let copied be try build.result(fn,call,0);
+    call=try ab.call(fn,graph,block,f8,[],loc);
+    call=try ab.call(fn,graph,block,f4,[decomposed,precomposed],loc);
+    let unequal be try build.result(fn,call,0);
+    call=try ab.call(fn,graph,block,f4,[decomposed,copied],loc);
+    let equal be try build.result(fn,call,0);
+    call=try ab.call(fn,graph,block,f5,[decomposed],loc);
+    let accentBytes be try build.result(fn,call,0);
+    call=try ab.call(fn,graph,block,f6,[decomposed],loc);
+    let accentScalars be try build.result(fn,call,0);
+    call=try ab.call(fn,graph,block,f7,[decomposed],loc);
+    let accentCharacters be try build.result(fn,call,0);
+    call=try ab.call(fn,graph,block,f1,[woman],loc);
+    let a be try build.result(fn,call,0);
+    call=try ab.call(fn,graph,block,f1,[joiner],loc);
+    let b be try build.result(fn,call,0);
+    call=try ab.call(fn,graph,block,f1,[laptop],loc);
+    let c be try build.result(fn,call,0);
+    call=try ab.call(fn,graph,block,f2,[a,b],loc);
+    let pair be try build.result(fn,call,0);
+    call=try ab.call(fn,graph,block,f2,[pair,c],loc);
+    let emoji be try build.result(fn,call,0);
+    call=try ab.call(fn,graph,block,f8,[],loc);
+    call=try ab.call(fn,graph,block,f5,[emoji],loc);
+    let emojiBytes be try build.result(fn,call,0);
+    call=try ab.call(fn,graph,block,f6,[emoji],loc);
+    let emojiScalars be try build.result(fn,call,0);
+    call=try ab.call(fn,graph,block,f7,[emoji],loc);
+    let emojiCharacters be try build.result(fn,call,0);
+    call=try ab.call(fn,graph,block,f8,[],loc);
+    try build.returnValues(fn,block,[accentCharacters],loc);
+    try ab.complete(fn,graph);
+    let read be try budget.constructionPhase(owner);
+    try textNative.emitManaged(fn,graph,carrier,read,registry,textType);
+    try budget.finishPhase(read);
+    try build.close(fn); try budget.finishPhase(phase);
+    try managed.close(registry); try aggregate.close(graph); try meta.close(data);
+    try budget.close(owner); try budget.close(shared); try budget.close(request);
+}
+run() else error budget.LimitError {
+    output("budget:"+error.message); process.setExitCode(1);
+} else error verify.InvalidIR {
+    output("ir:"+error.message); process.setExitCode(1);
+} else error textNative.Unsupported {
+    output("text:"+error.message); process.setExitCode(1);
+} else error managed.InvalidManagedTypes {
+    output("managed:"+error.message); process.setExitCode(1);
+} else error graphVerify.InvalidGraph {
+    output("graph:"+error.message); process.setExitCode(1);
+};

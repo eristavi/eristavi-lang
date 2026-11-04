@@ -1,0 +1,249 @@
+// U2 opt-in canonical Text/Unicode17 native slice. Closed import profile only.
+// The opaque structural carrier is Text only under this verified descriptor;
+// neither a new source syntax nor a general managed TypeId encoding.
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+import compiler.u1_meta as meta;
+import compiler.u1_builder as build;
+import compiler.u1_aggregate as aggregate;
+import compiler.u1_aggregate_signature as signatures;
+import compiler.u1_verify as canonical;
+import compiler.u1_aggregate_verify as graphVerify;
+import compiler.u2_managed_types as managed;
+import compiler.format as format;
+
+public error Unsupported { message Text; }
+function require(ok Bool,message Text) fails Unsupported {
+    if not ok { fail Unsupported { message=message; }; }
+}
+function get(w identity words.Words,p identity budget.Phase,index Int)
+    returns Int fails budget.LimitError {
+    return try words.get(w,p,index);
+}
+public function name(op Int) returns Text {
+    if op == 1 { return "u2.text.fromScalar"; }
+    if op == 2 { return "u2.text.concat"; }
+    if op == 3 { return "u2.text.copy"; }
+    if op == 4 { return "u2.text.equal"; }
+    if op == 5 { return "u2.text.bytes.count"; }
+    if op == 6 { return "u2.text.scalars.count"; }
+    if op == 7 { return "u2.text.characters.count"; }
+    return "u2.text.collect";
+}
+function verify(fn identity build.Function,g identity aggregate.Registry,
+    carrier aggregate.TypeId,p identity budget.Phase)
+    fails budget.LimitError,canonical.InvalidIR,Unsupported {
+    let proof be try canonical.verifyAggregates(fn,g,
+        try budget.verificationPhase(fn.owner));
+    let resultType be try signatures.resultType(fn.metadata,g,p,fn.signature,0);
+    try require(p.owner == fn.owner and p.state == 0 and
+        carrier.owner == g.key and carrier.index > 6 and
+        (try aggregate.fieldCount(g,p,carrier)) == 0 and
+        fn.blocks.length == 5 and fn.edges.length == 0 and
+        fn.values.length/4 <= 128 and fn.instructions.length/10 <= 256 and
+        fn.metadata.declarations.length == 48 and
+        (try meta.parameterCount(fn.metadata,p,fn.signature)) == 0 and
+        (try meta.resultCount(fn.metadata,p,fn.signature)) == 1 and
+        (resultType.index == 1 or resultType.index == 2),
+        "unsupported bounded canonical Text profile");
+    let op be 1;
+    while op <= 8 {
+        let d be (op-1)*6;
+        let symbol be name(op);
+        let first be try get(fn.metadata.declarations,p,d+1);
+        try require((try get(fn.metadata.declarations,p,d+2)) == symbol.bytes.count and
+            (try get(fn.metadata.declarations,p,d+3)) == 2 and
+            (try get(fn.metadata.declarations,p,d+4)) == 63 and
+            (try get(fn.metadata.declarations,p,d+5)) == 1,
+            "unsupported Text runtime import version or effects");
+        let j be 0;
+        while j < symbol.bytes.count {
+            try require((try get(fn.metadata.symbolBytes,p,first+j)) ==
+                symbol.bytes[j],"foreign Text runtime symbol");
+            j=j+1;
+        }
+        let target be meta.FunctionId { owner=fn.metadata.key; index=op; };
+        let sig be try meta.functionSignature(fn.metadata,p,target);
+        let count be 1;
+        if op == 2 or op == 4 { count=2; }
+        if op == 8 { count=0; }
+        let resultCount be 1;
+        if op == 8 { resultCount=0; }
+        try require((try meta.parameterCount(fn.metadata,p,sig)) == count and
+            (try meta.resultCount(fn.metadata,p,sig)) == resultCount,
+            "unsupported Text runtime import arity");
+        j=0;
+        while j < count {
+            let ty be carrier.index;
+            if op == 1 { ty=2; }
+            try require((try signatures.parameterType(fn.metadata,g,p,sig,j)).index ==
+                ty,"unsupported Text runtime argument type");
+            j=j+1;
+        }
+        if resultCount == 1 {
+            let ty be carrier.index;
+            if op == 4 { ty=1; }
+            if op == 5 or op == 6 or op == 7 { ty=2; }
+            try require((try signatures.resultType(fn.metadata,g,p,sig,0)).index ==
+                ty,"unsupported Text runtime result type");
+        }
+        op=op+1;
+    }
+    let i be 1;
+    while i <= fn.instructions.length/10 {
+        let code be try get(fn.instructions,p,(i-1)*10);
+        try require(code == 1 or code == 34 or code == 8,
+            "Text carrier is not an ordinary structural aggregate");
+        if code == 34 {
+            let op be try get(fn.instructions,p,(i-1)*10+7);
+            try require(op >= 1 and op <= 8,"unknown Text runtime call");
+        }
+        i=i+1;
+    }
+}
+function line(text Text) { output("    "+text); }
+function slot(value Int) returns Text {
+    return format.integer((value-1)*8)+"(%rsp)";
+}
+function load(fn identity build.Function,p identity budget.Phase,
+    inst Int,n Int,reg Text) fails budget.LimitError {
+    let first be try get(fn.instructions,p,(inst-1)*10+2);
+    let value be try get(fn.operands,p,first+n);
+    line("movq "+slot(value)+","+reg);
+}
+// Full native CFG root publication is NOT established by this single-block
+// adapter. Root all bounded SSA slots conservatively, plus one temporary
+// registered view root through potentially allocating Unicode17 view counting.
+function emitNative(fn identity build.Function,p identity budget.Phase)
+    fails budget.LimitError {
+    let total be fn.values.length/4;
+    let viewSlot be total*8;
+    let scopeOffset be viewSlot+8;
+    let returnOffset be scopeOffset+8;
+    let frame be ((returnOffset+8+15)/16)*16+8;
+    output(".section .rodata\nerist_u2_text_classes:");
+    let i be 0;
+    while i <= total { output(".byte 1"); i=i+1; }
+    output(".text\n.globl erist_u2_text_entry\nerist_u2_text_entry:");
+    // Match the exact existing owned runtime class and view indices.
+    line("cmpl $1,ev_types+32(%rip)");
+    line("jne erist_rt_value_fault_internal");
+    line("cmpl $3,ev_types+96(%rip)");
+    line("jne erist_rt_value_fault_internal");
+    line("cmpl $4,ev_types+128(%rip)");
+    line("jne erist_rt_value_fault_internal");
+    line("cmpl $12,ev_types+480(%rip)");
+    line("jne erist_rt_value_fault_internal");
+    line("cmpl $12,ev_types+512(%rip)");
+    line("jne erist_rt_value_fault_internal");
+    line("cmpl $12,ev_types+544(%rip)");
+    line("jne erist_rt_value_fault_internal");
+    line("subq $"+format.integer(frame)+",%rsp");
+    i=1;
+    while i <= total { line("movq $0,"+slot(i)); i=i+1; }
+    line("movq $0,"+format.integer(viewSlot)+"(%rsp)");
+    line("call evn_scope_enter");
+    line("movq %rax,"+format.integer(scopeOffset)+"(%rsp)");
+    line("movq %rax,%rdi");
+    line("movq %rsp,%rsi");
+    line("leaq erist_u2_text_classes(%rip),%rdx");
+    line("movq $"+format.integer(total+1)+",%rcx");
+    line("call evn_bind_roots");
+    let inst be try get(fn.blocks,p,2);
+    let terminal be try get(fn.blocks,p,4);
+    if inst == 0 { inst=terminal; }
+    while inst != 0 {
+        let off be (inst-1)*10;
+        let code be try get(fn.instructions,p,off);
+        let result be try get(fn.instructions,p,off+4);
+        if code == 1 {
+            line("movabsq $"+format.integer(try get(fn.instructions,p,off+7))+",%rdi");
+            line("call evn_int");
+            line("movq %rax,"+slot(result));
+        }
+        if code == 34 {
+            let op be try get(fn.instructions,p,off+7);
+            if op == 1 {
+                try load(fn,p,inst,0,"%rdi");
+                line("movq 8(%rdi),%rdi");
+                line("call erist_rt_unicode_from_scalar");
+            }
+            if op == 2 {
+                try load(fn,p,inst,0,"%rdi");
+                try load(fn,p,inst,1,"%rsi");
+                line("call erist_rt_text_concat");
+            }
+            if op == 3 {
+                try load(fn,p,inst,0,"%rdi");
+                line("call evn_copy");
+            }
+            if op == 4 {
+                line("movl $5,%edi");
+                try load(fn,p,inst,0,"%rsi");
+                try load(fn,p,inst,1,"%rdx");
+                line("call erist_rt_text_binary");
+            }
+            if op == 5 or op == 6 or op == 7 {
+                let kind be 15;
+                if op == 6 { kind=16; }
+                if op == 7 { kind=17; }
+                line("movl $"+format.integer(kind)+",%edi");
+                try load(fn,p,inst,0,"%rsi");
+                line("call evn_view");
+                line("movq %rax,"+format.integer(viewSlot)+"(%rsp)");
+                line("movq %rax,%rdi");
+                line("call erist_rt_view_count");
+                line("movq $0,"+format.integer(viewSlot)+"(%rsp)");
+            }
+            if op == 8 {
+                line("xorl %edi,%edi");
+                line("call erist_rt_slots_collect");
+                line("call erist_rt_text_collect");
+            } else {
+                line("movq %rax,"+slot(result));
+            }
+        }
+        if code == 8 {
+            try load(fn,p,inst,0,"%rax");
+            line("movq 8(%rax),%rax");
+            line("movq %rax,"+format.integer(returnOffset)+"(%rsp)");
+            line("call evn_void");
+            line("movq %rax,%rsi");
+            line("movq "+format.integer(scopeOffset)+"(%rsp),%rdi");
+            line("call evn_scope_leave");
+            line("movq "+format.integer(returnOffset)+"(%rsp),%rax");
+            line("addq $"+format.integer(frame)+",%rsp");
+            line("ret");
+        }
+        if inst == terminal { inst=0; }
+        else {
+            inst=try get(fn.instructions,p,off+9);
+            if inst == 0 { inst=terminal; }
+        }
+    }
+    output(".section .note.GNU-stack,\"\",@progbits");
+}
+public function emit(fn identity build.Function,g identity aggregate.Registry,
+    carrier aggregate.TypeId,p identity budget.Phase)
+    fails budget.LimitError,canonical.InvalidIR,Unsupported {
+    try verify(fn,g,carrier,p);
+    try emitNative(fn,p);
+}
+public function emitManaged(fn identity build.Function,g identity aggregate.Registry,
+    carrier aggregate.TypeId,p identity budget.Phase,table identity managed.Registry,
+    textType managed.TypeId)
+    fails budget.LimitError,canonical.InvalidIR,Unsupported,
+    managed.InvalidManagedTypes,graphVerify.InvalidGraph {
+    let phase be try budget.verificationPhase(table.owner);
+    let check be managed.verify(table,g,phase)
+        else error budget.LimitError { try budget.finishPhase(phase); fail error; }
+        else error managed.InvalidManagedTypes { try budget.finishPhase(phase); fail error; }
+        else error graphVerify.InvalidGraph { try budget.finishPhase(phase); fail error; };
+    let description be managed.descriptor(table,phase,textType)
+        else error budget.LimitError { try budget.finishPhase(phase); fail error; };
+    try budget.finishPhase(phase);
+    try require(description.kind == 1 and description.elementDomain == 0 and
+        description.element == 0 and description.copyPolicy == 1,
+        "native Text requires verified immutable managed Text descriptor");
+    try emit(fn,g,carrier,p);
+}

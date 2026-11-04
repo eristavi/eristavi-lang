@@ -33,6 +33,7 @@ SMOKE_TESTS=(
     'test_u2_ssa_recursion.U2SSARecursionTests',
     'test_u2_managed_types.U2ManagedTypesTests',
     'test_u2_list_i64.U2ListI64Tests',
+    'test_u2_text_unicode17.U2TextUnicode17Tests',
     # #51 semantic location-index optimization must retain AST identity,
     # duplicate-token collision handling and synthetic negative-token fallback.
     'test_source_fact_index.SourceFactIndexTests.test_identity_collisions_reanalysis_and_synthetic_nodes',
