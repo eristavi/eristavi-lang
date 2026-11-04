@@ -21,6 +21,7 @@ public type Report {
     sourceValue Int; normalValue Int;
     failureValue Int; failureCarry Int;
     rootIndex Int; frameWords Int;
+    ownerCount Int; survivingOwners Int;
 }
 public error InvalidSSA { message Text; }
 function require(ok Bool,message Text) fails InvalidSSA {
@@ -31,10 +32,10 @@ function read(w identity words.Words,p identity budget.Phase,index Int)
     return try words.get(w,p,index);
 }
 
-// Exactly one *already available predecessor i64* is carried through both
-// opcode-46 edges. It becomes normal block parameter 0 on successful cleanup
-// and failure block parameter 1 on a checked failure. The checked failure
-// itself is failure block parameter 0, NEVER a scalar error code.
+// Exactly one predecessor i64 is carried through both opcode-46 edges.
+// Zero to seven surviving lexical File owners are moved through the same
+// verified normal/failure SSA successor block parameters. The checked
+// failure itself is failure block parameter 0, NEVER a scalar error code.
 // Success-only call results (there are none for File.close) are forbidden
 // on the failure edge; a pre-existing pending return can still be carried
 // for handler context but MUST NOT be committed as successful completion.
@@ -57,36 +58,50 @@ public function verify(routine identity build.Function,
     try require(routine.state == 1 and pair.version == 2 and
         instruction.owner == routine.key and instruction.index >= 1 and
         instruction.index <= routine.instructions.length/10 and
-        active.count == 1 and survive == 0 and plan.depth == 1 and
+        active.count >= 1 and active.count <= 8 and
+        survive == active.count-1 and plan.depth == 1 and
         plan.entry == 1 and pair.location == exit and
         valueCount > 0 and valueCount <= 128 and rootProof.roots > 0,
         "unsupported bounded canonical checked SSA profile");
-    let selected cleanup.Scope be active[0];
+    let selected cleanup.Scope be active[active.count-1];
     let sourceBase be (pair.source.index-1)*5;
     let sourceFirst be try read(routine.blocks,phase,sourceBase);
     let sourceCount be try read(routine.blocks,phase,sourceBase+1);
-    try require(sourceCount == 2 and sourceFirst >= 1 and
-        sourceFirst+1 <= valueCount and
-        sourceFirst == selected.value and
+    let sourceScalar be sourceFirst+active.count;
+    try require(sourceCount == active.count+1 and sourceFirst >= 1 and
+        sourceScalar <= valueCount and
         (try read(routine.blocks,phase,sourceBase+4)) == instruction.index and
-        (try read(routine.values,phase,(sourceFirst-1)*4)) ==
-            profile.handle.index and
-        (try read(routine.values,phase,sourceFirst*4)) == meta.i64().index and
-        (try read(routine.values,phase,sourceFirst*4+1)) == 0 and
-        (try read(routine.values,phase,sourceFirst*4+2)) == pair.source.index and
-        (try read(routine.values,phase,sourceFirst*4+3)) == 1,
-        "checked source must own File then a live predecessor i64 SSA parameter");
+        (try read(routine.values,phase,(sourceScalar-1)*4)) == meta.i64().index and
+        (try read(routine.values,phase,(sourceScalar-1)*4+1)) == 0 and
+        (try read(routine.values,phase,(sourceScalar-1)*4+2)) == pair.source.index and
+        (try read(routine.values,phase,(sourceScalar-1)*4+3)) == active.count,
+        "source must have live File parameters and last predecessor i64");
     let ownerBase be (pair.source.index-1)*2;
     let ownerFirst be try read(profile.blocks,phase,ownerBase);
-    try require((try read(profile.blocks,phase,ownerBase+1)) == 1 and
-        ownerFirst >= 0 and ownerFirst < profile.entries.length/2 and
-        (try read(profile.entries,phase,ownerFirst*2)) == selected.scope and
-        (try read(profile.entries,phase,ownerFirst*2+1)) == selected.value and
-        selected.contract == profile.consume.index and
-        selected.scope >= 1 and selected.scope <= profile.scopes.length/2 and
-        selected.close == exit and
-        (try read(profile.scopes,phase,(selected.scope-1)*2+1)) == exit.index,
-        "canonical checked source has wrong lexical File ownership");
+    try require((try read(profile.blocks,phase,ownerBase+1)) == active.count and
+        ownerFirst >= 0 and ownerFirst+active.count <= profile.entries.length/2 and
+        selected.contract == profile.consume.index,
+        "canonical checked source has wrong lexical File ownership count");
+    let item be 0;
+    while item < active.count {
+        try budget.work(phase,1);
+        let original cleanup.Scope be active[item];
+        let source be original.value;
+        try require(original.scope >= 1 and
+            original.scope <= profile.scopes.length/2 and
+            original.contract == profile.consume.index and
+            source >= sourceFirst and source < sourceScalar and
+            (try read(routine.values,phase,(source-1)*4)) == profile.handle.index and
+            (try read(routine.values,phase,(source-1)*4+1)) == 0 and
+            (try read(routine.values,phase,(source-1)*4+2)) == pair.source.index and
+            (try read(profile.entries,phase,(ownerFirst+item)*2)) == original.scope and
+            (try read(profile.entries,phase,(ownerFirst+item)*2+1)) == source and
+            (try read(profile.scopes,phase,(original.scope-1)*2+1)) == original.close.index,
+            "active owners must match canonical source handles and lexical scope");
+        item=item+1;
+    }
+    try require(selected.close == exit,
+        "checked File.close origin differs from selected innermost owner");
     let base be (instruction.index-1)*10;
     let first be try read(routine.instructions,phase,base+2);
     let edge be try read(routine.instructions,phase,base+8);
@@ -104,26 +119,42 @@ public function verify(routine identity build.Function,
     let normalRow be (edge-1)*3; let failedRow be edge*3;
     let normalFirst be try read(routine.edges,phase,normalRow+1);
     let failedFirst be try read(routine.edges,phase,failedRow+1);
+    let normalStart be try read(routine.blocks,phase,(pair.normal.index-1)*5);
+    let failureValue be try read(routine.blocks,phase,(pair.failure.index-1)*5);
+    let normalValue be normalStart+survive;
+    let failureCarry be failureValue+1+survive;
     try require((try read(routine.edges,phase,normalRow)) == pair.normal.index and
         (try read(routine.edges,phase,failedRow)) == pair.failure.index and
-        (try read(routine.edges,phase,normalRow+2)) == 1 and
-        (try read(routine.edges,phase,failedRow+2)) == 2 and
-        normalFirst >= 0 and normalFirst < routine.arguments.length and
-        failedFirst >= 0 and failedFirst+1 < routine.arguments.length and
-        (try read(routine.arguments,phase,normalFirst)) == sourceFirst+1 and
+        (try read(routine.edges,phase,normalRow+2)) == survive+1 and
+        (try read(routine.edges,phase,failedRow+2)) == survive+2 and
+        normalFirst >= 0 and normalFirst+survive < routine.arguments.length and
+        failedFirst >= 0 and failedFirst+survive+1 < routine.arguments.length and
+        (try read(routine.blocks,phase,(pair.normal.index-1)*5+1)) == survive+1 and
+        (try read(routine.blocks,phase,(pair.failure.index-1)*5+1)) == survive+2 and
+        normalStart >= 1 and normalValue <= valueCount and
+        failureValue >= 1 and failureCarry <= valueCount and
+        (try read(routine.arguments,phase,normalFirst+survive)) == sourceScalar and
         (try read(routine.arguments,phase,failedFirst)) == -1 and
-        (try read(routine.arguments,phase,failedFirst+1)) == sourceFirst+1,
-        "canonical checked successor carries wrong predecessor i64 or failure marker");
-    let normalValue be try read(routine.blocks,phase,(pair.normal.index-1)*5);
-    let failureValue be try read(routine.blocks,phase,(pair.failure.index-1)*5);
-    try require(normalValue >= 1 and normalValue <= valueCount and
-        failureValue >= 1 and failureValue+1 <= valueCount and
-        (try read(routine.blocks,phase,(pair.normal.index-1)*5+1)) == 1 and
-        (try read(routine.blocks,phase,(pair.failure.index-1)*5+1)) == 2 and
+        (try read(routine.arguments,phase,failedFirst+survive+1)) == sourceScalar and
         (try read(routine.values,phase,(normalValue-1)*4)) == meta.i64().index and
-        (try read(routine.values,phase,failureValue*4)) == meta.i64().index and
+        (try read(routine.values,phase,(failureCarry-1)*4)) == meta.i64().index and
         (try read(routine.values,phase,(failureValue-1)*4)) > 6,
-        "checked successor parameters have wrong SSA types or arity");
+        "canonical checked SSA successor arity, marker or pending i64 mismatch");
+    item=0;
+    while item < survive {
+        try budget.work(phase,1);
+        let ancestor cleanup.Scope be active[item];
+        try require((try read(routine.arguments,phase,normalFirst+item)) ==
+                ancestor.value and
+            (try read(routine.arguments,phase,failedFirst+item+1)) ==
+                ancestor.value and
+            (try read(routine.values,phase,(normalStart+item-1)*4)) ==
+                profile.handle.index and
+            (try read(routine.values,phase,(failureValue+item)*4)) ==
+                profile.handle.index,
+            "surviving File owner must move to exact normal and failure SSA parameters");
+        item=item+1;
+    }
     let rootIndex be -1; let index be 0;
     while index < rootProof.roots {
         try budget.work(phase,1);
@@ -144,8 +175,9 @@ public function verify(routine identity build.Function,
     try require(rootIndex >= 0,"missing selected canonical class-5 root");
     return Report {
         instruction=instruction.index; revision=routine.revision;
-        sourceValue=sourceFirst+1; normalValue=normalValue;
-        failureValue=failureValue; failureCarry=failureValue+1;
+        sourceValue=sourceScalar; normalValue=normalValue;
+        failureValue=failureValue; failureCarry=failureCarry;
         rootIndex=rootIndex; frameWords=valueCount;
+        ownerCount=active.count; survivingOwners=survive;
     };
 }
