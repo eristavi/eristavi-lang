@@ -94,7 +94,7 @@ recorded separately once available.
 
 ## 4 November 2026 — three-part native U2 integration candidate
 
-Status: **code committed; exact-revision CI pending**, not U2 acceptance.
+Status: **verified in focused Linux x86-64 CI**, not U2 milestone acceptance, native ABI promotion, or four-platform qualification.
 This is a bounded continuation of the existing frozen semantics and canonical
 UIR contracts. Source syntax, semantic operation IDs, production compiler,
 owned runtime, GC collector, public 32-byte value ABI and external imports
@@ -130,8 +130,9 @@ failure record is live, root release on normal completion, owner consumption,
 open-resource counts and final GC/allocator shutdown.
 
 Existing independent `test_u2_native_root_publish.py` checks wrong-class,
-overlapping, misaligned, stale, foreign and closed slot plans. Full
-end-to-end malformed-root and allocator-refusal coverage is still open;
+overlapping, misaligned, stale, foreign and closed slot plans. The combined ingress now rejects wrong-class native slots and stale canonical
+root-map revisions before emission. Foreign/deleted-root and allocator-refusal
+coverage at this combined native entry is still open;
 do not extend the meaning of one bounded positive native regression.
 
 ### 3. Surviving prefixes and pending scalar completion
@@ -164,3 +165,12 @@ SSA pending-return transport or all-handler control-flow lowering.
   and final four-platform completed-batch qualification.
 
 Keep PR #111 draft and U2 issue #74 open; do not merge or promote.
+
+## 4 November 2026 — exact-revision qualification of this candidate
+
+- **Latest tested source:** `6b803e669531abb72966ca6da8f6d1dbb4c24688` on draft PR #111. Earlier three-step source implementation was committed through `275b31ce1cb5020dd6de065f04716de98960be2c`; subsequent patches repair test fixture reuse and add negative checks, without changing the native source profiles.
+- [Dedicated native U2 checks #41870175450](https://github.com/eristavi/eristavi-lang/actions/runs/41870175450) **SUCCESS: 4 of 4 test methods, zero failures**. Original real File scenarios, single-owner canonical ingress, surviving-prefix/pending-i64 completion, and compiler-produced checked class-5 failure roots with explicit GC execute. Combined ingress independently refuses a corrupted native class and stale root-map revision, with no inadmissible emitted symbol.
+- [Exact-head Linux Clang smoke #41870175496](https://github.com/eristavi/eristavi-lang/actions/runs/41870175496) **SUCCESS: 101 executed, 98 passed, zero failed, three intentional skips** in 397.191 seconds. Full four-platform matrix was **skipped** under the incremental CI policy.
+- The earlier [focused run #41865432112](https://github.com/eristavi/eristavi-lang/actions/runs/41865432112) and [broad smoke #41866025365](https://github.com/eristavi/eristavi-lang/actions/runs/41866025365) failed because the repeated native-generator test attempted to recreate its own existing compiler-import symlink. The fixture was corrected at `c81ad04c107df0ed811dfb52b9a2bbdc71ddfe66`; no native cleanup semantic failure was implicated. The corrected **exact-code** runs above supersede that result.
+- **Still open:** general canonical opcode-46 CFG/SSA to native checked control-flow and pending-return binding, live-root retirement across all blocks/instructions and recursive checked unwinds, combined foreign/deleted-root faults, physical retained memory/RSS and deterministic allocation refusal, Stage-0/native independent differential oracle, final required four-platform CI/qualified merge.
+- Do not merge #111 or close #74; leave production compiler/ABI, U3/U4 and paused #51 untouched.
