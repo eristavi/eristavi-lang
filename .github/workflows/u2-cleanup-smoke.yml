@@ -4,6 +4,7 @@ on:
     branches: [compiler/u2-cleanup-foundation-20261102]
     paths:
       - src/compiler/u2_cleanup_native_x86_64.eri
+      - src/compiler/u2_cleanup_canonical_x86_64.eri
       - tests/test_u2_native_cleanup.py
       - tests/fixtures/u2_cleanup_native.eri
       - .github/workflows/u2-cleanup-smoke.yml
