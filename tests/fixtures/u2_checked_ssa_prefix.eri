@@ -305,6 +305,13 @@ function run() fails budget.LimitError,canonical.InvalidIR,
         failedPair,innerFailureClose,outerFailedPlan,outerFailedOwners);
     try check(repaired.originalPrimary == route.originalPrimary,
         "restored canonical failure-chain proof changed");
+    // Both outer File.cleanup paths are emitted from their ORIGINAL
+    // independently verified plans after the complete canonical two-stage
+    // admission. The already-failing path must retain the incoming primary.
+    try nativeCleanup.emit(data,checkedPhase,outerNormalPlan,
+        outerNormalOwners,0,loc,false,73);
+    try nativeCleanup.emit(data,checkedPhase,outerFailedPlan,
+        outerFailedOwners,0,loc,true,74);
     try cleanup.close(outerNormalPlan); try cleanup.close(outerFailedPlan);
 
     try native.emit(fn,graph,profile,registry,checkedPhase,
