@@ -175,7 +175,7 @@ class U2NativeCleanupTests(unittest.TestCase):
             'import compiler.u2_cleanup_plan as cleanup;\n'
             'import compiler.u2_cleanup_verify as cleanupVerify;\n'
             'import compiler.u2_root_map as rootMap;\n'
-            'import compiler.u2_cleanup_native_x86_64 as native;\n',1)
+            'import compiler.u2_cleanup_canonical_x86_64 as native;\n',1)
         err='continuation.InvalidBinding,owners.InvalidOwnership,ProbeError {'
         self.assertIn(err,source)
         source=source.replace(err,err.replace('ProbeError {',
