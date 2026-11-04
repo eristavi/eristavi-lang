@@ -1,0 +1,256 @@
+// Canonical nested File resources with an i64 pending SSA value.
+// Inner checked File.close must move outer File owner (not copy) and pending
+// i64 across both version-two UIR successor edges. This fixture handles
+// every remaining checked/acquire path before ordinary function completion.
+import std.process;
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+import compiler.u1_meta as meta;
+import compiler.u1_builder as build;
+import compiler.u1_aggregate as aggregate;
+import compiler.u1_aggregate_signature as sig;
+import compiler.u1_aggregate_build as ab;
+import compiler.u1_verify as canonical;
+import compiler.u2_invoke_contract as contracts;
+import compiler.u2_invoke_transfer as invoke;
+import compiler.u2_continuation_bind as continuation;
+import compiler.u2_scoped_owners as owners;
+import compiler.u2_cleanup_plan as cleanup;
+import compiler.u2_cleanup_verify as planVerify;
+import compiler.u2_root_map as roots;
+import compiler.u2_native_slots_x86_64 as slots;
+import compiler.u2_native_root_x86_64 as nativeRoots;
+import compiler.u2_cleanup_native_x86_64 as nativeCleanup;
+import compiler.u2_checked_ssa_bind as ssa;
+import compiler.u2_checked_ssa_x86_64 as native;
+
+error ProbeError { message Text; }
+function check(ok Bool,message Text) fails ProbeError {
+    if not ok { fail ProbeError { message=message; }; }
+}
+function handledReturn(fn identity build.Function,from build.BlockId,
+    loc meta.LocId) fails budget.LimitError {
+    let zero be try build.integer(fn,from,0,loc);
+    try build.returnValues(fn,from,[zero],loc);
+}
+function run() fails budget.LimitError,canonical.InvalidIR,
+    owners.InvalidOwnership,continuation.InvalidBinding,planVerify.InvalidPlan,
+    roots.InvalidRoots,slots.InvalidSlots,nativeRoots.Unsupported,
+    nativeCleanup.Unsupported,ssa.InvalidSSA,native.Unsupported,ProbeError {
+    let root be try budget.developmentRequest();
+    let shared be try budget.metadataOwner(root);
+    let mp be try budget.constructionPhase(shared);
+    let data be try meta.create(shared,mp);
+    let graph be try aggregate.create(shared,mp);
+    let i64 be try aggregate.primitive(graph,meta.i64());
+    let handle be try aggregate.aggregate(graph,mp,[]);
+    let failure be try aggregate.aggregate(graph,mp,[i64]);
+    let openSig be try sig.signature(data,graph,mp,[],[handle]);
+    let closeSig be try sig.signature(data,graph,mp,[handle],[]);
+    let failSig be try sig.signature(data,graph,mp,[],[failure]);
+    let outerSig be try sig.signature(data,graph,mp,[],[handle,i64]);
+    let nestedSig be try sig.signature(data,graph,mp,[],[handle,handle,i64]);
+    let oneFailed be try sig.signature(data,graph,mp,[],[failure,i64]);
+    let twoFailed be try sig.signature(data,graph,mp,[],[failure,handle,i64]);
+    let twoError be try sig.signature(data,graph,mp,[],[failure,failure,i64]);
+    let completedSig be try sig.signature(data,graph,mp,[],[i64]);
+    let caller be try meta.signature(data,mp,[],[meta.i64()]);
+    let acquire be try meta.declaration(data,mp,openSig,"u2.prefix.acquire",2,8,1);
+    let close be try meta.declaration(data,mp,closeSig,"u2.prefix.close",2,4,1);
+    let src be try meta.source(data,mp,"prefix.eri",
+        "0000000000000000000000000000000000000000000000000000000000000000",64);
+    let loc be try meta.location(data,mp,src,0,8,0,1,1);
+    let innerLoc be try meta.location(data,mp,src,8,16,8,2,1);
+    try aggregate.freeze(graph); try meta.freeze(data);
+    let registry be try contracts.create(data,graph,mp);
+    let acquireContract be contracts.Contract {
+        version=1; target=acquire; failure=failSig;
+    };
+    let closeContract be contracts.Contract {
+        version=1; target=close; failure=failSig;
+    };
+    try contracts.register(registry,data,graph,mp,acquireContract);
+    try contracts.register(registry,data,graph,mp,closeContract);
+    try contracts.freeze(registry); try budget.finishPhase(mp);
+
+    let owner be try budget.functionOwner(root,true);
+    let phase be try budget.constructionPhase(owner);
+    let fn be try build.create(data,caller,owner,phase);
+    let entry be try build.block(fn,[]);
+    let outer be try ab.block(fn,graph,[handle,i64]);
+    let firstFailed be try ab.block(fn,graph,[failure,i64]);
+    let nested be try ab.block(fn,graph,[handle,handle,i64]);
+    let secondFailed be try ab.block(fn,graph,[failure,handle,i64]);
+    let afterInner be try ab.block(fn,graph,[handle,i64]);
+    let innerFailed be try ab.block(fn,graph,[failure,handle,i64]);
+    let done be try ab.block(fn,graph,[i64]);
+    let closeFailed be try ab.block(fn,graph,[failure,i64]);
+    let handled be try ab.block(fn,graph,[failure,i64]);
+    let doubleFailed be try ab.block(fn,graph,[failure,failure,i64]);
+    let dead be try build.block(fn,[]);
+    let deadTarget be try build.block(fn,[meta.i64()]);
+
+    let outerOwned be try build.parameter(fn,outer,0);
+    let outerPending be try build.parameter(fn,outer,1);
+    let innerOwned be try build.parameter(fn,nested,0);
+    let nestedOuter be try build.parameter(fn,nested,1);
+    let nestedPending be try build.parameter(fn,nested,2);
+    let secondError be try build.parameter(fn,secondFailed,0);
+    let secondOwner be try build.parameter(fn,secondFailed,1);
+    let secondPending be try build.parameter(fn,secondFailed,2);
+    let afterOwner be try build.parameter(fn,afterInner,0);
+    let afterPending be try build.parameter(fn,afterInner,1);
+    let innerError be try build.parameter(fn,innerFailed,0);
+    let innerOuter be try build.parameter(fn,innerFailed,1);
+    let innerPending be try build.parameter(fn,innerFailed,2);
+    let finished be try build.parameter(fn,done,0);
+
+    let profile be try owners.create(fn,graph,phase,handle,acquire,close);
+    let outerScope be try owners.scope(profile,fn,phase,0,loc);
+    let innerScope be try owners.scope(profile,fn,phase,outerScope,innerLoc);
+    try owners.block(profile,fn,phase,entry,[]);
+    try owners.block(profile,fn,phase,outer,
+        [owners.Entry { scope=outerScope; value=outerOwned; }]);
+    try owners.block(profile,fn,phase,firstFailed,[]);
+    try owners.block(profile,fn,phase,nested,
+        [owners.Entry { scope=outerScope; value=nestedOuter; },
+         owners.Entry { scope=innerScope; value=innerOwned; }]);
+    try owners.block(profile,fn,phase,secondFailed,
+        [owners.Entry { scope=outerScope; value=secondOwner; }]);
+    try owners.block(profile,fn,phase,afterInner,
+        [owners.Entry { scope=outerScope; value=afterOwner; }]);
+    try owners.block(profile,fn,phase,innerFailed,
+        [owners.Entry { scope=outerScope; value=innerOuter; }]);
+    try owners.block(profile,fn,phase,done,[]);
+    try owners.block(profile,fn,phase,closeFailed,[]);
+    try owners.block(profile,fn,phase,handled,[]);
+    try owners.block(profile,fn,phase,doubleFailed,[]);
+    try owners.block(profile,fn,phase,dead,[]);
+    try owners.block(profile,fn,phase,deadTarget,[]);
+
+    let pending be try build.integer(fn,entry,74565,loc);
+    let pair be try continuation.bindCarrying(fn,graph,phase,
+        entry,outer,firstFailed,outerSig,oneFailed,loc);
+    let firstAcquire be try invoke.emit(fn,graph,acquireContract,pair,[],[pending]);
+
+    pair=try continuation.bindCarrying(fn,graph,phase,
+        outer,nested,secondFailed,nestedSig,twoFailed,loc);
+    let secondAcquire be try invoke.emit(fn,graph,acquireContract,pair,[],
+        [outerOwned,outerPending]);
+
+    pair=try continuation.bindCarrying(fn,graph,phase,
+        nested,afterInner,innerFailed,outerSig,twoFailed,innerLoc);
+    let innerClose be try invoke.emit(fn,graph,closeContract,pair,[innerOwned],
+        [nestedOuter,nestedPending]);
+
+    pair=try continuation.bindCarrying(fn,graph,phase,
+        afterInner,done,closeFailed,completedSig,oneFailed,loc);
+    let exitClose be try invoke.emit(fn,graph,closeContract,pair,[afterOwner],
+        [afterPending]);
+
+    pair=try continuation.bindCarrying(fn,graph,phase,
+        secondFailed,handled,doubleFailed,oneFailed,twoError,loc);
+    let secondFailureClose be try invoke.emit(fn,graph,closeContract,pair,
+        [secondOwner],[secondError,secondPending]);
+
+    pair=try continuation.bindCarrying(fn,graph,phase,
+        innerFailed,handled,doubleFailed,oneFailed,twoError,loc);
+    let innerFailureClose be try invoke.emit(fn,graph,closeContract,pair,
+        [innerOuter],[innerError,innerPending]);
+
+    try build.returnValues(fn,done,[finished],loc);
+    try handledReturn(fn,firstFailed,loc);
+    try handledReturn(fn,closeFailed,loc);
+    try handledReturn(fn,handled,loc);
+    try handledReturn(fn,doubleFailed,loc);
+    let zero be try build.integer(fn,dead,0,loc);
+    try build.jump(fn,dead,deadTarget,[zero],loc);
+    try build.returnValues(fn,deadTarget,
+        [try build.parameter(fn,deadTarget,0)],loc);
+    try ab.complete(fn,graph); try owners.complete(profile,fn,phase);
+    try budget.finishPhase(phase);
+    let proofOwners be try owners.verify(profile,fn,graph,registry);
+    try check(proofOwners.maximumDepth == 2,"canonical nested owner depth wrong");
+
+    let checkedPhase be try budget.constructionPhase(owner);
+    let checkedPair be try continuation.bindCarrying(fn,graph,checkedPhase,
+        nested,afterInner,innerFailed,outerSig,twoFailed,innerLoc);
+    let original be [
+        cleanup.Scope {
+            scope=outerScope; contract=close.index;
+            value=nestedOuter.index; close=loc;
+        },
+        cleanup.Scope {
+            scope=innerScope; contract=close.index;
+            value=innerOwned.index; close=innerLoc;
+        }
+    ];
+    let plan be try planVerify.prepare(data,owner,checkedPhase,
+        original,1,innerLoc,false);
+    let map be try roots.create(fn,graph,checkedPhase);
+    let placement be try slots.create(map,fn,graph,checkedPhase);
+    let admitted be try ssa.verify(fn,graph,profile,registry,checkedPhase,
+        map,checkedPair,innerClose,plan,original,1,innerLoc);
+    try check(admitted.instruction == innerClose.index and
+        admitted.sourceValue == nestedPending.index and
+        admitted.survivingOwners == 1 and admitted.ownerCount == 2 and
+        admitted.normalValue == afterPending.index and
+        admitted.failureCarry == innerPending.index and
+        admitted.failureValue == innerError.index and
+        admitted.rootIndex == 2 and admitted.frameWords <= 64,
+        "canonical surviving SSA File owner projection differs");
+
+    let edge be try words.get(fn.instructions,checkedPhase,(innerClose.index-1)*10+8);
+    let normalStart be try words.get(fn.edges,checkedPhase,(edge-1)*3+1);
+    let originalCarry be try words.get(fn.arguments,checkedPhase,normalStart);
+    try check(originalCarry == nestedOuter.index,
+        "wrong verified canonical outer owner transfer");
+    fn.arguments.frozen=false;
+    try words.set(fn.arguments,checkedPhase,normalStart,innerOwned.index);
+    fn.arguments.frozen=true;
+    let refused be false;
+    native.emit(fn,graph,profile,registry,checkedPhase,map,placement,
+        checkedPair,innerClose,plan,original,1,innerLoc,72)
+        else error owners.InvalidOwnership { refused=true; }
+        else error ssa.InvalidSSA { refused=true; }
+        else error canonical.InvalidIR { refused=true; }
+        else error budget.LimitError { fail error; }
+        else error continuation.InvalidBinding { fail error; }
+        else error roots.InvalidRoots { fail error; }
+        else error planVerify.InvalidPlan { fail error; }
+        else error slots.InvalidSlots { fail error; }
+        else error nativeRoots.Unsupported { fail error; }
+        else error nativeCleanup.Unsupported { fail error; }
+        else error native.Unsupported { fail error; };
+    try check(refused,"consumed inner File restored in checked successor");
+    fn.arguments.frozen=false;
+    try words.set(fn.arguments,checkedPhase,normalStart,originalCarry);
+    fn.arguments.frozen=true;
+    let verifiedAgain be try ssa.verify(fn,graph,profile,registry,checkedPhase,
+        map,checkedPair,innerClose,plan,original,1,innerLoc);
+    try check(verifiedAgain.failureCarry == admitted.failureCarry,
+        "restored proof differs from original checked SSA binding");
+
+    try native.emit(fn,graph,profile,registry,checkedPhase,
+        map,placement,checkedPair,innerClose,plan,original,1,innerLoc,71);
+
+    try slots.close(placement); try roots.close(map); try cleanup.close(plan);
+    try budget.finishPhase(checkedPhase);
+    try owners.close(profile); try build.close(fn); try budget.close(owner);
+    try contracts.close(registry); try aggregate.close(graph);
+    try meta.close(data); try budget.close(shared);
+    try check(root.live == 0 and root.pending == 0,"prefix fixture leaked budget");
+    try budget.close(root);
+}
+run() else error budget.LimitError { output("limit:"+error.message); process.setExitCode(1); }
+else error canonical.InvalidIR { output("ir:"+error.message); process.setExitCode(1); }
+else error owners.InvalidOwnership { output("owner:"+error.message); process.setExitCode(1); }
+else error continuation.InvalidBinding { output("binding:"+error.message); process.setExitCode(1); }
+else error planVerify.InvalidPlan { output("plan:"+error.message); process.setExitCode(1); }
+else error roots.InvalidRoots { output("root:"+error.message); process.setExitCode(1); }
+else error slots.InvalidSlots { output("slots:"+error.message); process.setExitCode(1); }
+else error nativeRoots.Unsupported { output("nativeRoot:"+error.message); process.setExitCode(1); }
+else error nativeCleanup.Unsupported { output("cleanup:"+error.message); process.setExitCode(1); }
+else error ssa.InvalidSSA { output("ssa:"+error.message); process.setExitCode(1); }
+else error native.Unsupported { output("native:"+error.message); process.setExitCode(1); }
+else error ProbeError { output("probe:"+error.message); process.setExitCode(1); };
