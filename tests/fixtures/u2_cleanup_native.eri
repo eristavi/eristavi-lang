@@ -83,6 +83,18 @@ function run() fails budget.LimitError,verify.InvalidPlan,failure.InvalidContext
     let failurePlan be try verify.prepare(data,owner,phase,active,0,exit,true);
     try native.emit(data,phase,failurePlan,active,0,exit,true,32);
     try cleanup.close(failurePlan);
+    // Verify an exited inner suffix while one outer File remains owned.
+    let prefixPlan be try verify.prepare(data,owner,phase,active,1,exit,false);
+    try native.emit(data,phase,prefixPlan,active,1,exit,false,33);
+    try native.emitPendingScalar(data,phase,prefixPlan,active,1,exit,36);
+    try cleanup.close(prefixPlan);
+    let outerOnly be [active[0]];
+    let outerNormal be try verify.prepare(data,owner,phase,outerOnly,0,exit,false);
+    try native.emit(data,phase,outerNormal,outerOnly,0,exit,false,34);
+    try cleanup.close(outerNormal);
+    let outerFailed be try verify.prepare(data,owner,phase,outerOnly,0,exit,true);
+    try native.emit(data,phase,outerFailed,outerOnly,0,exit,true,35);
+    try cleanup.close(outerFailed);
     try budget.finishPhase(phase); try budget.close(owner);
     try meta.close(data); try budget.close(shared);
     try check(root.live == 0 and root.pending == 0,"request leaked");
