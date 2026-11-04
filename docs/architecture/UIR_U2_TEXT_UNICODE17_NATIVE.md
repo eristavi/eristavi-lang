@@ -15,12 +15,15 @@ points must terminate through the existing runtime fault path.
 
 The src/compiler/u2_text_native.eri adapter accepts one canonical block with
 at most 128 SSA values, 256 instructions, no entry arguments and one scalar
-return. It independently checks the full frozen UIR, exact eight imported
+return. It independently checks the full frozen UIR, exact twelve imported
 operation names, signatures, conservative effects, version and explicit Text
 carrier descriptor. The accepted closed profile is:
 - fromScalar, concat, copy and scalar-sequence equality
 - byte, scalar and Unicode 17 extended-grapheme counts
-- explicit slots and Text collector call.
+- explicit slots and Text collector call;
+- read-only zero-based byte/scalar/character indexed access, with explicit
+  negative/end-of-view terminal bounds and Text/Int result types;
+- explicit Unicode NFC normalization, never implicit for equality.
 
 The emitter calls existing Unicode17-owned runtime functions directly from
 canonical instruction data. It does not use legacy source compiler lowering.
@@ -37,15 +40,20 @@ introduced.
 ## Focused acceptance checks
 
 - e plus U+0301: 3 UTF-8 bytes, 2 scalar values, 1 grapheme.
+- Indexed byte 0/1 = 101/204; scalar 1 equals U+0301 and character 0
+  returns the entire e+U+0301 grapheme.
 - U+00E9 versus decomposed sequence: unequal, no normalization.
 - Copy of decomposed Text: equal by scalar sequence.
 - U+1F469 + U+200D + U+1F4BB: 11 bytes, 3 scalars, 1 grapheme.
+  Byte 0 is 240, scalar 0 is U+1F469 and grapheme 0 is the ZWJ sequence.
+- Explicit NFC transforms e+U+0301 into U+00E9 without modifying source.
+- Negative and end-of-view indexes emit the exact existing terminal bounds fault.
 - Explicit collection between allocation and later observation, full
   graph/Text/failure/handler/allocator teardown checks.
 - Invalid descriptor/import refuses before emission; surrogate scalar
   fails via the existing terminal Unicode fault path.
 
-Not covered: arbitrary Text literal UIR, view indexing and escape, multi-block
+Not covered: arbitrary Text literal UIR, view escape, multi-block
 CFG, recursion, Text-containing aggregates, complete root maps, checked
 failures/cleanup, full physical resource evidence or four-platform qualification.
 Keep PR #111 in draft and U2 #74 open.
