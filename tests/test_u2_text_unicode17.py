@@ -84,16 +84,21 @@ _start:
                             marks.append((chr(byte),line.strip()))
                             observed.append(f'    movb ${byte},.Ltext_trace_byte(%rip)\n')
                         observed.append(line)
-                    assembly='.data\n.Ltext_trace_byte:\n.byte 0\n'+''.join(observed)
+                        if line.strip() == 'cmpl $1,ev_types+32(%rip)':
+                            observed.append('    sete .Ltext_compare_ok(%rip)\n')
+                    assembly=('.data\n.Ltext_trace_byte:\n.byte 0\n'
+                              '.Ltext_compare_ok:\n.byte 0\n'+''.join(observed))
                     fault_patch=(
                         '.Lvalue_fault_emit:\n'
                         '    pushq %rax\n    pushq %rdi\n    pushq %rsi\n'
                         '    pushq %rdx\n    pushq %rcx\n    pushq %r11\n'
-                        '    movzbl ev_types+32(%rip),%eax\n'
-                        '    addb $48,%al\n'
-                        '    movb %al,.Ltext_trace_byte(%rip)\n'
+
                         '    movl $1,%eax\n    movl $2,%edi\n'
                         '    leaq .Ltext_trace_byte(%rip),%rsi\n'
+                        '    movl $1,%edx\n    syscall\n'
+                        '    addb $48,.Ltext_compare_ok(%rip)\n'
+                        '    movl $1,%eax\n    movl $2,%edi\n'
+                        '    leaq .Ltext_compare_ok(%rip),%rsi\n'
                         '    movl $1,%edx\n    syscall\n'
                         '    popq %r11\n    popq %rcx\n    popq %rdx\n'
                         '    popq %rsi\n    popq %rdi\n    popq %rax\n'
