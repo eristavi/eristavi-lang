@@ -161,6 +161,21 @@ function run() fails budget.LimitError,canonical.InvalidIR,
     fn.arguments.frozen=true;
     try check(try rejects(fn,graph,profile,registry,phase,map,checkedPair,
         closeCall,plan,active,loc,1),"same-type wrong-source normal carry accepted");
+    let nativeRefused be false;
+    native.emit(fn,graph,profile,registry,phase,map,placement,
+        checkedPair,closeCall,plan,active,0,loc,62)
+        else error ssa.InvalidSSA { nativeRefused=true; }
+        else error budget.LimitError { fail error; }
+        else error canonical.InvalidIR { fail error; }
+        else error owners.InvalidOwnership { fail error; }
+        else error continuation.InvalidBinding { fail error; }
+        else error roots.InvalidRoots { fail error; }
+        else error planVerify.InvalidPlan { fail error; }
+        else error slots.InvalidSlots { fail error; }
+        else error nativeCleanup.Unsupported { fail error; }
+        else error nativeRoots.Unsupported { fail error; }
+        else error native.Unsupported { fail error; };
+    try check(nativeRefused,"malformed same-type SSA carry produced native code");
     fn.arguments.frozen=false;
     try words.set(fn.arguments,phase,normalFirst,normalCarry);
     try words.set(fn.arguments,phase,failedFirst+1,original.index);
