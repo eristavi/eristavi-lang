@@ -108,6 +108,10 @@ function run() fails budget.LimitError,canonical.InvalidIR,
     let accepted be try owners.verify(profile,fn,graph,registry);
     try check(accepted.maximumDepth == 1,"invalid canonical File owner depth");
     let phase be try budget.constructionPhase(owner);
+    // Finalization and appended instructions advance Function.revision.
+    // Never reuse the stale construction-time continuation descriptor.
+    checkedPair=try continuation.bindCarrying(fn,graph,phase,
+        opened,normal,failed,normalClose,failureCarried,loc);
     let active be [cleanup.Scope {
         scope=scope; contract=consumption.index; value=owned.index; close=loc;
     }];
