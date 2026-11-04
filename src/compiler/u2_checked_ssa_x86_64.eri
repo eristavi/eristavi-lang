@@ -126,6 +126,12 @@ public function emit(routine identity build.Function,
     line("call erist_u2_publish_"+symbol);
     line("movq %r12,%rdi"); line("movq %r13,%rsi");
     line("call erist_u2_cleanup_"+name);
+    // The independently verified File.close consumes the innermost owner
+    // on BOTH checked outcomes. The private File transfer word is cleared
+    // by cleanup itself, and the canonical predecessor SSA handle must be
+    // killed separately so no later native block can reuse a stale owner.
+    let consumed cleanup.Scope be active[active.count-1];
+    line("movq $0,"+format.integer((consumed.value-1)*8)+"(%r15)");
     line("testq %rax,%rax");
     line("jne "+base+"_failure");
     line("cmpq $0,(%r13)");
