@@ -169,13 +169,14 @@ function emitNative(fn identity build.Function,p identity budget.Phase)
     let scratchOffset be returnOffset+8;
     let frame be ((scratchOffset+total*8+15)/16)*16+8;
     output(".section .rodata\nerist_u2_text_classes:");
-    if recursive {
-        // A deliberately bounded single-thread development profile. The
-        // counter protects native stack growth even for malformed recursion.
-        output(".bss\n.p2align 3\nerist_u2_text_depth:\n.quad 0");
-    }
     let i be 0;
     while i <= total { output(".byte 1"); i=i+1; }
+    if recursive {
+        // Keep initialized root class bytes in rodata: .bss permits only zero
+        // allocation and cannot contain the actual class byte value 1.
+        // This bounded single-thread counter prevents native stack overflow.
+        output(".bss\n.p2align 3\nerist_u2_text_depth:\n.quad 0");
+    }
     output(".text\n.globl erist_u2_text_entry\nerist_u2_text_entry:");
     // The owned graph descriptor kinds 1, 3 and 4 match scalar tags.
     // Unicode view rows 15..17 must have kind 12.
