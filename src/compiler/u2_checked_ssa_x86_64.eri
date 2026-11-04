@@ -35,6 +35,12 @@ function line(value Text) { output("    "+value); }
 // arbitrary caller-provided pending scalar. The caller is responsible for
 // establishing the predecessor block parameter before entering this stub.
 //
+// Surviving lexical File owners move (not copy) from source SSA parameters
+// to the selected normal/failure successor parameters after cleanup, with
+// every old source SSA owner slot cleared on the selected checked edge.
+// Caller-owned File resource words remain rooted until the surviving scope
+// exits, while consumed inner File slots are cleared by native cleanup.
+//
 // Return RAX=0 => normal destination parameter gets predecessor i64,
 // failure slots are cleared and class-5 root is released.
 // Return RAX=-1 => normal destination cleared, failure block parameter 0
@@ -107,6 +113,14 @@ public function emit(routine identity build.Function,
     line("movq $0,"+normalOffset+"(%r15)");
     line("movq $0,"+failedOffset+"(%r15)");
     line("movq $0,"+failedCarryOffset+"(%r15)");
+    let i be 0;
+    while i < checked.survivingOwners {
+        // Initialize both mutually exclusive successor block parameter
+        // destinations before any potentially allocating resource close.
+        line("movq $0,"+format.integer((checked.normalValue-checked.survivingOwners+i-1)*8)+"(%r15)");
+        line("movq $0,"+format.integer((checked.failureValue+i)*8)+"(%r15)");
+        i=i+1;
+    }
     // Publish the live saved context BEFORE any allocating File close call.
     line("movq %r14,%rdi"); line("movq %r13,%rsi");
     line("call erist_u2_publish_"+symbol);
@@ -117,6 +131,17 @@ public function emit(routine identity build.Function,
     line("cmpq $0,(%r13)");
     line("jne erist_rt_value_fault_internal");
     line("movq %rbx,"+normalOffset+"(%r15)");
+    i=0;
+    while i < checked.survivingOwners {
+        let prior cleanup.Scope be active[i];
+        let source be format.integer((prior.value-1)*8);
+        let target be format.integer((checked.normalValue-checked.survivingOwners+i-1)*8);
+        line("movq "+source+"(%r15),%rax");
+        line("testq %rax,%rax"); line("je erist_rt_value_fault_internal");
+        line("movq %rax,"+target+"(%r15)");
+        line("movq $0,"+source+"(%r15)");
+        i=i+1;
+    }
     line("movq %r14,%rdi");
     line("call erist_u2_release_"+symbol);
     line("xorl %eax,%eax");
@@ -126,6 +151,17 @@ public function emit(routine identity build.Function,
     line("je erist_rt_value_fault_internal");
     line("movq %r13,"+failedOffset+"(%r15)");
     line("movq %rbx,"+failedCarryOffset+"(%r15)");
+    i=0;
+    while i < checked.survivingOwners {
+        let prior cleanup.Scope be active[i];
+        let source be format.integer((prior.value-1)*8);
+        let target be format.integer((checked.failureValue+i)*8);
+        line("movq "+source+"(%r15),%rax");
+        line("testq %rax,%rax"); line("je erist_rt_value_fault_internal");
+        line("movq %rax,"+target+"(%r15)");
+        line("movq $0,"+source+"(%r15)");
+        i=i+1;
+    }
     line("movq $-1,%rax");
     output(base+"_leave:");
     line("popq %r15"); line("popq %r14"); line("popq %r13");
