@@ -79,6 +79,7 @@ SMOKE_TESTS=(
     'test_u2_checked_rooted.U2CheckedRootedTests',
     'test_u2_checked_ssa.U2CheckedSSATests',
     'test_u2_checked_ssa_prefix.U2CheckedSSAPrefixTests',
+    'test_u2_recursive_native_cleanup.U2RecursiveNativeCleanupTests',
     'test_owned_runtime_allocation_failures.OwnedRuntimeAllocationFailureTests.test_text_publication_and_shared_capacity_failure_boundaries',
 
     'test_u1_verifier.U1VerifierTests.test_malformed_ir_and_budget_protocol',
