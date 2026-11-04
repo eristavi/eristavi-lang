@@ -82,21 +82,21 @@ _start:
                             line.startswith('    jne ')) and len(marks)<90:
                             byte=33+len(marks)
                             marks.append((chr(byte),line.strip()))
-                            observed.append(f'    movb ${byte},.Ltext_trace_byte(%rip)\\n')
+                            observed.append(f'    movb ${byte},.Ltext_trace_byte(%rip)\n')
                         observed.append(line)
-                    assembly='.data\\n.Ltext_trace_byte:\\n.byte 0\\n'+''.join(observed)
+                    assembly='.data\n.Ltext_trace_byte:\n.byte 0\n'+''.join(observed)
                     fault_patch=(
-                        '.Lvalue_fault_emit:\\n'
-                        '    pushq %rax\\n    pushq %rdi\\n    pushq %rsi\\n'
-                        '    pushq %rdx\\n    pushq %rcx\\n    pushq %r11\\n'
-                        '    movl $1,%eax\\n    movl $2,%edi\\n'
-                        '    leaq .Ltext_trace_byte(%rip),%rsi\\n'
-                        '    movl $1,%edx\\n    syscall\\n'
-                        '    popq %r11\\n    popq %rcx\\n    popq %rdx\\n'
-                        '    popq %rsi\\n    popq %rdi\\n    popq %rax\\n'
-                    ).replace('\\n','\\n')
-                    self.assertIn('.Lvalue_fault_emit:\\n',self.runtime)
-                    runtime=self.runtime.replace('.Lvalue_fault_emit:\\n',fault_patch,1)
+                        '.Lvalue_fault_emit:\n'
+                        '    pushq %rax\n    pushq %rdi\n    pushq %rsi\n'
+                        '    pushq %rdx\n    pushq %rcx\n    pushq %r11\n'
+                        '    movl $1,%eax\n    movl $2,%edi\n'
+                        '    leaq .Ltext_trace_byte(%rip),%rsi\n'
+                        '    movl $1,%edx\n    syscall\n'
+                        '    popq %r11\n    popq %rcx\n    popq %rdx\n'
+                        '    popq %rsi\n    popq %rdi\n    popq %rax\n'
+                    )
+                    self.assertIn('.Lvalue_fault_emit:\n',self.runtime)
+                    runtime=self.runtime.replace('.Lvalue_fault_emit:\n',fault_patch,1)
                     trace=repr(marks)
                 try:
                     result=self.run_probe('text-'+expression,
