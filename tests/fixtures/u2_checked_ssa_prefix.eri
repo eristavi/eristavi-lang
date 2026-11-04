@@ -22,6 +22,7 @@ import compiler.u2_native_slots_x86_64 as slots;
 import compiler.u2_native_root_x86_64 as nativeRoots;
 import compiler.u2_cleanup_native_x86_64 as nativeCleanup;
 import compiler.u2_checked_ssa_bind as ssa;
+import compiler.u2_checked_chain_verify as chain;
 import compiler.u2_checked_ssa_x86_64 as native;
 
 error ProbeError { message Text; }
@@ -36,7 +37,7 @@ function handledReturn(fn identity build.Function,from build.BlockId,
 function run() fails budget.LimitError,canonical.InvalidIR,
     owners.InvalidOwnership,continuation.InvalidBinding,planVerify.InvalidPlan,
     roots.InvalidRoots,slots.InvalidSlots,nativeRoots.Unsupported,
-    nativeCleanup.Unsupported,ssa.InvalidSSA,native.Unsupported,ProbeError {
+    nativeCleanup.Unsupported,ssa.InvalidSSA,chain.InvalidChain,native.Unsupported,ProbeError {
     let root be try budget.developmentRequest();
     let shared be try budget.metadataOwner(root);
     let mp be try budget.constructionPhase(shared);
@@ -231,6 +232,79 @@ function run() fails budget.LimitError,canonical.InvalidIR,
     try check(verifiedAgain.failureCarry == admitted.failureCarry,
         "restored proof differs from original checked SSA binding");
 
+    // Independently verify BOTH checked continuations of the next outer File
+    // close, including the already-propagating inner failure path. The latter
+    // carries the OLD primary context in both outcomes and gives the NEW
+    // close failure its own first result only on that failure edge.
+    let normalPair be try continuation.bindCarrying(fn,graph,checkedPhase,
+        afterInner,done,closeFailed,completedSig,oneFailed,loc);
+    let failedPair be try continuation.bindCarrying(fn,graph,checkedPhase,
+        innerFailed,handled,doubleFailed,oneFailed,twoError,loc);
+    let outerNormalOwners be [cleanup.Scope {
+        scope=outerScope; contract=close.index;
+        value=afterOwner.index; close=loc;
+    }];
+    let outerFailedOwners be [cleanup.Scope {
+        scope=outerScope; contract=close.index;
+        value=innerOuter.index; close=loc;
+    }];
+    let outerNormalPlan be try planVerify.prepare(data,owner,checkedPhase,
+        outerNormalOwners,0,loc,false);
+    let outerFailedPlan be try planVerify.prepare(data,owner,checkedPhase,
+        outerFailedOwners,0,loc,true);
+    let route be try chain.verify(fn,graph,profile,registry,checkedPhase,map,
+        checkedPair,innerClose,plan,original,innerLoc,
+        normalPair,exitClose,outerNormalPlan,outerNormalOwners,loc,
+        failedPair,innerFailureClose,outerFailedPlan,outerFailedOwners);
+    try check(route.firstClose == innerClose.index and
+        route.normalClose == exitClose.index and
+        route.failingClose == innerFailureClose.index and
+        route.incomingPrimary == innerError.index and
+        route.survivingOwner == innerOuter.index and
+        route.normalPending == afterPending.index and
+        route.failedPending == innerPending.index and
+        route.newFailure == (try build.parameter(fn,doubleFailed,0)).index and
+        route.originalPrimary == (try build.parameter(fn,doubleFailed,1)).index and
+        route.rootIndex >= 0,
+        "verified two-stage canonical checked route lost old primary or owner");
+
+    // A structurally valid but WRONG carried primary is unacceptable, even
+    // if it would be tempting to rely on native saved FailureContext state.
+    let failedEdges be try words.get(fn.instructions,checkedPhase,
+        (innerFailureClose.index-1)*10+8);
+    let failedArgumentRow be try words.get(fn.edges,checkedPhase,
+        failedEdges*3+1);
+    let savedPrimary be try words.get(fn.arguments,checkedPhase,
+        failedArgumentRow+1);
+    try check(savedPrimary == innerError.index,"incorrect initial failure carry");
+    fn.arguments.frozen=false;
+    try words.set(fn.arguments,checkedPhase,failedArgumentRow+1,innerPending.index);
+    fn.arguments.frozen=true;
+    let denied be false;
+    chain.verify(fn,graph,profile,registry,checkedPhase,map,
+        checkedPair,innerClose,plan,original,innerLoc,
+        normalPair,exitClose,outerNormalPlan,outerNormalOwners,loc,
+        failedPair,innerFailureClose,outerFailedPlan,outerFailedOwners)
+        else error chain.InvalidChain { denied=true; }
+        else error canonical.InvalidIR { denied=true; }
+        else error owners.InvalidOwnership { denied=true; }
+        else error ssa.InvalidSSA { denied=true; }
+        else error budget.LimitError { fail error; }
+        else error roots.InvalidRoots { fail error; }
+        else error continuation.InvalidBinding { fail error; }
+        else error planVerify.InvalidPlan { fail error; };
+    try check(denied,"already-failing outer close erased original primary");
+    fn.arguments.frozen=false;
+    try words.set(fn.arguments,checkedPhase,failedArgumentRow+1,savedPrimary);
+    fn.arguments.frozen=true;
+    let repaired be try chain.verify(fn,graph,profile,registry,checkedPhase,map,
+        checkedPair,innerClose,plan,original,innerLoc,
+        normalPair,exitClose,outerNormalPlan,outerNormalOwners,loc,
+        failedPair,innerFailureClose,outerFailedPlan,outerFailedOwners);
+    try check(repaired.originalPrimary == route.originalPrimary,
+        "restored canonical failure-chain proof changed");
+    try cleanup.close(outerNormalPlan); try cleanup.close(outerFailedPlan);
+
     try native.emit(fn,graph,profile,registry,checkedPhase,
         map,placement,checkedPair,innerClose,plan,original,1,innerLoc,71);
 
@@ -252,5 +326,6 @@ else error slots.InvalidSlots { output("slots:"+error.message); process.setExitC
 else error nativeRoots.Unsupported { output("nativeRoot:"+error.message); process.setExitCode(1); }
 else error nativeCleanup.Unsupported { output("cleanup:"+error.message); process.setExitCode(1); }
 else error ssa.InvalidSSA { output("ssa:"+error.message); process.setExitCode(1); }
+else error chain.InvalidChain { output("chain:"+error.message); process.setExitCode(1); }
 else error native.Unsupported { output("native:"+error.message); process.setExitCode(1); }
 else error ProbeError { output("probe:"+error.message); process.setExitCode(1); };
