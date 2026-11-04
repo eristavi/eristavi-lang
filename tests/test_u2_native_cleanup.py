@@ -77,7 +77,7 @@ class U2NativeCleanupTests(unittest.TestCase):
             'testq %rax,%rax',
             'jne .Lresource_test_fail',
             'call erist_rt_live_failures',
-            'cmpq 
+            'cmpq $'+str(1+(3 if (close_failure and failed) else (2 if close_failure else 0)))+',%rax',
             'jne .Lresource_test_fail',
         ])
         if failed and close_failure:
