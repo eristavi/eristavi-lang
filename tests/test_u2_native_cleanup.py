@@ -20,7 +20,15 @@ class U2NativeCleanupTests(unittest.TestCase):
         src=ROOT/'tests/fixtures/u2_cleanup_native.eri'
         folder=self.directory/'u2-native-cleanup-generator'
         folder.mkdir(exist_ok=True)
-        (folder/'compiler').symlink_to(ROOT/'src/compiler',target_is_directory=True)
+        # Multiple tests share the class temporary directory. This generated
+        # compiler import link is stable across repeated emitter invocations.
+        compiler_link=folder/'compiler'
+        target=(ROOT/'src/compiler').resolve()
+        if compiler_link.is_symlink():
+            self.assertEqual(compiler_link.resolve(),target)
+        else:
+            self.assertFalse(compiler_link.exists())
+            compiler_link.symlink_to(target,target_is_directory=True)
         copy=folder/'app.eri'
         copy.write_text(src.read_text(encoding='utf-8'),encoding='utf-8')
         binary=folder/'generator'
