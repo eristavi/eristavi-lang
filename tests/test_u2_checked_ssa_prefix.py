@@ -162,9 +162,9 @@ class U2CheckedSSAPrefixTests(unittest.TestCase):
             "    call erist_rt_open_resources",
             "    testq %rax,%rax","    jne .Lresource_test_fail",
             "    call erist_rt_live_failures",
-            // Caller-owned class-5 root deliberately pins even an empty
-            // saved FailureContext until scope release. With two injected
-            // close failures, the first fills it and the second is appended.
+            # Caller-owned class-5 root pins even an empty saved
+            # FailureContext until scope release. The two injected
+            # close failures fill it and append a secondary record.
             "    cmpq $%d,%%rax"%(2 if fails else 1),
             "    jne .Lresource_test_fail",
             "    movq $0,%d(%%rsp)"%root_at,
