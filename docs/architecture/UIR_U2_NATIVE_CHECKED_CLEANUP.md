@@ -67,3 +67,27 @@ dependency is changed. Keep PR #111 draft and #74 open.
   formal U2 acceptance. Next connect canonical checked invoke CFG and
   typed FailureContext root publication to this adapter rather than
   broadening a separate executable plan interpreter.
+
+## 4 November 2026 — opt-in canonical single-owner ingress
+
+`src/compiler/u2_cleanup_canonical_x86_64.eri` is a separate admission
+boundary for an existing canonical opcode-46 checked `File.close`. It rechecks
+the published canonical function and independent scoped-owner profile, the
+current continuation pair, complete checked-invoke root map, selected source
+instruction, both destinations, class-5 failure slot, and the original private
+cleanup plan before forwarding to the established native adapter.
+
+The admission profile is deliberately closed: exactly one File owner, no
+surviving outer prefix, one consumed close operand, zero normal results, one
+failure edge payload, a current source LocId and a freshly verified root map.
+A mismatched location/owner/edge/root must fail closed before emitting any
+assembly; the native adapter re-verifies the private cleanup plan itself.
+
+This is an **integration gate**, not full machine lowering: it does not yet
+transport arbitrary checked-call return SSA values, publish the selected
+canonical machine-slot root itself, handle arbitrary multi-owner paths,
+recursive checked unwind or mixed resource types. Its private class-5 native
+root behavior remains the already-tested adapter's behavior. Keep U2 draft,
+production and public ABI unchanged. Do not cite the earlier native File tests
+as qualification of this new bridge; exact-head focused results must be
+recorded separately once available.
