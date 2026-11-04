@@ -203,12 +203,16 @@ this prevents use-after-consumption through an abandoned SSA slot.
   [focused run #41882834794](https://github.com/eristavi/eristavi-lang/actions/runs/41882834794)
   **SUCCESS: 6/6 tests**, proving native consumed-slot poisoning under the
   original and nested runtime cases.
-- Latest nested-owner consumed-slot assertion code revision
-  `200c7037d8db56e05fecadb4251e4d4a12dcff86` is **not yet
-  independently qualified at this checkpoint**. The earlier focused green
-  covers the exact emitter implementation plus the prior two-owner test,
-  not the newest strengthened two-owner test. Check exact-head CI before
-  calling the updated assertion verified or running the final matrix.
+- Latest consumed-source-SSA hardening *and* nested-owner assertion code
+  revision `200c7037d8db56e05fecadb4251e4d4a12dcff86` is now
+  [focused-verified in #41883433364](https://github.com/eristavi/eristavi-lang/actions/runs/41883433364):
+  **SUCCESS, 6/6 native methods, no failures**. The regression explicitly
+  publishes both canonical File source parameters, checks the inner consumed
+  SSA slot becomes zero on normal/failure, confirms the surviving outer File
+  moves correctly, forces collector passes and closes the outer resource
+  exactly once. This focused evidence is NOT a completed-batch full matrix;
+  the last completed broad Linux smoke remains #41881370999 on the
+  *pre-poisoning* `2099c624` revision.
 - Initial two-owner [candidate #41879954423](https://github.com/eristavi/eristavi-lang/actions/runs/41879954423)
   failed three *clean test assertions* because the caller deliberately
   class-5 pinned an empty saved FailureContext which the test had expected
