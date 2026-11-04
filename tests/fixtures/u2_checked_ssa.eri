@@ -1,0 +1,138 @@
+// Canonical opcode-46 File.close with a real predecessor SSA i64 parameter.
+// Success: i64 block parameter. Failure: (structural failure, i64 carried)
+// block parameters. The physical FileError remains separately GC-rooted.
+import std.process;
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+import compiler.u1_meta as meta;
+import compiler.u1_builder as build;
+import compiler.u1_aggregate as aggregate;
+import compiler.u1_aggregate_signature as sig;
+import compiler.u1_aggregate_build as ab;
+import compiler.u1_verify as canonical;
+import compiler.u2_invoke_contract as contracts;
+import compiler.u2_invoke_transfer as invoke;
+import compiler.u2_continuation_bind as continuation;
+import compiler.u2_scoped_owners as owners;
+import compiler.u2_cleanup_plan as cleanup;
+import compiler.u2_cleanup_verify as planVerify;
+import compiler.u2_root_map as roots;
+import compiler.u2_native_slots_x86_64 as slots;
+import compiler.u2_native_root_x86_64 as nativeRoots;
+import compiler.u2_cleanup_native_x86_64 as nativeCleanup;
+import compiler.u2_checked_ssa_bind as ssa;
+import compiler.u2_checked_ssa_x86_64 as native;
+
+error ProbeError { message Text; }
+function check(ok Bool,message Text) fails ProbeError {
+    if not ok { fail ProbeError { message=message; }; }
+}
+function run() fails budget.LimitError,canonical.InvalidIR,
+    owners.InvalidOwnership,continuation.InvalidBinding,
+    planVerify.InvalidPlan,roots.InvalidRoots,slots.InvalidSlots,
+    nativeRoots.Unsupported,nativeCleanup.Unsupported,
+    ssa.InvalidSSA,native.Unsupported,ProbeError {
+    let root be try budget.developmentRequest();
+    let shared be try budget.metadataOwner(root);
+    let mp be try budget.constructionPhase(shared);
+    let data be try meta.create(shared,mp);
+    let graph be try aggregate.create(shared,mp);
+    let i64 be try aggregate.primitive(graph,meta.i64());
+    let handle be try aggregate.aggregate(graph,mp,[]);
+    let failure be try aggregate.aggregate(graph,mp,[i64]);
+    let acquireSig be try sig.signature(data,graph,mp,[],[handle]);
+    let closeSig be try sig.signature(data,graph,mp,[handle],[]);
+    let failureSig be try sig.signature(data,graph,mp,[],[failure]);
+    let normalOpen be try sig.signature(data,graph,mp,[],[handle,i64]);
+    let normalClose be try sig.signature(data,graph,mp,[],[i64]);
+    let failureCarried be try sig.signature(data,graph,mp,[],[failure,i64]);
+    let caller be try meta.signature(data,mp,[],[meta.i64()]);
+    let acquisition be try meta.declaration(data,mp,acquireSig,"u2.ssa.open",2,8,1);
+    let consumption be try meta.declaration(data,mp,closeSig,"u2.ssa.close",2,4,1);
+    let src be try meta.source(data,mp,"ssa.eri",
+        "0000000000000000000000000000000000000000000000000000000000000000",64);
+    let loc be try meta.location(data,mp,src,0,8,0,1,1);
+    try aggregate.freeze(graph); try meta.freeze(data);
+    let registry be try contracts.create(data,graph,mp);
+    let acquire be contracts.Contract { version=1; target=acquisition; failure=failureSig; };
+    let consume be contracts.Contract { version=1; target=consumption; failure=failureSig; };
+    try contracts.register(registry,data,graph,mp,acquire);
+    try contracts.register(registry,data,graph,mp,consume);
+    try contracts.freeze(registry); try budget.finishPhase(mp);
+
+    let owner be try budget.functionOwner(root,true);
+    let construction be try budget.constructionPhase(owner);
+    let fn be try build.create(data,caller,owner,construction);
+    let entry be try build.block(fn,[]);
+    let opened be try ab.block(fn,graph,[handle,i64]);
+    let acquireFailed be try ab.block(fn,graph,[failure,i64]);
+    let normal be try ab.block(fn,graph,[i64]);
+    let failed be try ab.block(fn,graph,[failure,i64]);
+    let owned be try build.parameter(fn,opened,0);
+    let carried be try build.parameter(fn,opened,1);
+    let returned be try build.parameter(fn,normal,0);
+    let failedValue be try build.parameter(fn,failed,0);
+    let failedCarry be try build.parameter(fn,failed,1);
+    let profile be try owners.create(fn,graph,construction,handle,acquisition,consumption);
+    let scope be try owners.scope(profile,fn,construction,0,loc);
+    try owners.block(profile,fn,construction,entry,[]);
+    try owners.block(profile,fn,construction,opened,
+        [owners.Entry { scope=scope; value=owned; }]);
+    try owners.block(profile,fn,construction,acquireFailed,[]);
+    try owners.block(profile,fn,construction,normal,[]);
+    try owners.block(profile,fn,construction,failed,[]);
+    let original be try build.integer(fn,entry,74565,loc);
+    let acquirePair be try continuation.bindCarrying(fn,graph,construction,
+        entry,opened,acquireFailed,normalOpen,failureCarried,loc);
+    let firstCall be try invoke.emit(fn,graph,acquire,acquirePair,[],[original]);
+    let checkedPair be try continuation.bindCarrying(fn,graph,construction,
+        opened,normal,failed,normalClose,failureCarried,loc);
+    let closeCall be try invoke.emit(fn,graph,consume,checkedPair,[owned],[carried]);
+    try build.returnValues(fn,normal,[returned],loc);
+    let recovered be try build.integer(fn,acquireFailed,0,loc);
+    try build.returnValues(fn,acquireFailed,[recovered],loc);
+    let recoveredClose be try build.integer(fn,failed,0,loc);
+    try build.returnValues(fn,failed,[recoveredClose],loc);
+    try ab.complete(fn,graph); try owners.complete(profile,fn,construction);
+    try budget.finishPhase(construction);
+
+    let accepted be try owners.verify(profile,fn,graph,registry);
+    try check(accepted.maximumDepth == 1,"invalid canonical File owner depth");
+    let phase be try budget.constructionPhase(owner);
+    let active be [cleanup.Scope {
+        scope=scope; contract=consumption.index; value=owned.index; close=loc;
+    }];
+    let plan be try planVerify.prepare(data,owner,phase,active,0,loc,false);
+    let map be try roots.create(fn,graph,phase);
+    let placement be try slots.create(map,fn,graph,phase);
+    let proof be try ssa.verify(fn,graph,profile,registry,phase,map,
+        checkedPair,closeCall,plan,active,0,loc);
+    try check(proof.instruction == closeCall.index and
+        proof.sourceValue == carried.index and
+        proof.normalValue == returned.index and
+        proof.failureValue == failedValue.index and
+        proof.failureCarry == failedCarry.index and
+        proof.rootIndex == 1 and proof.frameWords <= 32,
+        "wrong canonical checked SSA source or successor projection");
+    try native.emit(fn,graph,profile,registry,phase,map,placement,
+        checkedPair,closeCall,plan,active,0,loc,61);
+    try slots.close(placement); try roots.close(map); try cleanup.close(plan);
+    try budget.finishPhase(phase);
+    try owners.close(profile); try build.close(fn); try budget.close(owner);
+    try contracts.close(registry); try aggregate.close(graph);
+    try meta.close(data); try budget.close(shared);
+    try check(root.live == 0 and root.pending == 0,"checked SSA fixture leaked budget");
+    try budget.close(root);
+}
+run() else error budget.LimitError { output("limit:"+error.message); process.setExitCode(1); }
+else error canonical.InvalidIR { output("ir:"+error.message); process.setExitCode(1); }
+else error owners.InvalidOwnership { output("owner:"+error.message); process.setExitCode(1); }
+else error continuation.InvalidBinding { output("binding:"+error.message); process.setExitCode(1); }
+else error planVerify.InvalidPlan { output("plan:"+error.message); process.setExitCode(1); }
+else error roots.InvalidRoots { output("root:"+error.message); process.setExitCode(1); }
+else error slots.InvalidSlots { output("slots:"+error.message); process.setExitCode(1); }
+else error nativeRoots.Unsupported { output("nativeRoot:"+error.message); process.setExitCode(1); }
+else error nativeCleanup.Unsupported { output("cleanup:"+error.message); process.setExitCode(1); }
+else error ssa.InvalidSSA { output("ssa:"+error.message); process.setExitCode(1); }
+else error native.Unsupported { output("native:"+error.message); process.setExitCode(1); }
+else error ProbeError { output("probe:"+error.message); process.setExitCode(1); };
