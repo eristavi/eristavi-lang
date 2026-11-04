@@ -21,8 +21,10 @@ function read(w identity words.Words,p identity budget.Phase,index Int)
 function line(s Text) { output("    "+s); }
 function jump(label Text,target Int) {
     if target == 0 { line("jmp "+label+"_success"); }
-    else if target == 0-1 { line("jmp "+label+"_failure"); }
-    else { line("jmp "+label+"_row_"+format.integer(target)); }
+    else {
+        if target == 0-1 { line("jmp "+label+"_failure"); }
+        else { line("jmp "+label+"_row_"+format.integer(target)); }
+    }
 }
 
 // RDI: writable caller resource root words in acquisition order.
