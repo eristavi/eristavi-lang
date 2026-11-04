@@ -200,7 +200,7 @@ class U2NativeCleanupTests(unittest.TestCase):
             'normal=checkedPair.normal; failure=checkedPair.failure; normalPayload=checkedPair.normalPayload; '
             'failurePayload=checkedPair.failurePayload; location=innerLoc; };\n'
             '    try native.emitCanonical(fn,graph,profile,table,mutate,nativeMap,badPair,outerClose,nativePlan,selected,0,loc,false,42)\n'
-            '        else error native.Unsupported { output("u2-canonical-native-rejected:ok"); };\n'
+            '        else error native.Unsupported { output("u2-canonical-native-rejected:ok"); }\n'\n            '        else error budget.LimitError { fail error; }\n'\n            '        else error cleanupVerify.InvalidPlan { fail error; };\n'
             '    try rootMap.close(nativeMap); try cleanup.close(nativePlan);'
         )
         source=source.replace(anchor,inserted,1)
