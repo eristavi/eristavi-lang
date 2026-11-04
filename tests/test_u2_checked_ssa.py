@@ -42,6 +42,8 @@ class U2CheckedSSATests(unittest.TestCase):
         for symbol in ("erist_u2_ssa_61:", "erist_u2_cleanup_61:",
                        "erist_u2_bind_61:"):
             self.assertIn(symbol, emitted)
+        self.assertNotIn("erist_u2_ssa_62:", emitted)
+        self.assertNotIn("erist_u2_cleanup_62:", emitted)
         return emitted
 
     def offsets(self, emission):
