@@ -7,10 +7,12 @@ on:
       - src/compiler/u2_cleanup_canonical_x86_64.eri
       - src/compiler/u2_checked_rooted_x86_64.eri
       - src/compiler/u2_checked_ssa_bind.eri
+      - src/compiler/u2_checked_chain_verify.eri
       - src/compiler/u2_checked_ssa_x86_64.eri
       - tests/fixtures/u2_checked_ssa.eri
       - tests/test_u2_checked_ssa.py
       - tests/test_u2_checked_ssa_prefix.py
+      - tests/test_u2_recursive_native_cleanup.py
       - tests/fixtures/u2_checked_ssa_prefix.eri
       - tests/test_u2_checked_rooted.py
       - tests/test_u2_native_cleanup.py
@@ -32,4 +34,4 @@ jobs:
       - name: Install compiler bootstrap
         run: python -m pip install -e .
       - name: Validate native checked cleanup
-        run: PYTHONPATH=tests python -u -m unittest -v test_u2_native_cleanup test_u2_checked_rooted test_u2_checked_ssa test_u2_checked_ssa_prefix
+        run: PYTHONPATH=tests python -u -m unittest -v test_u2_native_cleanup test_u2_checked_rooted test_u2_checked_ssa test_u2_checked_ssa_prefix test_u2_recursive_native_cleanup
