@@ -104,8 +104,10 @@ public function emit(data identity meta.Metadata,phase identity budget.Phase,
         // The explicit jump below is generated from independently checked
         // route facts, not from unchecked caller failure flags.
         if success == 0 { line("jmp "+base+"_success"); }
-        else if success == 0-1 { line("jmp "+base+"_failure"); }
-        else { line("jmp "+base+"_row_"+format.integer(success)); }
+        else {
+            if success == 0-1 { line("jmp "+base+"_failure"); }
+            else { line("jmp "+base+"_row_"+format.integer(success)); }
+        }
         i=i+1;
     }
     output(base+"_success:");
