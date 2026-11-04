@@ -248,10 +248,12 @@ function run() fails budget.LimitError,canonical.InvalidIR,
         scope=outerScope; contract=close.index;
         value=innerOuter.index; close=loc;
     }];
+    output(".Lu2_chain_probe_0:");
     let outerNormalPlan be try planVerify.prepare(data,owner,checkedPhase,
         outerNormalOwners,0,loc,false);
     let outerFailedPlan be try planVerify.prepare(data,owner,checkedPhase,
         outerFailedOwners,0,loc,true);
+    output(".Lu2_chain_probe_1:");
     let route be try chain.verify(fn,graph,profile,registry,checkedPhase,map,
         checkedPair,innerClose,plan,original,innerLoc,
         normalPair,exitClose,outerNormalPlan,outerNormalOwners,loc,
@@ -268,6 +270,7 @@ function run() fails budget.LimitError,canonical.InvalidIR,
         route.rootIndex >= 0,
         "verified two-stage canonical checked route lost old primary or owner");
 
+    output(".Lu2_chain_probe_2:");
     // A structurally valid but WRONG carried primary is unacceptable, even
     // if it would be tempting to rely on native saved FailureContext state.
     let failedEdges be try words.get(fn.instructions,checkedPhase,
@@ -293,26 +296,32 @@ function run() fails budget.LimitError,canonical.InvalidIR,
         else error roots.InvalidRoots { fail error; }
         else error continuation.InvalidBinding { fail error; }
         else error planVerify.InvalidPlan { fail error; };
+    output(".Lu2_chain_probe_3:");
     try check(denied,"already-failing outer close erased original primary");
     fn.arguments.frozen=false;
     try words.set(fn.arguments,checkedPhase,failedArgumentRow+1,savedPrimary);
     fn.arguments.frozen=true;
+    output(".Lu2_chain_probe_4:");
     let repaired be try chain.verify(fn,graph,profile,registry,checkedPhase,map,
         checkedPair,innerClose,plan,original,innerLoc,
         normalPair,exitClose,outerNormalPlan,outerNormalOwners,loc,
         failedPair,innerFailureClose,outerFailedPlan,outerFailedOwners);
     try check(repaired.originalPrimary == route.originalPrimary,
         "restored canonical failure-chain proof changed");
+    output(".Lu2_chain_probe_5:");
     try cleanup.close(outerNormalPlan); try cleanup.close(outerFailedPlan);
 
+    output(".Lu2_chain_probe_6:");
     try native.emit(fn,graph,profile,registry,checkedPhase,
         map,placement,checkedPair,innerClose,plan,original,1,innerLoc,71);
 
+    output(".Lu2_chain_probe_7:");
     try slots.close(placement); try roots.close(map); try cleanup.close(plan);
     try budget.finishPhase(checkedPhase);
     try owners.close(profile); try build.close(fn); try budget.close(owner);
     try contracts.close(registry); try aggregate.close(graph);
     try meta.close(data); try budget.close(shared);
+    output(".Lu2_chain_probe_8:");
     try check(root.live == 0 and root.pending == 0,"prefix fixture leaked budget");
     try budget.close(root);
 }
