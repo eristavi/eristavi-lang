@@ -40,7 +40,8 @@ class U2CheckedSSAPrefixTests(unittest.TestCase):
 
     def offsets(self,emission):
         for name in ("erist_u2_ssa_71:","erist_u2_cleanup_71:",
-                     "erist_u2_bind_71:"):
+                     "erist_u2_bind_71:","erist_u2_cleanup_73:",
+                     "erist_u2_cleanup_74:"):
             self.assertIn(name,emission)
         self.assertNotIn("erist_u2_cleanup_72:",emission)
         self.assertNotIn("erist_u2_ssa_72:",emission)
@@ -162,9 +163,35 @@ class U2CheckedSSAPrefixTests(unittest.TestCase):
         code += [
             "    xorl %edi,%edi","    call erist_rt_slots_collect",
             "    call erist_rt_text_collect",
-            "    movq 0(%rsp),%rdi","    movq 16(%rsp),%rsi",
-            "    call evn_cleanup_accumulate",
-            "    movq $0,0(%rsp)",
+            "    movq 16(%rsp),%r14",
+            "    movq (%r14),%r15",
+            # These helpers were emitted from the two ORIGINAL verified
+            # canonical File.close plans after full checked-path admission.
+            # The second checked close must never synthesize a success if
+            # the incoming inner File.close has already failed.
+            "    movq %rsp,%rdi","    movq 16(%rsp),%rsi",
+            "    call erist_u2_cleanup_"+("74" if fails else "73"),
+            "    cmpq $%d,%%rax"%(-1 if fails else 0),
+            "    jne .Lresource_test_fail",
+            "    cmpq %r15,(%r14)",
+            "    jne .Lresource_test_fail",
+            "    cmpq $0,0(%rsp)",
+            "    jne .Lresource_test_fail",
+        ]
+        if fails:
+            code += [
+                "    movq 80(%r14),%r12",
+                "    testq %r12,%r12",
+                "    je .Lresource_test_fail",
+                "    cmpq $0,88(%r12)",
+                "    jne .Lresource_test_fail",
+            ]
+        else:
+            code += [
+                "    cmpq $0,80(%r14)",
+                "    jne .Lresource_test_fail",
+            ]
+        code += [
             "    call erist_rt_open_resources",
             "    testq %rax,%rax","    jne .Lresource_test_fail",
             "    call erist_rt_live_failures",
