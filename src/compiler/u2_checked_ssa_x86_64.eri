@@ -1,0 +1,136 @@
+// Bounded native realization of canonical opcode-46 + version-two SSA edges.
+// The portable independent proof is in u2_checked_ssa_bind. This private
+// Linux SysV x86-64 adapter must not be confused with whole CFG lowering,
+// a new IR, or a public ABI migration.
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+import compiler.u1_meta as meta;
+import compiler.u1_builder as build;
+import compiler.u1_aggregate as aggregate;
+import compiler.u1_verify as canonical;
+import compiler.u2_scoped_owners as owners;
+import compiler.u2_invoke_contract as fallible;
+import compiler.u2_root_map as roots;
+import compiler.u2_continuation_bind as continuation;
+import compiler.u2_cleanup_plan as cleanup;
+import compiler.u2_cleanup_verify as planVerify;
+import compiler.u2_checked_ssa_bind as ssa;
+import compiler.u2_native_slots_x86_64 as slots;
+import compiler.u2_native_root_x86_64 as nativeRoots;
+import compiler.u2_cleanup_native_x86_64 as nativeCleanup;
+import compiler.format as format;
+
+public error Unsupported { message Text; }
+function require(ok Bool,message Text) fails Unsupported {
+    if not ok { fail Unsupported { message=message; }; }
+}
+function line(value Text) { output("    "+value); }
+
+// Wrapper ABI, all private, NO public 32-byte Value ABI changes:
+// RDI = File owner slot vector; RSI = caller-owned saved failure record;
+// RDX = already scope-bound canonical class-5 root vector;
+// RCX = caller-owned flat SSA frame of at least 8*Report.frameWords bytes.
+// The SSA frame indices and both edge destinations are derived exclusively
+// from canonical ValueIds and freshly verified edge arguments, NOT an
+// arbitrary caller-provided pending scalar. The caller is responsible for
+// establishing the predecessor block parameter before entering this stub.
+//
+// Return RAX=0 => normal destination parameter gets predecessor i64,
+// failure slots are cleared and class-5 root is released.
+// Return RAX=-1 => normal destination cleared, failure block parameter 0
+// gets the GC-rooted saved-failure pointer, parameter 1 gets predecessor
+// i64 for its handler/propagation context (not a successful return).
+// Root remains live on failure until the caller handles/propagates it;
+// no success-only call result ever appears on this edge.
+public function emit(routine identity build.Function,
+    graph identity aggregate.Registry,profile identity owners.Profile,
+    contracts identity fallible.Registry,phase identity budget.Phase,
+    map identity roots.Map,placement identity slots.Plan,
+    pair continuation.Pair,instruction build.InstId,
+    plan identity cleanup.Plan,active,survive Int,
+    exit meta.LocId,label Int)
+    fails budget.LimitError,canonical.InvalidIR,owners.InvalidOwnership,
+        roots.InvalidRoots,continuation.InvalidBinding,
+        planVerify.InvalidPlan,ssa.InvalidSSA,
+        slots.InvalidSlots,nativeCleanup.Unsupported,
+        nativeRoots.Unsupported,Unsupported {
+    // ALL metadata checks precede the first emitted assembler byte.
+    let checked be try ssa.verify(routine,graph,profile,contracts,phase,
+        map,pair,instruction,plan,active,survive,exit);
+    let machine be try slots.verify(placement,map,routine,graph,phase);
+    try require(label > 0 and label <= 2147483647 and
+        machine.roots >= 1 and machine.roots <= 128 and
+        checked.rootIndex >= 0 and checked.rootIndex < machine.roots and
+        checked.frameWords <= 128 and checked.frameWords > 0,
+        "unsupported bounded checked SSA machine profile");
+    let selected be checked.rootIndex*3;
+    let id be try words.get(placement.records,phase,selected);
+    let displacement be try words.get(placement.records,phase,selected+1);
+    let rootClass be try words.get(placement.records,phase,selected+2);
+    try require(id == checked.instruction and
+        displacement == checked.rootIndex*8 and
+        displacement >= 0 and displacement < machine.rootBytes and
+        rootClass == 5,
+        "selected canonical SSA failure has incorrect native class-5 slot");
+    // No unrelated target code is emitted before the complete source-neutral
+    // Function/owner/continuation/root/plan and private slot proofs agree.
+    try nativeCleanup.emit(routine.metadata,phase,plan,
+        active,survive,exit,false,label);
+    nativeRoots.emitWithSlots(placement,map,routine,graph,phase,label)
+        else error nativeRoots.Unsupported { fail error; }
+        else error budget.LimitError { fail error; }
+        else error roots.InvalidRoots { fail error; }
+        else error slots.InvalidSlots { fail error; };
+    let name be format.integer(label);
+    let symbol be name+"_"+format.integer(instruction.index);
+    let base be "erist_u2_ssa_"+name;
+    let sourceOffset be format.integer((checked.sourceValue-1)*8);
+    let normalOffset be format.integer((checked.normalValue-1)*8);
+    let failedOffset be format.integer((checked.failureValue-1)*8);
+    let failedCarryOffset be format.integer((checked.failureCarry-1)*8);
+    output(".text\n.globl "+base+"\n.type "+base+",@function\n"+base+":");
+    // SysV: entry %rsp = 8 mod 16; five callee-saved pushes align calls.
+    line("pushq %rbx"); line("pushq %r12"); line("pushq %r13");
+    line("pushq %r14"); line("pushq %r15");
+    line("movq %rdi,%r12"); line("movq %rsi,%r13");
+    line("movq %rdx,%r14"); line("movq %rcx,%r15");
+    line("testq %r12,%r12"); line("je erist_rt_value_fault_internal");
+    line("testq %r13,%r13"); line("je erist_rt_value_fault_internal");
+    line("testq %r14,%r14"); line("je erist_rt_value_fault_internal");
+    line("testq %r15,%r15"); line("je erist_rt_value_fault_internal");
+    line("cmpq $0,(%r13)"); line("jne erist_rt_value_fault_internal");
+    line("cmpq $0,"+format.integer(displacement)+"(%r14)");
+    line("jne erist_rt_value_fault_internal");
+    // Snapshot predecessor-available SSA source BEFORE clearing both new
+    // block-parameter slots. Never interpret a failed outcome as success.
+    line("movq "+sourceOffset+"(%r15),%rbx");
+    line("movq $0,"+normalOffset+"(%r15)");
+    line("movq $0,"+failedOffset+"(%r15)");
+    line("movq $0,"+failedCarryOffset+"(%r15)");
+    // Publish the live saved context BEFORE any allocating File close call.
+    line("movq %r14,%rdi"); line("movq %r13,%rsi");
+    line("call erist_u2_publish_"+symbol);
+    line("movq %r12,%rdi"); line("movq %r13,%rsi");
+    line("call erist_u2_cleanup_"+name);
+    line("testq %rax,%rax");
+    line("jne "+base+"_failure");
+    line("cmpq $0,(%r13)");
+    line("jne erist_rt_value_fault_internal");
+    line("movq %rbx,"+normalOffset+"(%r15)");
+    line("movq %r14,%rdi");
+    line("call erist_u2_release_"+symbol);
+    line("xorl %eax,%eax");
+    line("jmp "+base+"_leave");
+    output(base+"_failure:");
+    line("cmpq $0,(%r13)");
+    line("je erist_rt_value_fault_internal");
+    line("movq %r13,"+failedOffset+"(%r15)");
+    line("movq %rbx,"+failedCarryOffset+"(%r15)");
+    line("movq $-1,%rax");
+    output(base+"_leave:");
+    line("popq %r15"); line("popq %r14"); line("popq %r13");
+    line("popq %r12"); line("popq %rbx");
+    line("ret");
+    output(".size "+base+",.-"+base);
+    output(".section .note.GNU-stack,\"\",@progbits");
+}
