@@ -91,3 +91,76 @@ root behavior remains the already-tested adapter's behavior. Keep U2 draft,
 production and public ABI unchanged. Do not cite the earlier native File tests
 as qualification of this new bridge; exact-head focused results must be
 recorded separately once available.
+
+## 4 November 2026 — three-part native U2 integration candidate
+
+Status: **code committed; exact-revision CI pending**, not U2 acceptance.
+This is a bounded continuation of the existing frozen semantics and canonical
+UIR contracts. Source syntax, semantic operation IDs, production compiler,
+owned runtime, GC collector, public 32-byte value ABI and external imports
+remain unchanged.
+
+### 1. Checked edge -> live class-5 root
+
+`src/compiler/u2_checked_rooted_x86_64.eri` consumes the exact canonical
+`Function`, independent scoped-owner proof, canonical opcode-46 root map,
+native machine-slot placement, checked destination descriptor and private
+verified cleanup plan. It **verifies the complete placement first**, then
+invokes the canonical File close ingress and existing native root publisher.
+
+The generated private `erist_u2_checked_LABEL` entry takes RDI (caller File
+owner words), RSI (caller-owned 96-byte saved-failure record) and RDX (caller
+root words, already bound with `erist_u2_bind_LABEL` in a live scope). It
+requires the selected root to be empty, publishes RSI in the verified class-5
+slot **before any allocating close helper**, performs the checked native close,
+releases that root only on successful completion and retains it on failure.
+Status in RAX is 0 or -1, and the caller must retain the bound scope through
+error propagation/handling and explicitly release the slot afterward. A
+failure without a populated typed saved context is a terminal internal defect.
+This is a private backend adapter, **not** a general canonical CFG executor.
+
+### 2. Physical GC and rejection regression
+
+`tests/test_u2_checked_rooted.py` builds the canonical owner/checked-invoke
+fixture, derives the machine slot through the existing independently verified
+root-map/placement contracts, and executes the emitted File close + root
+publisher on the actual owned Linux x86-64 runtime. It covers normal and
+injected checked File-close failures, forced collection while the typed
+failure record is live, root release on normal completion, owner consumption,
+open-resource counts and final GC/allocator shutdown.
+
+Existing independent `test_u2_native_root_publish.py` checks wrong-class,
+overlapping, misaligned, stale, foreign and closed slot plans. Full
+end-to-end malformed-root and allocator-refusal coverage is still open;
+do not extend the meaning of one bounded positive native regression.
+
+### 3. Surviving prefixes and pending scalar completion
+
+`u2_cleanup_native_x86_64.emit` now accepts 1–8 original File owners with
+a verified `survive` prefix, while consuming *only* the exited suffix.
+Both normal and already-failing private plans retain surviving caller roots.
+`emitPendingScalar` adds a closed x86-64 private adapter whose RDX input is a
+pending i64 return value. After cleanup success it returns that value in RAX
+with RDX=0; after checked cleanup failure RAX carries no success result and
+RDX=-1. The caller must branch on the status before observing the return.
+
+`test_u2_native_cleanup.py` adds a three-owner/two-inner-scope exit
+with one surviving File owner, a pending scalar return, normal/failing closes
+and a subsequent outer File close. The tests do **not** establish a canonical
+SSA pending-return transport or all-handler control-flow lowering.
+
+### Remaining non-negotiable gates
+
+- Qualified exact-head focused CI for this candidate, then independent
+  broader tests; any red check remains a blocker.
+- Verify stale, foreign, deleted and wrong-class canonical roots at the
+  **combined** ingress, including forced-GC and allocator-refusal outcomes.
+- Bind pending success results from actual canonical SSA continuation
+  parameters rather than the caller-provided private scalar ABI.
+- Lower multiple owner prefixes and all checked/failure/handler CFG paths
+  from the canonical Function (not solely private plan rows).
+- Confirm recursion across checked frame failures, managed Text/List/identity
+  roots, physical retained capacity/RSS, independent Stage-0/native parity
+  and final four-platform completed-batch qualification.
+
+Keep PR #111 draft and U2 issue #74 open; do not merge or promote.
