@@ -34,15 +34,19 @@ scoped ownership, rather than inventing a second set of executable edges.
 `Pair`, class-5 `u2_root_map.Map`, and fresh original
 `u2_cleanup_plan.Plan`. Selected closed profile:
 
-- one active File resource and exactly one exited owner, with no surviving
-  outer File owner; normal mode only at entry;
-- one source block with exactly `(File, i64)` block parameters;
+- one to eight currently live lexical File owners, exactly one exiting
+  innermost File owner, and zero to seven surviving outer File owners;
+  no already-failing entry in this selected checked SSA profile;
+- one source block containing exactly the active File parameter set in any
+  verified lexical/SSA order, followed by one predecessor `i64`;
 - one checked `File.close` opcode-46 operand and exact source `LocId`;
-- normal edge has one **positive** SSA transfer of that source i64;
-- failure edge has the **negative typed failure marker -1** followed by
-  exactly the same predecessor SSA i64;
-- normal destination has one `i64` block parameter; failure destination
-  has one structural typed aggregate failure parameter plus one `i64`;
+- normal edge carries the **exact** positive predecessor ValueIds of all
+  surviving outer Files in lexical order and the source `i64`;
+- failure edge contains the **negative typed failure marker -1** followed
+  by those same surviving File ValueIds and the same predecessor `i64`;
+- normal destination contains surviving File parameters plus `i64`;
+  failure destination contains structural typed error payload **first**,
+  then surviving File parameters plus `i64`;
 - class-5 failure-root metadata names that exact checked instruction,
   first failure destination `ValueId`, type, original source location;
 - at most 128 canonical SSA values for the selected machine-frame profile.
@@ -69,6 +73,14 @@ saved failure record, `RDX` live already bound class-5 root vector,
 The caller must initialize the **actual predecessor block-parameter slot**
 before entering. The reported native frame contains no source-level or public
 Value ABI; its maximum 128 slots require at most 1024 bytes.
+
+The wrapper additionally kills the consumed innermost File's old source
+SSA ValueId after native close on BOTH checked outcomes, complementing
+the exact runtime File-owner word clearing. Each surviving File ValueId
+moves into its chosen successor parameter and its original SSA source slot
+is zeroed, while the caller-owned lexical root words remain live through
+the surviving outer scope. File ownership is not implemented as an
+implicit value copy; a stale consumed File must never be usable.
 
 The wrapper snapshots the verified source SSA slot, clears newly produced
 destination slots, publishes the class-5 saved record before any potentially
@@ -149,3 +161,67 @@ CI and required finished-batch qualification**. Keep draft PR #111 OPEN,
 issue #74 OPEN, default production compiler and 32-byte ABI unchanged,
 U3/U4 migration separate and optimization #51 paused. No experimental
 owned-compiler full self-build is authorized.
+
+## 4 November 2026 — bounded nested-owner SSA extension
+
+`src/compiler/u2_checked_ssa_bind.eri` and
+`src/compiler/u2_checked_ssa_x86_64.eri` now admit/emit a normal-entry,
+one-close checked edge with up to eight total File owners and the complete
+exact surviving owner prefix moved through version-two normal/failure
+successor parameters. The portable binding verifies canonical Function
+SSA dominance, owner-depth correspondence, original `Plan`/LocId, exact
+surviving positive edge transfers, typed failure marker, selected class-5
+root identity and each destination parameter. The machine profile derives
+all offsets from the freshly verified canonical ValueIds; the selected
+consumed File's source SSA slot is zeroed on **both** outcomes. The
+existing caller-owned File root vector remains responsible for the
+surviving outer handle through the next lexical exit.
+
+A canonical nested two-File acquire/inner-close/outer-close fixture also
+builds complete checked handler paths; on a selected inner checked edge
+it independently verifies one carried outer owner plus pending i64,
+tests that a forged consumed File cannot be transferred to the successor,
+and emits no rejected label. The generated Linux x86-64 test executes
+three pending i64 values under both real File-close outcomes, forces the
+actual collector, checks the outer resource remains live, closes it once,
+and checks the saved failure context survives until root release.
+Both the one-owner and two-owner probes explicitly populate the consumed
+source SSA File parameter and require it be **zero on completion**;
+this prevents use-after-consumption through an abandoned SSA slot.
+
+### Exact evidence and qualification boundary
+
+- Source revision `2099c6243b95679d8683207163f50023136f37b0`
+  (before the consumed-source-slot poison hardening):
+  [dedicated U2 run #41881371026](https://github.com/eristavi/eristavi-lang/actions/runs/41881371026)
+  **SUCCESS: 6 focused methods / 0 failures** and
+  [Linux smoke #41881370999](https://github.com/eristavi/eristavi-lang/actions/runs/41881370999)
+  **SUCCESS: 104 run / 101 passed / 0 failed / 3 opt-in skips**,
+  417.632 seconds. Four-platform CI skipped by incremental policy.
+- Native source hardening `a1d3cb8f24c6b4432733e703e05c0948e10be97a`
+  plus single-owner regression `8e9cadc0891a93e47abfc32bba46c2b84454e1da`:
+  [focused run #41882834794](https://github.com/eristavi/eristavi-lang/actions/runs/41882834794)
+  **SUCCESS: 6/6 tests**, proving native consumed-slot poisoning under the
+  original and nested runtime cases.
+- Latest nested-owner consumed-slot assertion code revision
+  `200c7037d8db56e05fecadb4251e4d4a12dcff86` is **not yet
+  independently qualified at this checkpoint**. The earlier focused green
+  covers the exact emitter implementation plus the prior two-owner test,
+  not the newest strengthened two-owner test. Check exact-head CI before
+  calling the updated assertion verified or running the final matrix.
+- Initial two-owner [candidate #41879954423](https://github.com/eristavi/eristavi-lang/actions/runs/41879954423)
+  failed three *clean test assertions* because the caller deliberately
+  class-5 pinned an empty saved FailureContext which the test had expected
+  to have been collected; this was corrected to one live record. A
+  following [#41880916713](https://github.com/eristavi/eristavi-lang/actions/runs/41880916713)
+  failed Python test collection on a `//` comment typo; repaired to `#`.
+  These harness failures are superseded by the verified `2099c624`
+  implementation smoke and `8e9cadc0` hardened-source focused run.
+
+**Still not full U2:** this is a private Linux x86-64 one-close entry from
+a pre-populated SSA frame, not complete code generation for all canonical
+CFG blocks/producers and all typed results; it is not recursive checked
+failure propagation/ordered secondary composition from native UIR,
+managed Text/List/identity root lifetime across loops, allocator-refusal
+physical/RSS evidence, Stage-0 vs native independent A/B, or four-platform
+completed-batch qualification. Keep PR #111 draft and issue #74 open.
