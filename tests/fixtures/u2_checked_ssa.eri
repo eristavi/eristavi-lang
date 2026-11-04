@@ -68,6 +68,10 @@ function run() fails budget.LimitError,canonical.InvalidIR,
     let acquireFailed be try ab.block(fn,graph,[failure,i64]);
     let normal be try ab.block(fn,graph,[i64]);
     let failed be try ab.block(fn,graph,[failure,i64]);
+    // A dead, fully verified branch also instantiates the generic U1a edge
+    // checker for the bootstrap compiler's concrete ValueId list shape.
+    let dead be try build.block(fn,[]);
+    let deadTarget be try build.block(fn,[meta.i64()]);
     let owned be try build.parameter(fn,opened,0);
     let carried be try build.parameter(fn,opened,1);
     let returned be try build.parameter(fn,normal,0);
@@ -81,6 +85,8 @@ function run() fails budget.LimitError,canonical.InvalidIR,
     try owners.block(profile,fn,construction,acquireFailed,[]);
     try owners.block(profile,fn,construction,normal,[]);
     try owners.block(profile,fn,construction,failed,[]);
+    try owners.block(profile,fn,construction,dead,[]);
+    try owners.block(profile,fn,construction,deadTarget,[]);
     let original be try build.integer(fn,entry,74565,loc);
     let acquirePair be try continuation.bindCarrying(fn,graph,construction,
         entry,opened,acquireFailed,normalOpen,failureCarried,loc);
@@ -93,6 +99,9 @@ function run() fails budget.LimitError,canonical.InvalidIR,
     try build.returnValues(fn,acquireFailed,[recovered],loc);
     let recoveredClose be try build.integer(fn,failed,0,loc);
     try build.returnValues(fn,failed,[recoveredClose],loc);
+    let deadValue be try build.integer(fn,dead,0,loc);
+    try build.jump(fn,dead,deadTarget,[deadValue],loc);
+    try build.returnValues(fn,deadTarget,[try build.parameter(fn,deadTarget,0)],loc);
     try ab.complete(fn,graph); try owners.complete(profile,fn,construction);
     try budget.finishPhase(construction);
 
