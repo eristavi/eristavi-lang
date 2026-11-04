@@ -5,50 +5,55 @@ Historical checkpoints are evidence, not instructions to restart old work.
 
 ## Resume here
 
-### 4 November 2026 — U2 coordinated Managed Text / Unicode17 batch
+### 4 November 2026 — bounded native recursive Text roots verified
 
-- **Active branch:** `compiler/u2-cleanup-foundation-20261102`, draft
-  [PR #111](https://github.com/eristavi/eristavi-lang/pull/111).
-  **U2 issue #74 remains OPEN; U2 is unmerged.** No production-path promotion.
-- **Exact tested implementation head:** `75a78d0673274373de6ff6e0651eba7d3db1d670`.
-  [Hosted U2 focused smoke #41793262699](https://github.com/eristavi/eristavi-lang/actions/runs/41793262699)
-  **SUCCESS** on that head: **97 tests run, 94 passed, 0 failed, 3 intentional
-  skips**, Linux Clang, 354.352 seconds. Four-platform matrix intentionally
-  skipped; no completed-batch qualification or owned full self-build.
-- **Dedicated Text+failure-context CI:** [#41793262684](https://github.com/eristavi/eristavi-lang/actions/runs/41793262684)
-  **SUCCESS**, 6 test methods / 0 failures. It includes native Unicode17
-  views, negative/end bounds, NFC, malformed contracts, CFG loop roots and
-  the *reference-only* typed Unicode failure-context fixture.
-- **Implemented Text semantics:** a 12-import opt-in canonical Text native
-  profile adds explicit zero-based byte/scalar/grapheme indexes, typed result
-  (Int for bytes, Text for scalar/grapheme), exact terminal bounds faults and
-  explicit NFC normalization. Text scalar-sequence equality still does not
-  normalize implicitly. No user syntax, Unicode tables or 32-byte ABI change.
-  Pre-0.1 Text slicing remains intentionally postponed by the locked language
-  semantics; do not invent it as a batch completion requirement.
-- **Native CFG roots:** conservative roots bound over a verified bounded CFG
-  (<=64 blocks, <=512 edges, <=128 SSA values, <=256 instructions). The
-  emitter supports branches, loop backedges and simultaneous SSA transfers,
-  and a native fixture proves original Text snapshots remain correct under
-  in-loop forced collection. These are *conservative roots*, not exact
-  per-instruction release, nor cross-function recursive root frames.
-- **Checked failure/cleanup:** the reference FailureContext now checks
-  Unicode17-decomposed primary Text and ordered emoji/flag secondary cleanup
-  Text payloads, including exact counts and owner charge release. These
-  passing reference assertions **do not** implement or accept native UIR
-  checked invoke opcode 46, recursive saved-error machine roots, resource
-  adapters, exactly-once reverse unwind, pending returns or primary/secondary
-  propagation at native safe points.
-- **Next engineering gate:** implement and independently verify managed Text
-  roots in recursive native function frames (creation, publication, collection,
-  return, release, stale/foreign root rejection). Then integrate real canonical
-  checked invoke, FailureContext root publication, and deterministic resource
-  cleanup on all normal/return/checked-failure paths. Prove exact physical
-  retained capacity/RSS, malformed/allocator-refusal and Stage-0/owned
-  differential behavior. Keep conservative fallbacks until proven safe.
-- **Batch boundary:** code and tests are on the draft branch only. No U2
-  merge, #74 closure, production compiler/ABI modification, final full matrix,
-  full owned self-build, or restart of paused optimization #51.
+- **Current tested implementation source** `ec982e1d969b3144b04f5e453100b407c3a8a34b` on
+  `compiler/u2-cleanup-foundation-20261102`, [draft PR #111](https://github.com/eristavi/eristavi-lang/pull/111).
+  U2 issue #74 remains **OPEN**; no implementation has been merged to main.
+- **Current exact-head Linux focused smoke:** [#41797941894](https://github.com/eristavi/eristavi-lang/actions/runs/41797941894)
+  **SUCCESS**: patch/scope, **98 tests run, 95 passed, 0 failed, 3 intentional
+  skips**; four-platform full matrix intentionally skipped.
+- **Recursive native Text dedicated suite:** [#41797941881](https://github.com/eristavi/eristavi-lang/actions/runs/41797941881)
+  **SUCCESS: 7 test methods, 0 failures.** Tested depths 0, 1, 3, 8, 31,
+  repeated Text allocation/collection in child frames, caller Text retention
+  after return, complete frame scope exit, and terminal refusal of depth 33.
+- **Exact bounded native profile:** a verified *local self-call* declaration
+  `u2.text.recurse` with signature `(Text, i64) -> i64` is admitted as a
+  13th declaration beside 12 unchanged Text runtime imports. Every invocation
+  roots its own incoming Text and depth words in a newly bound native
+  scope/frame; caller frames remain registered while children allocate and
+  collect. A private global counter limits this single-thread prototype to
+  32 simultaneously active frames. The old zero-argument Text profile
+  remains independently tested and unchanged. The source-neutral UIR,
+  32-byte value ABI, Unicode17 policy and production compiler are unchanged.
+- **Other tested Text behavior:** zero-based explicit byte/scalar/grapheme
+  indexes, terminal negative/end bounds, immutable Text equality/copy/concat,
+  explicit NFC normalization, conservative CFG loop roots and Unicode17
+  typed primary/ordered-secondary *reference* failure-context payloads.
+  Arbitrary slicing is intentionally excluded by locked pre-0.1 semantics.
+- **Important limitations:** this is **not** arbitrary interprocedural
+  recursion, multithreaded recursion, exact SSA root retirement, checked
+  opcode-46 execution, rooted native FailureContext, actual file/resource
+  adapters or exactly-once deterministic checked cleanup. The native recursive
+  path still needs stale/foreign root rejection and physical GC retention
+  evidence. The Unicode17 cleanup-context coverage is reference-only.
+- **Next action:** implement actual checked invoke/FailureContext native
+  publication and scoped reverse cleanup from existing canonical plans,
+  including a pending return, a preserved Unicode17 primary Text failure,
+  ordered secondary cleanup failures, GC safe points and recursive frames.
+  Use independent semantic and native oracles; preserve old-runtime/ABI
+  contracts. Then prove physical GC bounds and exact root liveness before
+  completed-batch four-platform qualification. Do not promote or merge U2.
+- **No work authorized or done on:** production promotion, unrelated U3/U4,
+  paused optimization #51, expensive full owned self-build, U2 merge/closure.
+
+### Earlier tested checkpoint — indexed Unicode17 and CFG Text
+
+- Source `75a78d0673274373de6ff6e0651eba7d3db1d670`;
+  [focused U2 #41793262699](https://github.com/eristavi/eristavi-lang/actions/runs/41793262699)
+  SUCCESS 97 run / 94 passed / 0 failed / 3 intentional skips.
+- [Dedicated Text/reference #41793262684](https://github.com/eristavi/eristavi-lang/actions/runs/41793262684)
+  SUCCESS 6 test methods. This evidence remains historical, not the latest head.
 
 Read the governing documents below before design or implementation. The user has
 authorized continuing U2; historical stop instructions are superseded. A future
@@ -60,7 +65,7 @@ work list alone does not authorize unrelated development.
 | --- | --- |
 | U1a | Accepted within its documented scalar/SSA/call/Float/provenance/physical boundary; #77 closed, qualified PR #105 merged. |
 | U1b | Bounded immutable aggregates/reference linked execution accepted; #73 closed, qualified PR #106 merged. |
-| U2 | Bounded native CFG List-i64 and Managed Text/Unicode17 indexing, NFC and conservative CFG-loop execution; Unicode failure-context reference model expanded. #74 OPEN, #111 DRAFT/unmerged; recursion, native checked cleanup and general managed acceptance OPEN. |
+| U2 | Bounded native CFG List-i64 and Managed Text/Unicode17 indexing, NFC, conservative loop roots and verified 32-frame local Text self-recursion. Unicode failure context is reference-only. #74 OPEN, #111 DRAFT/unmerged; general recursion, native checked cleanup and complete managed-root acceptance OPEN. |
 | U3 | Initial isolated Python shadow/planning foundation merged in #119; #75 OPEN. Direct production AST-to-owned-UIR integration remains unfinished. |
 | U4 | Initial parallel-move foundation in draft #120; #102 OPEN. Full machine migration remains unfinished. |
 | Production | Existing frontend/default compiler and 32-byte ABI retained. Latest recorded qualified production optimization is #110. No redesigned-UIR promotion. |
@@ -79,7 +84,7 @@ on main does not merge U2 implementation. Fetch current refs before continuing.
 | Failure contexts | Typed primary/ordered-secondary reference models now include Unicode17 primary Text and ordered emoji/flag cleanup Text payload assertions; class-5 saved-failure root metadata and bounded native publisher probes. Native checked failures and complete cleanup integration remain unimplemented. |
 | Liveness | Independently recomputed CFG/SSA plan and publication obligations; the native List-i64 profile now applies verified successor live-in facts to retire dead List roots after edge transfers for <=32 tracked List values. Per-instruction/all-managed-root coverage remains open. |
 | Managed types | Owner-scoped Text/List/identity descriptors, independent corruption rejection and Unicode17 copy/view contracts; expanded Stage-0/C/owned parity oracle with predeclared accent/flag/ZWJ/empty/ASCII/copy values. This is not general canonical managed execution. |
-| Native Text/Unicode17 | Tested 12-operation canonical Text adapter: scalar creation, immutable concat/copy/equality, byte/scalar/grapheme counts and zero-based indexing, explicit NFC and collection. Bounded native CFG branches/backedges hold Text snapshots under forced GC with conservative roots. Exact 64 blocks/512 edges/128 SSA values/256 instructions; scalar return only. Recursive frames, precise root release, checked failures/cleanup and full Text-surface integration are NOT accepted. |
+| Native Text/Unicode17 | Twelve exact runtime imports support scalar creation, immutable concat/copy/equality, byte/scalar/grapheme counts/indexing, explicit NFC and collection. Bounded native CFG and GC roots hold Text snapshots; a separate verified local (Text, i64) -> i64 self-call profile registers/retires nested native root frames and enforces depth <=32 in a single-thread prototype. Exact 64 blocks/512 edges/128 SSA values/256 instructions; scalar return only. No general recursion, precise root retirement, native checked failure/cleanup or completed Text-surface integration. |
 | Native List-i64 | Eristavi-written optional x86-64 adapter for empty/copy/append/replace/count/get/collection, branches/joins/backedges/cyclic transfers; verified successor-edge root retirement now focused-tested for <=32 selected List values. |
 | Native boundaries | Managed-registry entry validation, Int/Bool/List runtime descriptor checks, List bounds source name/line/column, independent fixture frame-layout checks, GC/snapshot/reclamation and fault probes. |
 
@@ -102,6 +107,8 @@ compatibility and physical retention bounds are still outstanding.
 
 | Revision / run | Verified result |
 | --- | --- |
+| `ec982e1d969b3144b04f5e453100b407c3a8a34b` — [CI #41797941894](https://github.com/eristavi/eristavi-lang/actions/runs/41797941894) | **SUCCESS:** exact-head patch/scope and focused Linux Clang U2 smoke; **98 run, 95 passed, 0 failed, 3 intentional skips**. Full four-platform matrix intentionally skipped. |
+| `ec982e1d969b3144b04f5e453100b407c3a8a34b` — [Text #41797941881](https://github.com/eristavi/eristavi-lang/actions/runs/41797941881) | **SUCCESS:** seven focused native Text methods, including distinct managed root frames, GC, depth 31 and depth-limit terminal fault. |
 | `75a78d0673274373de6ff6e0651eba7d3db1d670` — [hosted #41793262699](https://github.com/eristavi/eristavi-lang/actions/runs/41793262699) | **SUCCESS:** patch/scope and Linux Clang focused U2 smoke, **97 run / 94 passed / 0 failed / 3 skips**, 354.352 s. Indexed Unicode17, native CFG roots and typed Text failure-context reference included. Full matrix skipped. |
 | `75a78d0673274373de6ff6e0651eba7d3db1d670` — [dedicated #41793262684](https://github.com/eristavi/eristavi-lang/actions/runs/41793262684) | **SUCCESS:** six focused native Text plus reference FailureContext methods, zero failures. |
 | `5377eda39ff18c86a8c8b65d5bf2a9daf9d115e0` — [dedicated #41792856568](https://github.com/eristavi/eristavi-lang/actions/runs/41792856568) | **SUCCESS:** five focused native Text methods, including bound checks and loop-backedge GC roots. |
@@ -144,11 +151,13 @@ evidence only.
    Resolve the current 32-tracked-List-value profile limit deliberately;
    keep conservative fallback until new proof is qualified.
 3. Complete general canonical managed representation and eligible-local
-   promotion; the bounded Text/Unicode17 adapter now has view indexes, NFC
-   and conservative CFG-loop roots, but still needs recursive native frames,
-   exact managed safe-point rooting, Text-containing aggregates, comprehensive
-   API/source behavior, nested Lists and identity-cycle integration.
-   Preserve pre-0.1 deferral of arbitrary Text slicing.
+   promotion; the bounded Text/Unicode17 adapter now has view indexes, NFC,
+   conservative CFG-loop roots and an exact local self-recursion profile with
+   registered native frames. General interprocedural/thread-safe recursion,
+   stale/foreign-root rejection, exact managed safe-point retirement,
+   Text-containing aggregates, comprehensive API/source behavior, nested
+   Lists and identity-cycle integration remain. Arbitrary Text slicing is
+   deliberately postponed by frozen pre-0.1 semantics.
 4. Connect complete checked FailureContext and real resource adapters to canonical
    native lowering: opcode-46 checked invokes, pending returns, all exits,
    exactly-once reverse cleanup, stable primary and ordered secondary Unicode
