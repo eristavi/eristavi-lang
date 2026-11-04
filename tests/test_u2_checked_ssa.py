@@ -92,6 +92,10 @@ class U2CheckedSSATests(unittest.TestCase):
             "    movl $9,%edi","    xorl %edx,%edx",
             "    call erist_rt_file_open","    movq %rax,0(%rsp)",
             "    call evn_empty_failure","    movq %rax,48(%rsp)",
+            # Publish the consumed File into its actual canonical SSA
+            # predecessor parameter and require poisoning on BOTH exits.
+            "    movq 0(%rsp),%rax",
+            "    movq %rax,"+str(frame+source-8)+"(%rsp)",
             "    movq $"+str(pending)+","+str(frame+source)+"(%rsp)",
             "    movq %rsp,%rdi","    movq 48(%rsp),%rsi",
             "    leaq 8(%rsp),%rdx","    leaq 80(%rsp),%rcx",
@@ -99,6 +103,8 @@ class U2CheckedSSATests(unittest.TestCase):
             "    cmpq $"+str(status)+",%rax",
             "    jne .Lresource_test_fail",
             "    cmpq $0,0(%rsp)","    jne .Lresource_test_fail",
+            "    cmpq $0,"+str(frame+source-8)+"(%rsp)",
+            "    jne .Lresource_test_fail",
         ]
         if failing:
             lines += [
