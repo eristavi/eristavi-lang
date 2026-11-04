@@ -75,6 +75,7 @@ SMOKE_TESTS=(
     'test_freestanding_graph_values.FreestandingGraphValueTests.test_u2_saved_failure_root_survives_explicit_gc_and_releases',
     'test_freestanding_graph_values.FreestandingGraphValueTests.test_u2_primary_and_secondary_survive_forced_gc_in_order',
     'test_u2_native_root_publish.U2NativeRootPublishTests.test_generated_scoped_bind_publish_release_survives_forced_gc',
+    'test_u2_native_cleanup.U2NativeCleanupTests',
     'test_owned_runtime_allocation_failures.OwnedRuntimeAllocationFailureTests.test_text_publication_and_shared_capacity_failure_boundaries',
 
     'test_u1_verifier.U1VerifierTests.test_malformed_ir_and_budget_protocol',

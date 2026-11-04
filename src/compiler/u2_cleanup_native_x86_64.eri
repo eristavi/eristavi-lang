@@ -1,0 +1,125 @@
+// Opt-in U2 native cleanup lowering for independently verified lexical plans.
+// Emits x86-64 code that closes actual owned File resources in verified
+// reverse order, preserving one GC-rooted saved FailureContext and its ordered
+// secondary errors. This is a bounded private adapter, not an executable IR
+// or general canonical opcode-46 lowering.
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+import compiler.u1_meta as meta;
+import compiler.u2_cleanup_plan as cleanup;
+import compiler.u2_cleanup_verify as planVerify;
+import compiler.format as format;
+
+public error Unsupported { message Text; }
+function require(ok Bool,message Text) fails Unsupported {
+    if not ok { fail Unsupported { message=message; }; }
+}
+function read(w identity words.Words,p identity budget.Phase,index Int)
+    returns Int fails budget.LimitError {
+    return try words.get(w,p,index);
+}
+function line(s Text) { output("    "+s); }
+function jump(label Text,target Int) {
+    if target == 0 { line("jmp "+label+"_success"); }
+    else if target == 0-1 { line("jmp "+label+"_failure"); }
+    else { line("jmp "+label+"_row_"+format.integer(target)); }
+}
+
+// RDI: writable caller resource root words in acquisition order.
+// RSI: pointer to a 96-byte saved-failure record already pinned by the caller.
+// Return RAX=0 on success, -1 for checked failure; resource words are consumed
+// (cleared) exactly once on both paths. No exceptions/longjmp are synthesized.
+// Native resource closes can append real typed secondary FileErrors; caller
+// remains responsible for ownership of its saved failure after this returns.
+public function emit(data identity meta.Metadata,phase identity budget.Phase,
+    plan identity cleanup.Plan,active,survive Int,exit meta.LocId,
+    initiallyFailed Bool,label Int)
+    fails budget.LimitError,planVerify.InvalidPlan,Unsupported {
+    let verified be try planVerify.verify(data,phase,plan,active,survive,exit,initiallyFailed);
+    try require(plan.depth > 0 and plan.depth <= 8 and survive == 0 and
+        active.count == plan.depth and
+        label > 0 and label <= 2147483647,
+        "unsupported bounded x86-64 native cleanup profile");
+    let count be plan.depth;
+    let rootBytes be (count+1)*8;
+    let scopeOffset be rootBytes;
+    let frame be ((scopeOffset+8+15)/16)*16;
+    let base be "erist_u2_cleanup_"+format.integer(label);
+    // Root byte 1 = owned value slot, byte 5 = saved failure record.
+    // All roots are private per invocation and registered before any
+    // potentially collecting native close helper.
+    output(".section .rodata\n.p2align 3\n"+base+"_classes:");
+    let i be 0;
+    while i < count { output(".byte 1"); i=i+1; }
+    output(".byte 5");
+    output(".text\n.globl "+base+"\n.type "+base+",@function\n"+base+":");
+    line("pushq %rbx"); line("pushq %r12"); line("pushq %r13");
+    line("subq $"+format.integer(frame)+",%rsp");
+    line("movq %rdi,%r12"); line("movq %rsi,%r13");
+    line("testq %r12,%r12"); line("je erist_rt_value_fault_internal");
+    line("testq %r13,%r13"); line("je erist_rt_value_fault_internal");
+    i=0;
+    while i < count {
+        line("movq "+format.integer(i*8)+"(%r12),%rax");
+        line("testq %rax,%rax");
+        line("je erist_rt_value_fault_internal");
+        line("movq %rax,"+format.integer(i*8)+"(%rsp)");
+        i=i+1;
+    }
+    line("movq %r13,"+format.integer(count*8)+"(%rsp)");
+    line("call evn_scope_enter");
+    line("movq %rax,"+format.integer(scopeOffset)+"(%rsp)");
+    line("movq %rax,%rdi");
+    line("movq %rsp,%rsi");
+    line("leaq "+base+"_classes(%rip),%rdx");
+    line("movl $"+format.integer(count+1)+",%ecx");
+    line("call evn_bind_roots");
+    line("cmpq $0,(%r13)");
+    if initiallyFailed { line("je erist_rt_value_fault_internal"); }
+    else { line("jne erist_rt_value_fault_internal"); }
+    jump(base,plan.entry);
+    i=0;
+    while i < count*2 {
+        let position be i%count;
+        let physical be count-position-1;
+        let row be i*8;
+        let success be try read(plan.records,phase,row+6);
+        let failure be try read(plan.records,phase,row+7);
+        output(base+"_row_"+format.integer(i+1)+":");
+        line("movq "+format.integer(physical*8)+"(%rsp),%rdi");
+        line("testq %rdi,%rdi");
+        line("je erist_rt_value_fault_internal");
+        line("movq %r13,%rsi");
+        line("call evn_cleanup_accumulate");
+        // The owned File is consumed on both checked outcomes.
+        // Clear both the local safe-point root and caller transfer word.
+        line("movq $0,"+format.integer(physical*8)+"(%rsp)");
+        line("movq $0,"+format.integer(physical*8)+"(%r12)");
+        line("cmpq $0,(%r13)");
+        if failure == 0-1 { line("jne "+base+"_failure"); }
+        else { line("jne "+base+"_row_"+format.integer(failure)); }
+        // Final failed terminal uses a separate name instead of row_-1.
+        // The explicit jump below is generated from independently checked
+        // route facts, not from unchecked caller failure flags.
+        if success == 0 { line("jmp "+base+"_success"); }
+        else if success == 0-1 { line("jmp "+base+"_failure"); }
+        else { line("jmp "+base+"_row_"+format.integer(success)); }
+        i=i+1;
+    }
+    output(base+"_success:");
+    line("xorl %ebx,%ebx");
+    line("jmp "+base+"_leave");
+    output(base+"_failure:");
+    line("movq $-1,%rbx");
+    output(base+"_leave:");
+    line("call evn_void");
+    line("movq %rax,%rsi");
+    line("movq "+format.integer(scopeOffset)+"(%rsp),%rdi");
+    line("call evn_scope_leave");
+    line("movq %rbx,%rax");
+    line("addq $"+format.integer(frame)+",%rsp");
+    line("popq %r13"); line("popq %r12"); line("popq %rbx");
+    line("ret");
+    output(".size "+base+",.-"+base);
+    output(".section .note.GNU-stack,\"\",@progbits");
+}

@@ -1,0 +1,97 @@
+import std.process;
+import compiler.u1_budget as budget;
+import compiler.u1_meta as meta;
+import compiler.u2_cleanup_plan as cleanup;
+import compiler.u2_cleanup_verify as verify;
+import compiler.u2_failure_context as failure;
+import compiler.u2_failure_trace as trace;
+import compiler.u2_cleanup_native_x86_64 as native;
+error ProbeError { message Text; }
+function check(ok Bool,message Text) fails ProbeError {
+    if not ok { fail ProbeError { message=message; }; }
+}
+function run() fails budget.LimitError,verify.InvalidPlan,failure.InvalidContext,trace.InvalidTrace,native.Unsupported,ProbeError {
+    let root be try budget.developmentRequest();
+    let shared be try budget.metadataOwner(root);
+    let mp be try budget.constructionPhase(shared);
+    let data be try meta.create(shared,mp);
+    let signature be try meta.signature(data,mp,[meta.i64()],[meta.i64()]);
+    let source be try meta.source(data,mp,"trace.eri","0000000000000000000000000000000000000000000000000000000000000000",64);
+    let close be try meta.location(data,mp,source,0,8,0,1,1);
+    let exit be try meta.location(data,mp,source,8,16,8,2,1);
+    try meta.freeze(data); try budget.finishPhase(mp);
+    let owner be try budget.functionOwner(root,true);
+    let phase be try budget.constructionPhase(owner);
+    let active be [cleanup.Scope { scope=1; contract=9; value=11; close=close; },
+        cleanup.Scope { scope=2; contract=9; value=12; close=close; },
+        cleanup.Scope { scope=3; contract=9; value=13; close=close; }];
+    let scenarios be [0,1,2,3,4,5,6,7]; let body be 0;
+    while body < 2 {
+        let scenario be 0;
+        while scenario < scenarios.count {
+            let plan be try verify.prepare(data,owner,phase,active,0,exit,body == 1);
+            let primaryKind be 0; let primaryPayload be ""; let primaryLocation be 0;
+            if body == 1 { primaryKind=90; primaryPayload="body"; primaryLocation=exit.index; }
+            let ctx be try failure.create(owner,phase,primaryKind,primaryPayload,primaryLocation);
+            let bits be scenarios[scenario]; let mask be [];
+            let kinds be [31,32,33]; let descriptions be ["inner","middle","outer"];
+            let slot be 0;
+            while slot < 3 {
+                let divisor be 1; if slot == 1 { divisor=2; } if slot == 2 { divisor=4; }
+                let bit be (bits/divisor)%2;
+                mask.add(bit); slot=slot+1;
+            }
+            let result be try trace.run(data,phase,plan,active,0,exit,body == 1,ctx,mask,kinds,descriptions);
+            try check(result.closed == 3,"missing cleanup owner");
+            let expectedPrimary be 0; if body == 1 { expectedPrimary=90; }
+            if body == 0 {
+                slot=0; while slot < 3 {
+                    if mask[slot] == 1 and expectedPrimary == 0 { expectedPrimary=kinds[slot]; }
+                    slot=slot+1;
+                }
+            }
+            try check(result.primaryType == expectedPrimary,"wrong retained primary");
+            let failureCount be mask[0]+mask[1]+mask[2]; let secondary be failureCount;
+            if body == 0 and failureCount > 0 { secondary=failureCount-1; }
+            try check(result.secondary == secondary,"wrong secondary failure count");
+            if expectedPrimary == 0 { try check(result.terminal == 0,"false failure"); }
+            else { try check(result.terminal == 0-1,"false success"); }
+            slot=0; let nextSecondary be 0; let promoted be body == 1;
+            while slot < 3 {
+                if mask[slot] == 1 {
+                    if promoted {
+                        let record be try failure.secondaryAt(ctx,phase,nextSecondary);
+                        try check(record.typeId == kinds[slot] and record.payload == descriptions[slot],
+                            "secondary cleanup order or payload lost");
+                        nextSecondary=nextSecondary+1;
+                    } else { promoted=true; }
+                }
+                slot=slot+1;
+            }
+            try failure.close(ctx); try cleanup.close(plan);
+            try check(owner.live == 0 and owner.pending == 0,"failure trace leaked charges");
+            scenario=scenario+1;
+        }
+        body=body+1;
+    }
+    // The same verified three-owner plan drives two emitted native entries:
+    // a pending-success exit and an already-failing checked exit. Both close
+    // resources in reverse lexical order, with a rooted saved FailureContext.
+    let normalPlan be try verify.prepare(data,owner,phase,active,0,exit,false);
+    try native.emit(data,phase,normalPlan,active,0,exit,false,31);
+    try cleanup.close(normalPlan);
+    let failurePlan be try verify.prepare(data,owner,phase,active,0,exit,true);
+    try native.emit(data,phase,failurePlan,active,0,exit,true,32);
+    try cleanup.close(failurePlan);
+    try budget.finishPhase(phase); try budget.close(owner);
+    try meta.close(data); try budget.close(shared);
+    try check(root.live == 0 and root.pending == 0,"request leaked");
+    try budget.close(root);
+    // Code generator prints assembler only.
+}
+run() else error budget.LimitError { output("limit:"+error.message); process.setExitCode(1); }
+else error verify.InvalidPlan { output("plan:"+error.message); process.setExitCode(1); }
+else error failure.InvalidContext { output("context:"+error.message); process.setExitCode(1); }
+else error trace.InvalidTrace { output("trace:"+error.message); process.setExitCode(1); }
+else error native.Unsupported { output("native:"+error.message); process.setExitCode(1); }
+else error ProbeError { output("probe:"+error.message); process.setExitCode(1); };
