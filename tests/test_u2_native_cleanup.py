@@ -165,3 +165,55 @@ class U2NativeCleanupTests(unittest.TestCase):
                               str(paths[1])+'\n'+str(paths[0])+'\n').encode()
                 self.assertEqual((result.returncode,result.stdout,result.stderr),
                                  (0,expected,b''))
+
+    def test_canonical_single_owner_checked_edge_gate(self):
+        """Verified UIR checked edge/root/owner must precede File adapter emission."""
+        source=(ROOT/'tests/fixtures/u2_scoped_owners.eri').read_text(encoding='utf-8')
+        anchor='import compiler.u2_scoped_owners as owners;'
+        self.assertIn(anchor,source)
+        source=source.replace(anchor,anchor+'\\n'.replace('\\n','\\n')+
+            'import compiler.u2_cleanup_plan as cleanup;\\n'
+            'import compiler.u2_cleanup_verify as cleanupVerify;\\n'
+            'import compiler.u2_root_map as rootMap;\\n'
+            'import compiler.u2_cleanup_native_x86_64 as native;\\n',1)
+        err='continuation.InvalidBinding,owners.InvalidOwnership,ProbeError {'
+        self.assertIn(err,source)
+        source=source.replace(err,err.replace('ProbeError {',
+            'cleanupVerify.InvalidPlan,rootMap.InvalidRoots,native.Unsupported,ProbeError {'),1)
+        catch='else error ProbeError { output("probe:"+error.message);'
+        self.assertIn(catch,source)
+        source=source.replace(catch,
+            'else error cleanupVerify.InvalidPlan { output("plan:"+error.message); process.setExitCode(1); }\\n'
+            'else error rootMap.InvalidRoots { output("roots:"+error.message); process.setExitCode(1); }\\n'
+            'else error native.Unsupported { output("native:"+error.message); process.setExitCode(1); }\\n'+catch,1)
+        anchor='let mutate be try budget.constructionPhase(owner); let revision be fn.revision;'
+        self.assertIn(anchor,source)
+        inserted = (
+            anchor+'\\n'
+            '    let checkedPair be try continuation.bind(fn,graph,mutate,afterInner,done,failed,emptySig,failedSig,loc);\\n'
+            '    let selected be [cleanup.Scope { scope=outerScope; contract=consumption.index; value=afterValue.index; close=loc; }];\\n'
+            '    let nativePlan be try cleanupVerify.prepare(data,owner,mutate,selected,0,loc,false);\\n'
+            '    let nativeMap be try rootMap.create(fn,graph,mutate);\\n'
+            '    try native.emitCanonical(fn,graph,profile,table,mutate,nativeMap,checkedPair,outerClose,nativePlan,selected,0,loc,false,41);\\n'
+            '    let badPair be continuation.Pair { version=checkedPair.version; functionKey=checkedPair.functionKey; '
+            'typeOwner=checkedPair.typeOwner; revision=checkedPair.revision; source=checkedPair.source; '
+            'normal=checkedPair.normal; failure=checkedPair.failure; normalPayload=checkedPair.normalPayload; '
+            'failurePayload=checkedPair.failurePayload; location=innerLoc; };\\n'
+            '    native.emitCanonical(fn,graph,profile,table,mutate,nativeMap,badPair,outerClose,nativePlan,selected,0,loc,false,42)\\n'
+            '        else error native.Unsupported { output("u2-canonical-native-rejected:ok"); };\\n'
+            '    try rootMap.close(nativeMap); try cleanup.close(nativePlan);'
+        )
+        source=source.replace(anchor,inserted,1)
+        folder=self.directory/'u2-canonical-native-gate'
+        folder.mkdir(exist_ok=True)
+        (folder/'compiler').symlink_to(ROOT/'src/compiler',target_is_directory=True)
+        file=folder/'app.eri'; file.write_text(source,encoding='utf-8')
+        binary=folder/'generator'
+        self.assertEqual(build_native(file,binary,folder),0)
+        run=subprocess.run([str(binary)],capture_output=True,text=True,timeout=120)
+        self.assertEqual((run.returncode,run.stderr),(0,''),run.stdout)
+        self.assertIn('erist_u2_cleanup_41:',run.stdout)
+        self.assertNotIn('erist_u2_cleanup_42:',run.stdout)
+        self.assertIn('u2-canonical-native-rejected:ok',run.stdout)
+        self.assertIn('u2-scoped-owners:ok',run.stdout)
+        self.assertIn('call evn_cleanup_accumulate',run.stdout)
