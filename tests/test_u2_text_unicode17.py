@@ -71,6 +71,7 @@ _start:
                 runtime=None
                 trace=''
                 if expression == 'accentBytes':
+                    print('U2_TEXT_ASM_HEAD',repr(assembly[:950]),flush=True)
                     # TEMPORARY diagnostic: instrument emitted assembler only.
                     # The owned production runtime code is not changed.
                     marks=[]
