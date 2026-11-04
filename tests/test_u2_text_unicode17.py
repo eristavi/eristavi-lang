@@ -139,6 +139,8 @@ _start:
         # Outer scope retains the initial Text while boxing the depth
         # argument. Recursion then owns a separate registered native frame
         # per invocation; all levels trigger collection and remain live.
+        # Bottom frame has 1+depth scalars; unwinding adds the Text
+        # length from every parent frame: sum(1..depth).
         for depth in (0,1,3,8,31):
             with self.subTest(depth=depth):
                 start=f'''
@@ -162,7 +164,7 @@ _start:
     movq %rax,%rsi
     movq 0(%rsp),%rdi
     call erist_u2_text_entry
-    cmpq ${2*depth+1},%rax
+    cmpq ${1+depth+depth*(depth+1)//2},%rax
     jne .Lgraph_test_fail
     call evn_void
     movq %rax,%rsi
