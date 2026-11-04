@@ -5,7 +5,16 @@ Historical checkpoints are evidence, not instructions to restart old work.
 
 ## Resume here
 
-### 4 November 2026 — real native File cleanup from verified U2 plans
+### 4 November 2026 — canonical checked File-close admission added and focused-tested
+
+- **Current tested implementation revision:** `12bba417a822db605addf66304608d448f246490` on `compiler/u2-cleanup-foundation-20261102`, draft [PR #111](https://github.com/eristavi/eristavi-lang/pull/111). Production/main implementation is untouched. U2 issue #74 remains OPEN.
+- **Exact-code focused native cleanup run:** [#41821092507](https://github.com/eristavi/eristavi-lang/actions/runs/41821092507) **SUCCESS**. Both `test_u2_native_cleanup` methods pass: previously proven real File cleanup and new canonical one-owner checked-edge admission/refusal. This is focused Linux x86-64 only, not full U2 acceptance. The broad Eristavi CI check on this revision was pending at checkpoint preparation; check GitHub for its final outcome.
+- **New private gate:** `src/compiler/u2_cleanup_canonical_x86_64.eri` consumes a frozen canonical Function with opcode 46 and a freshly verified scoped-owner profile, fallible registry, continuation binding, complete class-5 failure-root map and exact original private cleanup plan. Before output it confirms the selected instruction's source, operand, close FunctionId, source LocId, both checked edges and the typed failure destination/root; it then invokes the independently verified existing native cleanup emitter. The malformed-location regression refuses before emitting the forbidden symbol.
+- **Closed admitted scope:** exactly one live File owner, no surviving outer owner, no already-failing entry, zero successful close results and one failure payload. It is an **ingress proof and forwarding adapter**, not full canonical CFG machine lowering or an SSA-liveness-aware machine-root publisher. The existing private native adapter performs actual File close execution; the bridge does not yet bind the canonical failure-root slot to that runtime scope, transport pending successful returns, lower arbitrary checked calls, unwind recursive checked frames or support multiple owners/mixed resource families.
+- **Next engineering gate:** connect the verified selected failure ValueId/root-map record to an *actual* live native safe-point root word and checked outcome dispatch, with independent forced-GC and malformed/stale/foreign root tests. Extend from one owner to surviving prefixes, pending returns, multi-exit chains and recursive frames only after the bound slice passes. Measure physical retained memory/RSS and allocator refusal, then perform independent Stage-0/native A/B and completed-batch four-platform qualification.
+- **Do not merge** PR #111, close #74, change the production compiler, restart paused #51, or run experimental owned compiler self-build. Do not count the three intentionally skipped tests as passes.
+
+### Earlier 4 November 2026 — real native File cleanup from verified U2 plans
 
 - **Current tested code revision:** `3f36fa48e473ef554f003b0c0edcdc36c44f3a73`
   on `compiler/u2-cleanup-foundation-20261102`, draft
@@ -110,7 +119,7 @@ work list alone does not authorize unrelated development.
 | --- | --- |
 | U1a | Accepted within its documented scalar/SSA/call/Float/provenance/physical boundary; #77 closed, qualified PR #105 merged. |
 | U1b | Bounded immutable aggregates/reference linked execution accepted; #73 closed, qualified PR #106 merged. |
-| U2 | Bounded native CFG List-i64, Unicode17 Text/indexing/NFC, conservative roots and 32-frame local self-recursion. Native verified-plan File cleanup now executes real reverse close and ordered saved-failure composition, but arbitrary opcode-46 CFG lowering, general recursion and complete managed-root/resource acceptance remain OPEN. #74 OPEN, #111 DRAFT/unmerged. |
+| U2 | Bounded native CFG List-i64, Unicode17 Text/indexing/NFC, conservative roots and 32-frame local self-recursion. Native verified-plan File cleanup executes reverse close and ordered saved-failure composition. A new single-owner canonical checked-close ingress gate is focused-tested; general opcode-46 CFG lowering, machine root publication, recursive checked unwind and complete managed-root/resource acceptance remain OPEN. #74 OPEN, #111 DRAFT/unmerged. |
 | U3 | Initial isolated Python shadow/planning foundation merged in #119; #75 OPEN. Direct production AST-to-owned-UIR integration remains unfinished. |
 | U4 | Initial parallel-move foundation in draft #120; #102 OPEN. Full machine migration remains unfinished. |
 | Production | Existing frontend/default compiler and 32-byte ABI retained. Latest recorded qualified production optimization is #110. No redesigned-UIR promotion. |
@@ -126,7 +135,7 @@ on main does not merge U2 implementation. Fetch current refs before continuing.
 | --- | --- |
 | Checked continuations | Canonical opcode-46 invokes, versioned FunctionId contracts, edge-only results and typed carried values. |
 | Cleanup and owners | Independently verified reverse-cleanup plans, bounded canonical close construction, lexical owner signatures, success-only acquisition and consumption on both close outcomes. Complete resource adapters remain open. |
-| Failure contexts | Typed Unicode17 primary/ordered-secondary reference models, class-5 saved-failure publisher probes, and **new real native File close failure composition** from verified private cleanup plans. Whole canonical opcode-46 native failure dispatch, all SSA/handler exits and complete cleanup integration remain open. |
+| Failure contexts | Typed Unicode17 primary/ordered-secondary reference models, class-5 saved-failure publisher probes, and **real native File close failure composition** from verified private cleanup plans. A bounded one-owner checked-edge admission now verifies canonical metadata before emitting the existing native adapter. Whole canonical opcode-46 native failure dispatch, all SSA/handler exits and complete cleanup integration remain open. |
 | Liveness | Independently recomputed CFG/SSA plan and publication obligations; the native List-i64 profile now applies verified successor live-in facts to retire dead List roots after edge transfers for <=32 tracked List values. Per-instruction/all-managed-root coverage remains open. |
 | Managed types | Owner-scoped Text/List/identity descriptors, independent corruption rejection and Unicode17 copy/view contracts; expanded Stage-0/C/owned parity oracle with predeclared accent/flag/ZWJ/empty/ASCII/copy values. This is not general canonical managed execution. |
 | Native Text/Unicode17 | Twelve exact runtime imports support scalar creation, immutable concat/copy/equality, byte/scalar/grapheme counts/indexing, explicit NFC and collection. Bounded CFG and 32-frame local self-recursion retain managed roots. A separate native verified-plan File cleanup adapter composes real saved failures; no arbitrary opcode-46 Text checked failure, general recursion, precise root retirement or full Text integration. |
@@ -152,6 +161,7 @@ compatibility and physical retention bounds are still outstanding.
 
 | Revision / run | Verified result |
 | --- | --- |
+| `12bba417a822db605addf66304608d448f246490` — [focused canonical/native #41821092507](https://github.com/eristavi/eristavi-lang/actions/runs/41821092507) | **SUCCESS:** two Linux x86-64 native cleanup test methods; original real File cleanup and canonical single-owner admission with bad-location refusal. Full four-platform U2 acceptance **not** performed. |
 | `3f36fa48e473ef554f003b0c0edcdc36c44f3a73` — [CI #41812694324](https://github.com/eristavi/eristavi-lang/actions/runs/41812694324) | **SUCCESS:** exact-code Linux Clang focused smoke 99 run / **96 passed, 0 failed, 3 intentional skips**, 306.028 s; patch check passed; four-platform test matrix intentionally skipped. |
 | `3f36fa48e473ef554f003b0c0edcdc36c44f3a73` — [dedicated #41812694413](https://github.com/eristavi/eristavi-lang/actions/runs/41812694413) | **SUCCESS:** one test method, four real native File cleanup scenarios; reverse owner ordering, primary plus secondary error payloads, forced GC, no remaining open resources and consumed slots. |
 | `ec982e1d969b3144b04f5e453100b407c3a8a34b` — [CI #41797941894](https://github.com/eristavi/eristavi-lang/actions/runs/41797941894) | **SUCCESS:** exact-head patch/scope and focused Linux Clang U2 smoke; **98 run, 95 passed, 0 failed, 3 intentional skips**. Full four-platform matrix intentionally skipped. |
