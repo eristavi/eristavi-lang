@@ -107,5 +107,7 @@ public function emitCanonical(routine identity build.Function,
     native.emit(routine.metadata,phase,plan,active,survive,exit,false,label)
         else error native.Unsupported {
             fail Unsupported { message=error.message; };
-        };
+        }
+        else error budget.LimitError { fail error; }
+        else error planVerify.InvalidPlan { fail error; };
 }
