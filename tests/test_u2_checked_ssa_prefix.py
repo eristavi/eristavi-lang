@@ -103,6 +103,10 @@ class U2CheckedSSAPrefixTests(unittest.TestCase):
         code += [
             "    call evn_empty_failure",
             "    movq %rax,16(%rsp)",
+            # Canonical source layout is [inner File, outer File, i64].
+            # The inner source SSA File must be poisoned after consumption.
+            "    movq 8(%rsp),%rax",
+            "    movq %%rax,%d(%%rsp)"%(base+src_outer-8),
             "    movq 0(%rsp),%rax",
             "    movq %%rax,%d(%%rsp)"%(base+src_outer),
             "    movq $%d,%d(%%rsp)"%(pending,base+src_scalar),
@@ -114,6 +118,8 @@ class U2CheckedSSAPrefixTests(unittest.TestCase):
             "    cmpq $%d,%%rax"%status,
             "    jne .Lresource_test_fail",
             "    cmpq $0,8(%rsp)","    jne .Lresource_test_fail",
+            "    cmpq $0,%d(%%rsp)"%(base+src_outer-8),
+            "    jne .Lresource_test_fail",
             "    cmpq $0,0(%rsp)","    je .Lresource_test_fail",
             "    cmpq $0,%d(%%rsp)"%(base+src_outer),
             "    jne .Lresource_test_fail",
