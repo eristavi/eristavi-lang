@@ -48,6 +48,8 @@ function run() fails budget.LimitError,verify.InvalidIR,
     let fn be try build.create(data,entrySig,owner,phase);
     let block be try build.block(fn,[]);
     let letter be try build.integer(fn,block,101,loc);
+    // Retain the accepted U1a concrete ValueId-list specialization.
+    if false { try build.jump(fn,block,block,[letter],loc); }
     let combining be try build.integer(fn,block,769,loc);
     let composed be try build.integer(fn,block,233,loc);
     let woman be try build.integer(fn,block,128105,loc);
