@@ -128,7 +128,7 @@ _start:
                 result=self.run_probe('view-bounds-'+label,
                     emitted.stdout+start+unicode_descriptors(),types=False)
                 self.assertEqual((result.returncode,result.stdout,result.stderr),
-                    (1,b'',b'Eristavi runtime fault: Text view index out of bounds\\n'))
+                    (1,b'',b'Eristavi runtime fault: Text view index out of bounds\n'))
 
     def test_surrogate_scalar_terminal_fault(self):
         original=(ROOT/'tests/fixtures/u2_text_unicode17.eri').read_text(encoding='utf-8')
