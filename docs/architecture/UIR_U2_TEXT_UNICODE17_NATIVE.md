@@ -72,3 +72,15 @@ and the final string.
 This is NOT exact machine-root liveness/release, per-instruction publication,
 cross-function recursion, checked failure execution, deterministic cleanup
 or physical retained-capacity proof. Those remain required acceptance gates.
+
+## Failure-context Text retention — independent reference checkpoint
+
+The existing typed `FailureContext` reference fixture now additionally
+retains decomposed UTF-8 Text primary payloads and ordered Unicode17 emoji
+and flag cleanup secondary payloads. It verifies no implicit normalization,
+byte/scalar/grapheme integrity and deterministic secondary order after
+several allocations, then releases charged context storage. The dedicated
+Text-focused test workflow selects this fixture alongside native Text tests.
+This is **reference validation only**: native canonical Text checked invoke,
+recursive frames, scope cleanup adapters and root publication for saved
+failures remain unimplemented and must not be reported complete.
