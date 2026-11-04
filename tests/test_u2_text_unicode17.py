@@ -54,6 +54,9 @@ class U2TextUnicode17Tests(unittest.TestCase):
                 emitted=self.generator('text-'+expression,source)
                 self.assertEqual((emitted.returncode,emitted.stderr),
                                  (0,''),emitted.stdout)
+                # Prevent a comment or output-boundary bug from swallowing the
+                # first native ABI guard and leaving an unconditional jne.
+                self.assertIn('    cmpl $1,ev_types+32(%rip)',emitted.stdout)
                 for symbol in ('erist_rt_unicode_from_scalar',
                                'erist_rt_text_concat','erist_rt_view_count',
                                'erist_rt_text_collect','evn_bind_roots'):
@@ -67,59 +70,15 @@ _start:
     jne .Lgraph_test_fail
     jmp .Lgraph_finish
 '''
-                assembly=emitted.stdout
-                runtime=None
-                trace=''
-                if expression == 'accentBytes':
-                    print('U2_TEXT_ASM_HEAD',repr(assembly[:950]),flush=True)
-                    # TEMPORARY diagnostic: instrument emitted assembler only.
-                    # The owned production runtime code is not changed.
-                    marks=[]
-                    observed=[]
-                    for line in assembly.splitlines(keepends=True):
-                        if (line.startswith('    call ') or
-                            line.startswith('    cmp') or
-                            line.startswith('    movabsq ') or
-                            line.startswith('    jne ')) and len(marks)<90:
-                            byte=33+len(marks)
-                            marks.append((chr(byte),line.strip()))
-                            observed.append(f'    movb ${byte},.Ltext_trace_byte(%rip)\n')
-                        observed.append(line)
-                        if line.strip() == 'cmpl $1,ev_types+32(%rip)':
-                            observed.append('    sete .Ltext_compare_ok(%rip)\n')
-                    assembly=('.data\n.Ltext_trace_byte:\n.byte 0\n'
-                              '.Ltext_compare_ok:\n.byte 0\n'+''.join(observed))
-                    fault_patch=(
-                        '.Lvalue_fault_emit:\n'
-                        '    pushq %rax\n    pushq %rdi\n    pushq %rsi\n'
-                        '    pushq %rdx\n    pushq %rcx\n    pushq %r11\n'
-
-                        '    movl $1,%eax\n    movl $2,%edi\n'
-                        '    leaq .Ltext_trace_byte(%rip),%rsi\n'
-                        '    movl $1,%edx\n    syscall\n'
-                        '    movl ev_types+32(%rip),%eax\n'
-                        '    cmpl $1,%eax\n'
-                        '    sete %al\n'
-                        '    movb %al,.Ltext_compare_ok(%rip)\n'
-                        '    addb $48,.Ltext_compare_ok(%rip)\n'
-                        '    movl $1,%eax\n    movl $2,%edi\n'
-                        '    leaq .Ltext_compare_ok(%rip),%rsi\n'
-                        '    movl $1,%edx\n    syscall\n'
-                        '    popq %r11\n    popq %rcx\n    popq %rdx\n'
-                        '    popq %rsi\n    popq %rdi\n    popq %rax\n'
-                    )
-                    self.assertIn('.Lvalue_fault_emit:\n',self.runtime)
-                    runtime=self.runtime.replace('.Lvalue_fault_emit:\n',fault_patch,1)
-                    trace=repr(marks)
                 try:
                     result=self.run_probe('text-'+expression,
-                        assembly+start+graph.FINISH+unicode_descriptors(),
-                        runtime=runtime,types=False)
+                        emitted.stdout+start+graph.FINISH+unicode_descriptors(),
+                        types=False)
                 except subprocess.CalledProcessError as exc:
                     self.fail('native linker error: '+(exc.stderr or b'').decode(
                         'utf-8',errors='replace'))
                 self.assertEqual((result.returncode,result.stdout,result.stderr),
-                                 (0,b'',b''),trace)
+                                 (0,b'',b''))
 
     def test_malformed_descriptor_and_import_refuse_before_assembly(self):
         original=(ROOT/'tests/fixtures/u2_text_unicode17.eri').read_text(encoding='utf-8')
