@@ -63,7 +63,7 @@ class U2TextUnicode17Tests(unittest.TestCase):
 .globl _start
 _start:
     call erist_u2_text_entry
-    cmpq efe1aae05b17c6c5cd6401145dd6c2c4fcb85869,%rax
+    cmpq ${expected},%rax
     jne .Lgraph_test_fail
     jmp .Lgraph_finish
 '''
