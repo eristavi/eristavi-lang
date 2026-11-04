@@ -28,7 +28,11 @@ public function name(op Int) returns Text {
     if op == 5 { return "u2.text.bytes.count"; }
     if op == 6 { return "u2.text.scalars.count"; }
     if op == 7 { return "u2.text.characters.count"; }
-    return "u2.text.collect";
+    if op == 8 { return "u2.text.collect"; }
+    if op == 9 { return "u2.text.bytes.index"; }
+    if op == 10 { return "u2.text.scalars.index"; }
+    if op == 11 { return "u2.text.characters.index"; }
+    return "u2.text.normalizeNfc";
 }
 function verify(fn identity build.Function,g identity aggregate.Registry,
     carrier aggregate.TypeId,p identity budget.Phase)
@@ -41,13 +45,13 @@ function verify(fn identity build.Function,g identity aggregate.Registry,
         (try aggregate.fieldCount(g,p,carrier)) == 0 and
         fn.blocks.length == 5 and fn.edges.length == 0 and
         fn.values.length/4 <= 128 and fn.instructions.length/10 <= 256 and
-        fn.metadata.declarations.length == 48 and
+        fn.metadata.declarations.length == 72 and
         (try meta.parameterCount(fn.metadata,p,fn.signature)) == 0 and
         (try meta.resultCount(fn.metadata,p,fn.signature)) == 1 and
         (resultType.index == 1 or resultType.index == 2),
         "unsupported bounded canonical Text profile");
     let op be 1;
-    while op <= 8 {
+    while op <= 12 {
         let d be (op-1)*6;
         let symbol be name(op);
         let first be try get(fn.metadata.declarations,p,d+1);
@@ -65,7 +69,7 @@ function verify(fn identity build.Function,g identity aggregate.Registry,
         let target be meta.FunctionId { owner=fn.metadata.key; index=op; };
         let sig be try meta.functionSignature(fn.metadata,p,target);
         let count be 1;
-        if op == 2 or op == 4 { count=2; }
+        if op == 2 or op == 4 or (op >= 9 and op <= 11) { count=2; }
         if op == 8 { count=0; }
         let resultCount be 1;
         if op == 8 { resultCount=0; }
@@ -75,7 +79,7 @@ function verify(fn identity build.Function,g identity aggregate.Registry,
         j=0;
         while j < count {
             let ty be carrier.index;
-            if op == 1 { ty=2; }
+            if op == 1 or (op >= 9 and op <= 11 and j == 1) { ty=2; }
             try require((try signatures.parameterType(fn.metadata,g,p,sig,j)).index ==
                 ty,"unsupported Text runtime argument type");
             j=j+1;
@@ -83,7 +87,7 @@ function verify(fn identity build.Function,g identity aggregate.Registry,
         if resultCount == 1 {
             let ty be carrier.index;
             if op == 4 { ty=1; }
-            if op == 5 or op == 6 or op == 7 { ty=2; }
+            if op == 5 or op == 6 or op == 7 or op == 9 { ty=2; }
             try require((try signatures.resultType(fn.metadata,g,p,sig,0)).index ==
                 ty,"unsupported Text runtime result type");
         }
@@ -96,7 +100,7 @@ function verify(fn identity build.Function,g identity aggregate.Registry,
             "Text carrier is not an ordinary structural aggregate");
         if code == 34 {
             let instructionOp be try get(fn.instructions,p,(i-1)*10+7);
-            try require(instructionOp >= 1 and instructionOp <= 8,
+            try require(instructionOp >= 1 and instructionOp <= 12,
                 "unknown Text runtime call");
         }
         i=i+1;
@@ -185,17 +189,27 @@ function emitNative(fn identity build.Function,p identity budget.Phase)
                 try load(fn,p,inst,1,"%rdx");
                 line("call erist_rt_text_binary");
             }
-            if op == 5 or op == 6 or op == 7 {
+            if op == 5 or op == 6 or op == 7 or op == 9 or op == 10 or op == 11 {
                 let kind be 15;
-                if op == 6 { kind=16; }
-                if op == 7 { kind=17; }
+                if op == 6 or op == 10 { kind=16; }
+                if op == 7 or op == 11 { kind=17; }
                 line("movl $"+format.integer(kind)+",%edi");
                 try load(fn,p,inst,0,"%rsi");
                 line("call evn_view");
                 line("movq %rax,"+format.integer(viewSlot)+"(%rsp)");
                 line("movq %rax,%rdi");
-                line("call erist_rt_view_count");
+                if op == 5 or op == 6 or op == 7 {
+                    line("call erist_rt_view_count");
+                } else {
+                    try load(fn,p,inst,1,"%rsi");
+                    line("movq 8(%rsi),%rsi");
+                    line("call erist_rt_view_index");
+                }
                 line("movq $0,"+format.integer(viewSlot)+"(%rsp)");
+            }
+            if op == 12 {
+                try load(fn,p,inst,0,"%rdi");
+                line("call erist_rt_unicode_normalize_nfc");
             }
             if op == 8 {
                 line("xorl %edi,%edi");
