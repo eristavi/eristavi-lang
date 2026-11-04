@@ -5,6 +5,36 @@ Historical checkpoints are evidence, not instructions to restart old work.
 
 ## Resume here
 
+### 4 November 2026 — Managed Text / Unicode17 focused checkpoint
+
+- **Verified candidate:** `bce2e9c59b7c997d436f9b74980a31b6c4878aa2` on draft PR #111.
+  [Dedicated native Text checks #41789413436](https://github.com/eristavi/eristavi-lang/actions/runs/41789413436)
+  **PASSED**: 3 test methods, 0 failures, covering eight native
+  expression/Unicode cases, invalid surrogate terminal fault, and malformed
+  descriptor/import rejection. Includes immutable copy and explicit GC.
+- **Current U2 full focused smoke:** [#41789413729](https://github.com/eristavi/eristavi-lang/actions/runs/41789413729)
+  still in progress at this checkpoint. Do NOT mark full smoke green
+  until that exact-head run completes. The four-platform U2 matrix and
+  completed-batch qualification remain outstanding.
+- **Descriptor/reference basis:** stronger frozen Text kind/copy/view/
+  Unicode17 policy, negative corruption/foreign TypeId checks and the
+  independent Stage-0/C/owned reference corpus of accents, ZWJ emoji,
+  flags, ASCII wrappers, empty Text and value copying. These reference
+  checks passed on prior focused execution; native Text is a distinct
+  opt-in UIR adapter, not production frontend lowering.
+- **Failure and repair history:** the initial native Text commit
+  `aa675d83` failed on a no-shadowing diagnostic. Later revisions
+  corrected the fixture's ValueId specialization, a numeric assembly
+  oracle/linker issue, and an accidentally removed first descriptor
+  guard during temporary instrumentation. Temporary fault tracing was
+  removed before the passing exact-head dedicated native run.
+- **Remaining Text scope:** general Text operations and views/indexing,
+  multi-block CFG and recursive roots, complete checked failures/cleanup,
+  malformed/fuzz and physical RSS/retention evidence, Stage-0
+  differential execution on the new UIR adapter, and final platform
+  qualification. **Do not merge U2 or close #74 on this evidence alone.**
+
+
 - **Active work:** U2 on `compiler/u2-cleanup-foundation-20261102`, draft
   [PR #111](https://github.com/eristavi/eristavi-lang/pull/111). U2 is unmerged;
   issue #74 remains OPEN.
