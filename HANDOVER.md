@@ -1,34 +1,72 @@
 # Eristavi compiler — current handover
 
-Reviewed 3 November 2026 (Asia/Nicosia). This is the current recovery document.
+Reviewed 4 November 2026 (Asia/Nicosia). This is the current recovery document.
 Historical checkpoints are evidence, not instructions to restart old work.
 
 ## Resume here
 
+### 4 November 2026 — Managed Text / Unicode17 focused checkpoint
+
+- **Verified candidate:** `bce2e9c59b7c997d436f9b74980a31b6c4878aa2` on draft PR #111.
+  [Dedicated native Text checks #41789413436](https://github.com/eristavi/eristavi-lang/actions/runs/41789413436)
+  **PASSED**: 3 test methods, 0 failures, covering eight native
+  expression/Unicode cases, invalid surrogate terminal fault, and malformed
+  descriptor/import rejection. Includes immutable copy and explicit GC.
+- **Current U2 complete focused smoke:** [#41789413729 (attempt 2)](https://github.com/eristavi/eristavi-lang/actions/runs/41789413729)
+  **PASSED on exact code bce2e9c5**: patch/scope check success, Linux Clang
+  95 run, **92 passed, 0 failed, 3 intentional skips**, 421.127 seconds.
+  Attempt 1 was cancelled by the subsequent handover-only push, then the
+  same exact-head focused job was re-run and passed. The four-platform matrix
+  was intentionally skipped; no completed-batch U2 qualification.
+- **Descriptor/reference basis:** stronger frozen Text kind/copy/view/
+  Unicode17 policy, negative corruption/foreign TypeId checks and the
+  independent Stage-0/C/owned reference corpus of accents, ZWJ emoji,
+  flags, ASCII wrappers, empty Text and value copying. These reference
+  checks passed on prior focused execution; native Text is a distinct
+  opt-in UIR adapter, not production frontend lowering.
+- **Failure and repair history:** the initial native Text commit
+  `aa675d83` failed on a no-shadowing diagnostic. Later revisions
+  corrected the fixture's ValueId specialization, a numeric assembly
+  oracle/linker issue, and an accidentally removed first descriptor
+  guard during temporary instrumentation. Temporary fault tracing was
+  removed before the passing exact-head dedicated native run.
+- **Remaining Text scope:** general Text operations and views/indexing,
+  multi-block CFG and recursive roots, complete checked failures/cleanup,
+  malformed/fuzz and physical RSS/retention evidence, Stage-0
+  differential execution on the new UIR adapter, and final platform
+  qualification. **Do not merge U2 or close #74 on this evidence alone.**
+
+
 - **Active work:** U2 on `compiler/u2-cleanup-foundation-20261102`, draft
   [PR #111](https://github.com/eristavi/eristavi-lang/pull/111). U2 is unmerged;
   issue #74 remains OPEN.
-- **Current tested implementation:** native CFG List-i64 successor-edge root
-  retirement, code commit `91f2703532a5b4644c25e0b0fc908d3106e7f769`;
-  final test-only revision `d2a25a82d9d8216f494118b348878e25176903d1`.
-- **Latest hosted evidence:** [CI #41718084522](https://github.com/eristavi/eristavi-lang/actions/runs/41718084522)
-  on exact `d2a25a82`: patch check SUCCESS; focused Linux Clang smoke
-  **92 run, 89 passed, 0 failed, 3 intentional skips, 382.990 seconds**.
-  Four-platform matrix intentionally SKIPPED; no full qualification.
+- **Current tested implementation:** bounded native CFG List-i64 successor-edge
+  root retirement plus opt-in one-block canonical managed Text/Unicode17
+  execution (scalar construction, immutable concat/copy/equality, 3 explicit
+  Unicode17 view counts, collection and invalid scalar rejection).
+  Text code revision `bce2e9c59b7c997d436f9b74980a31b6c4878aa2`.
+- **Latest hosted evidence:** [CI #41789413729 attempt 2](https://github.com/eristavi/eristavi-lang/actions/runs/41789413729)
+  on exact `bce2e9c5`: patch check SUCCESS; focused Linux Clang smoke
+  **95 run, 92 passed, 0 failed, 3 intentional skips, 421.127 seconds**.
+  [Dedicated Text #41789413436](https://github.com/eristavi/eristavi-lang/actions/runs/41789413436)
+  also PASSED, 3 test methods and eight Unicode result cases.
+  Four-platform matrix intentionally SKIPPED; no final U2 qualification.
 - **New implementation boundary:** when at most 32 List-carrier SSA values are
   selected, verified canonical CFG live-in facts clear dead List root slots
   after simultaneous successor edge transfers, including loops and cyclic
   moves, before the next possible allocation. More than 32 List values retain
   the existing conservative multi-block policy, up to 128 total native SSA
   values. Intra-block roots remain conservative; no general exact root map.
-- **Next action:** add independent machine-root/dead-value rejection and
-  physical GC retained-capacity evidence for edge pruning; then extend exact
-  per-instruction liveness only after validating bounded work and semantics.
-  Preserve the source-neutral UIR, previous runtime/profile, ABI and fault
-  behavior. No speculative production promotion.
-- **This session:** fixed the previous three EOF fixture patch-check errors,
-  developed bounded native List edge-root retirement and observer tests, and
-  reconciled its focused CI outcome. No U2 merge, closure, full four-platform
+- **Next action:** develop Text view indexing/bounds and fuller canonical
+  managed operations in separately bounded slices; prove native roots and
+  memory-retention evidence across CFG/recursion/failure paths. Independently
+  reject corrupt/stale/dead machine roots; retain fallback root conservatism
+  until exact publication is qualified. Preserve UIR/ABI and failure behavior.
+- **This session:** strengthened Text descriptors and independent Unicode17
+  reference vectors, added and validated a bounded canonical Text native
+  adapter, corrected malformed source generation and test-oracle assembly,
+  removed temporary fault instrumentation, and added a dedicated quick native
+  Text workflow. Focused Linux CI passed. No U2 merge/closure, four-platform
   qualification, owned full self-build or restart of paused #51.
 
 Read the governing documents below before design or implementation. The user has
@@ -41,7 +79,7 @@ work list alone does not authorize unrelated development.
 | --- | --- |
 | U1a | Accepted within its documented scalar/SSA/call/Float/provenance/physical boundary; #77 closed, qualified PR #105 merged. |
 | U1b | Bounded immutable aggregates/reference linked execution accepted; #73 closed, qualified PR #106 merged. |
-| U2 | Implemented partial foundation plus bounded native List-i64 path; #74 OPEN, #111 DRAFT/unmerged; full acceptance outstanding. |
+| U2 | Partial foundation plus bounded native CFG List-i64 and one-block managed Text/Unicode17 paths; #74 OPEN, #111 DRAFT/unmerged; general runtime/cleanup acceptance outstanding. |
 | U3 | Initial isolated Python shadow/planning foundation merged in #119; #75 OPEN. Direct production AST-to-owned-UIR integration remains unfinished. |
 | U4 | Initial parallel-move foundation in draft #120; #102 OPEN. Full machine migration remains unfinished. |
 | Production | Existing frontend/default compiler and 32-byte ABI retained. Latest recorded qualified production optimization is #110. No redesigned-UIR promotion. |
@@ -59,7 +97,8 @@ on main does not merge U2 implementation. Fetch current refs before continuing.
 | Cleanup and owners | Independently verified reverse-cleanup plans, bounded canonical close construction, lexical owner signatures, success-only acquisition and consumption on both close outcomes. Complete resource adapters remain open. |
 | Failure contexts | Typed primary/ordered-secondary reference models and semantic matrix; class-5 saved-failure root metadata and bounded native publisher probes. These do not establish complete canonical checked-runtime integration. |
 | Liveness | Independently recomputed CFG/SSA plan and publication obligations; the native List-i64 profile now applies verified successor live-in facts to retire dead List roots after edge transfers for <=32 tracked List values. Per-instruction/all-managed-root coverage remains open. |
-| Managed types | Owner-scoped Text/List/identity descriptors, copy-versus-alias contracts and typed operation shapes; existing Stage-0/C/owned runtime parity oracle. This is not general canonical managed execution. |
+| Managed types | Owner-scoped Text/List/identity descriptors, independent corruption rejection and Unicode17 copy/view contracts; expanded Stage-0/C/owned parity oracle with predeclared accent/flag/ZWJ/empty/ASCII/copy values. This is not general canonical managed execution. |
+| Native Text/Unicode17 | Independently verified one-block canonical Text native adapter with eight exact imported operations: scalar creation, concat/copy/equality, byte/scalar/grapheme counts and explicit GC. Dedicated exact-head native tests and full focused U2 smoke passed. Bound to 128 SSA values, 256 instructions, immutable Text descriptor, one scalar return; no CFG, recursive, indexed view or failure/cleanup coverage. |
 | Native List-i64 | Eristavi-written optional x86-64 adapter for empty/copy/append/replace/count/get/collection, branches/joins/backedges/cyclic transfers; verified successor-edge root retirement now focused-tested for <=32 selected List values. |
 | Native boundaries | Managed-registry entry validation, Int/Bool/List runtime descriptor checks, List bounds source name/line/column, independent fixture frame-layout checks, GC/snapshot/reclamation and fault probes. |
 
@@ -82,6 +121,8 @@ compatibility and physical retention bounds are still outstanding.
 
 | Revision / run | Verified result |
 | --- | --- |
+| `bce2e9c59b7c997d436f9b74980a31b6c4878aa2` — [hosted U2 #41789413729 attempt 2](https://github.com/eristavi/eristavi-lang/actions/runs/41789413729) | **SUCCESS:** scope/patch and Linux Clang focused smoke, 95 run, **92 passed, 0 failed, 3 intentional skips**, 421.127 s. Exact code tested; full platform matrix skipped. |
+| `bce2e9c59b7c997d436f9b74980a31b6c4878aa2` — [dedicated Text #41789413436](https://github.com/eristavi/eristavi-lang/actions/runs/41789413436) | **SUCCESS:** three native Text/Unicode17 test methods, eight value/view cases plus corrupted descriptors/imports and invalid scalar fault. |
 | `d2a25a82d9d8216f494118b348878e25176903d1` — [hosted #41718084522](https://github.com/eristavi/eristavi-lang/actions/runs/41718084522) | **SUCCESS:** scope/patch check and Linux Clang focused smoke: 92 run, **89 passed, 0 failed, 3 intentional skips**; 382.990 s. Includes List snapshots, loop/backedge, cyclic swap, GC and added edge-clear assembly assertion. Full platform matrix SKIPPED. |
 | `5bcaf8533bedc44f0b4689c3d0cbddc2c1fc9ac3` — [hosted #41711062178](https://github.com/eristavi/eristavi-lang/actions/runs/41711062178) | **SUCCESS:** earlier fixture-only EOF repair; scope and focused Linux smoke passed. |
 | `c7149aee5102b67b2a68e888776406ea01a0035e` — local coherent smoke | 92 run, **89 passed, 0 failed, 3 intentional opt-in skips**, 255.341 s. Covers CFG List snapshots/cyclic swaps, registry/runtime rejection, bounds origins and existing regressions. |
@@ -92,7 +133,7 @@ Original implementation source hashes and raw outcomes/logs (unchanged by fixtur
 [JSON](https://github.com/eristavi/eristavi-lang/blob/c7149aee5102b67b2a68e888776406ea01a0035e/docs/evidence/2026-11-03/u2-list-cfg-smoke.json)
 and [raw log](https://github.com/eristavi/eristavi-lang/blob/c7149aee5102b67b2a68e888776406ea01a0035e/docs/evidence/2026-11-03/u2-list-cfg-smoke.log).
 Exact native scope, algorithms and exclusions:
-[List-i64 contract](https://github.com/eristavi/eristavi-lang/blob/compiler/u2-cleanup-foundation-20261102/docs/architecture/UIR_U2_LIST_I64_NATIVE.md) (U2 draft branch, not main); the earlier pinned file remains historical evidence.
+[List-i64 contract](docs/architecture/UIR_U2_LIST_I64_NATIVE.md) (branch current); the earlier pinned file remains historical evidence.
 
 Three skipped probes are not passes. No full U2 four-platform CI or
 completed-batch qualification has passed. Earlier CI #41698723325 failed
@@ -118,8 +159,9 @@ evidence only.
    Resolve the current 32-tracked-List-value profile limit deliberately;
    keep conservative fallback until new proof is qualified.
 3. Complete general canonical managed representation and eligible-local
-   promotion; extend owned execution to Text/Unicode17, nested Lists and identity
-   with value-copy/alias guarantees and identity-cycle coverage.
+   promotion; extend the newly verified bounded one-block Text/Unicode17
+   adapter to indexed views, full Text semantics, CFG/recursion/checked exits,
+   nested Lists and identity with value-copy/alias and cycle coverage.
 4. Connect complete checked FailureContext and real resource adapters to canonical
    lowering: pending returns, all exits, exactly-once reverse cleanup, stable
    primary and ordered secondary failures, roots through cleanup and recursion.
