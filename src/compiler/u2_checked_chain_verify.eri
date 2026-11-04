@@ -57,14 +57,20 @@ public function verify(routine identity build.Function,
     fails budget.LimitError,canonical.InvalidIR,owners.InvalidOwnership,
         roots.InvalidRoots,continuation.InvalidBinding,
         planVerify.InvalidPlan,ssa.InvalidSSA,InvalidChain {
+    output(".Lu2_chain_internal_0:");
     let firstProof be try ssa.verify(routine,graph,profile,contracts,phase,
         map,first,firstCall,innerPlan,innerOwners,innerOwners.count-1,innerExit);
+    output(".Lu2_chain_internal_1:");
     let normalProof be try ssa.verify(routine,graph,profile,contracts,phase,
         map,normal,normalCall,normalPlan,normalOwners,0,outerExit);
+    output(".Lu2_chain_internal_2:");
     let failedBinding be try continuation.verify(routine,graph,phase,failed);
+    output(".Lu2_chain_internal_3:");
     let failedPlanProof be try planVerify.verify(routine.metadata,phase,
         failedPlan,failedOwners,0,outerExit,true);
+    output(".Lu2_chain_internal_4:");
     let rootProof be try roots.verify(map,routine,graph,phase);
+    output(".Lu2_chain_internal_5:");
     let ownerProof be try owners.verify(profile,routine,graph,contracts);
     try require(innerOwners.count == 2 and firstProof.survivingOwners == 1 and
         normalOwners.count == 1 and failedOwners.count == 1 and
@@ -91,6 +97,7 @@ public function verify(routine identity build.Function,
         "outer owner scope/contract/origin changed across checked edges");
     let normalSource be (normal.source.index-1)*5;
     let failedSource be (failed.source.index-1)*5;
+    output(".Lu2_chain_internal_6:");
     let sourceFirst be try read(routine.blocks,phase,failedSource);
     let nfirst be try read(routine.blocks,phase,normalSource);
     try require((try read(routine.blocks,phase,failedSource+1)) == 3 and
@@ -161,6 +168,7 @@ public function verify(routine identity build.Function,
         (try read(routine.values,phase,(newFailure+1)*4)) ==
             meta.i64().index,
         "already-failing close has wrong typed propagation destination");
+    output(".Lu2_chain_internal_7:");
     let rootIndex be -1; let i be 0;
     while i < rootProof.roots {
         try budget.work(phase,1);
@@ -181,6 +189,7 @@ public function verify(routine identity build.Function,
     try require(rootIndex >= 0 and normalProof.sourceValue ==
         firstProof.normalValue and normalProof.normalValue > 0,
         "checked path missing verified normal or already-failing root");
+    output(".Lu2_chain_internal_8:");
     return Report {
         firstClose=firstCall.index;
         normalClose=normalCall.index;
