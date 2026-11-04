@@ -223,3 +223,95 @@ class U2NativeCleanupTests(unittest.TestCase):
         self.assertIn('u2-canonical-native-rejected:ok',run.stdout)
         self.assertIn('u2-scoped-owners:ok',run.stdout)
         self.assertIn('call evn_cleanup_accumulate',run.stdout)
+
+    def test_surviving_prefix_and_pending_scalar_return(self):
+        """Inner exits do not close outer File; pending i64 cancels on failure."""
+        emitted=self.generator()
+        for label in (33,34,35,36):
+            self.assertIn("erist_u2_cleanup_"+str(label)+":",emitted)
+        self.assertIn("erist_u2_cleanup_pending_36:",emitted)
+        paths=[self.directory/f'prefix-{i}.txt' for i in range(3)]
+        for path in paths:
+            path.write_text('file',encoding='utf-8')
+        for failed_close in (False,True):
+            with self.subTest(failed_close=failed_close):
+                bits=[]
+                for i,path in enumerate(paths):
+                    bits.extend([
+                        f'leaq .Lprefix{i}(%rip),%rdi',
+                        f'movl $(.Lprefix{i}_end-.Lprefix{i}),%esi',
+                        'call evn_text',
+                        'movq %rax,%rsi',
+                        'movl $9,%edi',
+                        'xorl %edx,%edx',
+                        'call erist_rt_file_open',
+                        f'movq %rax,{i*8}(%rsp)',
+                    ])
+                bits += [
+                    'call evn_empty_failure',
+                    'movq %rax,24(%rsp)',
+                    'movq %rsp,%rdi',
+                    'movq %rax,%rsi',
+                    'movq $74565,%rdx',
+                    'call erist_u2_cleanup_pending_36',
+                    'cmpq $'+('-1' if failed_close else '0')+',%rdx',
+                    'jne .Lresource_test_fail',
+                    'cmpq $'+('0' if failed_close else '74565')+',%rax',
+                    'jne .Lresource_test_fail',
+                    'cmpq $0,8(%rsp)',
+                    'jne .Lresource_test_fail',
+                    'cmpq $0,16(%rsp)',
+                    'jne .Lresource_test_fail',
+                    'cmpq $0,0(%rsp)',
+                    'je .Lresource_test_fail',
+                    'call erist_rt_open_resources',
+                    'cmpq $1,%rax',
+                    'jne .Lresource_test_fail',
+                    'movq %rsp,%rdi',
+                    'movq 24(%rsp),%rsi',
+                    'call erist_u2_cleanup_'+('35' if failed_close else '34'),
+                    'cmpq $'+('-1' if failed_close else '0')+',%rax',
+                    'jne .Lresource_test_fail',
+                    'cmpq $0,0(%rsp)',
+                    'jne .Lresource_test_fail',
+                    'xorl %edi,%edi',
+                    'call erist_rt_slots_collect',
+                    'call erist_rt_text_collect',
+                    'call erist_rt_open_resources',
+                    'testq %rax,%rax',
+                    'jne .Lresource_test_fail',
+                    'movq $0,24(%rsp)',
+                    'call evn_void',
+                    'movq %rax,%rsi',
+                    'movq 32(%rsp),%rdi',
+                    'call evn_scope_leave',
+                    'addq $48,%rsp',
+                    'call .Lresource_finish',
+                    'xorl %edi,%edi',
+                    'jmp erist_rt_exit',
+                ]
+                assembly=[
+                    '.text','.globl _start','_start:',
+                    'subq $48,%rsp',
+                    'movq $0,0(%rsp)','movq $0,8(%rsp)',
+                    'movq $0,16(%rsp)','movq $0,24(%rsp)',
+                    'call evn_scope_enter',
+                    'movq %rax,32(%rsp)',
+                    'movq %rax,%rdi','movq %rsp,%rsi',
+                    'leaq .Lprefix_classes(%rip),%rdx',
+                    'movl $4,%ecx',
+                    'call evn_bind_roots',
+                ]+['    '+row for row in bits]+[
+                    '.section .rodata',
+                    '.Lprefix_classes:','.byte 1,1,1,5',
+                ]
+                for i,path in enumerate(paths):
+                    assembly.append(self.code_bytes(
+                        'prefix'+str(i),str(path).encode('utf-8')))
+                native=emitted+'\n'.join(assembly)+'\n'+resource.FINISH
+                runtime=(resource.close_failures(self.runtime) if failed_close
+                         else self.runtime)
+                result=self.run_probe('u2-prefix-'+str(int(failed_close)),
+                    native,runtime=runtime)
+                self.assertEqual((result.returncode,result.stdout,result.stderr),
+                    (0,b'',b''))
