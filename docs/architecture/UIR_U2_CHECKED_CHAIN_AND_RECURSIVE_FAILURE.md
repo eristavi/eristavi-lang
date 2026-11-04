@@ -119,10 +119,11 @@ values or an independent new UIR runtime executable oracle.
 - [Exact-code Linux Clang smoke #41886934726](https://github.com/eristavi/eristavi-lang/actions/runs/41886934726)
   **SUCCESS: 105 run / 102 passed / 0 failed / 3 intentional skips**,
   579.788 seconds, including native nested File and recursive frame checks.
-  The same-code [sibling run #41886929188](https://github.com/eristavi/eristavi-lang/actions/runs/41886929188)
-  was still active when the passing run was captured; this duplicate adds
-  no new acceptance requirement. Full four-platform matrix and completed-
-  batch qualification were **not run**.
+  The same-code [sibling Linux smoke #41886929188](https://github.com/eristavi/eristavi-lang/actions/runs/41886929188)
+  also **SUCCESS: 105 run / 102 passed / 0 failed / 3 skips**
+  in 600.284 seconds. Both runs use the same exact implementation SHA;
+  this duplicate adds no new acceptance requirement. Full four-platform
+  matrix and completed-batch qualification were **not run**.
 - Exploratory red checks before these passing revisions exposed a
   *test-fixture* bug: obtaining `build.parameter` after Function completion
   rejected valid U1a accounting state. Pre-capturing those typed ValueIds
