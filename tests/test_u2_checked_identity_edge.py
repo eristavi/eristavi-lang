@@ -70,7 +70,8 @@ class U2CheckedIdentityEdgeTests(unittest.TestCase):
         next_offsets=[int(i) for i in re.findall(
             r"^    movq %rax,(\d+)\(%rdi\)$",asm,re.M)]
         self.assertEqual(len(next_offsets),2)
-        normal_offset,fail_offset=next_offsets[0],next_offsets[1]
+        # Emission order is checked FAILURE first, then NORMAL.
+        fail_offset,normal_offset=next_offsets[0],next_offsets[1]
         self.assertEqual(len({from_offset,normal_offset,fail_offset}),3)
         for offset in (from_offset,normal_offset,fail_offset):
             self.assertEqual(offset%8,0)
