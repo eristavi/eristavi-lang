@@ -111,3 +111,62 @@ corruption probes. It does **not** emit those native root stores or prove
 the currently unsupported Text/List/identity type classifications; the
 native saved-failure class-5 publisher remains a separate bounded slice.
 Do not merge PR #111 or close #74 on this evidence.
+
+
+## 5 November 2026 — bounded canonical identity SSA native publication
+
+An opt-in Eristavi-owned x86-64 adapter,
+src/compiler/u2_identity_root_x86_64.eri, emits **real class-1 root
+publication, retirement and release helpers** for one independently
+verified canonical SSA instruction. Its input is a frozen managed identity
+descriptor with kind 3 and shared-handle copy policy 2, an exact structural
+carrier, a current verified SSA plan, and a concrete canonical InstId.
+This is a root-machine fragment, not general native identity-value
+construction, whole-Function lowering or a separate executable IR.
+
+Emission first invokes the existing managed identity admission gate, then
+independently verifies the selected SSA plan and its exact
+requirePublished before/after root sets. It refuses unsupported/foreign
+instruction IDs, owner/descriptor mismatches, stale or corrupted plans
+and out-of-range private symbol labels before emitting assembly. The
+selected profile retains the **32 managed SSA value** maximum; values
+outside it are not silently omitted.
+
+The class-1 root vector and the original canonical SSA frame are **two
+separate caller-owned writable buffers**. Root words are zero-initialized
+before scope registration. The emitter assigns contiguous 8-byte offsets
+to selected root entries, but reads physical boxed-handle words from the
+original ValueId-based SSA offsets 8*(index-1). Each generated
+before and after helper writes the complete selected live set,
+zeroing every selected dead root. Live required identity handles must be
+nonzero; null required words fault through the existing native internal
+runtime-fault path. The release helper zeros every selected entry. No new
+GC tracer, source syntax, public ABI or special identity collection mode
+is introduced; the runtime's existing scope binder and graph collector
+remain authoritative.
+
+Focused native Linux x86-64 Clang test evidence:
+[Actions #42018250948](https://github.com/eristavi/eristavi-lang/actions/runs/42018250948)
+on exact source and test revision
+[c4b6b27](https://github.com/eristavi/eristavi-lang/commit/c4b6b27af41dd16d56cdee1f431c74fb32b90d8c)
+**PASSED six of six test methods**, including the two new methods.
+The positive regression derives root offsets from emitted ValueIds,
+checks the before/after transition of the canonical loop value, forces
+real owned GC with a three-node cycle alive under class-1 roots, clears
+the final root, and observes complete cycle reclamation despite
+unregistered stale copies in the separate SSA frame. The negative
+regression passes an ordinary Text descriptor and verifies fail-closed
+refusal **before** any assembly output. Previous identity admissions,
+two-alias cycles, checked identity error/Stage-0 parity, and real
+checked File close/root co-existence remain green.
+
+**Boundary:** the test caller still creates/populates the canonical
+SSA frame, selects the actual execution safepoint, binds the root vector,
+and invokes the helpers. The emitter does not automatically insert
+safepoints into a whole canonical Function, lower identity-producing UIR
+instructions, retain generic nested List/identity fields or handle all
+opcode-46 normal/failure/recursive cleanup exits. It is not a complete
+class-1/class-5 combined root-map compiler, allocator-refusal/RSS/GC-pause
+proof, general thread-safe recursion solution or U2 merge qualification.
+No unmeasured speedup or memory-efficiency claim follows from the test.
+Keep #111 draft and #74 open.
