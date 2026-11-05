@@ -67,6 +67,23 @@ helpers; it does not route through the old source lowering. GNU as/ld and the
 bootstrap compiler remain test/build tools. Keep PR #111 draft and #74 open.
 
 
+## 5 November experimental per-instruction retirement (unqualified)
+
+A new development candidate on draft PR #111 uses `ssa.liveAfter` after each
+nonterminal, non-branch instruction to clear selected List SSA root words in
+multi-block functions, after a boxed result is published and after its last
+operand use. The verified successor-edge root retirement still runs after
+parallel edge moves. It does not change single-block last-use behavior or
+the >32-selected-List conservative fallback.
+
+The candidate also adds after-invoke publication refusal tests and a physical
+native loop check that an obsolete List root word is zero before the following
+forced collector, while a live loop-carried snapshot remains rooted. These
+new assertions are provisional until exact-head focused CI is green.
+No performance, collector-efficiency, RSS or general managed-root acceptance
+claim follows merely from this source change. The prior historical evidence
+in this file remains evidence for the older edge-only implementation.
+
 ## CFG, registry and fault-origin follow-up
 
 `emitManaged` freshly verifies the complete managed registry/structural graph,
