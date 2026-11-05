@@ -1,0 +1,92 @@
+// Closed x86-64 checked-continuation identity SSA edge realization.
+// The File.close adapter must already have completed its checked cleanup,
+// with class-1 and class-5 roots registered in the existing owned scope.
+// No allocation is permitted between predecessor transfer and root update.
+// The caller must leave the class-1 root live through the next safepoint.
+import compiler.u1_budget as budget;
+import compiler.u1_builder as build;
+import compiler.u1_aggregate as aggregate;
+import compiler.u1_meta as meta;
+import compiler.u1_verify as canonical;
+import compiler.u1_aggregate_verify as graphVerify;
+import compiler.u2_scoped_owners as owners;
+import compiler.u2_invoke_contract as fallible;
+import compiler.u2_root_map as roots;
+import compiler.u2_continuation_bind as continuation;
+import compiler.u2_cleanup_plan as cleanup;
+import compiler.u2_cleanup_verify as planVerify;
+import compiler.u2_checked_identity_ssa_bind as identitySSA;
+import compiler.u2_managed_types as managed;
+import compiler.u2_ssa_liveness as liveness;
+import compiler.u2_identity_root_gate as identityRoots;
+import compiler.format as format;
+
+public error Unsupported { message Text; }
+function require(ok Bool,message Text) fails Unsupported {
+    if not ok { fail Unsupported { message=message; }; }
+}
+function line(t Text) { output("    "+t); }
+
+// Private ABI: RDI = canonical SSA value words; RSI = an existing, bound
+// class-1 root word; RDX = existing bound class-5 checked failure root word;
+// RCX = verified File.close result status (0 or -1).
+// Caller must have published the root BEFORE File.close. The move is not
+// a call/GC safepoint and does not release the surviving identity's root.
+// Validating a root class on arbitrary caller pointers is impossible here:
+// only the independently verified caller's registration contract authorizes
+// use of this fragment. Invalid/absent roots fail closed with a terminal fault.
+public function emit(routine identity build.Function,
+    graph identity aggregate.Registry,profile identity owners.Profile,
+    contracts identity fallible.Registry,phase identity budget.Phase,
+    map identity roots.Map,pair continuation.Pair,instruction build.InstId,
+    plan identity cleanup.Plan,active,survive Int,exit meta.LocId,
+    registry identity managed.Registry,carrier aggregate.TypeId,
+    identityType managed.TypeId,label Int)
+    fails budget.LimitError,canonical.InvalidIR,owners.InvalidOwnership,
+        roots.InvalidRoots,continuation.InvalidBinding,planVerify.InvalidPlan,
+        identitySSA.InvalidSSA,liveness.InvalidLiveness,
+        identityRoots.InvalidIdentityRoot,managed.InvalidManagedTypes,
+        graphVerify.InvalidGraph,Unsupported {
+    let checked be try identitySSA.verifyManagedIdentity(routine,graph,
+        profile,contracts,phase,map,pair,instruction,plan,active,survive,
+        exit,registry,carrier,identityType);
+    try require(label >= 1 and label <= 2147483647 and
+        checked.identitySource >= 1 and checked.identityNormal >= 1 and
+        checked.identityFailure >= 1 and checked.frameWords <= 128 and
+        checked.identitySource != checked.identityNormal and
+        checked.identitySource != checked.identityFailure and
+        checked.identityNormal != checked.identityFailure,
+        "invalid checked identity native SSA profile");
+    try budget.work(phase,24);
+    let name be format.integer(label);
+    let from be format.integer((checked.identitySource-1)*8);
+    let normal be format.integer((checked.identityNormal-1)*8);
+    let failed be format.integer((checked.identityFailure-1)*8);
+    output(".text");
+    output(".globl erist_u2_checked_identity_edge_"+name);
+    output("erist_u2_checked_identity_edge_"+name+":");
+    line("testq %rdi,%rdi"); line("je erist_rt_value_fault_internal");
+    line("testq %rsi,%rsi"); line("je erist_rt_value_fault_internal");
+    line("testq %rdx,%rdx"); line("je erist_rt_value_fault_internal");
+    line("movq "+from+"(%rdi),%rax");
+    line("testq %rax,%rax"); line("je erist_rt_value_fault_internal");
+    // At this exact checked edge, the identity must ALREADY be published.
+    // A raw unregistered SSA word is never sufficient GC evidence.
+    line("cmpq %rax,(%rsi)");
+    line("jne erist_rt_value_fault_internal");
+    line("cmpq $0,%rcx"); line("je .Lu2_id_normal_"+name);
+    line("cmpq $-1,%rcx"); line("jne erist_rt_value_fault_internal");
+    line("cmpq $0,(%rdx)"); line("je erist_rt_value_fault_internal");
+    // Checked failure never makes normal success-only results available.
+    line("movq $0,"+normal+"(%rdi)");
+    line("movq %rax,"+failed+"(%rdi)");
+    line("movq $0,"+from+"(%rdi)");
+    line("movq $-1,%rax"); line("ret");
+    output(".Lu2_id_normal_"+name+":");
+    line("cmpq $0,(%rdx)"); line("jne erist_rt_value_fault_internal");
+    line("movq %rax,"+normal+"(%rdi)");
+    line("movq $0,"+failed+"(%rdi)");
+    line("movq $0,"+from+"(%rdi)");
+    line("xorl %eax,%eax"); line("ret");
+    output(".section .note.GNU-stack,\"\",@progbits");
+}
