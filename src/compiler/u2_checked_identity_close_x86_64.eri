@@ -76,7 +76,7 @@ public function emit(routine identity build.Function,
         checked.failureValue != checked.identityNormal and
         checked.failureValue != checked.identitySource,
         "unsupported canonical checked identity plus File close profile");
-    let consumed cleanup.Scope be active[0];
+    let consumed be active[0];
     try require(consumed.value > 0 and
         consumed.value <= checked.frameWords and
         consumed.value != checked.identitySource and
