@@ -82,6 +82,7 @@ class U2CheckedIdentityEdgeTests(unittest.TestCase):
 .text
 .globl _start
 _start:
+    xorl %ebp,%ebp
     call evn_scope_enter
     movq %rax,%r15
     movq %rax,%rdi
@@ -166,10 +167,24 @@ _start:
 .Lu2_check_classes:
 .byte 1,5
 """
+                # Retain an independent exit code for EACH native assertion.
+                # A generic 99 from the test runtime otherwise hides which
+                # root/checked outcome was lost during collection.
+                checks=re.findall(r"\\b(?:jne|je|jb|ja|jbe|jae) \\.Lgraph_test_fail",body)
+                targets=[]
+                for index,check in enumerate(checks):
+                    label=".Lu2_checked_assert_"+str(index)
+                    body=body.replace(check,check.replace(".Lgraph_test_fail",label),1)
+                    targets.append((label,30+index))
+                for label,exit_code in targets:
+                    body+=("\\n.text\\n"+label+":\\n"
+                           "    movl $"+str(exit_code)+",%edi\\n"
+                           "    jmp erist_rt_exit\\n")
                 result=self.run_probe("checked-identity-edge-"+str(int(failed)),
                      asm+body+graph.FINISH)
                 self.assertEqual((result.returncode,result.stdout,result.stderr),
-                                 (0,b"",b""))
+                                 (0,b"",b""),"native assertion index "+
+                                 str(result.returncode-30))
 
     def test_wrong_managed_identity_refuses_before_assembly(self):
         result=self.generator(negative=True)
