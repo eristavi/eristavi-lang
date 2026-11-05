@@ -67,7 +67,17 @@ helpers; it does not route through the old source lowering. GNU as/ld and the
 bootstrap compiler remain test/build tools. Keep PR #111 draft and #74 open.
 
 
-## 5 November experimental per-instruction retirement (unqualified)
+## 5 November per-instruction retirement (focused and Linux smoke verified)
+
+**Qualification update (exact implementation 78828f4):** focused [CI
+#41983294418](https://github.com/eristavi/eristavi-lang/actions/runs/41983294418)
+passed all 8 methods; the broader [Linux Clang smoke
+#41983294307](https://github.com/eristavi/eristavi-lang/actions/runs/41983294307)
+passed 103 of 106 tests with 3 intentional skips and no failures. Earlier
+candidate failures were from an optional-plan semantic guard, corrected by
+an explicit nested presence proof, and a malformed test-file insertion,
+both corrected on the draft branch. These green runs verify the selected
+bounded root-word behavior, not the full four-platform U2 acceptance gates.
 
 A new development candidate on draft PR #111 uses `ssa.liveAfter` after each
 nonterminal, non-branch instruction to clear selected List SSA root words in
@@ -76,10 +86,10 @@ operand use. The verified successor-edge root retirement still runs after
 parallel edge moves. It does not change single-block last-use behavior or
 the >32-selected-List conservative fallback.
 
-The candidate also adds after-invoke publication refusal tests and a physical
+The changes also add after-invoke publication refusal tests and a physical
 native loop check that an obsolete List root word is zero before the following
-forced collector, while a live loop-carried snapshot remains rooted. These
-new assertions are provisional until exact-head focused CI is green.
+forced collector, while a live loop-carried snapshot remains rooted. Both
+focused native CI and the Linux Clang smoke suite passed for the exact code revision.
 No performance, collector-efficiency, RSS or general managed-root acceptance
 claim follows merely from this source change. The prior historical evidence
 in this file remains evidence for the older edge-only implementation.
