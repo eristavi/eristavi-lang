@@ -328,6 +328,28 @@ class U2CheckedIdentityCloseTests(unittest.TestCase):
                                     identities.identity_file_descriptors()+stepped,
                                     runtime=runtime,types=False)
                                 stage[name]=probe.returncode
+                            identity_start=code.index(
+                                "erist_u2_identity_close_95_identity:\n")
+                            identity_end=code.index(
+                                "erist_u2_identity_close_95_normal:\n",
+                                identity_start)
+                            for key,asm in (
+                                ("load","    movq "+str(offsets["source"])+"(%r15),%rax\n"),
+                                ("nonzero","    testq %rax,%rax\n"),
+                                ("rootcompare","    cmpq %rax,(%rbx)\n"),
+                                ("poison","    movq $0,"+str(offsets["source"])+"(%r15)\n"),
+                                ("branch","    cmpq $0,16(%rsp)\n")):
+                                suffix=code[identity_start:identity_end]
+                                self.assertEqual(suffix.count(asm),1,(key,asm))
+                                at=identity_start+suffix.index(asm)+len(asm)
+                                stepped=code[:at]+(
+                                    "    xorl %edi,%edi\n    jmp erist_rt_exit\n"
+                                    )+code[at:]
+                                probe=self.run_probe(
+                                    "u2-id-step-%s-%d"%(key,pending),
+                                    identities.identity_file_descriptors()+stepped,
+                                    runtime=runtime,types=False)
+                                stage[key]=probe.returncode
                         self.fail("native checked identity close %r; "
                             "post-native-close=%r post-wrapper=%r "
                             "post-first-GC=%r post-second-GC=%r "
