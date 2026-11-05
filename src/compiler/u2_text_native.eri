@@ -446,7 +446,7 @@ public function emit(fn identity build.Function,g identity aggregate.Registry,
     // Avoid expensive proof construction on unaffected single-block cases,
     // and do not alter the separately tested recursive Text-frame contract.
     if fn.blocks.length == 5 or fn.metadata.declarations.length == 78 {
-        try emitNative(fn,p,none)
+        emitNative(fn,p,none)
             else error budget.LimitError { fail error; }
             else error ssa.InvalidLiveness {
                 fail Unsupported { message=error.message; };
@@ -463,7 +463,7 @@ public function emit(fn identity build.Function,g identity aggregate.Registry,
     // The exact bounded plan accepts <=32 selected Text SSA values.
     // Retain the previous safe conservative profile beyond that bound.
     if tracked > 32 {
-        try emitNative(fn,p,none)
+        emitNative(fn,p,none)
             else error budget.LimitError { fail error; }
             else error ssa.InvalidLiveness {
                 fail Unsupported { message=error.message; };
