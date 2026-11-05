@@ -22,6 +22,10 @@ import compiler.u2_cleanup_verify as planVerify;
 import compiler.u2_root_map as roots;
 import compiler.u2_native_slots_x86_64 as slots;
 import compiler.u2_checked_identity_ssa_bind as ssa;
+import compiler.u2_managed_types as managed;
+import compiler.u2_identity_root_gate as identityRoots;
+import compiler.u2_ssa_liveness as liveSSA;
+import compiler.u1_aggregate_verify as graphVerify;
 
 error ProbeError { message Text; }
 function check(ok Bool,message Text) fails ProbeError {
@@ -50,7 +54,8 @@ function rejects(fn identity build.Function,graph identity aggregate.Registry,
 function run() fails budget.LimitError,canonical.InvalidIR,
     owners.InvalidOwnership,continuation.InvalidBinding,
     planVerify.InvalidPlan,roots.InvalidRoots,slots.InvalidSlots,
-    ssa.InvalidSSA,ProbeError {
+    ssa.InvalidSSA,liveSSA.InvalidLiveness,identityRoots.InvalidIdentityRoot,
+    managed.InvalidManagedTypes,graphVerify.InvalidGraph,ProbeError {
     let root be try budget.developmentRequest();
     let shared be try budget.metadataOwner(root);
     let mp be try budget.constructionPhase(shared);
@@ -72,7 +77,11 @@ function run() fails budget.LimitError,canonical.InvalidIR,
     let src be try meta.source(data,mp,"ssa.eri",
         "0000000000000000000000000000000000000000000000000000000000000000",64);
     let loc be try meta.location(data,mp,src,0,8,0,1,1);
-    try aggregate.freeze(graph); try meta.freeze(data);
+    try aggregate.freeze(graph);
+    let managedRegistry be try managed.create(graph,mp);
+    let identityType be try managed.identityOfBase(managedRegistry,mp,carrier);
+    try managed.freeze(managedRegistry);
+    try meta.freeze(data);
     let registry be try contracts.create(data,graph,mp);
     let acquire be contracts.Contract { version=1; target=acquisition; failure=failureSig; };
     let consume be contracts.Contract { version=1; target=consumption; failure=failureSig; };
@@ -143,8 +152,8 @@ function run() fails budget.LimitError,canonical.InvalidIR,
     let plan be try planVerify.prepare(data,owner,phase,active,0,loc,false);
     let map be try roots.create(fn,graph,phase);
     let placement be try slots.create(map,fn,graph,phase);
-    let proof be try ssa.verifyIdentity(fn,graph,profile,registry,phase,map,
-        checkedPair,closeCall,plan,active,0,loc,carrier);
+    let proof be try ssa.verifyManagedIdentity(fn,graph,profile,registry,phase,map,
+        checkedPair,closeCall,plan,active,0,loc,managedRegistry,carrier,identityType);
     try check(proof.instruction == closeCall.index and
         proof.sourceValue == carried.index and
         proof.normalValue == returned.index and
@@ -215,8 +224,8 @@ function run() fails budget.LimitError,canonical.InvalidIR,
     fn.arguments.frozen=false;
     try words.set(fn.arguments,phase,failedFirst+1,identitySource.index);
     fn.arguments.frozen=true;
-    let checkedAgain be try ssa.verifyIdentity(fn,graph,profile,registry,phase,map,
-        checkedPair,closeCall,plan,active,0,loc,carrier);
+    let checkedAgain be try ssa.verifyManagedIdentity(fn,graph,profile,registry,phase,map,
+        checkedPair,closeCall,plan,active,0,loc,managedRegistry,carrier,identityType);
     try check(checkedAgain.sourceValue == proof.sourceValue and
         checkedAgain.failureValue == proof.failureValue,
         "repaired canonical SSA proofs differ from first independent check");
@@ -227,7 +236,8 @@ function run() fails budget.LimitError,canonical.InvalidIR,
     try slots.close(placement); try roots.close(map); try cleanup.close(plan);
     try budget.finishPhase(phase);
     try owners.close(profile); try build.close(fn); try budget.close(owner);
-    try contracts.close(registry); try aggregate.close(graph);
+    try contracts.close(registry); try managed.close(managedRegistry);
+    try aggregate.close(graph);
     try meta.close(data); try budget.close(shared);
     try check(root.live == 0 and root.pending == 0,"checked SSA fixture leaked budget");
     try budget.close(root);
@@ -240,4 +250,8 @@ else error planVerify.InvalidPlan { output("plan:"+error.message); process.setEx
 else error roots.InvalidRoots { output("root:"+error.message); process.setExitCode(1); }
 else error slots.InvalidSlots { output("slots:"+error.message); process.setExitCode(1); }
 else error ssa.InvalidSSA { output("ssa:"+error.message); process.setExitCode(1); }
+else error liveSSA.InvalidLiveness { output("liveness:"+error.message); process.setExitCode(1); }
+else error identityRoots.InvalidIdentityRoot { output("identity:"+error.message); process.setExitCode(1); }
+else error managed.InvalidManagedTypes { output("managed:"+error.message); process.setExitCode(1); }
+else error graphVerify.InvalidGraph { output("graph:"+error.message); process.setExitCode(1); }
 else error ProbeError { output("probe:"+error.message); process.setExitCode(1); };

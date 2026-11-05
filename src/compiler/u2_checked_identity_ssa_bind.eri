@@ -20,6 +20,10 @@ import compiler.u2_root_map as roots;
 import compiler.u2_continuation_bind as continuation;
 import compiler.u2_cleanup_plan as cleanup;
 import compiler.u2_cleanup_verify as planVerify;
+import compiler.u2_managed_types as managed;
+import compiler.u2_identity_root_gate as identityRoots;
+import compiler.u2_ssa_liveness as liveSSA;
+import compiler.u1_aggregate_verify as graphVerify;
 
 public type Report {
     instruction Int; revision Int;
@@ -225,3 +229,33 @@ public function verifyIdentity(routine identity build.Function,
     };
 }
 
+
+// Full managed-identity admission must prove the frozen copy/shared-handle
+// descriptor and independently recompute all selected SSA safepoint roots
+// before accepting the canonical checked edge transport. It does not emit
+// native instructions, and never treats a plain U1b aggregate as an identity.
+public function verifyManagedIdentity(routine identity build.Function,
+    graph identity aggregate.Registry,profile identity owners.Profile,
+    contracts identity fallible.Registry,phase identity budget.Phase,
+    map identity roots.Map,pair continuation.Pair,instruction build.InstId,
+    plan identity cleanup.Plan,active,survive Int,exit meta.LocId,
+    registry identity managed.Registry,carrier aggregate.TypeId,
+    identityType managed.TypeId)
+    returns Report
+    fails budget.LimitError,canonical.InvalidIR,owners.InvalidOwnership,
+        roots.InvalidRoots,continuation.InvalidBinding,
+        planVerify.InvalidPlan,InvalidSSA,liveSSA.InvalidLiveness,
+        identityRoots.InvalidIdentityRoot,managed.InvalidManagedTypes,
+        graphVerify.InvalidGraph {
+    let rootPlan be try identityRoots.create(routine,graph,contracts,
+        phase,registry,carrier,identityType);
+    let report be liveSSA.verify(rootPlan,routine,graph,contracts,phase)
+        else error budget.LimitError { try liveSSA.close(rootPlan); fail error; }
+        else error canonical.InvalidIR { try liveSSA.close(rootPlan); fail error; }
+        else error liveSSA.InvalidLiveness {
+            try liveSSA.close(rootPlan); fail error;
+        };
+    try liveSSA.close(rootPlan);
+    return try verifyIdentity(routine,graph,profile,contracts,phase,map,
+        pair,instruction,plan,active,survive,exit,carrier);
+}
