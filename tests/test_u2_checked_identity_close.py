@@ -301,10 +301,28 @@ class U2CheckedIdentityCloseTests(unittest.TestCase):
                             "u2-id-close-gc-%d-%d"%(pending,int(failed)),
                             identities.identity_file_descriptors()+gc_code,
                             runtime=runtime,types=False)
+                        native_mark="    call erist_u2_cleanup_95\n"
+                        self.assertEqual(code.count(native_mark),1)
+                        native_code=code.replace(native_mark,native_mark+
+                            "    xorl %edi,%edi\n    jmp erist_rt_exit\n",1)
+                        native_result=self.run_probe(
+                            "u2-id-close-native-%d-%d"%(pending,int(failed)),
+                            identities.identity_file_descriptors()+native_code,
+                            runtime=runtime,types=False)
+                        second=code.index(mark,code.index(mark)+len(mark))+len(mark)
+                        second_code=code[:second]+(
+                            "    xorl %edi,%edi\n    jmp erist_rt_exit\n"
+                            )+code[second:]
+                        second_result=self.run_probe(
+                            "u2-id-close-second-gc-%d-%d"%(pending,int(failed)),
+                            identities.identity_file_descriptors()+second_code,
+                            runtime=runtime,types=False)
                         self.fail("native checked identity close %r; "
-                            "post-wrapper checkpoint=%r post-first-GC=%r"%
-                            (result.returncode,call_result.returncode,
-                             gc_result.returncode))
+                            "post-native-close=%r post-wrapper=%r "
+                            "post-first-GC=%r post-second-GC=%r"%
+                            (result.returncode,native_result.returncode,
+                             call_result.returncode,gc_result.returncode,
+                             second_result.returncode))
                     self.assertEqual(
                         (result.returncode,result.stdout,result.stderr),
                         (0,b"",b""))
