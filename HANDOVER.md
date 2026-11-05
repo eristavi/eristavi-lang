@@ -1,6 +1,6 @@
 # Eristavi compiler — current handover
 
-Reviewed 4 November 2026 (Asia/Nicosia). This is the current recovery document.
+Reviewed 5 November 2026 (Asia/Nicosia). This is the current recovery document.
 Historical checkpoints are evidence, not instructions to restart old work.
 
 ## Resume here
