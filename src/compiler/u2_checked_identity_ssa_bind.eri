@@ -89,7 +89,7 @@ public function verifyIdentity(routine identity build.Function,
         (try read(routine.values,phase,(sourceScalar-1)*4)) == meta.i64().index and
         (try read(routine.values,phase,(sourceScalar-1)*4+1)) == 0 and
         (try read(routine.values,phase,(sourceScalar-1)*4+2)) == pair.source.index and
-        (try read(routine.values,phase,(sourceScalar-1)*4+3)) == active.count,
+        (try read(routine.values,phase,(sourceScalar-1)*4+3)) == active.count+extra,
         "source must have live File parameters and last predecessor i64");
     if extra == 1 {
         try require(sourceIdentity >= 1 and
