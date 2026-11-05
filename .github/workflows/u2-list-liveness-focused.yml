@@ -1,0 +1,40 @@
+name: U2 List and SSA liveness focused tests
+on:
+  push:
+    branches: [compiler/u2-cleanup-foundation-20261102]
+    paths:
+      - src/compiler/u2_list_i64.eri
+      - src/compiler/u2_ssa_liveness.eri
+      - tests/test_u2_list_i64.py
+      - tests/test_u2_ssa_liveness.py
+      - tests/fixtures/u2_list_i64_loop.eri
+      - tests/fixtures/u2_list_i64_swap.eri
+      - .github/workflows/u2-list-liveness-focused.yml
+permissions:
+  contents: read
+jobs:
+  list-roots:
+    runs-on: ubuntu-latest
+    env:
+      CC: clang
+      CFLAGS: -O2
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install bootstrap compiler
+        run: python -m pip install -e .
+      - name: Syntax check before native compilation
+        run: python -m compileall -q compiler tests
+      - name: Validate U2 List native roots and independent liveness
+        run: |
+          set -o pipefail
+          PYTHONPATH=tests python -u -m unittest -v test_u2_ssa_liveness test_u2_list_i64 2>&1 | tee "$RUNNER_TEMP/u2-list-liveness.log"
+      - name: Preserve focused evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: u2-list-roots-${{ github.run_attempt }}
+          retention-days: 14
+          path: ${{ runner.temp }}/u2-list-liveness.log
