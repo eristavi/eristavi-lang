@@ -171,9 +171,9 @@ public function verifyIdentity(routine identity build.Function,
             (try read(routine.arguments,phase,failedFirst+survive+1)) ==
                 sourceIdentity and
             (try read(routine.values,phase,(normalIdentity-1)*4)) ==
-                identityCarrier and
+                identityCarrier.index and
             (try read(routine.values,phase,(failureIdentity-1)*4)) ==
-                identityCarrier and
+                identityCarrier.index and
             (try read(routine.values,phase,(normalIdentity-1)*4+1)) == 0 and
             (try read(routine.values,phase,(failureIdentity-1)*4+1)) == 0 and
             (try read(routine.values,phase,(normalIdentity-1)*4+2)) == pair.normal.index and
