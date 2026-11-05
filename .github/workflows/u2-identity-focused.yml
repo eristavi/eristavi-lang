@@ -8,6 +8,7 @@ on:
       - src/compiler/u2_ssa_liveness.eri
       - tests/test_u2_identity_root_gate.py
       - tests/test_u2_identity_gc_cleanup.py
+      - tests/test_u2_identity_file_cleanup.py
       - .github/workflows/u2-identity-focused.yml
 permissions:
   contents: read
@@ -32,7 +33,7 @@ jobs:
       - name: Run focused identity SSA and owned-runtime tests
         run: |
           set -o pipefail
-          PYTHONPATH=tests python -u -m unittest -v test_u2_identity_root_gate test_u2_identity_gc_cleanup 2>&1 | tee "$RUNNER_TEMP/identity-results.log"
+          PYTHONPATH=tests python -u -m unittest -v test_u2_identity_root_gate test_u2_identity_gc_cleanup test_u2_identity_file_cleanup 2>&1 | tee "$RUNNER_TEMP/identity-results.log"
       - name: Preserve focused evidence
         if: always()
         uses: actions/upload-artifact@v6
