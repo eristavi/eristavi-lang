@@ -108,9 +108,9 @@ class U2IdentityRootGateTests(unittest.TestCase):
             "pair,forged),\"foreign identity registry was accepted\");\n"
             "    try check(try rejectedIdentity(fn,graph,table,read,registry,"
             "i64,identityType),\"wrong canonical identity payload accepted\");\n"
-            "    let before be fnOwner.live;\n"
+            "    let identityBaselineLive be fnOwner.live;\n"
             "    try ssa.close(plan); try budget.finishPhase(read);\n"
-            "    try check(fnOwner.live <= before,"
+            "    try check(fnOwner.live <= identityBaselineLive,"
             "\"identity liveness backing was not released\");\n"
         )
         source=source.replace("    try budget.finishPhase(cp);",
