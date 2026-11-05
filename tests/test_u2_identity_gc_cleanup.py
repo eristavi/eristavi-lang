@@ -102,3 +102,67 @@ _start:
         result=self.run_probe("u2-two-identity-cycle-roots",asm+graph.FINISH)
         self.assertEqual((result.returncode,result.stdout,result.stderr),
                          (0,b"",b""))
+
+    def test_checked_failure_keeps_identity_cycle_through_gc_and_releases(self):
+        # Source-level frozen semantics oracle vs native-C and existing
+        # owned-graph runtime. The checked handler's error payload owns an
+        # identity cycle while unrelated cycles allocate, then it exits.
+        # This is NOT canonical opcode-46 identity/cleanup lowering.
+        import os
+        import subprocess
+        import sys
+        from compiler.erist.cli import build_native
+
+        folder=self.directory/"u2-identity-checked-cycle"
+        folder.mkdir()
+        source=folder/"app.eri"
+        source.write_text("""
+type Node { label Text; next maybe identity Node; }
+error Problem { message Text; link identity Node; }
+function cycle(label Text) returns identity Node {
+    let node be identity Node { label=label; next=none; };
+    node.next=node;
+    return node;
+}
+function failWithCycle() returns Int fails Problem {
+    fail Problem { message="body"; link=cycle("retained"); };
+}
+function forward() returns Int fails Problem { return try failWithCycle(); }
+let survivor be cycle("outer");
+let alias be survivor;
+forward() else error Problem {
+    let index be 0;
+    while index<200 {
+        let discarded be cycle("transient");
+        index=index+1;
+    }
+    output(error.message);
+    output(error.link.next==error.link);
+    output(error.link.label);
+};
+output(survivor.next==alias);
+""",encoding="utf-8")
+        expected=b"body\ntrue\nretained\ntrue\n"
+        stage0=subprocess.run([sys.executable,"-m","compiler.erist","run",
+            str(source),"--source-root",str(folder)],cwd=graph.ROOT,
+            capture_output=True,timeout=90)
+        self.assertEqual((stage0.returncode,stage0.stdout,stage0.stderr),
+                         (0,expected,b""))
+        reference=folder/"native-c"
+        self.assertEqual(build_native(source,reference,folder),0)
+        c_run=subprocess.run([str(reference)],capture_output=True,timeout=60)
+        self.assertEqual((c_run.returncode,c_run.stdout,c_run.stderr),
+                         (0,expected,b""))
+        emitted=self.compile_application(source)
+        asm="""
+.text
+.globl _start
+_start:
+    xorl %ebp,%ebp
+    call erist_entry
+    jmp .Lgraph_finish
+"""
+        result=self.run_probe("u2-identity-checked-cycle",
+            emitted+asm+graph.FINISH,types=False)
+        self.assertEqual((result.returncode,result.stdout,result.stderr),
+                         (0,expected,b""))
