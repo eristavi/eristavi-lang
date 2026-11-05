@@ -42,9 +42,9 @@ class U2IdentityFileCleanupTests(unittest.TestCase):
             path.write_text("open",encoding="utf-8")
         code=self.assembly(True,True,emitted,paths)
         bound=(
-            "    leaq .Lu2_native_caller_classes(%rip),%rdx\n"
-            "    movl $4,%ecx\n"
-            "    call evn_bind_roots\n"
+            "leaq .Lu2_native_caller_classes(%rip),%rdx\n"
+            "movl $4,%ecx\n"
+            "call evn_bind_roots\n"
         )
         self.assertEqual(code.count(bound),1)
         prepare=r"""    # A second nested live scope protects two aliases of one graph cycle.
