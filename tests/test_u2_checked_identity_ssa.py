@@ -19,10 +19,11 @@ class U2CheckedIdentitySSATests(unittest.TestCase):
             folder=Path(temporary)
             (folder/'compiler').symlink_to(ROOT/'src/compiler',
                                           target_is_directory=True)
-            source=ROOT/'tests/fixtures/u2_checked_identity_ssa.eri'
+            source=folder/'checked-identity-ssa.eri'
+            source.write_text((ROOT/'tests/fixtures/u2_checked_identity_ssa.eri').read_text(encoding='utf-8'),encoding='utf-8')
             binary=folder/'checked-identity-ssa'
             self.assertEqual(build_native(source,binary,folder),0)
             run=subprocess.run([str(binary)],capture_output=True,
                                text=True,timeout=120)
             self.assertEqual((run.returncode,run.stdout,run.stderr),
-                             (0,'u2-identity-checked-ssa:ok\\n',''))
+                             (0,'u2-identity-checked-ssa:ok\n',''))
