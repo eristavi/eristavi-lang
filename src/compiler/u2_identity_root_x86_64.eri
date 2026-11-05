@@ -1,0 +1,168 @@
+// Opt-in native machine-root publication from ONE verified canonical identity
+// SSA safepoint. This adapter does not lower the Function's instructions,
+// checked handlers, or File ownership. Caller supplies real SSA frame words;
+// native root offsets are DERIVED from reverified Function ValueIds.
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+import compiler.u1_builder as build;
+import compiler.u1_aggregate as aggregate;
+import compiler.u1_aggregate_verify as graphVerify;
+import compiler.u1_verify as canonical;
+import compiler.u2_managed_types as managed;
+import compiler.u2_invoke_contract as contracts;
+import compiler.u2_ssa_liveness as ssa;
+import compiler.u2_identity_root_gate as identityRoots;
+import compiler.format as format;
+
+public error Unsupported { message Text; }
+function require(ok Bool,message Text) fails Unsupported {
+    if not ok { fail Unsupported { message=message; }; }
+}
+
+// Validate EVERYTHING before emitting one byte of assembly. A published
+// root is a runtime boxed identity handle, not a File owner or raw graph node.
+// The input frame and root vector must be separate writable allocations.
+function emitVerified(plan identity ssa.Plan,routine identity build.Function,
+    graph identity aggregate.Registry,table identity contracts.Registry,
+    phase identity budget.Phase,at build.InstId,label Int)
+    fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,Unsupported {
+    let report be try ssa.verify(plan,routine,graph,table,phase);
+    try require(label >= 1 and label <= 2147483647 and
+        at.owner == routine.key and at.index >= 1 and
+        at.index <= report.instructions and
+        report.tracked >= 1 and report.tracked <= 32 and
+        routine.values.length/4 <= 512,
+        "invalid selected native identity publication profile");
+    let values be [];
+    let before be [];
+    let after be [];
+    let beforePresent be [];
+    let afterPresent be [];
+    let position be 0;
+    while position < plan.values.length/4 {
+        let id be try words.get(plan.values,phase,position*4);
+        let value be build.ValueId { owner=routine.key; index=id; };
+        let liveBefore be try ssa.liveBefore(plan,routine,phase,at,value);
+        let liveAfter be try ssa.liveAfter(plan,routine,phase,at,value);
+        values.add(id);
+        if liveBefore { before.add(value); beforePresent.add(1); }
+        else { beforePresent.add(0); }
+        if liveAfter { after.add(value); afterPresent.add(1); }
+        else { afterPresent.add(0); }
+        position=position+1;
+    }
+    // Independently recompute both full canonical obligations, including
+    // dead blocks and the exact current Function revision.
+    let checkedBefore be try ssa.requirePublished(
+        plan,routine,graph,table,phase,at,before,true);
+    let checkedAfter be try ssa.requirePublished(
+        plan,routine,graph,table,phase,at,after,false);
+    try require(checkedBefore == before.count and checkedAfter == after.count,
+        "incomplete native identity root publication");
+    // Precharge emission work so quota cancellation cannot leave a partially
+    // output assembler fragment. Subsequent loops do not make fallible calls.
+    try budget.work(phase,report.tracked*16+32);
+    let name be format.integer(label);
+    output(".section .rodata");
+    output(".p2align 3");
+    output("erist_u2_identity_classes_"+name+":");
+    position=0;
+    while position < values.count {
+        output("    .byte 1");
+        position=position+1;
+    }
+    // Native root words are tightly packed, but the backing canonical frame
+    // stays indexed by original UIR ValueId; never use a guessed compact
+    // local or instruction-order position for that frame.
+    position=0;
+    while position < values.count {
+        let value Int be values[position];
+        output(".set erist_u2_identity_slot_"+name+"_"+format.integer(value)+
+            ", "+format.integer(position*8));
+        output(".set erist_u2_identity_ssa_"+name+"_"+format.integer(value)+
+            ", "+format.integer((value-1)*8));
+        position=position+1;
+    }
+    output(".text");
+    output(".globl erist_u2_identity_bind_"+name);
+    output("erist_u2_identity_bind_"+name+":");
+    // ABI: RDI is live scope, RSI is root vector. It must be zeroed BEFORE
+    // it becomes visible to any allocating GC safepoint.
+    output("    testq %rdi,%rdi");
+    output("    je erist_rt_value_fault_internal");
+    output("    testq %rsi,%rsi");
+    output("    je erist_rt_value_fault_internal");
+    position=0;
+    while position < values.count {
+        output("    movq $0,"+format.integer(position*8)+"(%rsi)");
+        position=position+1;
+    }
+    output("    leaq erist_u2_identity_classes_"+name+"(%rip),%rdx");
+    output("    movl $"+format.integer(values.count)+",%ecx");
+    output("    jmp evn_bind_roots");
+
+    let phaseIndex be 0;
+    while phaseIndex < 2 {
+        let mode be "before";
+        if phaseIndex == 1 { mode="after"; }
+        output(".globl erist_u2_identity_"+mode+"_"+name);
+        output("erist_u2_identity_"+mode+"_"+name+":");
+        // ABI: RDI = already bound root-vector pointer, RSI = caller's
+        // original one-word-per-canonical-ValueId SSA frame pointer.
+        output("    testq %rdi,%rdi");
+        output("    je erist_rt_value_fault_internal");
+        output("    testq %rsi,%rsi");
+        output("    je erist_rt_value_fault_internal");
+        position=0;
+        while position < values.count {
+            let id Int be values[position];
+            let rooted be beforePresent[position];
+            if phaseIndex == 1 { rooted=afterPresent[position]; }
+            if rooted == 1 {
+                output("    movq "+format.integer((id-1)*8)+"(%rsi),%rax");
+                // This selected closed profile has non-null identity handles.
+                // Publishing a zero/dead mandatory root would be unsafe.
+                output("    testq %rax,%rax");
+                output("    je erist_rt_value_fault_internal");
+                output("    movq %rax,"+format.integer(position*8)+"(%rdi)");
+            } else {
+                output("    movq $0,"+format.integer(position*8)+"(%rdi)");
+            }
+            position=position+1;
+        }
+        output("    ret");
+        phaseIndex=phaseIndex+1;
+    }
+    output(".globl erist_u2_identity_release_"+name);
+    output("erist_u2_identity_release_"+name+":");
+    output("    testq %rdi,%rdi");
+    output("    je erist_rt_value_fault_internal");
+    position=0;
+    while position < values.count {
+        output("    movq $0,"+format.integer(position*8)+"(%rdi)");
+        position=position+1;
+    }
+    output("    ret");
+    output(".section .note.GNU-stack,\"\",@progbits");
+}
+
+public function emit(routine identity build.Function,
+    graph identity aggregate.Registry,table identity contracts.Registry,
+    phase identity budget.Phase,registry identity managed.Registry,
+    carrier aggregate.TypeId,identityType managed.TypeId,
+    at build.InstId,label Int)
+    fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,
+        identityRoots.InvalidIdentityRoot,managed.InvalidManagedTypes,
+        graphVerify.InvalidGraph,Unsupported {
+    // The descriptor gate checks the frozen identity/shared-handle policy
+    // and fully verifies the selected canonical Function. This emitter
+    // also rederives and independently verifies the SSA root obligations.
+    let plan be try identityRoots.create(routine,graph,table,phase,registry,
+        carrier,identityType);
+    emitVerified(plan,routine,graph,table,phase,at,label)
+        else error budget.LimitError { try ssa.close(plan); fail error; }
+        else error canonical.InvalidIR { try ssa.close(plan); fail error; }
+        else error ssa.InvalidLiveness { try ssa.close(plan); fail error; }
+        else error Unsupported { try ssa.close(plan); fail error; };
+    try ssa.close(plan);
+}
