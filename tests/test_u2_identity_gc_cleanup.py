@@ -16,6 +16,7 @@ import test_freestanding_graph_values as graph
 class U2IdentityGCCleanupTests(unittest.TestCase):
     setUpClass=classmethod(graph.FreestandingGraphValueTests.setUpClass.__func__)
     run_probe=graph.FreestandingGraphValueTests.run_probe
+    compile_application=graph.FreestandingGraphValueTests.compile_application
 
     def test_two_alias_roots_keep_cyclic_graph_until_last_release(self):
         # Three physical graph nodes form an 8->9->10->8 cycle, using the
