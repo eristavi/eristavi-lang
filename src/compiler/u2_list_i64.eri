@@ -189,8 +189,25 @@ function emitNative(fn identity build.Function,g identity aggregate.Registry,
             line("movq "+format.integer(tempOffset)+"(%rsp),%rax");
             line("addq $"+format.integer(frame)+",%rsp"); line("ret");
         }
-        // Multi-block intra-block values are retained until the next edge;
-        // verified successor live-in drives precise List edge release.
+        // The independently reverified canonical plan now retires dead List
+        // values after each nonterminal instruction in the selected CFG.
+        // All call operands remain published through the call itself; newly
+        // produced values are stored first. Edge copies remain simultaneous,
+        // and the >32-carrier profile still uses conservative retention.
+        if fn.blocks.length > 5 and plan != none and
+            code != 6 and code != 7 and code != 8 {
+            let at be build.InstId { owner=fn.key; index=inst; };
+            let selected be 0;
+            while selected < plan.values.length/4 {
+                let value be try get(plan.values,p,selected*4);
+                let word be build.ValueId { owner=fn.key; index=value; };
+                if not (try ssa.liveAfter(plan,fn,p,at,word)) {
+                    line("movq $0,"+slot(value));
+                }
+                selected=selected+1;
+            }
+        }
+        // Keep the original straight-line last-use profile untouched.
         if fn.blocks.length == 5 {
         // Exact straight-line last-use release, including inputs of this op.
         i=1;
