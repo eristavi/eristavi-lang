@@ -316,12 +316,25 @@ class U2CheckedIdentityCloseTests(unittest.TestCase):
                             "u2-id-close-second-gc-%d-%d"%(pending,int(failed)),
                             identities.identity_file_descriptors()+second_code,
                             runtime=runtime,types=False)
+                        stage={}
+                        if not failed:
+                            for name in ("success","identity","normal","leave"):
+                                label="erist_u2_identity_close_95_"+name+":\n"
+                                self.assertEqual(code.count(label),1)
+                                stepped=code.replace(label,label+
+                                    "    xorl %edi,%edi\n    jmp erist_rt_exit\n",1)
+                                probe=self.run_probe(
+                                    "u2-id-close-stage-%s-%d"%(name,pending),
+                                    identities.identity_file_descriptors()+stepped,
+                                    runtime=runtime,types=False)
+                                stage[name]=probe.returncode
                         self.fail("native checked identity close %r; "
                             "post-native-close=%r post-wrapper=%r "
-                            "post-first-GC=%r post-second-GC=%r"%
+                            "post-first-GC=%r post-second-GC=%r "
+                            "normal-branch-stages=%r"%
                             (result.returncode,native_result.returncode,
                              call_result.returncode,gc_result.returncode,
-                             second_result.returncode))
+                             second_result.returncode,stage))
                     self.assertEqual(
                         (result.returncode,result.stdout,result.stderr),
                         (0,b"",b""))
