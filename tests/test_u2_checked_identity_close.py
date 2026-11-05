@@ -43,16 +43,16 @@ class U2CheckedIdentityCloseTests(unittest.TestCase):
             "import compiler.u2_checked_identity_close_x86_64 as nativeClose;",1)
         marker='    output("u2-identity-checked-ssa:ok");'
         self.assertEqual(source.count(marker),1)
-        descriptor=("managed.text(managedRegistry)" if negative else
+        descriptor=("identityType" if negative else
                     "identityType")
         source=source.replace(marker,
             "    try nativeClose.emit(fn,graph,profile,registry,phase,map,"
             "checkedPair,closeCall,plan,active,0,loc,managedRegistry,"
             "carrier,"+descriptor+",95);",1)
-        declaration="graphVerify.InvalidGraph,ProbeError {"
+        declaration="managed.InvalidManagedTypes,graphVerify.InvalidGraph,ProbeError {"
         self.assertEqual(source.count(declaration),1)
         source=source.replace(declaration,
-            "graphVerify.InvalidGraph,nativeClose.Unsupported,ProbeError {",1)
+            "managed.InvalidManagedTypes,nativeClose.Unsupported,graphVerify.InvalidGraph,ProbeError {",1)
         handler='else error ProbeError { output("probe:"+error.message);'
         self.assertEqual(source.count(handler),1)
         source=source.replace(handler,
@@ -98,7 +98,7 @@ class U2CheckedIdentityCloseTests(unittest.TestCase):
             ".text",".globl _start","_start:",
             "    subq $512,%rsp",
             "    movq $0,0(%rsp)",
-            "    movq $0,8(%rsp)",
+            "    movq $0,.Lu2_saved_failure(%rip)",
             "    call evn_scope_enter",
             "    movq %rax,16(%rsp)",
             "    movq %rax,%rdi",
@@ -129,8 +129,8 @@ class U2CheckedIdentityCloseTests(unittest.TestCase):
             "    call erist_rt_file_open",
             "    movq %rax,0(%rsp)",
             "    call evn_empty_failure",
-            "    movq %rax,8(%rsp)",
-            "    movq %rax,.Lu2_failure_root(%rip)",
+            "    movq %rax,.Lu2_saved_failure(%rip)",
+            "    movq $0,.Lu2_failure_root(%rip)",
         ]
         # The independently observed native identity carries three cyclic
         # graph nodes. A temporary producer root protects construction only;
@@ -157,8 +157,8 @@ class U2CheckedIdentityCloseTests(unittest.TestCase):
             # native emitter binds and publishes the two required roots.
             "    movq $0,.Lu2_temporary_root(%rip)",
             "    movq $0,.Lu2_failure_root(%rip)",
-            "    movq %rsp,%rdi",
-            "    movq 8(%rsp),%rsi",
+            "    leaq 0(%rsp),%rdi",
+            "    leaq .Lu2_saved_failure(%rip),%rsi",
             "    leaq .Lu2_failure_root(%rip),%rdx",
             "    leaq .Lu2_ssa(%rip),%rcx",
             "    movq 40(%rsp),%r8",
@@ -190,7 +190,7 @@ class U2CheckedIdentityCloseTests(unittest.TestCase):
                 "    cmpq $"+str(pending)+",.Lu2_ssa+"+
                     str(offsets["failed_scalar"])+"(%rip)",
                 "    jne .Lresource_test_fail",
-                "    movq 8(%rsp),%rax",
+                "    leaq .Lu2_saved_failure(%rip),%rax",
                 "    cmpq %rax,.Lu2_failure_root(%rip)",
                 "    jne .Lresource_test_fail",
                 "    cmpq %rax,.Lu2_ssa+"+
@@ -252,6 +252,7 @@ class U2CheckedIdentityCloseTests(unittest.TestCase):
             ".bss",".p2align 3",
             ".Lu2_ssa:",".zero 1024",
             ".Lu2_failure_root:",".zero 8",
+            ".Lu2_saved_failure:",".zero 96",
             ".Lu2_identity_root:",".zero 8",
             ".Lu2_temporary_root:",".zero 8",
         ]
