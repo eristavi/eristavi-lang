@@ -13,6 +13,8 @@ on:
       - src/compiler/u2_checked_identity_ssa_bind.eri
       - src/compiler/u2_checked_identity_edge_x86_64.eri
       - tests/test_u2_checked_identity_edge.py
+      - src/compiler/u2_checked_identity_close_x86_64.eri
+      - tests/test_u2_checked_identity_close.py
       - tests/fixtures/u2_checked_identity_ssa.eri
       - tests/test_u2_checked_identity_ssa.py
       - tests/test_u2_identity_gc_cleanup.py
@@ -41,7 +43,7 @@ jobs:
       - name: Run focused identity SSA and owned-runtime tests
         run: |
           set -o pipefail
-          PYTHONPATH=tests python -u -m unittest -v test_u2_identity_root_gate test_u2_identity_gc_cleanup test_u2_identity_file_cleanup test_u2_identity_native_publication test_u2_checked_identity_ssa test_u2_checked_identity_edge 2>&1 | tee "$RUNNER_TEMP/identity-results.log"
+          PYTHONPATH=tests python -u -m unittest -v test_u2_identity_root_gate test_u2_identity_gc_cleanup test_u2_identity_file_cleanup test_u2_identity_native_publication test_u2_checked_identity_ssa test_u2_checked_identity_edge test_u2_checked_identity_close 2>&1 | tee "$RUNNER_TEMP/identity-results.log"
       - name: Preserve focused evidence
         if: always()
         uses: actions/upload-artifact@v6
