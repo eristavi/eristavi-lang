@@ -34,6 +34,7 @@ SMOKE_TESTS=(
     'test_u2_managed_types.U2ManagedTypesTests',
     'test_u2_identity_root_gate.U2IdentityRootGateTests',
     'test_u2_identity_native_publication.U2IdentityNativePublicationTests',
+    'test_u2_checked_identity_ssa.U2CheckedIdentitySSATests',
     'test_u2_identity_gc_cleanup.U2IdentityGCCleanupTests',
     'test_u2_identity_file_cleanup.U2IdentityFileCleanupTests',
     'test_u2_list_i64.U2ListI64Tests',
