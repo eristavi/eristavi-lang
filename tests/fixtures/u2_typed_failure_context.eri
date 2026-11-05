@@ -1,0 +1,83 @@
+import std.process;
+import compiler.u1_budget as budget;
+import compiler.u2_failure_context as failure;
+error ProbeError { message Text; }
+function check(okay Bool,message Text) fails ProbeError {
+    if not okay { fail ProbeError { message=message; }; }
+}
+function run() fails budget.LimitError,failure.InvalidContext,ProbeError {
+    let root be try budget.developmentRequest();
+    let owner be try budget.functionOwner(root,true);
+    let phase be try budget.constructionPhase(owner);
+    let empty be try failure.create(owner,phase,0,"",0);
+    try failure.append(empty,phase,11,"first",1);
+    try failure.append(empty,phase,12,"second",2);
+    let first be empty.primary;
+    try check(first != none,"first cleanup did not become primary");
+    if first != none {
+        try check(first.typeId == 11 and first.payload == "first" and first.location == 1,
+            "first typed primary changed");
+    }
+    try check(empty.count == 1,"unexpected secondary count");
+    let second be try failure.secondaryAt(empty,phase,0);
+    try check(second.typeId == 12 and second.payload == "second" and second.location == 2,
+        "ordered typed secondary lost");
+    try failure.close(empty);
+    let active be try failure.create(owner,phase,21,"body",3);
+    try failure.append(active,phase,22,"close-A",4);
+    try failure.append(active,phase,23,"close-B",5);
+    let primary be active.primary;
+    try check(primary != none and active.count == 2,"body failure/context missing");
+    if primary != none {
+        try check(primary.typeId == 21 and primary.payload == "body" and primary.location == 3,
+            "cleanup replaced body primary");
+    }
+    let a be try failure.secondaryAt(active,phase,0);
+    let b be try failure.secondaryAt(active,phase,1);
+    try check(a.typeId == 22 and a.payload == "close-A" and a.location == 4 and
+        b.typeId == 23 and b.payload == "close-B" and b.location == 5,
+        "typed secondary ordering incorrect");
+    try check(owner.traffic >= 2*512+4*256,"typed failure records did not charge owner traffic");
+    try failure.close(active);
+    // Preserve immutable Unicode17 Text payloads through ordered cleanup
+    // reference chains. This is a semantic oracle for later native lowering.
+    let decomposed be "é";
+    let composed be "é";
+    let joined be "👩‍💻";
+    let flags be "🇨🇾🇬🇪";
+    let retained be try failure.create(owner,phase,31,decomposed,6);
+    try failure.append(retained,phase,32,joined,7);
+    try failure.append(retained,phase,33,flags,8);
+    let unicodePrimary be retained.primary;
+    try check(unicodePrimary != none and retained.count == 2,
+        "Text failure chain did not retain ordered records");
+    if unicodePrimary != none {
+        try check(unicodePrimary.payload == decomposed and
+            unicodePrimary.payload != composed and
+            unicodePrimary.payload.bytes.count == 3 and
+            unicodePrimary.payload.scalars.count == 2 and
+            unicodePrimary.payload.characters.count == 1,
+            "Unicode17 primary payload was normalized or damaged");
+    }
+    let unicodeFirst be try failure.secondaryAt(retained,phase,0);
+    let unicodeSecond be try failure.secondaryAt(retained,phase,1);
+    try check(unicodeFirst.typeId == 32 and unicodeFirst.payload == joined and
+        unicodeFirst.payload.bytes.count == 11 and
+        unicodeFirst.payload.scalars.count == 3 and
+        unicodeFirst.payload.characters.count == 1 and
+        unicodeSecond.typeId == 33 and unicodeSecond.payload == flags and
+        unicodeSecond.payload.bytes.count == 16 and
+        unicodeSecond.payload.scalars.count == 4 and
+        unicodeSecond.payload.characters.count == 2,
+        "Unicode17 ordered cleanup Text payloads lost identity or values");
+    try failure.close(retained);
+    try budget.finishPhase(phase);
+    try check(owner.live == 0 and owner.pending == 0,"typed context backing leaked");
+    try budget.close(owner);
+    try check(root.live == 0 and root.pending == 0,"root backing leaked");
+    try budget.close(root);
+    output("u2-typed-failure:ok");
+}
+run() else error budget.LimitError { output("limit:"+error.message); process.setExitCode(1); }
+else error failure.InvalidContext { output("context:"+error.message); process.setExitCode(1); }
+else error ProbeError { output("probe:"+error.message); process.setExitCode(1); };

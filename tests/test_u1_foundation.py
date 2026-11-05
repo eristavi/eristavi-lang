@@ -44,7 +44,7 @@ class U1FoundationTests(unittest.TestCase):
         source.write_text('''
 import compiler.u1_ops as ops;
 let opcode be -1;
-while opcode <= 46 {
+while opcode <= 47 {
     let flags be 0;
     if ops.known(opcode) { flags=flags+1; }
     if ops.isCell(opcode) { flags=flags+2; }
@@ -59,12 +59,12 @@ while opcode <= 46 {
         self.assertEqual(build_native(source, binary, self.root), 0)
         completed = subprocess.run([str(binary)], capture_output=True, text=True, timeout=30)
         expected = ''.join(str(
-            (1 if 1 <= op <= 45 else 0)
+            (1 if 1 <= op <= 46 else 0)
             + (2 if op in (10, 11, 12) else 0)
-            + (4 if op in (6, 7, 8, 35) else 0)
-            + (32 if op in (5, 24, 25, 26, 27, 34, 41, 42) else 0)
-            + (8 if op == 6 else 16 if op == 7 else 0)
-        ) + '\n' for op in range(-1, 47))
+            + (4 if op in (6, 7, 8, 35, 46) else 0)
+            + (32 if op in (5, 24, 25, 26, 27, 34, 41, 42, 46) else 0)
+            + (8 if op == 6 else 16 if op in (7, 46) else 0)
+        ) + '\n' for op in range(-1, 48))
         self.assertEqual((completed.returncode, completed.stdout, completed.stderr),
                          (0, expected, ''))
 

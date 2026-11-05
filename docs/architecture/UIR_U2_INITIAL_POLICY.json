@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "status": "initial private cleanup-planning policy selected before planner implementation",
+  "date": "2026-11-02",
+  "baseline": "docs/evidence/2026-11-02/u2-resource-baseline.json",
+  "scope": "one source exit plan, not production input limits or complete U2 acceptance",
+  "maximum_owner_depth": 128,
+  "maximum_cleanup_steps_per_exit": 256,
+  "maximum_plan_words": 2048,
+  "qualification_owner_peak_bytes": 8388608,
+  "qualification_owner_traffic_bytes": 67108864,
+  "construction_work_visits": 16777216,
+  "qualification_wall_watchdog_seconds": 120,
+  "structural_gate": "exactly two close records per exited owner; iterative O(depth) construction; no cross-exit sharing",
+  "attribution": "existing U1 budget-ledger admission; not actual allocator capacity or RSS",
+  "open_gates": [
+    "whole-function X/A and code expansion policies",
+    "typed success/failure payloads and canonical UIR integration",
+    "scoped-owner verification and safe-point root maps",
+    "managed value and identity semantics",
+    "runtime failure-context append, physical memory and latency evidence"
+  ]
+}

@@ -1,0 +1,252 @@
+// U2 private, versioned source-neutral descriptors for managed values.
+// Not executable UIR, native pointers or GC root classes.
+// Text and List copy ordinary values; identity copies the shared handle.
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+import compiler.u1_meta as meta;
+import compiler.u1_aggregate as aggregate;
+import compiler.u1_aggregate_verify as graphVerify;
+
+public type TypeId { owner identity meta.Key; index Int; }
+public type Descriptor { kind Int; elementDomain Int; element Int; copyPolicy Int; }
+public type Registry {
+    key identity meta.Key; graph identity aggregate.Registry;
+    owner identity budget.Owner; graphKey identity meta.Key;
+    version Int; state Int; records identity words.Words;
+    control identity budget.Allocation;
+}
+public type Report { types Int; lists Int; identities Int; }
+public error InvalidManagedTypes { message Text; index Int; }
+function require(ok Bool,index Int,message Text) fails InvalidManagedTypes {
+    if not ok { fail InvalidManagedTypes { message=message; index=index; }; }
+}
+function init(reg identity Registry,phase identity budget.Phase)
+    fails budget.LimitError {
+    let ignored be try words.push(reg.records,phase,1);
+    ignored=try words.push(reg.records,phase,0);
+    ignored=try words.push(reg.records,phase,0);
+    ignored=try words.push(reg.records,phase,1);
+}
+public function create(graph identity aggregate.Registry,phase identity budget.Phase)
+    returns identity Registry fails budget.LimitError {
+    try budget.poll(graph.owner);
+    if graph.state != 1 or graph.owner.kind != 1 or
+        phase.owner != graph.owner or phase.state != 0 {
+        try budget.reject("managed types require frozen owned type graph");
+    }
+    let pending be try budget.reserve(graph.owner,512);
+    let records be words.create(graph.owner,256)
+        else error budget.LimitError {
+            try budget.cancelReservation(pending); fail error;
+        };
+    let control be try budget.commit(pending);
+    let reg be identity Registry {
+        key=identity meta.Key { marker=0; }; graph=graph; owner=graph.owner;
+        graphKey=graph.key; version=1; state=3; records=records; control=control;
+    };
+    // Type #1 is canonical Text. Policy 1 means an ordinary value.
+    init(reg,phase) else error budget.LimitError {
+        try close(reg); fail error;
+    };
+    reg.state=0;
+    return reg;
+}
+public function text(reg identity Registry) returns TypeId {
+    return TypeId { owner=reg.key; index=1; };
+}
+function mutable(reg identity Registry,phase identity budget.Phase)
+    fails budget.LimitError {
+    try budget.poll(reg.owner);
+    if reg.version != 1 or reg.state != 0 or reg.graph.state != 1 or
+        reg.graph.key != reg.graphKey or phase.owner != reg.owner or
+        reg.records.closed or reg.records.frozen {
+        try budget.reject("foreign or poisoned managed-type builder");
+    }
+}
+function offset(reg identity Registry,phase identity budget.Phase,value TypeId)
+    returns Int fails budget.LimitError {
+    try budget.poll(reg.owner);
+    if reg.state == 2 or reg.state == 3 or
+        reg.graph.key != reg.graphKey or phase.owner != reg.owner or
+        value.owner != reg.key or value.index < 1 or
+        value.index > reg.records.length/4 {
+        try budget.reject("foreign or invalid managed TypeId");
+    }
+    return (value.index-1)*4;
+}
+public function descriptor(reg identity Registry,phase identity budget.Phase,
+    value TypeId) returns Descriptor fails budget.LimitError {
+    let row be try offset(reg,phase,value);
+    return Descriptor { kind=try words.get(reg.records,phase,row);
+        elementDomain=try words.get(reg.records,phase,row+1);
+        element=try words.get(reg.records,phase,row+2);
+        copyPolicy=try words.get(reg.records,phase,row+3); };
+}
+function append(reg identity Registry,phase identity budget.Phase,
+    kind Int,domain Int,element Int) returns TypeId fails budget.LimitError {
+    try mutable(reg,phase);
+    if (kind != 2 and kind != 3) or
+        (domain != 0 and domain != 1) or element < 1 {
+        try budget.reject("unsupported U2 managed type constructor");
+    }
+    if domain == 0 {
+        if element > 6+reg.graph.records.length/4 {
+            try budget.reject("invalid structural element");
+        }
+    } else {
+        if element > reg.records.length/4 {
+            try budget.reject("forward managed element");
+        }
+        if kind == 3 and
+            (try words.get(reg.records,phase,(element-1)*4)) == 3 {
+            try budget.reject("identity cannot wrap an identity handle");
+        }
+    }
+    let index be 1;
+    while index <= reg.records.length/4 {
+        try budget.work(phase,1);
+        let row be (index-1)*4;
+        if (try words.get(reg.records,phase,row)) == kind and
+           (try words.get(reg.records,phase,row+1)) == domain and
+           (try words.get(reg.records,phase,row+2)) == element {
+            return TypeId { owner=reg.key; index=index; };
+        }
+        index=index+1;
+    }
+    if reg.records.length/4 >= 64 { try budget.exceed(reg.owner,1,0); }
+    let policy be 1; if kind == 3 { policy=2; }
+    // Allocation refusal leaves a poisoned, close-only unpublished builder.
+    reg.state=3;
+    let ignored be try words.push(reg.records,phase,kind);
+    ignored=try words.push(reg.records,phase,domain);
+    ignored=try words.push(reg.records,phase,element);
+    ignored=try words.push(reg.records,phase,policy);
+    reg.state=0;
+    return TypeId { owner=reg.key; index=reg.records.length/4; };
+}
+public function listOfBase(reg identity Registry,phase identity budget.Phase,
+    element aggregate.TypeId) returns TypeId fails budget.LimitError {
+    if element.owner != reg.graphKey { try budget.reject("foreign List element"); }
+    return try append(reg,phase,2,0,element.index);
+}
+public function listOfManaged(reg identity Registry,phase identity budget.Phase,
+    element TypeId) returns TypeId fails budget.LimitError {
+    if element.owner != reg.key { try budget.reject("foreign managed List element"); }
+    return try append(reg,phase,2,1,element.index);
+}
+public function identityOfBase(reg identity Registry,phase identity budget.Phase,
+    element aggregate.TypeId) returns TypeId fails budget.LimitError {
+    if element.owner != reg.graphKey { try budget.reject("foreign identity payload"); }
+    return try append(reg,phase,3,0,element.index);
+}
+public function identityOfManaged(reg identity Registry,phase identity budget.Phase,
+    element TypeId) returns TypeId fails budget.LimitError {
+    if element.owner != reg.key { try budget.reject("foreign managed identity payload"); }
+    return try append(reg,phase,3,1,element.index);
+}
+public function deepFixable(reg identity Registry,phase identity budget.Phase,
+    value TypeId) returns Bool fails budget.LimitError {
+    let current be value; let depth be 0;
+    while true {
+        let item be try descriptor(reg,phase,current);
+        depth=depth+1;
+        if depth > 64 { try budget.reject("invalid managed type ancestry"); }
+        if item.kind == 3 { return false; }
+        if item.kind == 1 { return true; }
+        if item.kind != 2 { try budget.reject("unknown managed descriptor"); }
+        if item.elementDomain == 0 { return true; }
+        current=TypeId { owner=reg.key; index=item.element; };
+    }
+    return false;
+}
+public function freeze(reg identity Registry) fails budget.LimitError {
+    try budget.poll(reg.owner);
+    if reg.version != 1 or reg.state != 0 or reg.graph.state != 1 or
+       reg.graph.key != reg.graphKey {
+        try budget.reject("invalid managed type freeze");
+    }
+    try words.freeze(reg.records);
+    reg.state=1;
+}
+function inspect(reg identity Registry,phase identity budget.Phase)
+    returns Report fails budget.LimitError,InvalidManagedTypes {
+    let count be reg.records.length/4;
+    let row be 1; let lists be 0; let identities be 0;
+    while row <= count {
+        try budget.work(phase,1);
+        let start be (row-1)*4;
+        let kind be try words.get(reg.records,phase,start);
+        let domain be try words.get(reg.records,phase,start+1);
+        let element be try words.get(reg.records,phase,start+2);
+        let policy be try words.get(reg.records,phase,start+3);
+        if row == 1 {
+            try require(kind == 1 and domain == 0 and
+                element == 0 and policy == 1,row,
+                "invalid canonical Text descriptor");
+        } else {
+            try require((kind == 2 and policy == 1) or
+                (kind == 3 and policy == 2),row,
+                "invalid copy/identity semantics");
+            try require(domain == 0 or domain == 1,row,
+                "invalid managed type domain");
+            if domain == 0 {
+                try require(element >= 1 and
+                    element <= 6+reg.graph.records.length/4,row,
+                    "invalid structural payload");
+            } else {
+                try require(element >= 1 and element < row,row,
+                    "forward or cyclic managed type");
+                if kind == 3 {
+                    try require((try words.get(reg.records,phase,
+                        (element-1)*4)) != 3,row,
+                        "nested identity wrapper is invalid");
+                }
+            }
+            let previous be 2;
+            while previous < row {
+                try budget.work(phase,1);
+                let base be (previous-1)*4;
+                try require(
+                    (try words.get(reg.records,phase,base)) != kind or
+                    (try words.get(reg.records,phase,base+1)) != domain or
+                    (try words.get(reg.records,phase,base+2)) != element,
+                    row,"duplicate managed type descriptor");
+                previous=previous+1;
+            }
+            if kind == 2 { lists=lists+1; }
+            else { identities=identities+1; }
+        }
+        row=row+1;
+    }
+    return Report { types=count; lists=lists; identities=identities; };
+}
+public function verify(reg identity Registry,graph identity aggregate.Registry,
+    phase identity budget.Phase) returns Report
+    fails budget.LimitError,graphVerify.InvalidGraph,InvalidManagedTypes {
+    try budget.poll(reg.owner);
+    try require(reg.version == 1 and reg.state == 1 and
+        reg.owner == graph.owner and reg.graph == graph and
+        reg.graphKey == graph.key and reg.owner.kind == 1 and
+        phase.owner == reg.owner and phase.state == 0 and
+        reg.records.owner == reg.owner and not reg.records.closed and
+        reg.records.frozen and reg.records.limit == 256 and
+        reg.records.length >= 4 and reg.records.length <= 256 and
+        reg.records.length%4 == 0 and
+        reg.control.owner == reg.owner and reg.control.state == 0,
+        0,"stale, foreign or noncanonical managed type backing");
+    let checkPhase be try budget.verificationPhase(graph.owner);
+    let valid be graphVerify.verify(graph,checkPhase)
+        else error budget.LimitError {
+            try budget.finishPhase(checkPhase); fail error;
+        } else error graphVerify.InvalidGraph {
+            try budget.finishPhase(checkPhase); fail error;
+        };
+    try budget.finishPhase(checkPhase);
+    return try inspect(reg,phase);
+}
+public function close(reg identity Registry) fails budget.LimitError {
+    if reg.state == 2 { try budget.reject("managed type registry already closed"); }
+    reg.state=2;
+    try words.close(reg.records);
+    try budget.release(reg.control);
+}

@@ -1,0 +1,479 @@
+// U2 opt-in SSA liveness for canonical, independently verified Function tables.
+// This is neither a second executable IR nor a native GC root map.
+// A closed explicit type selection is required; unknown managed types fail closed.
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+import compiler.u1_meta as meta;
+import compiler.u1_builder as build;
+import compiler.u1_aggregate as aggregate;
+import compiler.u1_successors as successors;
+import compiler.u1_verify as canonical;
+import compiler.u2_invoke_contract as contracts;
+
+public error InvalidLiveness { message Text; }
+public type Report {
+    blocks Int; edges Int; instructions Int; tracked Int;
+    iterations Int; revision Int;
+}
+public type Plan {
+    version Int; owner identity budget.Owner; functionKey identity meta.Key;
+    typeKey identity meta.Key; contract identity contracts.Registry; revision Int;
+    types identity words.Words; values identity words.Words;
+    uses identity words.Words; inputs identity words.Words; outputs identity words.Words;
+    control identity budget.Allocation; closed Bool; blocks Int;
+    instructions Int; edges Int; iterations Int;
+}
+function require(ok Bool,message Text) fails InvalidLiveness {
+    if not ok { fail InvalidLiveness { message=message; }; }
+}
+function member(plan identity Plan,routine identity build.Function,
+    phase identity budget.Phase) fails InvalidLiveness {
+    try require(not plan.closed and plan.version == 1 and
+        plan.functionKey == routine.key and plan.owner == routine.owner and
+        plan.revision == routine.revision and phase.owner == routine.owner and
+        phase.state == 0 and routine.state == 1,
+        "stale or foreign SSA liveness plan");
+}
+public function close(plan identity Plan) fails budget.LimitError {
+    if plan.closed { try budget.reject("SSA liveness plan already closed"); }
+    plan.closed=true;
+    try words.close(plan.outputs); try words.close(plan.inputs);
+    try words.close(plan.uses); try words.close(plan.values);
+    try words.close(plan.types); try budget.release(plan.control);
+}
+function trackedSlot(plan identity Plan,phase identity budget.Phase,value Int)
+    returns Int fails budget.LimitError {
+    let index be 0;
+    while index < plan.values.length/4 {
+        if (try words.get(plan.values,phase,index*4)) == value { return index+1; }
+        index=index+1;
+    }
+    return 0;
+}
+function setOne(store identity words.Words,phase identity budget.Phase,index Int)
+    returns Bool fails budget.LimitError {
+    if (try words.get(store,phase,index)) != 0 { return false; }
+    try words.set(store,phase,index,1);
+    return true;
+}
+function zero(store identity words.Words,phase identity budget.Phase,count Int)
+    fails budget.LimitError {
+    let index be 0;
+    while index < count {
+        let ignored be try words.push(store,phase,0);
+        index=index+1;
+    }
+}
+function select(plan identity Plan,routine identity build.Function,
+    graph identity aggregate.Registry,phase identity budget.Phase,chosen)
+    fails budget.LimitError,InvalidLiveness {
+    let i be 0;
+    while i < chosen.count {
+        let item aggregate.TypeId be chosen[i];
+        try require(item.owner == graph.key and item.index >= 7 and
+            item.index <= 6+graph.records.length/4,
+            "foreign or unsupported managed TypeId");
+        let j be 0;
+        while j < i {
+            let earlier aggregate.TypeId be chosen[j];
+            try require(item.index != earlier.index,
+                "duplicate managed TypeId");
+            j=j+1;
+        }
+        let ignored be try words.push(plan.types,phase,item.index);
+        i=i+1;
+    }
+    let value be 1;
+    while value <= routine.values.length/4 {
+        try budget.work(phase,1);
+        let offset be (value-1)*4;
+        let typeIndex be try words.get(routine.values,phase,offset);
+        let selected be false; i=0;
+        while i < plan.types.length {
+            if typeIndex == (try words.get(plan.types,phase,i)) { selected=true; }
+            i=i+1;
+        }
+        if selected {
+            try require(plan.values.length/4 < 32,
+                "managed SSA profile exceeds 32 value slots");
+            let kind be try words.get(routine.values,phase,offset+1);
+            let definition be try words.get(routine.values,phase,offset+2);
+            let block be definition;
+            if kind == 1 {
+                block=try words.get(routine.instructions,phase,(definition-1)*10+1);
+            }
+            try require((kind == 0 or kind == 1) and
+                block >= 1 and block <= plan.blocks,
+                "invalid managed SSA definition");
+            let ignored be try words.push(plan.values,phase,value);
+            ignored=try words.push(plan.values,phase,typeIndex);
+            ignored=try words.push(plan.values,phase,kind);
+            ignored=try words.push(plan.values,phase,block);
+        }
+        value=value+1;
+    }
+}
+function markUses(plan identity Plan,routine identity build.Function,
+    phase identity budget.Phase) fails budget.LimitError,InvalidLiveness {
+    let size be plan.values.length/4; let index be 1;
+    while index <= plan.instructions {
+        try budget.work(phase,1);
+        let offset be (index-1)*10;
+        let block be try words.get(routine.instructions,phase,offset+1);
+        try require(block >= 1 and block <= plan.blocks,
+            "unowned managed instruction");
+        let first be try words.get(routine.instructions,phase,offset+2);
+        let count be try words.get(routine.instructions,phase,offset+3);
+        let operand be 0;
+        while operand < count {
+            let value be try words.get(routine.operands,phase,first+operand);
+            let slot be try trackedSlot(plan,phase,value);
+            if slot > 0 {
+                let changed be try setOne(plan.uses,phase,(block-1)*size+slot-1);
+            }
+            operand=operand+1;
+        }
+        index=index+1;
+    }
+}
+function flow(plan identity Plan,routine identity build.Function,
+    phase identity budget.Phase) fails budget.LimitError,InvalidLiveness {
+    let size be plan.values.length/4;
+    let changed be true; let passes be 0;
+    while changed {
+        changed=false; passes=passes+1;
+        // Each successful pass flips at least one of at most 2*B*R bits.
+        try require(passes <= 2*plan.blocks*size+2,
+            "SSA liveness fixpoint did not converge");
+        let block be plan.blocks;
+        while block >= 1 {
+            try budget.work(phase,1);
+            let term be try words.get(routine.blocks,phase,(block-1)*5+4);
+            let number be try successors.count(routine,phase,term);
+            let ordinal be 0;
+            while ordinal < number {
+                let edge be try successors.edge(routine,phase,term,ordinal);
+                let target be try words.get(routine.edges,phase,(edge-1)*3);
+                let first be try words.get(routine.edges,phase,(edge-1)*3+1);
+                let r be 0;
+                while r < size {
+                    let needed be try words.get(plan.inputs,phase,(target-1)*size+r);
+                    if needed == 1 {
+                        let value be try words.get(plan.values,phase,r*4);
+                        let kind be try words.get(plan.values,phase,r*4+2);
+                        let definitionBlock be try words.get(plan.values,phase,r*4+3);
+                        let source be value;
+                        if kind == 0 and definitionBlock == target {
+                            // Phi/block parameter: demand ONLY its selected
+                            // predecessor argument, never a union of other arms.
+                            let position be try words.get(routine.values,phase,(value-1)*4+3);
+                            source=try words.get(routine.arguments,phase,first+position);
+                        }
+                        if source > 0 {
+                            let slot be try trackedSlot(plan,phase,source);
+                            try require(slot > 0,
+                                "tracked managed edge value has no typed slot");
+                            if try setOne(plan.outputs,phase,(block-1)*size+slot-1) {
+                                changed=true;
+                            }
+                        } else {
+                            // A negative invoke argument is a new edge-produced
+                            // result, not a predecessor SSA value to keep alive.
+                            try require((try words.get(routine.instructions,phase,(term-1)*10)) == 46,
+                                "non-invoke edge produced an implicit value");
+                        }
+                    }
+                    r=r+1;
+                }
+                ordinal=ordinal+1;
+            }
+            let slot be 0;
+            while slot < size {
+                let idx be (block-1)*size+slot;
+                let locallyUsed be (try words.get(plan.uses,phase,idx)) == 1;
+                let liveOut be (try words.get(plan.outputs,phase,idx)) == 1;
+                let kind be try words.get(plan.values,phase,slot*4+2);
+                let definitionBlock be try words.get(plan.values,phase,slot*4+3);
+                // A block parameter exists at entry. A later instruction
+                // result does NOT exist there, even when live on an exit.
+                if (locallyUsed or liveOut) and not (kind == 1 and definitionBlock == block) {
+                    if try setOne(plan.inputs,phase,idx) { changed=true; }
+                }
+                slot=slot+1;
+            }
+            block=block-1;
+        }
+    }
+    plan.iterations=passes;
+}
+function construct(plan identity Plan,routine identity build.Function,
+    graph identity aggregate.Registry,phase identity budget.Phase,chosen)
+    fails budget.LimitError,InvalidLiveness {
+    try select(plan,routine,graph,phase,chosen);
+    let total be plan.blocks*(plan.values.length/4);
+    try zero(plan.uses,phase,total);
+    try zero(plan.inputs,phase,total);
+    try zero(plan.outputs,phase,total);
+    try markUses(plan,routine,phase);
+    try flow(plan,routine,phase);
+    try words.freeze(plan.types); try words.freeze(plan.values);
+    try words.freeze(plan.uses); try words.freeze(plan.inputs);
+    try words.freeze(plan.outputs);
+}
+public function create(routine identity build.Function,
+    graph identity aggregate.Registry,contractsTable identity contracts.Registry,
+    phase identity budget.Phase,managedTypes)
+    returns identity Plan fails budget.LimitError,canonical.InvalidIR,InvalidLiveness {
+    try budget.poll(routine.owner);
+    try require(phase.owner == routine.owner and phase.state == 0 and
+        routine.state == 1 and graph.state == 1 and
+        graph.owner == routine.metadata.owner and
+        graph.owner.parent == routine.owner.parent and
+        managedTypes.count >= 1 and managedTypes.count <= 8 and
+        routine.blocks.length/5 >= 1 and routine.blocks.length/5 <= 64 and
+        routine.instructions.length/10 <= 512 and
+        routine.values.length/4 <= 512 and
+        routine.edges.length/3 <= 512,
+        "unsupported or foreign bounded SSA liveness profile");
+    // The canonical verifier independently rereads ALL reachable and dead IR
+    // structure, all invoke contracts and the aggregate graph. This result is
+    // not a reused stamp, and consumes its own fresh verification phase.
+    let verification be try budget.verificationPhase(routine.owner);
+    let checked be try canonical.verifyFallibleRegistry(
+        routine,graph,verification,contractsTable);
+    let pending be try budget.reserve(routine.owner,512);
+    let selected be words.create(routine.owner,8)
+        else error budget.LimitError { try budget.cancelReservation(pending); fail error; };
+    let values be words.create(routine.owner,128)
+        else error budget.LimitError { try words.close(selected); try budget.cancelReservation(pending); fail error; };
+    let used be words.create(routine.owner,2048)
+        else error budget.LimitError { try words.close(values); try words.close(selected); try budget.cancelReservation(pending); fail error; };
+    let input be words.create(routine.owner,2048)
+        else error budget.LimitError { try words.close(used); try words.close(values); try words.close(selected); try budget.cancelReservation(pending); fail error; };
+    let output be words.create(routine.owner,2048)
+        else error budget.LimitError { try words.close(input); try words.close(used); try words.close(values); try words.close(selected); try budget.cancelReservation(pending); fail error; };
+    let control be try budget.commit(pending);
+    let plan be identity Plan { version=1; owner=routine.owner;
+        functionKey=routine.key; typeKey=graph.key; contract=contractsTable;
+        revision=routine.revision; types=selected; values=values;
+        uses=used; inputs=input; outputs=output; control=control;
+        closed=false; blocks=routine.blocks.length/5;
+        instructions=routine.instructions.length/10;
+        edges=routine.edges.length/3; iterations=0; };
+    construct(plan,routine,graph,phase,managedTypes)
+        else error InvalidLiveness { try close(plan); fail error; }
+        else error budget.LimitError { try close(plan); fail error; };
+    return plan;
+}
+function same(first identity words.Words,second identity words.Words,
+    phase identity budget.Phase) returns Bool fails budget.LimitError {
+    if first.length != second.length or first.closed or second.closed or
+        not first.frozen or not second.frozen { return false; }
+    let index be 0;
+    while index < first.length {
+        if (try words.get(first,phase,index)) != (try words.get(second,phase,index)) {
+            return false;
+        }
+        index=index+1;
+    }
+    return true;
+}
+public function verify(plan identity Plan,routine identity build.Function,
+    graph identity aggregate.Registry,contractsTable identity contracts.Registry,
+    phase identity budget.Phase) returns Report
+    fails budget.LimitError,canonical.InvalidIR,InvalidLiveness {
+    try member(plan,routine,phase);
+    try require(plan.typeKey == graph.key and plan.contract == contractsTable and
+        plan.control.owner == routine.owner and plan.control.state == 0 and
+        plan.blocks == routine.blocks.length/5 and
+        plan.instructions == routine.instructions.length/10 and
+        plan.edges == routine.edges.length/3 and
+        plan.types.owner == routine.owner and plan.values.owner == routine.owner and
+        plan.uses.owner == routine.owner and plan.inputs.owner == routine.owner and
+        plan.outputs.owner == routine.owner and
+        plan.types.frozen and plan.values.frozen and
+        plan.uses.frozen and plan.inputs.frozen and plan.outputs.frozen and
+        not plan.types.closed and not plan.values.closed and
+        not plan.uses.closed and not plan.inputs.closed and not plan.outputs.closed and
+        plan.types.length >= 1 and plan.types.length <= 8 and
+        plan.values.length%4 == 0 and plan.values.length <= 128 and
+        plan.inputs.length == plan.blocks*plan.values.length/4 and
+        plan.outputs.length == plan.inputs.length and
+        plan.uses.length == plan.inputs.length,
+        "stale, missing or malformed SSA root liveness backing");
+    let typeList be [];
+    let index be 0;
+    while index < plan.types.length {
+        typeList.add(aggregate.TypeId { owner=graph.key;
+            index=try words.get(plan.types,phase,index); });
+        index=index+1;
+    }
+    let derived be try create(routine,graph,contractsTable,phase,typeList);
+    let good be plan.iterations == derived.iterations and
+        (try same(plan.types,derived.types,phase)) and
+        (try same(plan.values,derived.values,phase)) and
+        (try same(plan.uses,derived.uses,phase)) and
+        (try same(plan.inputs,derived.inputs,phase)) and
+        (try same(plan.outputs,derived.outputs,phase));
+    let report be Report { blocks=derived.blocks; edges=derived.edges;
+        instructions=derived.instructions; tracked=derived.values.length/4;
+        iterations=derived.iterations; revision=derived.revision; };
+    try close(derived);
+    try require(good,"forged or incomplete canonical SSA liveness");
+    return report;
+}
+function offset(plan identity Plan,routine identity build.Function,
+    phase identity budget.Phase,block Int,value Int)
+    returns Int fails budget.LimitError,InvalidLiveness {
+    try member(plan,routine,phase);
+    try require(block >= 1 and block <= plan.blocks,
+        "invalid liveness block");
+    let slot be try trackedSlot(plan,phase,value);
+    try require(slot > 0,"untracked managed SSA value");
+    return (block-1)*(plan.values.length/4)+slot-1;
+}
+public function liveEntry(plan identity Plan,routine identity build.Function,
+    phase identity budget.Phase,block build.BlockId,value build.ValueId)
+    returns Bool fails budget.LimitError,InvalidLiveness {
+    try require(block.owner == routine.key and value.owner == routine.key,
+        "foreign liveness identifier");
+    return (try words.get(plan.inputs,phase,
+        try offset(plan,routine,phase,block.index,value.index))) == 1;
+}
+public function liveExit(plan identity Plan,routine identity build.Function,
+    phase identity budget.Phase,block build.BlockId,value build.ValueId)
+    returns Bool fails budget.LimitError,InvalidLiveness {
+    try require(block.owner == routine.key and value.owner == routine.key,
+        "foreign liveness identifier");
+    return (try words.get(plan.outputs,phase,
+        try offset(plan,routine,phase,block.index,value.index))) == 1;
+}
+function usedAt(routine identity build.Function,phase identity budget.Phase,
+    instruction Int,value Int) returns Bool fails budget.LimitError {
+    let offset be (instruction-1)*10;
+    let first be try words.get(routine.instructions,phase,offset+2);
+    let count be try words.get(routine.instructions,phase,offset+3);
+    let item be 0;
+    while item < count {
+        if (try words.get(routine.operands,phase,first+item)) == value { return true; }
+        item=item+1;
+    }
+    return false;
+}
+function at(plan identity Plan,routine identity build.Function,
+    phase identity budget.Phase,instruction build.InstId,
+    value build.ValueId,before Bool)
+    returns Bool fails budget.LimitError,InvalidLiveness {
+    try member(plan,routine,phase);
+    try require(instruction.owner == routine.key and value.owner == routine.key and
+        instruction.index >= 1 and instruction.index <= plan.instructions,
+        "foreign instruction or managed value");
+    let slot be try trackedSlot(plan,phase,value.index);
+    try require(slot > 0,"untracked managed SSA value at safe point");
+    let block be try words.get(routine.instructions,phase,(instruction.index-1)*10+1);
+    let definitionKind be try words.get(routine.values,phase,(value.index-1)*4+1);
+    let definition be try words.get(routine.values,phase,(value.index-1)*4+2);
+    let definitionBlock be try words.get(plan.values,phase,(slot-1)*4+3);
+    // Independently follow the canonical per-block linked instruction order.
+    // Global instruction IDs can be interleaved across different blocks.
+    let cursor be try words.get(routine.blocks,phase,(block-1)*5+2);
+    let seen be 0; let passed be false; let defined be definitionKind == 0 or
+        definitionBlock != block;
+    let usedLater be false;
+    while cursor != 0 {
+        try budget.work(phase,1);
+        seen=seen+1;
+        try require(seen <= plan.instructions,"cyclic native liveness instruction chain");
+        if cursor == instruction.index {
+            passed=true;
+            if not before and definitionKind == 1 and definition == cursor {
+                defined=true;
+            }
+            if before and try usedAt(routine,phase,cursor,value.index) {
+                usedLater=true;
+            }
+        } else {
+            if not passed {
+                if definitionKind == 1 and definition == cursor { defined=true; }
+            } else {
+                if try usedAt(routine,phase,cursor,value.index) { usedLater=true; }
+            }
+        }
+        cursor=try words.get(routine.instructions,phase,(cursor-1)*10+9);
+    }
+    let term be try words.get(routine.blocks,phase,(block-1)*5+4);
+    try require(term >= 1 and term <= plan.instructions,
+        "missing canonical liveness terminator");
+    if term == instruction.index {
+        passed=true;
+        if before and try usedAt(routine,phase,term,value.index) { usedLater=true; }
+    } else {
+        if passed and try usedAt(routine,phase,term,value.index) {
+            usedLater=true;
+        }
+    }
+    try require(passed,"foreign block instruction in safe-point query");
+    let liveOut be (try words.get(plan.outputs,phase,
+        (block-1)*(plan.values.length/4)+slot-1)) == 1;
+    return defined and (usedLater or liveOut);
+}
+public function liveBefore(plan identity Plan,routine identity build.Function,
+    phase identity budget.Phase,instruction build.InstId,value build.ValueId)
+    returns Bool fails budget.LimitError,InvalidLiveness {
+    return try at(plan,routine,phase,instruction,value,true);
+}
+public function liveAfter(plan identity Plan,routine identity build.Function,
+    phase identity budget.Phase,instruction build.InstId,value build.ValueId)
+    returns Bool fails budget.LimitError,InvalidLiveness {
+    return try at(plan,routine,phase,instruction,value,false);
+}
+
+// Emitters can require an exact, independently revalidated publication set
+// before each potential allocation/call safe point. 'published' contains
+// ValueIds whose native root words the lowering promises to keep registered.
+// This validates an OBLIGATION, not the resulting machine instructions.
+public function requirePublished(plan identity Plan,routine identity build.Function,
+    graph identity aggregate.Registry,contractsTable identity contracts.Registry,
+    phase identity budget.Phase,instruction build.InstId,published,before Bool)
+    returns Int fails budget.LimitError,canonical.InvalidIR,InvalidLiveness {
+    let proof be try verify(plan,routine,graph,contractsTable,phase);
+    try require(instruction.owner == routine.key and
+        instruction.index >= 1 and instruction.index <= plan.instructions and
+        published.count <= plan.values.length/4,
+        "foreign or oversized managed root publication");
+    let i be 0;
+    while i < published.count {
+        let item build.ValueId be published[i];
+        try require(item.owner == routine.key and
+            (try trackedSlot(plan,phase,item.index)) > 0,
+            "untracked or foreign native root publication");
+        let j be 0;
+        while j < i {
+            let previous build.ValueId be published[j];
+            try require(previous.index != item.index,
+                "duplicated native root publication");
+            j=j+1;
+        }
+        i=i+1;
+    }
+    let required be 0; i=0;
+    while i < plan.values.length/4 {
+        try budget.work(phase,1);
+        let value be build.ValueId { owner=routine.key;
+            index=try words.get(plan.values,phase,i*4); };
+        let live be false;
+        if before { live=try liveBefore(plan,routine,phase,instruction,value); }
+        else { live=try liveAfter(plan,routine,phase,instruction,value); }
+        let found be false; let j be 0;
+        while j < published.count {
+            let item build.ValueId be published[j];
+            if item.index == value.index { found=true; }
+            j=j+1;
+        }
+        try require(live == found,
+            "missing, prematurely released or incorrectly retained managed root");
+        if live { required=required+1; }
+        i=i+1;
+    }
+    return required;
+}

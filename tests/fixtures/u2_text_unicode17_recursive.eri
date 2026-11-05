@@ -1,0 +1,115 @@
+import std.process;
+import compiler.u1_budget as budget;
+import compiler.u1_meta as meta;
+import compiler.u1_builder as build;
+import compiler.u1_aggregate as aggregate;
+import compiler.u1_aggregate_build as ab;
+import compiler.u1_aggregate_signature as sig;
+import compiler.u1_verify as verify;
+import compiler.u1_aggregate_verify as graphVerify;
+import compiler.u2_text_native as textNative;
+import compiler.u2_managed_types as managed;
+
+function run() fails budget.LimitError,verify.InvalidIR,
+    textNative.Unsupported,managed.InvalidManagedTypes,graphVerify.InvalidGraph {
+    let request be try budget.developmentRequest();
+    let shared be try budget.metadataOwner(request);
+    let p be try budget.constructionPhase(shared);
+    let data be try meta.create(shared,p);
+    let source be try meta.source(data,p,"text-probe",
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",64);
+    let loc be try meta.location(data,p,source,0,1,0,1,1);
+    let graph be try aggregate.create(shared,p);
+    let intType be try aggregate.primitive(graph,meta.i64());
+    let predType be try aggregate.primitive(graph,meta.pred());
+    let carrier be try aggregate.aggregate(graph,p,[]);
+    // Instantiate the accepted concrete scalar metadata signature path.
+    let scalarSig be try meta.signature(data,p,[meta.i64()],[meta.i64()]);
+    let entrySig be try sig.signature(data,graph,p,
+        [carrier,intType],[intType]);
+    let fromSignature be try sig.signature(data,graph,p,[intType],[carrier]);
+    let f1 be try meta.declaration(data,p,fromSignature,textNative.name(1),2,63,1);
+    let concatSignature be try sig.signature(data,graph,p,[carrier,carrier],[carrier]);
+    let f2 be try meta.declaration(data,p,concatSignature,textNative.name(2),2,63,1);
+    let copySignature be try sig.signature(data,graph,p,[carrier],[carrier]);
+    let f3 be try meta.declaration(data,p,copySignature,textNative.name(3),2,63,1);
+    let equalSignature be try sig.signature(data,graph,p,[carrier,carrier],[predType]);
+    let f4 be try meta.declaration(data,p,equalSignature,textNative.name(4),2,63,1);
+    let countSignature be try sig.signature(data,graph,p,[carrier],[intType]);
+    let f5 be try meta.declaration(data,p,countSignature,textNative.name(5),2,63,1);
+    let f6 be try meta.declaration(data,p,countSignature,textNative.name(6),2,63,1);
+    let f7 be try meta.declaration(data,p,countSignature,textNative.name(7),2,63,1);
+    let collectSignature be try meta.signature(data,p,[],[]);
+    let f8 be try meta.declaration(data,p,collectSignature,textNative.name(8),2,63,1);
+    let byteIndexSignature be try sig.signature(data,graph,p,[carrier,intType],[intType]);
+    let f9 be try meta.declaration(data,p,byteIndexSignature,textNative.name(9),2,63,1);
+    let textIndexSignature be try sig.signature(data,graph,p,[carrier,intType],[carrier]);
+    let f10 be try meta.declaration(data,p,textIndexSignature,textNative.name(10),2,63,1);
+    let f11 be try meta.declaration(data,p,textIndexSignature,textNative.name(11),2,63,1);
+    let f12 be try meta.declaration(data,p,copySignature,textNative.name(12),2,63,1);
+    let f13 be try meta.declaration(data,p,entrySig,textNative.name(13),1,0,0);
+    try aggregate.freeze(graph);
+    let registry be try managed.create(graph,p);
+    let textType be managed.text(registry);
+    try managed.freeze(registry);
+    try meta.freeze(data); try budget.finishPhase(p);
+    let owner be try budget.functionOwner(request,false);
+    let phase be try budget.constructionPhase(owner);
+    let fn be try build.create(data,entrySig,owner,phase);
+
+    // Closed recursive Text function: (Text, i64) -> i64.
+    // Parent and child frames retain separate live Text roots.
+    let entryBlock be try ab.block(fn,graph,[carrier,intType]);
+    let original be try build.parameter(fn,entryBlock,0);
+    let depth be try build.parameter(fn,entryBlock,1);
+    let doneBlock be try ab.block(fn,graph,[]);
+    let childBlock be try ab.block(fn,graph,[]);
+    let zero be try build.integer(fn,entryBlock,0,loc);
+    let condition be try build.compareInteger(fn,entryBlock,depth,zero,1,loc);
+    // Preserve the accepted scalar U1a ValueId-list specialization.
+    if false { try build.jump(fn,entryBlock,entryBlock,[depth],loc); }
+    try ab.branch(fn,graph,entryBlock,condition,doneBlock,[],childBlock,[],loc);
+
+    let call be try ab.call(fn,graph,doneBlock,f6,[original],loc);
+    let finalCount be try build.result(fn,call,0);
+    call=try ab.call(fn,graph,doneBlock,f8,[],loc);
+    try ab.returnValues(fn,graph,doneBlock,[finalCount],loc);
+
+    let one be try build.integer(fn,childBlock,1,loc);
+    let mark be try build.integer(fn,childBlock,769,loc);
+    let nextDepth be try build.wrapSubtract(fn,childBlock,depth,one,loc);
+    call=try ab.call(fn,graph,childBlock,f1,[mark],loc);
+    let markText be try build.result(fn,call,0);
+    call=try ab.call(fn,graph,childBlock,f2,[original,markText],loc);
+    let extended be try build.result(fn,call,0);
+    call=try ab.call(fn,graph,childBlock,f8,[],loc);
+    let childCall be try ab.call(fn,graph,childBlock,f13,
+        [extended,nextDepth],loc);
+    let childResult be try build.result(fn,childCall,0);
+    // A child collects after each nested allocation; this parent's original
+    // Text must remain available in its own registered root frame.
+    call=try ab.call(fn,graph,childBlock,f8,[],loc);
+    call=try ab.call(fn,graph,childBlock,f6,[original],loc);
+    let originalCount be try build.result(fn,call,0);
+    let combined be try build.wrapAdd(fn,childBlock,
+        childResult,originalCount,loc);
+    try ab.returnValues(fn,graph,childBlock,[combined],loc);
+    try ab.complete(fn,graph);
+    let read be try budget.constructionPhase(owner);
+    try textNative.emitManaged(fn,graph,carrier,read,registry,textType);
+    try budget.finishPhase(read);
+    try build.close(fn); try budget.finishPhase(phase);
+    try managed.close(registry); try aggregate.close(graph); try meta.close(data);
+    try budget.close(owner); try budget.close(shared); try budget.close(request);
+}
+run() else error budget.LimitError {
+    output("budget:"+error.message); process.setExitCode(1);
+} else error verify.InvalidIR {
+    output("ir:"+error.message); process.setExitCode(1);
+} else error textNative.Unsupported {
+    output("text:"+error.message); process.setExitCode(1);
+} else error managed.InvalidManagedTypes {
+    output("managed:"+error.message); process.setExitCode(1);
+} else error graphVerify.InvalidGraph {
+    output("graph:"+error.message); process.setExitCode(1);
+};

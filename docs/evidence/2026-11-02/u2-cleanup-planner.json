@@ -1,0 +1,40 @@
+{
+  "status": "pass",
+  "profile": "private exit planner; not canonical U2",
+  "plans": 30,
+  "independent_paths": 1602,
+  "negative_controls": 1,
+  "seconds": 2.4290247420003652,
+  "owners": [
+    {
+      "depth": 0,
+      "modeled_peak": 1024,
+      "modeled_traffic": 6144
+    },
+    {
+      "depth": 2,
+      "modeled_peak": 8960,
+      "modeled_traffic": 34752
+    },
+    {
+      "depth": 8,
+      "modeled_peak": 18368,
+      "modeled_traffic": 62976
+    },
+    {
+      "depth": 32,
+      "modeled_peak": 56800,
+      "modeled_traffic": 177472
+    },
+    {
+      "depth": 128,
+      "modeled_peak": 212128,
+      "modeled_traffic": 643456
+    }
+  ],
+  "cc": "cc",
+  "cflags": "-O2",
+  "module_sha256": "ad01a92df95a62482b27a6bd419977762806c0d898105e8078f25f6a162e34a3",
+  "fixture_sha256": "78587e630f117a684fc0882f685fc44c17908c28f7ff0b77266575a2b359bfc6",
+  "memory_scope": "budget-ledger admission, not allocator capacity or RSS"
+}

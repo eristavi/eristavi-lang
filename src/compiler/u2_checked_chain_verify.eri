@@ -1,0 +1,197 @@
+// Machine-neutral admission of an exact two-stage canonical checked cleanup.
+// First File.close has normal and checked-failure successors. The normal
+// successor executes its own checked File.close. The failed successor also
+// executes File.close in already-failing mode while retaining the ORIGINAL
+// checked failure as primary and carrying its context over both new edges.
+// All three real canonical opcode-46 instructions, SSA edges, lexical owner
+// profiles and the two original cleanup modes are independently checked.
+// This is not a shadow interpreter, a backend, or general whole-Function
+// machine lowering. It admits the finite, explicitly documented path only.
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+import compiler.u1_meta as meta;
+import compiler.u1_builder as build;
+import compiler.u1_aggregate as aggregate;
+import compiler.u1_verify as canonical;
+import compiler.u2_scoped_owners as owners;
+import compiler.u2_invoke_contract as fallible;
+import compiler.u2_root_map as roots;
+import compiler.u2_continuation_bind as continuation;
+import compiler.u2_cleanup_plan as cleanup;
+import compiler.u2_cleanup_verify as planVerify;
+import compiler.u2_checked_ssa_bind as ssa;
+
+public error InvalidChain { message Text; }
+public type Report {
+    firstClose Int; normalClose Int; failingClose Int;
+    incomingPrimary Int; survivingOwner Int;
+    normalPending Int; failedPending Int;
+    recoveredPrimary Int; newFailure Int; originalPrimary Int;
+    rootIndex Int;
+}
+function require(ok Bool,message Text) fails InvalidChain {
+    if not ok { fail InvalidChain { message=message; }; }
+}
+function read(table identity words.Words,phase identity budget.Phase,index Int)
+    returns Int fails budget.LimitError {
+    return try words.get(table,phase,index);
+}
+
+// The caller supplies EXACT original immutable canonical Function objects and
+// independent original semantic cleanup Plans for each source outcome.
+// The normal outer close is checked in its own right by SSA admission.
+// The failed outer close must start with an already-active typed failure;
+// its complete canonical successor shape is checked separately against the
+// original predecessor's live, owner-transferred failure block.
+public function verify(routine identity build.Function,
+    graph identity aggregate.Registry,profile identity owners.Profile,
+    contracts identity fallible.Registry,phase identity budget.Phase,
+    map identity roots.Map,
+    first continuation.Pair,firstCall build.InstId,
+    innerPlan identity cleanup.Plan,innerOwners,innerExit meta.LocId,
+    normal continuation.Pair,normalCall build.InstId,
+    normalPlan identity cleanup.Plan,normalOwners,outerExit meta.LocId,
+    failed continuation.Pair,failedCall build.InstId,
+    failedPlan identity cleanup.Plan,failedOwners)
+    returns Report
+    fails budget.LimitError,canonical.InvalidIR,owners.InvalidOwnership,
+        roots.InvalidRoots,continuation.InvalidBinding,
+        planVerify.InvalidPlan,ssa.InvalidSSA,InvalidChain {
+    let firstProof be try ssa.verify(routine,graph,profile,contracts,phase,
+        map,first,firstCall,innerPlan,innerOwners,innerOwners.count-1,innerExit);
+    let normalProof be try ssa.verify(routine,graph,profile,contracts,phase,
+        map,normal,normalCall,normalPlan,normalOwners,0,outerExit);
+    let failedBinding be try continuation.verify(routine,graph,phase,failed);
+    let failedPlanProof be try planVerify.verify(routine.metadata,phase,
+        failedPlan,failedOwners,0,outerExit,true);
+    let rootProof be try roots.verify(map,routine,graph,phase);
+    let ownerProof be try owners.verify(profile,routine,graph,contracts);
+    try require(innerOwners.count == 2 and firstProof.survivingOwners == 1 and
+        normalOwners.count == 1 and failedOwners.count == 1 and
+        firstProof.ownerCount == 2 and normalProof.ownerCount == 1 and
+        failed.version == 2 and failedPlan.depth == 1 and
+        failedPlan.entry == 2 and first.version == 2 and
+        normal.version == 2 and
+        first.normal.index == normal.source.index and
+        first.failure.index == failed.source.index and
+        normal.location == outerExit and failed.location == outerExit and
+        firstProof.revision == routine.revision and
+        firstProof.frameWords <= 128,
+        "unsupported or mismatched canonical two-stage checked File path");
+    let original cleanup.Scope be innerOwners[0];
+    let normalOwner cleanup.Scope be normalOwners[0];
+    let failedOwner cleanup.Scope be failedOwners[0];
+    try require(original.scope == normalOwner.scope and
+        original.scope == failedOwner.scope and
+        original.contract == normalOwner.contract and
+        original.contract == failedOwner.contract and
+        normalOwner.contract == profile.consume.index and
+        original.close == outerExit and normalOwner.close == outerExit and
+        failedOwner.close == outerExit,
+        "outer owner scope/contract/origin changed across checked edges");
+    let normalSource be (normal.source.index-1)*5;
+    let failedSource be (failed.source.index-1)*5;
+    let sourceFirst be try read(routine.blocks,phase,failedSource);
+    let nfirst be try read(routine.blocks,phase,normalSource);
+    try require((try read(routine.blocks,phase,failedSource+1)) == 3 and
+        (try read(routine.blocks,phase,normalSource+1)) == 2 and
+        (try read(routine.blocks,phase,failedSource+4)) == failedCall.index and
+        sourceFirst == firstProof.failureValue and
+        sourceFirst+1 == failedOwner.value and
+        sourceFirst+2 == firstProof.failureCarry and
+        nfirst == normalOwner.value and
+        nfirst+1 == firstProof.normalValue and
+        (try read(routine.values,phase,(sourceFirst+1-1)*4)) ==
+            profile.handle.index and
+        (try read(routine.values,phase,(sourceFirst+2-1)*4)) ==
+            meta.i64().index,
+        "failed successor must preserve original primary, File owner and i64");
+    let ownerRow be (failed.source.index-1)*2;
+    let ownerFirst be try read(profile.blocks,phase,ownerRow);
+    try require((try read(profile.blocks,phase,ownerRow+1)) == 1 and
+        ownerFirst >= 0 and ownerFirst < profile.entries.length/2 and
+        (try read(profile.entries,phase,ownerFirst*2)) == failedOwner.scope and
+        (try read(profile.entries,phase,ownerFirst*2+1)) == failedOwner.value,
+        "failed checked source has incorrect outer owner");
+    let base be (failedCall.index-1)*10;
+    let operand be try read(routine.instructions,phase,base+2);
+    let edges be try read(routine.instructions,phase,base+8);
+    try require(failedCall.owner == routine.key and
+        failedCall.index >= 1 and
+        failedCall.index <= routine.instructions.length/10 and
+        (try read(routine.instructions,phase,base)) == 46 and
+        (try read(routine.instructions,phase,base+1)) == failed.source.index and
+        operand >= 0 and operand < routine.operands.length and
+        (try read(routine.instructions,phase,base+3)) == 1 and
+        (try read(routine.instructions,phase,base+4)) == 0 and
+        (try read(routine.instructions,phase,base+5)) == 0 and
+        (try read(routine.instructions,phase,base+6)) == outerExit.index and
+        (try read(routine.instructions,phase,base+7)) == failedOwner.contract and
+        (try read(routine.operands,phase,operand)) == failedOwner.value and
+        edges >= 1 and edges < routine.edges.length/3,
+        "failed-close instruction is not the matching canonical File.close");
+    let nrow be (edges-1)*3; let frow be edges*3;
+    let nbase be try read(routine.edges,phase,nrow+1);
+    let fbase be try read(routine.edges,phase,frow+1);
+    try require((try read(routine.edges,phase,nrow)) == failed.normal.index and
+        (try read(routine.edges,phase,frow)) == failed.failure.index and
+        (try read(routine.edges,phase,nrow+2)) == 2 and
+        (try read(routine.edges,phase,frow+2)) == 3 and
+        nbase >= 0 and nbase+1 < routine.arguments.length and
+        fbase >= 0 and fbase+2 < routine.arguments.length and
+        (try read(routine.arguments,phase,nbase)) == sourceFirst and
+        (try read(routine.arguments,phase,nbase+1)) == sourceFirst+2 and
+        (try read(routine.arguments,phase,fbase)) == -1 and
+        (try read(routine.arguments,phase,fbase+1)) == sourceFirst and
+        (try read(routine.arguments,phase,fbase+2)) == sourceFirst+2,
+        "already-failing close must carry primary and i64 without success forgery");
+    let resolvedPrimary be try read(routine.blocks,phase,(failed.normal.index-1)*5);
+    let newFailure be try read(routine.blocks,phase,(failed.failure.index-1)*5);
+    try require((try read(routine.blocks,phase,(failed.normal.index-1)*5+1)) == 2 and
+        (try read(routine.blocks,phase,(failed.failure.index-1)*5+1)) == 3 and
+        resolvedPrimary >= 1 and resolvedPrimary+1 <= routine.values.length/4 and
+        newFailure >= 1 and newFailure+2 <= routine.values.length/4 and
+        (try read(routine.values,phase,(resolvedPrimary-1)*4)) ==
+            (try read(routine.values,phase,(sourceFirst-1)*4)) and
+        (try read(routine.values,phase,(newFailure-1)*4)) > 6 and
+        (try read(routine.values,phase,(newFailure)*4)) ==
+            (try read(routine.values,phase,(sourceFirst-1)*4)) and
+        (try read(routine.values,phase,(resolvedPrimary)*4)) ==
+            meta.i64().index and
+        (try read(routine.values,phase,(newFailure+1)*4)) ==
+            meta.i64().index,
+        "already-failing close has wrong typed propagation destination");
+    let rootIndex be -1; let i be 0;
+    while i < rootProof.roots {
+        try budget.work(phase,1);
+        let row be i*6;
+        if (try read(map.records,phase,row)) == failedCall.index {
+            try require(rootIndex == -1 and
+                (try read(map.records,phase,row+1)) == failed.failure.index and
+                (try read(map.records,phase,row+2)) == newFailure and
+                (try read(map.records,phase,row+3)) ==
+                    (try read(routine.values,phase,(newFailure-1)*4)) and
+                (try read(map.records,phase,row+4)) == outerExit.index and
+                (try read(map.records,phase,row+5)) == 5,
+                "new close failure root is not the canonical typed successor");
+            rootIndex=i;
+        }
+        i=i+1;
+    }
+    try require(rootIndex >= 0 and normalProof.sourceValue ==
+        firstProof.normalValue and normalProof.normalValue > 0,
+        "checked path missing verified normal or already-failing root");
+    return Report {
+        firstClose=firstCall.index;
+        normalClose=normalCall.index;
+        failingClose=failedCall.index;
+        incomingPrimary=sourceFirst;
+        survivingOwner=failedOwner.value;
+        normalPending=normalProof.sourceValue;
+        failedPending=sourceFirst+2;
+        recoveredPrimary=resolvedPrimary;
+        newFailure=newFailure;
+        originalPrimary=newFailure+1;
+        rootIndex=rootIndex;
+    };
+}

@@ -1,0 +1,316 @@
+// Optional canonical scoped-owner proof. No runtime handles or alternate IR.
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+import compiler.u1_meta as meta;
+import compiler.u1_builder as build;
+import compiler.u1_aggregate as aggregate;
+import compiler.u1_aggregate_signature as signatures;
+import compiler.u1_successors as successors;
+import compiler.u1_verify as canonical;
+import compiler.u2_invoke_contract as fallible;
+
+public type Entry { scope Int; value build.ValueId; }
+public type Profile {
+    version Int; functionKey identity meta.Key; typeKey identity meta.Key;
+    owner identity budget.Owner; revision Int; handle aggregate.TypeId;
+    acquire meta.FunctionId; consume meta.FunctionId;
+    scopes identity words.Words; blocks identity words.Words; entries identity words.Words;
+    state Int; control identity budget.Allocation;
+}
+public error InvalidOwnership { message Text; block Int; instruction Int; location Int; }
+public type Report { blocks Int; scopes Int; signatureEntries Int; edgeEntries Int; maximumDepth Int; work Int; }
+type Context {
+    profile identity Profile; routine identity build.Function; types identity aggregate.Registry;
+    phase identity budget.Phase; scratch identity words.Words;
+    active Int; taint Int; stack Int; depth Int; block Int; instruction Int; location Int;
+    edgeEntries Int; maximumDepth Int;
+}
+function require(context identity Context,okay Bool,message Text) fails InvalidOwnership {
+    if not okay { fail InvalidOwnership { message=message; block=context.block;
+        instruction=context.instruction; location=context.location; }; }
+}
+function compatible(profile identity Profile,routine identity build.Function,phase identity budget.Phase)
+    fails budget.LimitError {
+    if profile.state != 0 or profile.functionKey != routine.key or profile.owner != routine.owner or
+       phase.owner != routine.owner or phase.state != 0 { try budget.reject("invalid scoped-owner construction"); }
+}
+public function create(routine identity build.Function,types identity aggregate.Registry,
+    phase identity budget.Phase,handle aggregate.TypeId,acquire meta.FunctionId,consume meta.FunctionId)
+    returns identity Profile fails budget.LimitError {
+    try budget.poll(routine.owner);
+    if phase.owner != routine.owner or phase.state != 0 or routine.state != 0 or
+       types.state != 1 or types.owner != routine.metadata.owner or handle.owner != types.key or
+       handle.index < 7 or handle.index > 6+types.records.length/4 or
+       acquire.owner != routine.metadata.key or consume.owner != routine.metadata.key or
+       acquire.index == consume.index { try budget.reject("invalid scoped resource contract"); }
+    let control be try budget.commit(try budget.reserve(routine.owner,512));
+    let scopes be words.create(routine.owner,131072)
+        else error budget.LimitError { try budget.release(control); fail error; };
+    let blocks be words.create(routine.owner,131072)
+        else error budget.LimitError { try words.close(scopes); try budget.release(control); fail error; };
+    let entries be words.create(routine.owner,524288)
+        else error budget.LimitError { try words.close(blocks); try words.close(scopes); try budget.release(control); fail error; };
+    return identity Profile { version=1; functionKey=routine.key; typeKey=types.key; owner=routine.owner;
+        revision=0; handle=handle; acquire=acquire; consume=consume; scopes=scopes; blocks=blocks;
+        entries=entries; state=0; control=control; };
+}
+public function scope(profile identity Profile,routine identity build.Function,phase identity budget.Phase,
+    parent Int,location meta.LocId) returns Int fails budget.LimitError {
+    try compatible(profile,routine,phase); try meta.validLocation(routine.metadata,location);
+    if parent < 0 or parent > profile.scopes.length/2 or profile.scopes.length/2 >= 65536 {
+        try budget.reject("invalid scoped-owner parent");
+    }
+    profile.state=3;
+    let ignored be try words.push(profile.scopes,phase,parent);
+    ignored=try words.push(profile.scopes,phase,location.index); profile.state=0;
+    return profile.scopes.length/2;
+}
+public function block(profile identity Profile,routine identity build.Function,phase identity budget.Phase,
+    target build.BlockId,owners) fails budget.LimitError {
+    try compatible(profile,routine,phase);
+    if target.owner != routine.key or target.index != profile.blocks.length/2+1 or
+       target.index > routine.blocks.length/5 or owners.count > 128 or
+       owners.count > 262144-profile.entries.length/2 { try budget.reject("invalid block owner signature"); }
+    let index be 0;
+    while index < owners.count {
+        let item Entry be owners[index];
+        if item.value.owner != routine.key or item.scope < 1 or item.scope > profile.scopes.length/2 {
+            try budget.reject("foreign scoped owner entry");
+        }
+        index=index+1;
+    }
+    profile.state=3;
+    let ignored be try words.push(profile.blocks,phase,profile.entries.length/2);
+    ignored=try words.push(profile.blocks,phase,owners.count); index=0;
+    while index < owners.count {
+        let item Entry be owners[index];
+        ignored=try words.push(profile.entries,phase,item.scope);
+        ignored=try words.push(profile.entries,phase,item.value.index); index=index+1;
+    }
+    profile.state=0;
+}
+public function complete(profile identity Profile,routine identity build.Function,phase identity budget.Phase)
+    fails budget.LimitError {
+    try compatible(profile,routine,phase);
+    if routine.state != 1 or profile.blocks.length != routine.blocks.length/5*2 {
+        try budget.reject("incomplete scoped-owner signatures");
+    }
+    try words.freeze(profile.scopes); try words.freeze(profile.blocks); try words.freeze(profile.entries);
+    profile.revision=routine.revision; profile.state=1;
+}
+public function close(profile identity Profile) fails budget.LimitError {
+    if profile.state == 2 { try budget.reject("closed owner profile"); }
+    profile.state=2; try words.close(profile.entries); try words.close(profile.blocks);
+    try words.close(profile.scopes); try budget.release(profile.control);
+}
+function get(context identity Context,table identity words.Words,index Int) returns Int fails budget.LimitError {
+    return try words.get(table,context.phase,index);
+}
+function put(context identity Context,index Int,value Int) fails budget.LimitError {
+    try words.set(context.scratch,context.phase,index,value);
+}
+function scratch(context identity Context,index Int) returns Int fails budget.LimitError {
+    return try get(context,context.scratch,index);
+}
+function shape(context identity Context,table identity words.Words,width Int,limit Int) fails InvalidOwnership {
+    try require(context,table.owner == context.routine.owner and not table.closed and table.frozen and
+        table.length >= 0 and table.length <= limit and table.length%width == 0,"invalid owner table backing");
+}
+function headers(context identity Context,contracts identity fallible.Registry) fails budget.LimitError,InvalidOwnership {
+    let profile be context.profile; let fn be context.routine; let types be context.types;
+    try require(context,profile.version == 1 and profile.state == 1 and profile.functionKey == fn.key and
+        profile.owner == fn.owner and profile.typeKey == types.key and profile.handle.owner == types.key and
+        profile.revision == fn.revision,"unsupported, foreign or stale owner profile");
+    try shape(context,profile.scopes,2,131072); try shape(context,profile.blocks,2,131072);
+    try shape(context,profile.entries,2,524288);
+    try require(context,profile.blocks.length/2 == fn.blocks.length/5,"missing block owner signatures");
+    let handle be profile.handle.index;
+    try require(context,handle >= 7 and handle <= 6+types.records.length/4,"invalid resource handle type");
+    let data be fn.metadata;
+    try require(context,profile.acquire.owner == data.key and profile.consume.owner == data.key and
+        profile.acquire.index >= 1 and profile.acquire.index <= data.declarations.length/6 and
+        profile.consume.index >= 1 and profile.consume.index <= data.declarations.length/6 and
+        profile.acquire.index != profile.consume.index,"invalid resource FunctionIds");
+    let acquireSig be try meta.functionSignature(data,context.phase,profile.acquire);
+    let closeSig be try meta.functionSignature(data,context.phase,profile.consume);
+    try require(context,(try meta.resultCount(data,context.phase,acquireSig)) == 1 and
+        (try signatures.resultType(data,types,context.phase,acquireSig,0)).index == handle and
+        (try meta.parameterCount(data,context.phase,closeSig)) == 1 and
+        (try signatures.parameterType(data,types,context.phase,closeSig,0)).index == handle and
+        (try meta.resultCount(data,context.phase,closeSig)) == 0,"invalid acquire/consume signatures");
+    try require(context,(try get(context,contracts.entries,(profile.acquire.index-1)*2+1)) != 0 and
+        (try get(context,contracts.entries,(profile.consume.index-1)*2+1)) != 0,"resource contracts must be explicitly fallible");
+    let index be 1;
+    while index <= profile.scopes.length/2 {
+        let parent be try get(context,profile.scopes,(index-1)*2);
+        let loc be try get(context,profile.scopes,(index-1)*2+1);
+        try require(context,parent >= 0 and parent < index and loc >= 1 and loc <= data.locations.length/7,
+            "invalid lexical owner scope"); index=index+1;
+    }
+}
+function containedTypes(context identity Context) fails budget.LimitError,InvalidOwnership {
+    let graph be context.types; let index be 7;
+    while index <= 6+graph.records.length/4 {
+        let value be aggregate.TypeId { owner=graph.key; index=index; };
+        let count be try aggregate.fieldCount(graph,context.phase,value); let field be 0; let contained be 0;
+        while field < count {
+            let child be try aggregate.field(graph,context.phase,value,field);
+            if (try scratch(context,context.taint+child.index)) != 0 { contained=1; }
+            field=field+1;
+        }
+        if index == context.profile.handle.index {
+            try require(context,contained == 0,"resource handle recursively contains a resource"); contained=1;
+        }
+        try put(context,context.taint+index,contained); index=index+1;
+    }
+}
+function ownerSignatures(context identity Context) fails budget.LimitError,InvalidOwnership {
+    let profile be context.profile; let fn be context.routine; let cursor be 0; context.block=1;
+    while context.block <= fn.blocks.length/5 {
+        let first be try get(context,profile.blocks,(context.block-1)*2);
+        let count be try get(context,profile.blocks,(context.block-1)*2+1);
+        try require(context,first == cursor and count >= 0 and count <= 128 and
+            count <= profile.entries.length/2-first,"invalid owner signature range");
+        if context.block == 1 { try require(context,count == 0,"entry must have no owners"); }
+        if count > context.maximumDepth { context.maximumDepth=count; }
+        let parent be 0; let index be 0;
+        while index < count {
+            let scope be try get(context,profile.entries,(first+index)*2);
+            let value be try get(context,profile.entries,(first+index)*2+1);
+            try require(context,scope >= 1 and scope <= profile.scopes.length/2 and value >= 1 and
+                value <= fn.values.length/4,"invalid owner scope or value");
+            try require(context,(try get(context,profile.scopes,(scope-1)*2)) == parent,"owner stack is not lexically nested");
+            let base be (value-1)*4;
+            try require(context,(try get(context,fn.values,base)) == profile.handle.index and
+                (try get(context,fn.values,base+1)) == 0 and
+                (try get(context,fn.values,base+2)) == context.block and
+                (try scratch(context,value)) == 0,"resource owner must be a unique typed block parameter");
+            try put(context,value,scope); parent=scope; index=index+1;
+        }
+        cursor=cursor+count; context.block=context.block+1;
+    }
+    try require(context,cursor == profile.entries.length/2,"orphan owner signature entries");
+    let value be 1;
+    while value <= fn.values.length/4 {
+        let ty be try get(context,fn.values,(value-1)*4);
+        if (try scratch(context,context.taint+ty)) != 0 {
+            try require(context,ty == profile.handle.index and (try scratch(context,value)) != 0,
+                "ordinary construction, wrapping or escape of resource value");
+        }
+        value=value+1;
+    }
+}
+function edge(context identity Context,instruction Int,edge Int,acquired Bool) fails budget.LimitError,InvalidOwnership {
+    let profile be context.profile; let fn be context.routine;
+    let target be try get(context,fn.edges,(edge-1)*3);
+    let first be try get(context,fn.edges,(edge-1)*3+1);
+    let start be try get(context,profile.blocks,(target-1)*2);
+    let count be try get(context,profile.blocks,(target-1)*2+1);
+    let expected be context.depth; if acquired { expected=expected+1; }
+    try require(context,count == expected,"edge drops, invents or restores a consumed owner");
+    let index be 0; let parent be 0;
+    while index < count {
+        let scope be try get(context,profile.entries,(start+index)*2);
+        let value be try get(context,profile.entries,(start+index)*2+1);
+        let ordinal be try get(context,fn.values,(value-1)*4+3);
+        let argument be try get(context,fn.arguments,first+ordinal);
+        if index < context.depth {
+            let currentScope be try scratch(context,context.stack+index*2);
+            let currentValue be try scratch(context,context.stack+index*2+1);
+            try require(context,scope == currentScope and argument == currentValue,"owner edge differs from exact surviving prefix");
+        } else {
+            try require(context,acquired and argument == 0-1 and ordinal == 0 and
+                (try get(context,profile.scopes,(scope-1)*2)) == parent,"acquisition owner unavailable on this edge");
+        }
+        parent=scope; context.edgeEntries=context.edgeEntries+1; index=index+1;
+    }
+}
+function instruction(context identity Context,index Int) fails budget.LimitError,InvalidOwnership {
+    let fn be context.routine; let profile be context.profile; context.instruction=index;
+    let base be (index-1)*10; context.location=try get(context,fn.instructions,base+6);
+    let op be try get(context,fn.instructions,base); let target be 0;
+    if op == 34 or op == 46 { target=try get(context,fn.instructions,base+7); }
+    let consuming be op == 46 and target == profile.consume.index;
+    let acquiring be op == 46 and target == profile.acquire.index;
+    let first be try get(context,fn.instructions,base+2); let count be try get(context,fn.instructions,base+3);
+    let operand be 0;
+    while operand < count {
+        let value be try get(context,fn.operands,first+operand);
+        if (try scratch(context,value)) != 0 {
+            try require(context,consuming and operand == 0 and context.depth > 0,"resource copy, observation or escape is unsupported");
+            try require(context,(try scratch(context,context.active+value)) == context.depth and
+                (try scratch(context,context.stack+(context.depth-1)*2+1)) == value,"use of inactive or non-innermost owner");
+        } else { if consuming { try require(context,false,"consume requires an active resource owner"); } }
+        operand=operand+1;
+    }
+    if consuming {
+        try require(context,context.depth > 0,"consume with empty owner stack");
+        let scope be try scratch(context,context.stack+(context.depth-1)*2);
+        let value be try scratch(context,context.stack+(context.depth-1)*2+1);
+        try require(context,context.location == (try get(context,profile.scopes,(scope-1)*2+1)),"cleanup lost its lexical source origin");
+        try put(context,context.active+value,0); context.depth=context.depth-1;
+    }
+    if op == 8 { try require(context,context.depth == 0,"return bypasses required cleanup"); }
+    let successorsCount be try successors.count(fn,context.phase,index); let ordinal be 0;
+    while ordinal < successorsCount {
+        try edge(context,index,try successors.edge(fn,context.phase,index,ordinal),acquiring and ordinal == 0);
+        ordinal=ordinal+1;
+    }
+}
+function inspect(context identity Context,contracts identity fallible.Registry) returns Report
+    fails budget.LimitError,InvalidOwnership {
+    try headers(context,contracts); try containedTypes(context); try ownerSignatures(context);
+    let profile be context.profile; let fn be context.routine; context.block=1;
+    while context.block <= fn.blocks.length/5 {
+        let first be try get(context,profile.blocks,(context.block-1)*2);
+        let count be try get(context,profile.blocks,(context.block-1)*2+1); let owner be 0;
+        context.depth=count;
+        while owner < count {
+            let scope be try get(context,profile.entries,(first+owner)*2);
+            let value be try get(context,profile.entries,(first+owner)*2+1);
+            try put(context,context.stack+owner*2,scope); try put(context,context.stack+owner*2+1,value);
+            try put(context,context.active+value,owner+1); owner=owner+1;
+        }
+        let current be try get(context,fn.blocks,(context.block-1)*5+2);
+        let terminal be try get(context,fn.blocks,(context.block-1)*5+4);
+        if current == 0 { current=terminal; }
+        while current != 0 {
+            try instruction(context,current);
+            if current == terminal { current=0; }
+            else { current=try get(context,fn.instructions,(current-1)*10+9); if current == 0 { current=terminal; } }
+        }
+        owner=0;
+        while owner < count {
+            let value be try get(context,profile.entries,(first+owner)*2+1);
+            try put(context,context.active+value,0); owner=owner+1;
+        }
+        context.block=context.block+1;
+    }
+    return Report { blocks=fn.blocks.length/5; scopes=profile.scopes.length/2;
+        signatureEntries=profile.entries.length/2; edgeEntries=context.edgeEntries;
+        maximumDepth=context.maximumDepth; work=context.phase.used; };
+}
+public function verify(profile identity Profile,routine identity build.Function,
+    types identity aggregate.Registry,contracts identity fallible.Registry) returns Report
+    fails budget.LimitError,canonical.InvalidIR,InvalidOwnership {
+    let ir be try canonical.verifyFallibleRegistry(routine,types,try budget.verificationPhase(routine.owner),contracts);
+    let phase be try budget.verificationPhase(routine.owner);
+    let control be budget.commit(try budget.reserve(routine.owner,512))
+        else error budget.LimitError { try budget.finishPhase(phase); fail error; };
+    let scratch be words.create(routine.owner,33554432)
+        else error budget.LimitError { try budget.release(control); try budget.finishPhase(phase); fail error; };
+    let values be routine.values.length/4+1; let typeCount be 6+types.records.length/4+1;
+    let count be 2*values+typeCount+256; let index be 0;
+    while index < count {
+        let slot be words.push(scratch,phase,0)
+            else error budget.LimitError { try words.close(scratch); try budget.release(control); try budget.finishPhase(phase); fail error; };
+        index=index+1;
+    }
+    let context be identity Context { profile=profile; routine=routine; types=types; phase=phase;
+        scratch=scratch; active=values; taint=2*values; stack=2*values+typeCount; depth=0;
+        block=0; instruction=0; location=0; edgeEntries=0; maximumDepth=0; };
+    let result be inspect(context,contracts)
+        else error InvalidOwnership { try words.close(scratch); try budget.release(control); try budget.finishPhase(phase); fail error; }
+        else error budget.LimitError { try words.close(scratch); try budget.release(control); try budget.finishPhase(phase); fail error; };
+    try words.close(scratch); try budget.release(control); try budget.finishPhase(phase); return result;
+}

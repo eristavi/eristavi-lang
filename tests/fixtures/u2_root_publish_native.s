@@ -1,0 +1,88 @@
+.text
+.globl _start
+_start:
+    xorl %ebp,%ebp
+    # Five checked-call root words and one private scope word, 16-byte aligned.
+    subq $48,%rsp
+    movq %rsp,%r15
+    call evn_scope_enter
+    movq %rax,40(%r15)
+    movq %rax,%rdi
+    movq %r15,%rsi
+    call erist_u2_bind_7
+    call evn_frame
+    movq %rax,%r13
+    movq %rax,%rdi
+    call setjmp
+    testq %rax,%rax
+    jne .Lu2_native_caught
+    movl $42,%edi
+    call evn_int
+    movq %rax,%r14
+    leaq .Lu2_native_text(%rip),%rdi
+    movl $15,%esi
+    call evn_text
+    movq %rax,%rbx
+    movl $11,%edi
+    movl $2,%esi
+    call evn_object
+    movq %rax,%r12
+    movq %rax,%rdi
+    xorl %esi,%esi
+    movq %r14,%rdx
+    call evn_init
+    movq %r12,%rdi
+    movl $1,%esi
+    movq %rbx,%rdx
+    call evn_init
+    movq %r12,%rdi
+    movl $1,%esi
+    call evn_fail
+    jmp .Lgraph_test_fail
+.Lu2_native_caught:
+    movq %r13,%rdi
+    call evn_pop
+    call evn_saved
+    movq %r15,%rdi
+    movq %rax,%rsi
+    call erist_u2_publish_7_@INSTRUCTION@
+    call erist_rt_failure_clear
+    movl $4,%r14d
+.Lu2_native_collect:
+    xorl %edi,%edi
+    call erist_rt_slots_collect
+    call erist_rt_text_collect
+    call erist_rt_live_failures
+    cmpq $1,%rax
+    jne .Lgraph_test_fail
+    decq %r14
+    jne .Lu2_native_collect
+    movq (%r15),%rdi
+    movl $12,%esi
+    call evn_error
+    movq %rax,%rdi
+    xorl %esi,%esi
+    call evn_member
+    movq %rax,%rdi
+    call evn_output
+    movq %r15,%rdi
+    call erist_u2_release_7_@INSTRUCTION@
+    cmpq $0,(%r15)
+    jne .Lgraph_test_fail
+    call evn_void
+    movq 40(%r15),%rdi
+    movq %rax,%rsi
+    call evn_scope_leave
+    xorl %edi,%edi
+    call erist_rt_slots_collect
+    call erist_rt_text_collect
+    call erist_rt_live_failures
+    testq %rax,%rax
+    jne .Lgraph_test_fail
+    cmpq $5,erist_rt_u2_generated_gc_visits(%rip)
+    jb .Lgraph_test_fail
+    addq $48,%rsp
+    jmp .Lgraph_finish
+.section .rodata
+.Lu2_native_text:
+.ascii "u2-emitted-root"

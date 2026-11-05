@@ -31,25 +31,28 @@
 // These are internal U1b profile operations, NOT source syntax nor a public
 // serialized schema. Legacy U1a independent verification must reject them.
 // These operations are private, not frozen serialized IR IDs.
+// 46 invoke.direct.v1: payload FunctionId; extra first of two consecutive
+// outcome edges. No instruction results. Negative edge argument -(ordinal+1)
+// denotes an edge-produced payload, never an ordinary SSA ValueId.
 public function isAggregate(op Int) returns Bool { return op >= 43 and op <= 45; }
-public function known(op Int) returns Bool { return (op >= 1 and op <= 9) or isCell(op) or (op >= 13 and op <= 42) or isAggregate(op); }
+public function known(op Int) returns Bool { return (op >= 1 and op <= 9) or isCell(op) or (op >= 13 and op <= 42) or isAggregate(op) or op == 46; }
 // Construction cells are exactly 10/11/12; numeric thresholds would misclassify future opcodes.
 public function isCell(op Int) returns Bool { return op == 10 or op == 11 or op == 12; }
 // Only existing jump/branch edges occupy inline payload/extra slots (maximum two).
 // A future multiway switch needs a reviewed side-table edge schema.
 public function inlineEdges(op Int) returns Int {
     if op == 6 { return 1; }
-    if op == 7 { return 2; }
+    if op == 7 or op == 46 { return 2; }
     return 0;
 }
-public function terminal(op Int) returns Bool { return op == 6 or op == 7 or op == 8 or op == 35; }
+public function terminal(op Int) returns Bool { return op == 6 or op == 7 or op == 8 or op == 35 or op == 46; }
 // Potential terminal fault on execution is distinct from a CFG terminator.
 // Do not discard a may-trap instruction just because its SSA result is unused.
-public function mayTrap(op Int) returns Bool { return op == 5 or (op >= 24 and op <= 27) or op == 34 or op == 41 or op == 42; }
+public function mayTrap(op Int) returns Bool { return op == 5 or (op >= 24 and op <= 27) or op == 34 or op == 41 or op == 42 or op == 46; }
 public function observable(op Int) returns Bool { return mayTrap(op) or op == 34; }
 public function operands(op Int) returns Int {
     if op == 3 or (op >= 13 and op <= 31) or op == 33 or (op >= 37 and op <= 42) { return 2; } if op == 4 or op == 5 or op == 7 or op == 32 { return 1; }
-    if op == 10 or op == 12 or op == 35 or op == 44 { return 1; } if op == 45 { return 2; } if op == 8 or op == 34 or op == 43 { return -1; } return 0;
+    if op == 10 or op == 12 or op == 35 or op == 44 { return 1; } if op == 45 { return 2; } if op == 8 or op == 34 or op == 43 or op == 46 { return -1; } return 0;
 }
 public function results(op Int) returns Int {
     if op == 34 { return -1; }

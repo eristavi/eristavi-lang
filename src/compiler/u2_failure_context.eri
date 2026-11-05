@@ -1,0 +1,94 @@
+// Opt-in U2 typed failure-context reference. This is not yet the canonical
+// managed UIR FailureContext or a native root-map ABI. The identity-linked
+// records keep complete typed Text payload snapshots alive under the existing
+// owned runtime; the deterministic order is independent of token numbering.
+import compiler.u1_budget as budget;
+
+public type Failure {
+    typeId Int;
+    payload Text;
+    location Int;
+    next maybe identity Failure;
+}
+public type Context {
+    owner identity budget.Owner;
+    primary maybe identity Failure;
+    first maybe identity Failure;
+    last maybe identity Failure;
+    count Int;
+    closed Bool;
+    charge identity budget.Allocation;
+}
+public error InvalidContext { message Text; }
+function require(okay Bool,message Text) fails InvalidContext {
+    if not okay { fail InvalidContext { message=message; }; }
+}
+public function create(owner identity budget.Owner,phase identity budget.Phase,
+    typeId Int,payload Text,location Int)
+    returns identity Context fails budget.LimitError,InvalidContext {
+    try require(owner.kind == 2 and phase.owner == owner and phase.state == 0 and
+        typeId >= 0 and location >= 0 and
+        (typeId != 0 or (payload == "" and location == 0)),
+        "invalid typed failure construction");
+    try budget.poll(owner);
+    let charge be try budget.commit(try budget.reserve(owner,512));
+    let primary maybe identity Failure be none;
+    if typeId > 0 {
+        primary=identity Failure { typeId=typeId; payload=payload; location=location; next=none; };
+    }
+    return identity Context { owner=owner; primary=primary; first=none;
+        last=none; count=0; closed=false; charge=charge; };
+}
+public function append(context identity Context,phase identity budget.Phase,
+    typeId Int,payload Text,location Int)
+    fails budget.LimitError,InvalidContext {
+    try require(not context.closed and phase.owner == context.owner and
+        phase.state == 0 and typeId > 0 and location > 0,
+        "invalid typed cleanup failure");
+    try budget.poll(context.owner);
+    // A bounded reference profile: refusal is explicit, never drop context.
+    // Validate an existing chain before any new allocation or publication.
+    if context.count >= 256 { try budget.reject("typed cleanup failures exceed bounded profile"); }
+    try require((context.first == none and context.last == none and context.count == 0) or
+        (context.first != none and context.last != none and context.count > 0),
+        "invalid typed failure chain shape");
+    try budget.work(phase,1);
+    // Charge each new retained record to the existing context lease. The
+    // control's 512-byte charge covers the Context and optional initial
+    // primary; this incremental charge models the additional failure record.
+    let pending be try budget.reserve(context.owner,256);
+    let node be identity Failure { typeId=typeId; payload=payload; location=location; next=none; };
+    try budget.commitInto(pending,context.charge);
+    if context.primary == none { context.primary=node; return; }
+    if context.first == none {
+        context.first=node; context.last=node;
+    } else {
+        let tail be context.last;
+        if tail == none { try budget.reject("invalid typed failure tail"); }
+        if tail != none { tail.next=node; }
+        context.last=node;
+    }
+    context.count=context.count+1;
+}
+public function secondaryAt(context identity Context,phase identity budget.Phase,index Int)
+    returns identity Failure fails budget.LimitError,InvalidContext {
+    try require(not context.closed and phase.owner == context.owner and phase.state == 0 and
+        index >= 0 and index < context.count,"invalid typed failure lookup");
+    try budget.poll(context.owner);
+    let cursor be context.first; let i be 0;
+    while i < index {
+        try budget.work(phase,1);
+        if cursor == none { try budget.reject("invalid typed failure chain"); }
+        if cursor != none { cursor=cursor.next; }
+        i=i+1;
+    }
+    if cursor == none { try budget.reject("invalid typed failure chain"); }
+    if cursor != none { return cursor; }
+    fail InvalidContext { message="missing typed failure"; };
+}
+public function close(context identity Context) fails budget.LimitError,InvalidContext {
+    try require(not context.closed,"typed context already closed");
+    context.closed=true;
+    context.primary=none; context.first=none; context.last=none;
+    try budget.release(context.charge);
+}

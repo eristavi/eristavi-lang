@@ -31,6 +31,12 @@ public function edge(routine identity build.Function,phase identity budget.Phase
         let first be try words.get(routine.switches,phase,base);
         return try words.get(routine.cases,phase,(first+ordinal)*2+1);
     }
+    if op == 46 {
+        if ordinal < 0 or ordinal > 1 { try budget.reject("invalid invoke edge ordinal"); }
+        let first be try words.get(routine.instructions,phase,offset+8);
+        if first < 1 or first >= routine.edges.length/3 { try budget.reject("invalid invoke edge pair"); }
+        return first+ordinal;
+    }
     if ordinal < 0 or ordinal >= ops.inlineEdges(op) { try budget.reject("invalid successor ordinal"); }
     return try words.get(routine.instructions,phase,offset+7+ordinal);
 }

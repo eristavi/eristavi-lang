@@ -1,0 +1,316 @@
+// U2 managed Text/List/identity nominal relationships and corruption oracle.
+import std.process;
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+import compiler.u1_meta as meta;
+import compiler.u1_aggregate as aggregate;
+import compiler.u1_aggregate_verify as graphVerify;
+import compiler.u2_managed_types as managed;
+import compiler.u2_managed_operation_contract as operations;
+
+error ProbeError { message Text; }
+function check(ok Bool,message Text) fails ProbeError {
+    if not ok { fail ProbeError { message=message; }; }
+}
+function rejected(reg identity managed.Registry,graph identity aggregate.Registry,
+    phase identity budget.Phase) returns Bool
+    fails budget.LimitError,graphVerify.InvalidGraph {
+    let result be managed.verify(reg,graph,phase)
+        else error managed.InvalidManagedTypes { return true; }
+        else error budget.LimitError { fail error; }
+        else error graphVerify.InvalidGraph { fail error; };
+    return false;
+}
+function operationRejected(reg identity managed.Registry,
+    phase identity budget.Phase,value managed.TypeId,
+    opcode Int,view Int) returns Bool fails budget.LimitError {
+    let contract be operations.select(reg,phase,value,opcode,view)
+        else error operations.Unsupported { return true; }
+        else error budget.LimitError { fail error; };
+    return false;
+}
+function contractRejected(reg identity managed.Registry,
+    phase identity budget.Phase,value managed.TypeId,contract operations.Contract)
+    returns Bool fails budget.LimitError,managed.InvalidManagedTypes,graphVerify.InvalidGraph {
+    let result be operations.verifyContract(reg,phase,value,contract)
+        else error operations.Unsupported { return true; }
+        else error budget.LimitError { fail error; }
+        else error managed.InvalidManagedTypes { fail error; }
+        else error graphVerify.InvalidGraph { fail error; };
+    return false;
+}
+function run() fails budget.LimitError,graphVerify.InvalidGraph,
+    managed.InvalidManagedTypes,operations.Unsupported,ProbeError {
+    let request be try budget.developmentRequest();
+    let shared be try budget.metadataOwner(request);
+    let phase be try budget.constructionPhase(shared);
+    // U1a metadata has a generic TypeId-list signature specialization.
+    // Instantiate the same concrete TypeId-list profile as the accepted U1b
+    // standalone aggregate fixture, without changing compiler semantics.
+    let data be try meta.create(shared,phase);
+    let signature be try meta.signature(data,phase,[meta.i64()],[meta.i64()]);
+    let graph be try aggregate.create(shared,phase);
+    let i64 be try aggregate.primitive(graph,meta.i64());
+    let primitivePair be try aggregate.aggregate(graph,phase,[i64,i64]);
+    try aggregate.freeze(graph);
+    let registry be try managed.create(graph,phase);
+    let textType be managed.text(registry);
+    let textList be try managed.listOfManaged(registry,phase,textType);
+    let textListAgain be try managed.listOfManaged(registry,phase,textType);
+    let nestedList be try managed.listOfManaged(registry,phase,textList);
+    let numberList be try managed.listOfBase(registry,phase,i64);
+    let boxed be try managed.identityOfBase(registry,phase,primitivePair);
+    let listOfHandles be try managed.listOfManaged(registry,phase,boxed);
+    let sharedList be try managed.identityOfManaged(registry,phase,textList);
+    let repeated be try managed.identityOfManaged(registry,phase,textList);
+    let kind be try managed.descriptor(registry,phase,textType);
+    let listKind be try managed.descriptor(registry,phase,textList);
+    let identityKind be try managed.descriptor(registry,phase,sharedList);
+    try check(textList.index == textListAgain.index and
+        sharedList.index == repeated.index and
+        kind.kind == 1 and kind.copyPolicy == 1 and
+        listKind.kind == 2 and listKind.elementDomain == 1 and
+        listKind.element == textType.index and listKind.copyPolicy == 1 and
+        identityKind.kind == 3 and identityKind.element == textList.index and
+        identityKind.copyPolicy == 2,
+        "incorrect canonical Text/List/identity descriptors");
+    try check(try managed.deepFixable(registry,phase,textType) and
+        try managed.deepFixable(registry,phase,textList) and
+        try managed.deepFixable(registry,phase,nestedList) and
+        try managed.deepFixable(registry,phase,numberList) and
+        not (try managed.deepFixable(registry,phase,boxed)) and
+        not (try managed.deepFixable(registry,phase,listOfHandles)) and
+        not (try managed.deepFixable(registry,phase,sharedList)),
+        "managed deep-fixability does not propagate identity");
+    try managed.freeze(registry);
+    // U2 private version-one operation profile: no alternative source syntax,
+    // invented NoValue result, or silent List aliasing.
+    let textCopy be try operations.select(registry,phase,textType,1,0);
+    let listCopy be try operations.select(registry,phase,textList,1,0);
+    let handleCopy be try operations.select(registry,phase,boxed,1,0);
+    let listAdd be try operations.select(registry,phase,textList,2,0);
+    let listIndex be try operations.select(registry,phase,textList,3,0);
+    let listEquality be try operations.select(registry,phase,nestedList,4,0);
+    let textEquality be try operations.select(registry,phase,textType,6,0);
+    let graphemes be try operations.select(registry,phase,textType,7,1);
+    let scalars be try operations.select(registry,phase,textType,7,2);
+    let bytes be try operations.select(registry,phase,textType,7,3);
+    let identityEquality be try operations.select(registry,phase,boxed,8,0);
+    // U2 Text is an immutable managed value. All three explicit Unicode17
+    // views retain the Text descriptor but have their own read-only domain.
+    let textCopyShape be try operations.verifyContract(registry,phase,textType,textCopy);
+    let graphemeShape be try operations.verifyContract(registry,phase,textType,graphemes);
+    let scalarShape be try operations.verifyContract(registry,phase,textType,scalars);
+    let byteShape be try operations.verifyContract(registry,phase,textType,bytes);
+    try check(textType.index == 1 and kind.kind == 1 and
+        kind.elementDomain == 0 and kind.element == 0 and
+        kind.copyPolicy == 1 and
+        textCopy.version == 1 and textCopy.unicodeVersion == 17 and
+        textCopy.kind == 1 and textCopy.copyPolicy == 1 and
+        textCopy.mayAllocate and textCopy.requiresRoot and
+        not textCopy.mayTrap and
+        try operations.requiresSafePoint(textCopy) and
+        textCopyShape.operands == 1 and
+        textCopyShape.results == 1 and
+        textCopyShape.firstDomain == 1 and
+        textCopyShape.resultDomain == 1 and
+        textCopyShape.resultType == textType.index and
+        textEquality.kind == 1 and textEquality.resultCount == 1 and
+        not textEquality.mayAllocate and not textEquality.mayTrap and
+        not textEquality.requiresRoot and
+        not (operations.requiresSafePoint(textEquality)) and
+        graphemes.unicodeVersion == 17 and scalars.unicodeVersion == 17 and
+        bytes.unicodeVersion == 17 and
+        graphemes.copyPolicy == 1 and scalars.copyPolicy == 1 and
+        bytes.copyPolicy == 1 and
+        graphemes.mayAllocate and scalars.mayAllocate and bytes.mayAllocate and
+        graphemes.requiresRoot and scalars.requiresRoot and bytes.requiresRoot and
+        graphemeShape.firstDomain == 1 and
+        graphemeShape.resultDomain == 2 and
+        scalarShape.resultDomain == 2 and
+        byteShape.resultDomain == 2 and
+        graphemeShape.resultType == textType.index and
+        scalarShape.resultType == textType.index and
+        byteShape.resultType == textType.index,
+        "managed Text/Unicode17 descriptor or view contract is inconsistent");
+    let foreignText be managed.TypeId { owner=data.key; index=textType.index; };
+    try check(try operationRejected(registry,phase,foreignText,7,1) and
+        try operationRejected(registry,phase,textType,7,0) and
+        try operationRejected(registry,phase,textType,7,-1) and
+        try operationRejected(registry,phase,textType,7,4) and
+        try operationRejected(registry,phase,textType,6,3),
+        "foreign Text/invalid Unicode view selector accepted");
+    try check(textCopy.mayAllocate and textCopy.requiresRoot and
+        listCopy.copyPolicy == 1 and
+        listCopy.mayAllocate and listCopy.requiresRoot and
+        handleCopy.copyPolicy == 2 and
+        not handleCopy.mayAllocate and
+        listAdd.resultCount == 0 and listAdd.mayAllocate and
+        listIndex.mayTrap and listIndex.resultCount == 0 and
+        listEquality.mayAllocate and textEquality.unicodeVersion == 17 and
+        graphemes.view == 1 and scalars.view == 2 and bytes.view == 3 and
+        graphemes.requiresRoot and
+        not identityEquality.mayAllocate and
+        identityEquality.kind == 3,
+        "managed operation contract violated value/alias/Unicode policy");
+    try check(try operationRejected(registry,phase,textList,7,1) and
+        try operationRejected(registry,phase,textType,2,0) and
+        try operationRejected(registry,phase,textList,8,0) and
+        try operationRejected(registry,phase,textType,7,4) and
+        try operationRejected(registry,phase,textType,1,1) and
+        try operationRejected(registry,phase,textType,99,0),
+        "unsupported managed operation was accepted");
+    let addShape be try operations.verifyContract(registry,phase,textList,listAdd);
+    let updateShape be try operations.verifyContract(registry,phase,textList,listIndex);
+    let equalShape be try operations.verifyContract(registry,phase,textType,textEquality);
+    let viewShape be try operations.verifyContract(registry,phase,textType,bytes);
+    let copyShape be try operations.verifyContract(registry,phase,boxed,handleCopy);
+    let snapshotShape be try operations.shape(registry,phase,textList,5,0);
+    let numberShape be try operations.shape(registry,phase,numberList,2,0);
+    try check(addShape.operands == 2 and addShape.results == 1 and
+        addShape.replacesReceiver and addShape.resultDomain == 1 and
+        addShape.resultType == textList.index and addShape.secondDomain == 1 and
+        addShape.secondType == textType.index and
+        updateShape.operands == 3 and updateShape.secondDomain == 0 and
+        updateShape.secondType == 2 and updateShape.thirdDomain == 1 and
+        updateShape.thirdType == textType.index and updateShape.replacesReceiver and
+        equalShape.operands == 2 and equalShape.resultDomain == 0 and
+        equalShape.resultType == 1 and not equalShape.replacesReceiver and
+        viewShape.resultDomain == 2 and viewShape.resultType == textType.index and
+        copyShape.resultType == boxed.index and copyShape.operands == 1 and
+        snapshotShape.resultType == textList.index and
+        numberShape.secondDomain == 0 and numberShape.secondType == i64.index,
+        "canonical managed SSA shape violated typed snapshot semantics");
+    let mutation be 0;
+    while mutation < 9 {
+        let forged be listAdd;
+        if mutation == 0 { forged.version=2; }
+        if mutation == 1 { forged.typeIndex=textType.index; }
+        if mutation == 2 { forged.kind=3; }
+        if mutation == 3 { forged.resultCount=1; }
+        if mutation == 4 { forged.copyPolicy=2; }
+        if mutation == 5 { forged.mayAllocate=false; }
+        if mutation == 6 { forged.mayTrap=true; }
+        if mutation == 7 { forged.requiresRoot=false; }
+        if mutation == 8 { forged.unicodeVersion=16; }
+        try check(try contractRejected(registry,phase,textList,forged),
+            "same-revision operation contract corruption accepted");
+        mutation=mutation+1;
+    }
+    // Independently re-derive Text semantic metadata from the frozen table.
+    // A cached same-revision contract never authorizes a corrupted view.
+    let textMutation be 0;
+    while textMutation < 11 {
+        let forgedText be textCopy;
+        if textMutation == 0 { forgedText.version=2; }
+        if textMutation == 1 { forgedText.operation=7; }
+        if textMutation == 2 { forgedText.typeIndex=textList.index; }
+        if textMutation == 3 { forgedText.kind=2; }
+        if textMutation == 4 { forgedText.resultCount=0; }
+        if textMutation == 5 { forgedText.copyPolicy=2; }
+        if textMutation == 6 { forgedText.mayAllocate=false; }
+        if textMutation == 7 { forgedText.mayTrap=true; }
+        if textMutation == 8 { forgedText.requiresRoot=false; }
+        if textMutation == 9 { forgedText.view=2; }
+        if textMutation == 10 { forgedText.unicodeVersion=16; }
+        try check(try contractRejected(registry,phase,textType,forgedText),
+            "forged Text copy contract was trusted");
+        textMutation=textMutation+1;
+    }
+    textMutation=0;
+    while textMutation < 8 {
+        let forgedView be graphemes;
+        if textMutation == 0 { forgedView.version=2; }
+        if textMutation == 1 { forgedView.typeIndex=textList.index; }
+        if textMutation == 2 { forgedView.kind=3; }
+        if textMutation == 3 { forgedView.resultCount=0; }
+        if textMutation == 4 { forgedView.copyPolicy=2; }
+        if textMutation == 5 { forgedView.mayAllocate=false; }
+        if textMutation == 6 { forgedView.requiresRoot=false; }
+        if textMutation == 7 { forgedView.view=4; }
+        try check(try contractRejected(registry,phase,textType,forgedView),
+            "forged Unicode17 grapheme contract was trusted");
+        textMutation=textMutation+1;
+    }
+    let review be try managed.verify(registry,graph,phase);
+    try check(review.types == 7 and review.lists == 4 and
+        review.identities == 2,"incorrect managed type inventory");
+    let baseline be shared.live;
+    let changed be registry.records.frozen;
+    registry.records.frozen=false;
+    let saved be try words.get(registry.records,phase,3);
+    try words.set(registry.records,phase,3,2);
+    registry.records.frozen=true;
+    try check(try rejected(registry,graph,phase),"forged Text copy policy accepted");
+    registry.records.frozen=false;
+    try words.set(registry.records,phase,3,saved);
+    registry.records.frozen=true;
+    // Text descriptor #1 is canonical: kind=1, domain=0, element=0,
+    // value copyPolicy=1. Any changed word must fail independent verification.
+    let textWord be 0;
+    while textWord < 3 {
+        let prior be try words.get(registry.records,phase,textWord);
+        registry.records.frozen=false;
+        let corrupt be 1;
+        if textWord == 0 { corrupt=2; }
+        try words.set(registry.records,phase,textWord,corrupt);
+        registry.records.frozen=true;
+        try check(try rejected(registry,graph,phase),
+            "forged canonical Text descriptor word accepted");
+        registry.records.frozen=false;
+        try words.set(registry.records,phase,textWord,prior);
+        registry.records.frozen=true;
+        textWord=textWord+1;
+    }
+    let pointer be (nestedList.index-1)*4+2;
+    saved=try words.get(registry.records,phase,pointer);
+    registry.records.frozen=false;
+    try words.set(registry.records,phase,pointer,review.types+1);
+    registry.records.frozen=true;
+    try check(try rejected(registry,graph,phase),"forward List element accepted");
+    registry.records.frozen=false;
+    try words.set(registry.records,phase,pointer,saved);
+    registry.records.frozen=true;
+    let row be (sharedList.index-1)*4+3;
+    saved=try words.get(registry.records,phase,row);
+    registry.records.frozen=false;
+    try words.set(registry.records,phase,row,1);
+    registry.records.frozen=true;
+    try check(try rejected(registry,graph,phase),"identity alias changed into value copy");
+    registry.records.frozen=false;
+    try words.set(registry.records,phase,row,saved);
+    registry.records.frozen=true;
+    registry.version=2;
+    try check(try rejected(registry,graph,phase),"unsupported type version accepted");
+    registry.version=1;
+    let restored be try managed.verify(registry,graph,phase);
+    try check(restored.types == review.types and shared.live == baseline,
+        "restored managed registry was rejected or leaked verification backing");
+    try managed.close(registry);
+    try aggregate.close(graph);
+    try meta.close(data);
+    try check(shared.live == 0 and shared.pending == 0,
+        "managed type registry did not reclaim owner backing");
+    try budget.finishPhase(phase);
+    try budget.close(shared);
+    try check(request.live == 0 and request.pending == 0,
+        "managed type owner leaked into request");
+    try budget.close(request);
+    output("u2-managed-types:ok");
+}
+run()
+else error budget.LimitError {
+    output("limit:"+error.message); process.setExitCode(1);
+}
+else error graphVerify.InvalidGraph {
+    output("graph:"+error.message); process.setExitCode(1);
+}
+else error managed.InvalidManagedTypes {
+    output("managed:"+error.message); process.setExitCode(1);
+}
+else error operations.Unsupported {
+    output("operation:"+error.message); process.setExitCode(1);
+}
+else error ProbeError {
+    output("probe:"+error.message); process.setExitCode(1);
+};

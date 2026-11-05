@@ -1,0 +1,30 @@
+// Private cleanup-to-canonical-destination binding. This is construction data,
+// not a fallible terminator, runtime call or executable U2 publication.
+import compiler.u1_budget as budget;
+import compiler.u1_meta as meta;
+import compiler.u1_builder as build;
+import compiler.u1_aggregate as aggregate;
+import compiler.u2_cleanup_plan as cleanup;
+import compiler.u2_cleanup_verify as planVerify;
+import compiler.u2_continuation_bind as continuation;
+
+public type LinkedExit { plan identity cleanup.Plan; continuations continuation.Pair; }
+public function verify(routine identity build.Function,graph identity aggregate.Registry,
+    phase identity budget.Phase,value LinkedExit,active,survive Int,exit meta.LocId,failed Bool)
+    returns Bool fails budget.LimitError,planVerify.InvalidPlan,continuation.InvalidBinding {
+    let accepted be try continuation.verify(routine,graph,phase,value.continuations);
+    if value.continuations.location != exit or value.plan.owner != routine.owner {
+        fail continuation.InvalidBinding { message="cleanup and typed continuation owner/origin mismatch"; };
+    }
+    return try planVerify.verify(routine.metadata,phase,value.plan,active,survive,exit,failed);
+}
+public function prepare(routine identity build.Function,graph identity aggregate.Registry,
+    phase identity budget.Phase,active,survive Int,exit meta.LocId,failed Bool,pair continuation.Pair)
+    returns LinkedExit fails budget.LimitError,planVerify.InvalidPlan,continuation.InvalidBinding {
+    let accepted be try continuation.verify(routine,graph,phase,pair);
+    if pair.location != exit {
+        fail continuation.InvalidBinding { message="cleanup and typed continuation origin mismatch"; };
+    }
+    let plan be try planVerify.prepare(routine.metadata,routine.owner,phase,active,survive,exit,failed);
+    return LinkedExit { plan=plan; continuations=pair; };
+}

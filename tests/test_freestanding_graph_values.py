@@ -326,6 +326,292 @@ _start:
 '''+FINISH)
         self.assertEqual((result.returncode,result.stdout,result.stderr),(0,b'rooted\nrooted\n',b''))
 
+    def test_u2_saved_failure_root_survives_explicit_gc_and_releases(self):
+        # U2 native-adapter acceptance slice: exercise the EXISTING owned
+        # failure root/collector ABI, not the canonical UIR code generator.
+        # The secondary context is separately tested by the typed U2 oracle;
+        # this probe only proves a saved typed primary with managed Text.
+        runtime = self.runtime
+        needle = 'erist_rt_text_collect:\n'
+        self.assertEqual(runtime.count(needle), 1)
+        runtime = runtime.replace(
+            needle,
+            needle + '    incq erist_rt_u2_forced_gc_calls(%rip)\n', 1)
+        runtime += ('\n.bss\n.p2align 3\n'
+                    '.globl erist_rt_u2_forced_gc_calls\n'
+                    'erist_rt_u2_forced_gc_calls:\n.quad 0\n')
+        result = self.run_probe('u2-saved-failure-explicit-gc', r'''
+.text
+.globl _start
+_start:
+    xorl %ebp,%ebp
+    call evn_scope_enter
+    movq %rax,%r12
+    movq %rax,%rdi
+    leaq .Lu2_root_key(%rip),%rsi
+    leaq .Lu2_root_class(%rip),%rdx
+    movl $1,%ecx
+    call evn_bind_roots
+    call evn_frame
+    movq %rax,%r13
+    movq %rax,%rdi
+    call setjmp
+    testq %rax,%rax
+    jne .Lu2_caught
+    # Build the typed Problem object and its owned Text payload.
+    movl $42,%edi
+    call evn_int
+    movq %rax,%r14
+    leaq .Lu2_payload(%rip),%rdi
+    movl $15,%esi
+    call evn_text
+    movq %rax,%r15
+    movl $11,%edi
+    movl $2,%esi
+    call evn_object
+    movq %rax,%rbx
+    movq %rax,%rdi
+    xorl %esi,%esi
+    movq %r14,%rdx
+    call evn_init
+    movq %rbx,%rdi
+    movl $1,%esi
+    movq %r15,%rdx
+    call evn_init
+    movq %rbx,%rdi
+    movl $1,%esi
+    call evn_fail
+    jmp .Lgraph_test_fail
+.Lu2_caught:
+    movq %r13,%rdi
+    call evn_pop
+    call evn_saved
+    # A class-5 saved-failure root must survive explicit slot and graph GC.
+    movq %rax,.Lu2_root_key(%rip)
+    call erist_rt_failure_clear
+    movl $4,%r14d
+.Lu2_collect_while_rooted:
+    xorl %edi,%edi
+    call erist_rt_slots_collect
+    call erist_rt_text_collect
+    call erist_rt_live_failures
+    cmpq $1,%rax
+    jne .Lgraph_test_fail
+    decq %r14
+    jne .Lu2_collect_while_rooted
+    movq .Lu2_root_key(%rip),%rdi
+    movl $11,%esi
+    call evn_match
+    cmpq $1,%rax
+    jne .Lgraph_test_fail
+    movq .Lu2_root_key(%rip),%rdi
+    movl $12,%esi
+    call evn_error
+    movq %rax,%rdi
+    xorl %esi,%esi
+    call evn_member
+    movq %rax,%rdi
+    call evn_output
+    # No root remains after scope exit; collector must reclaim the record.
+    movq $0,.Lu2_root_key(%rip)
+    call evn_void
+    movq %r12,%rdi
+    movq %rax,%rsi
+    call evn_scope_leave
+    xorl %edi,%edi
+    call erist_rt_slots_collect
+    call erist_rt_text_collect
+    call erist_rt_live_failures
+    testq %rax,%rax
+    jne .Lgraph_test_fail
+    cmpq $5,erist_rt_u2_forced_gc_calls(%rip)
+    jb .Lgraph_test_fail
+    jmp .Lgraph_finish
+.bss
+.p2align 3
+.Lu2_root_key:
+.quad 0
+.section .rodata
+.Lu2_root_class:
+.byte 5
+.Lu2_payload:
+.ascii "u2-primary-text"
+'''+FINISH, runtime=runtime)
+        self.assertEqual((result.returncode,result.stdout,result.stderr),
+                         (0,b'u2-primary-text\n',b''))
+
+    def test_u2_primary_and_secondary_survive_forced_gc_in_order(self):
+        # Native runtime conformance only: this uses the pre-existing class-5
+        # frame root, NOT a root table emitted by the new canonical UIR.
+        # The actual cleanup append service is provided by the resource
+        # profile, not by the graph-only runtime built for this test class.
+        generator = self.directory / 'u2-resource-runtime'
+        self.assertEqual(build_native(ROOT/'src/resource_value_runtime.eri',
+                                      generator, ROOT/'src'), 0)
+        emitted = subprocess.run([str(generator)], capture_output=True,
+                                 text=True, timeout=60)
+        self.assertEqual((emitted.returncode, emitted.stderr), (0, ''))
+        runtime = lifetime_tests.audit_slot_count(emitted.stdout)
+        needle = 'erist_rt_text_collect:\n'
+        self.assertEqual(runtime.count(needle), 1)
+        runtime = runtime.replace(
+            needle, needle + '    incq erist_rt_u2_forced_gc_calls(%rip)\n', 1)
+        runtime += ('\n.bss\n.p2align 3\n'
+                    '.globl erist_rt_u2_forced_gc_calls\n'
+                    'erist_rt_u2_forced_gc_calls:\n.quad 0\n')
+        result = self.run_probe('u2-rooted-secondary-gc', r'''
+.text
+.globl _start
+_start:
+    xorl %ebp,%ebp
+    call evn_scope_enter
+    movq %rax,%r12
+    movq %rax,%rdi
+    leaq .Lu2_pair_root(%rip),%rsi
+    leaq .Lu2_pair_class(%rip),%rdx
+    movl $1,%ecx
+    call evn_bind_roots
+    # Produce and save a typed primary failure with a managed Text payload.
+    call evn_frame
+    movq %rax,%r13
+    movq %rax,%rdi
+    call setjmp
+    testq %rax,%rax
+    jne .Lu2_primary_caught
+    movl $42,%edi
+    call evn_int
+    movq %rax,%r14
+    leaq .Lu2_primary_text(%rip),%rdi
+    movl $12,%esi
+    call evn_text
+    movq %rax,%r15
+    movl $11,%edi
+    movl $2,%esi
+    call evn_object
+    movq %rax,%rbx
+    movq %rax,%rdi
+    xorl %esi,%esi
+    movq %r14,%rdx
+    call evn_init
+    movq %rbx,%rdi
+    movl $1,%esi
+    movq %r15,%rdx
+    call evn_init
+    movq %rbx,%rdi
+    movl $1,%esi
+    call evn_fail
+    jmp .Lgraph_test_fail
+.Lu2_primary_caught:
+    movq %r13,%rdi
+    call evn_pop
+    call evn_saved
+    movq %rax,.Lu2_pair_root(%rip)
+    call erist_rt_failure_clear
+    # Produce an independent typed cleanup failure, preserving the primary.
+    call evn_frame
+    movq %rax,%r13
+    movq %rax,%rdi
+    call setjmp
+    testq %rax,%rax
+    jne .Lu2_secondary_caught
+    movl $43,%edi
+    call evn_int
+    movq %rax,%r14
+    leaq .Lu2_secondary_text(%rip),%rdi
+    movl $17,%esi
+    call evn_text
+    movq %rax,%r15
+    movl $11,%edi
+    movl $2,%esi
+    call evn_object
+    movq %rax,%rbx
+    movq %rax,%rdi
+    xorl %esi,%esi
+    movq %r14,%rdx
+    call evn_init
+    movq %rbx,%rdi
+    movl $1,%esi
+    movq %r15,%rdx
+    call evn_init
+    movq %rbx,%rdi
+    movl $1,%esi
+    call evn_fail
+    jmp .Lgraph_test_fail
+.Lu2_secondary_caught:
+    movq %r13,%rdi
+    call evn_pop
+    call evn_saved
+    movq %rax,%rsi
+    movq .Lu2_pair_root(%rip),%rdi
+    call erist_rt_failure_append
+    call erist_rt_failure_clear
+    movq .Lu2_pair_root(%rip),%rax
+    movq 80(%rax),%rax
+    testq %rax,%rax
+    je .Lgraph_test_fail
+    cmpq $0,88(%rax)
+    jne .Lgraph_test_fail
+    # A single saved-primary root must mark both records and both Texts.
+    movl $4,%r14d
+.Lu2_pair_collect:
+    xorl %edi,%edi
+    call erist_rt_slots_collect
+    call erist_rt_text_collect
+    call erist_rt_live_failures
+    cmpq $2,%rax
+    jne .Lgraph_test_fail
+    call erist_rt_text_live_buffers
+    cmpq $2,%rax
+    jb .Lgraph_test_fail
+    decq %r14
+    jne .Lu2_pair_collect
+    movq .Lu2_pair_root(%rip),%rdi
+    movl $12,%esi
+    call evn_error
+    movq %rax,%rdi
+    xorl %esi,%esi
+    call evn_member
+    movq %rax,%rdi
+    call evn_output
+    movq .Lu2_pair_root(%rip),%rdi
+    movq 80(%rdi),%rdi
+    movl $12,%esi
+    call evn_error
+    movq %rax,%rdi
+    xorl %esi,%esi
+    call evn_member
+    movq %rax,%rdi
+    call evn_output
+    # Once the last root is removed the chain and payloads are reclaimable.
+    movq $0,.Lu2_pair_root(%rip)
+    call evn_void
+    movq %r12,%rdi
+    movq %rax,%rsi
+    call evn_scope_leave
+    xorl %edi,%edi
+    call erist_rt_slots_collect
+    call erist_rt_text_collect
+    call erist_rt_live_failures
+    testq %rax,%rax
+    jne .Lgraph_test_fail
+    cmpq $5,erist_rt_u2_forced_gc_calls(%rip)
+    jb .Lgraph_test_fail
+    jmp .Lgraph_finish
+.bss
+.p2align 3
+.Lu2_pair_root:
+.quad 0
+.section .rodata
+.Lu2_pair_class:
+.byte 5
+.Lu2_primary_text:
+.ascii "body-primary"
+.Lu2_secondary_text:
+.ascii "cleanup-secondary"
+'''+FINISH, runtime=runtime)
+        self.assertEqual((result.returncode,result.stdout,result.stderr),
+                         (0,b'body-primary\ncleanup-secondary\n',b''))
+
     def test_owned_context_restores_callee_registers_stack_and_fp_control(self):
         result=self.run_probe('graph-context',r'''
 .text
@@ -548,3 +834,82 @@ _start:
 '''+FINISH)
         self.assertEqual((result.returncode,result.stdout,result.stderr),
                          (1,b'',b'Eristavi runtime fault: boom\0\xce\xb2\n'))
+
+    def test_u2_managed_unicode17_list_value_and_identity_alias_parity(self):
+        # Frozen old-frontend oracle: this is NOT redesigned UIR lowering.
+        source=self.directory/'u2-unicode-value-identity.eri'
+        source.write_text("""
+        type Cell { value Int; }
+        let composed be "é";
+        let decomposed be "é";
+        let original be [decomposed,"🇨🇾"];
+        let copied be original;
+        copied.add("Z");
+        let flag be original[1];
+        let shared be identity Cell { value=1; };
+        let alias be shared;
+        alias.value=7;
+        let distinct be identity Cell { value=7; };
+        // Independent Unicode17 reference corpus: expected counts below
+        // are fixed Unicode scalar/UTF-8/grapheme facts, not computed by
+        // another Eristavi execution engine.
+        let emoji be "👩‍💻";
+        let twoFlags be "🇨🇾🇬🇪";
+        let wrapped be "A👩‍💻Z";
+        let emptyText be "";
+        let copiedText be decomposed;
+        output(composed==decomposed);
+        output(decomposed.characters.count);
+        output(decomposed.scalars.count);
+        output(decomposed.bytes.count);
+        output(original.count);
+        output(copied.count);
+        output(flag.characters.count);
+        output(shared.value);
+        output(alias==shared);
+        output(distinct==shared);
+        output(emoji.characters.count);
+        output(emoji.scalars.count);
+        output(emoji.bytes.count);
+        output(twoFlags.characters.count);
+        output(twoFlags.scalars.count);
+        output(twoFlags.bytes.count);
+        output(wrapped.characters.count);
+        output(wrapped.scalars.count);
+        output(wrapped.bytes.count);
+        output(emptyText.characters.count);
+        output(emptyText.scalars.count);
+        output(emptyText.bytes.count);
+        output(copiedText==decomposed);
+        output(copiedText==composed);
+        output(composed.bytes.count);
+        output(composed.scalars.count);
+        output(composed.characters.count);
+        """,encoding='utf-8')
+        expected=(b'false\n1\n2\n3\n2\n3\n1\n7\ntrue\nfalse\n'
+                  b'1\n3\n11\n2\n4\n16\n3\n5\n13\n0\n0\n0\n'
+                  b'true\nfalse\n2\n1\n1\n')
+        import sys
+        stage0=subprocess.run(
+            [sys.executable,'-m','compiler.erist','run',str(source),
+             '--source-root',str(self.directory)],
+            cwd=ROOT,capture_output=True,timeout=60)
+        self.assertEqual((stage0.returncode,stage0.stdout,stage0.stderr),
+                         (0,expected,b''))
+        reference=self.directory/'u2-parity-c'
+        self.assertEqual(build_native(source,reference,self.directory),0)
+        c_run=subprocess.run([str(reference)],capture_output=True,timeout=30)
+        self.assertEqual((c_run.returncode,c_run.stdout,c_run.stderr),
+                         (0,expected,b''))
+        app=self.compile_application(source)
+        owned=self.run_probe('u2-managed-unicode-parity',
+                             app+'''
+.text
+.globl _start
+_start:
+    xorl %ebp,%ebp
+    call erist_entry
+    jmp .Lgraph_finish
+'''+FINISH,types=False)
+        self.assertEqual((owned.returncode,owned.stdout,owned.stderr),
+                         (0,expected,b''))

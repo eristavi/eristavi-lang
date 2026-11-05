@@ -1,0 +1,383 @@
+// Bounded optional List<i64> runtime-import profile in canonical Function pools.
+// The empty structural carrier is opaque under THIS profile, never aggregate data.
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+import compiler.u1_meta as meta;
+import compiler.u1_builder as build;
+import compiler.u1_aggregate as aggregate;
+import compiler.u1_aggregate_signature as signatures;
+import compiler.u1_verify as canonical;
+import compiler.format as format;
+import compiler.u2_managed_types as managed;
+import compiler.u2_invoke_contract as contracts;
+import compiler.u2_ssa_liveness as ssa;
+import compiler.u1_aggregate_verify as graphVerify;
+public error Unsupported { message Text; }
+function require(ok Bool,message Text) fails Unsupported {
+    if not ok { fail Unsupported { message=message; }; }
+}
+function get(w identity words.Words,p identity budget.Phase,i Int) returns Int fails budget.LimitError {
+    return try words.get(w,p,i);
+}
+public function name(op Int) returns Text {
+    if op == 1 { return "u2.list.i64.empty"; }
+    if op == 2 { return "u2.list.i64.copy"; }
+    if op == 3 { return "u2.list.i64.append"; }
+    if op == 4 { return "u2.list.i64.replace"; }
+    if op == 5 { return "u2.list.i64.count"; }
+    if op == 6 { return "u2.list.i64.get"; }
+    return "u2.list.i64.collect";
+}
+public function verify(fn identity build.Function,g identity aggregate.Registry,
+    carrier aggregate.TypeId,p identity budget.Phase) returns Int
+    fails budget.LimitError,canonical.InvalidIR,Unsupported {
+    let proof be try canonical.verifyAggregates(fn,g,try budget.verificationPhase(fn.owner));
+    try require(p.owner == fn.owner and p.state == 0 and carrier.owner == g.key and
+        carrier.index > 6 and (try aggregate.fieldCount(g,p,carrier)) == 0 and
+        fn.blocks.length >= 5 and fn.blocks.length/5 <= 64 and fn.edges.length/3 <= 512 and fn.values.length/4 <= 128 and
+        fn.instructions.length/10 <= 256 and fn.metadata.declarations.length == 42 and
+        (try meta.parameterCount(fn.metadata,p,fn.signature)) == 0 and
+        (try meta.resultCount(fn.metadata,p,fn.signature)) == 1 and
+        (try signatures.resultType(fn.metadata,g,p,fn.signature,0)).index == 2,
+        "unsupported bounded List i64 profile");
+    let op be 1;
+    while op <= 7 {
+        let d be (op-1)*6; let data be fn.metadata;
+        let symbol be name(op); let first be try get(data.declarations,p,d+1);
+        try require((try get(data.declarations,p,d+2)) == symbol.bytes.count and
+            (try get(data.declarations,p,d+3)) == 2 and
+            (try get(data.declarations,p,d+4)) == 63 and
+            (try get(data.declarations,p,d+5)) == 1,"unsupported List runtime import");
+        let j be 0;
+        while j < symbol.bytes.count {
+            try require((try get(data.symbolBytes,p,first+j)) == symbol.bytes[j],"foreign List runtime symbol"); j=j+1;
+        }
+        let target be meta.FunctionId { owner=data.key; index=op; };
+        let sig be try meta.functionSignature(data,p,target);
+        let count be 1; if op == 1 or op == 7 { count=0; }
+        if op == 3 or op == 6 { count=2; } if op == 4 { count=3; }
+        let resultCount be 1; if op == 7 { resultCount=0; }
+        try require((try meta.parameterCount(data,p,sig)) == count and
+            (try meta.resultCount(data,p,sig)) == resultCount,"List import arity");
+        j=0;
+        while j < count {
+            let ty be 2; if j == 0 { ty=carrier.index; }
+            try require((try signatures.parameterType(data,g,p,sig,j)).index == ty,"List import parameter type"); j=j+1;
+        }
+        if resultCount == 1 {
+            let ty be carrier.index; if op == 5 or op == 6 { ty=2; }
+            try require((try signatures.resultType(data,g,p,sig,0)).index == ty,"List import result type");
+        }
+        op=op+1;
+    }
+    let i be 1;
+    while i <= fn.instructions.length/10 {
+        let code be try get(fn.instructions,p,(i-1)*10);
+        try require(code == 1 or code == 2 or code == 18 or code == 34 or code == 8 or code == 6 or code == 7,
+            "opaque List carrier cannot be constructed/projected as an aggregate");
+        i=i+1;
+    }
+    return proof.revision;
+}
+function line(s Text) { output("    "+s); }
+function slot(id Int) returns Text { return format.integer((id-1)*8)+"(%rsp)"; }
+function load(fn identity build.Function,p identity budget.Phase,inst Int,n Int,reg Text)
+    fails budget.LimitError {
+    let first be try get(fn.instructions,p,(inst-1)*10+2);
+    let value be try get(fn.operands,p,first+n);
+    line("movq "+slot(value)+","+reg);
+}
+function emitNative(fn identity build.Function,g identity aggregate.Registry,
+    carrier aggregate.TypeId,p identity budget.Phase,plan maybe identity ssa.Plan)
+    fails budget.LimitError,ssa.InvalidLiveness {
+    let total be fn.values.length/4;
+    let scopeOffset be total*8; let tempOffset be scopeOffset+8;
+    let scratchOffset be tempOffset+8;
+    let frame be ((scratchOffset+total*8+15)/16)*16+8;
+    output(".section .rodata\nerist_u2_list_classes:");
+    let i be 0;
+    while i < total { output(".byte 1"); i=i+1; }
+    output(".text\n.globl erist_u2_list_entry\nerist_u2_list_entry:");
+    // Validate the closed boxed runtime descriptor contract BEFORE any call.
+    line("cmpl $1,ev_types+32(%rip)"); line("jne erist_rt_value_fault_internal");
+    line("cmpl $3,ev_types+96(%rip)"); line("jne erist_rt_value_fault_internal");
+    line("cmpl $7,ev_types+224(%rip)"); line("jne erist_rt_value_fault_internal");
+    line("cmpl $1,ev_types+228(%rip)"); line("jne erist_rt_value_fault_internal");
+    line("subq $"+format.integer(frame)+",%rsp");
+    i=1; while i <= total { line("movq $0,"+slot(i)); i=i+1; }
+    line("call evn_scope_enter"); line("movq %rax,"+format.integer(scopeOffset)+"(%rsp)");
+    line("movq %rax,%rdi"); line("movq %rsp,%rsi");
+    line("leaq erist_u2_list_classes(%rip),%rdx");
+    line("movq $"+format.integer(total)+",%rcx"); line("call evn_bind_roots");
+    let block be 1;
+    while block <= fn.blocks.length/5 {
+    output("erist_u2_block_"+format.integer(block)+":");
+    let inst be try get(fn.blocks,p,(block-1)*5+2);
+    let terminal be try get(fn.blocks,p,(block-1)*5+4);
+    if inst == 0 { inst=terminal; }
+    while inst != 0 {
+        let off be (inst-1)*10; let code be try get(fn.instructions,p,off);
+        let result be try get(fn.instructions,p,off+4);
+        if code == 1 {
+            line("movabsq $"+format.integer(try get(fn.instructions,p,off+7))+",%rdi");
+            line("call evn_int"); line("movq %rax,"+slot(result));
+        }
+        if code == 2 {
+            line("movq $"+format.integer(try get(fn.instructions,p,off+7))+",%rdi");
+            line("call evn_bool"); line("movq %rax,"+slot(result));
+        }
+        if code == 18 {
+            try load(fn,p,inst,0,"%rdi"); try load(fn,p,inst,1,"%rsi");
+            line("movq 8(%rdi),%rdi"); line("cmpq 8(%rsi),%rdi");
+            let rel be try get(fn.instructions,p,off+7);
+            let cc be "e";
+            if rel == 2 { cc="ne"; } if rel == 3 { cc="l"; }
+            if rel == 4 { cc="le"; } if rel == 5 { cc="g"; } if rel == 6 { cc="ge"; }
+            if rel == 7 { cc="b"; } if rel == 8 { cc="be"; }
+            if rel == 9 { cc="a"; } if rel == 10 { cc="ae"; }
+            line("set"+cc+" %dil"); line("movzbl %dil,%edi");
+            line("call evn_bool"); line("movq %rax,"+slot(result));
+        }
+        if code == 6 or code == 7 {
+            let edges be 1; if code == 7 { edges=2;
+                try load(fn,p,inst,0,"%rax"); line("cmpq $0,8(%rax)");
+                line("je erist_u2_edge_"+format.integer(inst)+"_1");
+            }
+            let ordinal be 0;
+            while ordinal < edges {
+                output("erist_u2_edge_"+format.integer(inst)+"_"+format.integer(ordinal)+":");
+                let edge be try get(fn.instructions,p,off+7+ordinal);
+                try transfer(fn,p,edge,scratchOffset,plan);
+                ordinal=ordinal+1;
+            }
+        }
+        if code == 34 {
+            let op be try get(fn.instructions,p,off+7);
+            if op == 4 or op == 6 {
+                try load(fn,p,inst,0,"%rdi"); line("call erist_rt_graph_object_of");
+                try load(fn,p,inst,1,"%rcx"); line("movq 8(%rcx),%rcx");
+                line("testq %rcx,%rcx"); line("js erist_u2_bounds_"+format.integer(inst));
+                line("cmpq 0(%rax),%rcx"); line("jae erist_u2_bounds_"+format.integer(inst));
+            }
+            if op == 1 { line("movl $7,%edi"); line("xorl %esi,%esi"); line("call evn_object"); }
+            if op == 2 { try load(fn,p,inst,0,"%rdi"); line("call evn_copy"); }
+            if op == 3 or op == 4 {
+                try load(fn,p,inst,0,"%rdi"); line("call evn_copy");
+                // Publish the new snapshot before the mutating allocating helper.
+                line("movq %rax,"+slot(result));
+                line("movq %rax,%rdi");
+                if op == 3 { try load(fn,p,inst,1,"%rsi"); line("call evn_add"); }
+                if op == 4 {
+                    try load(fn,p,inst,1,"%rsi"); line("movq 8(%rsi),%rsi"); line("call evn_index_ref");
+                    line("movq %rax,%rdi"); try load(fn,p,inst,2,"%rsi"); line("call evn_store");
+                }
+                line("movq "+slot(result)+",%rax");
+            }
+            if op == 5 { try load(fn,p,inst,0,"%rdi"); line("call evn_count"); }
+            if op == 6 {
+                try load(fn,p,inst,0,"%rdi"); try load(fn,p,inst,1,"%rsi");
+                line("movq 8(%rsi),%rsi"); line("call evn_index");
+            }
+            if op == 7 { line("call erist_rt_text_collect"); }
+            else { line("movq %rax,"+slot(result)); }
+        }
+        if code == 8 {
+            try load(fn,p,inst,0,"%rax"); line("movq 8(%rax),%rax");
+            line("movq %rax,"+format.integer(tempOffset)+"(%rsp)");
+            line("call evn_void"); line("movq %rax,%rsi");
+            line("movq "+format.integer(scopeOffset)+"(%rsp),%rdi"); line("call evn_scope_leave");
+            line("movq "+format.integer(tempOffset)+"(%rsp),%rax");
+            line("addq $"+format.integer(frame)+",%rsp"); line("ret");
+        }
+        // The independently reverified canonical plan now retires dead List
+        // values after each nonterminal instruction in the selected CFG.
+        // All call operands remain published through the call itself; newly
+        // produced values are stored first. Edge copies remain simultaneous,
+        // and the >32-carrier profile still uses conservative retention.
+        if fn.blocks.length > 5 and plan != none and
+            code != 6 and code != 7 and code != 8 {
+            let at be build.InstId { owner=fn.key; index=inst; };
+            let selected be 0;
+            while selected < plan.values.length/4 {
+                let value be try get(plan.values,p,selected*4);
+                let word be build.ValueId { owner=fn.key; index=value; };
+                if not (try ssa.liveAfter(plan,fn,p,at,word)) {
+                    line("movq $0,"+slot(value));
+                }
+                selected=selected+1;
+            }
+        }
+        // Keep the original straight-line last-use profile untouched.
+        if fn.blocks.length == 5 {
+        // Exact straight-line last-use release, including inputs of this op.
+        i=1;
+        while i <= total {
+            let later be try get(fn.instructions,p,off+9);
+            if later == 0 and code != 8 { later=terminal; }
+            let needed be false;
+            while later != 0 {
+                let first be try get(fn.instructions,p,(later-1)*10+2);
+                let count be try get(fn.instructions,p,(later-1)*10+3); let j be 0;
+                while j < count { if (try get(fn.operands,p,first+j)) == i { needed=true; } j=j+1; }
+                if later == terminal { later=0; }
+                else { later=try get(fn.instructions,p,(later-1)*10+9); if later == 0 { later=terminal; } }
+            }
+            if not needed and code != 8 { line("movq $0,"+slot(i)); }
+            i=i+1;
+        }
+        }
+        if inst == terminal { inst=0; }
+        else { inst=try get(fn.instructions,p,off+9); if inst == 0 { inst=terminal; } }
+    }
+    block=block+1;
+    }
+    i=1;
+    while i <= fn.instructions.length/10 {
+        let off be (i-1)*10;
+        if (try get(fn.instructions,p,off)) == 34 {
+            let op be try get(fn.instructions,p,off+7);
+            if op == 4 or op == 6 { try fault(fn,p,i,try get(fn.instructions,p,off+6)); }
+        }
+        i=i+1;
+    }
+    output(".section .note.GNU-stack,\"\",@progbits");
+}
+
+// Private List carrier root retirement uses independently recomputed canonical
+// SSA facts. Keep the established 128-value profile: >32 tracked List values
+// use the previously validated conservative retention behavior.
+function closeProof(plan identity ssa.Plan,table identity contracts.Registry)
+    fails budget.LimitError {
+    try ssa.close(plan);
+    try contracts.close(table);
+}
+public function emit(fn identity build.Function,g identity aggregate.Registry,
+    carrier aggregate.TypeId,p identity budget.Phase)
+    fails budget.LimitError,canonical.InvalidIR,Unsupported {
+    let revision be try verify(fn,g,carrier,p);
+    let tracked be 0; let value be 1;
+    while value <= fn.values.length/4 {
+        if (try get(fn.values,p,(value-1)*4)) == carrier.index {
+            tracked=tracked+1;
+        }
+        value=value+1;
+    }
+    if tracked > 32 {
+        emitNative(fn,g,carrier,p,none)
+            else error budget.LimitError { fail error; }
+            else error ssa.InvalidLiveness {
+                fail Unsupported { message=error.message; };
+            };
+        return;
+    }
+    let metadataPhase be try budget.constructionPhase(fn.metadata.owner);
+    let table be contracts.create(fn.metadata,g,metadataPhase)
+        else error budget.LimitError { try budget.finishPhase(metadataPhase); fail error; };
+    contracts.freeze(table)
+        else error budget.LimitError {
+            try contracts.close(table); try budget.finishPhase(metadataPhase); fail error;
+        };
+    try budget.finishPhase(metadataPhase);
+    let plan be ssa.create(fn,g,table,p,[carrier])
+        else error ssa.InvalidLiveness {
+            try contracts.close(table); fail Unsupported { message=error.message; };
+        }
+        else error canonical.InvalidIR { try contracts.close(table); fail error; }
+        else error budget.LimitError { try contracts.close(table); fail error; };
+    let proof be ssa.verify(plan,fn,g,table,p)
+        else error ssa.InvalidLiveness {
+            try closeProof(plan,table); fail Unsupported { message=error.message; };
+        }
+        else error canonical.InvalidIR { try closeProof(plan,table); fail error; }
+        else error budget.LimitError { try closeProof(plan,table); fail error; };
+    emitNative(fn,g,carrier,p,plan)
+        else error budget.LimitError { try closeProof(plan,table); fail error; }
+        else error ssa.InvalidLiveness {
+            try closeProof(plan,table); fail Unsupported { message=error.message; };
+        };
+    try closeProof(plan,table);
+}
+
+// Simultaneous edge transfer: capture every source before overwriting any
+// destination. There are no calls/safe points while unregistered scratch lives.
+function transfer(fn identity build.Function,p identity budget.Phase,edge Int,scratch Int,
+    plan maybe identity ssa.Plan) fails budget.LimitError,ssa.InvalidLiveness {
+    let target be try get(fn.edges,p,(edge-1)*3);
+    let first be try get(fn.edges,p,(edge-1)*3+1);
+    let count be try get(fn.edges,p,(edge-1)*3+2);
+    let parameter be try get(fn.blocks,p,(target-1)*5); let i be 0;
+    while i < count {
+        let value be try get(fn.arguments,p,first+i);
+        line("movq "+slot(value)+",%rax");
+        line("movq %rax,"+format.integer(scratch+i*8)+"(%rsp)"); i=i+1;
+    }
+    i=0;
+    while i < count {
+        line("movq "+format.integer(scratch+i*8)+"(%rsp),%rax");
+        line("movq %rax,"+slot(parameter+i)); i=i+1;
+    }
+    // There is no allocating call between capture, transfer and dead-root release.
+    // If the closed liveness profile is too large, retain the prior safe policy.
+    if plan != none {
+        let targetId be build.BlockId { owner=fn.key; index=target; };
+        let tracked be 0;
+        while tracked < plan.values.length/4 {
+            let value be try get(plan.values,p,tracked*4);
+            let valueId be build.ValueId { owner=fn.key; index=value; };
+            if not (try ssa.liveEntry(plan,fn,p,targetId,valueId)) {
+                line("movq $0,"+slot(value));
+            }
+            tracked=tracked+1;
+        }
+    }
+    line("jmp erist_u2_block_"+format.integer(target));
+}
+public function emitManaged(fn identity build.Function,g identity aggregate.Registry,
+    carrier aggregate.TypeId,p identity budget.Phase,table identity managed.Registry,
+    listType managed.TypeId)
+    fails budget.LimitError,canonical.InvalidIR,Unsupported,
+    managed.InvalidManagedTypes,graphVerify.InvalidGraph {
+    let phase be try budget.verificationPhase(table.owner);
+    let checked be managed.verify(table,g,phase)
+        else error budget.LimitError { try budget.finishPhase(phase); fail error; }
+        else error managed.InvalidManagedTypes { try budget.finishPhase(phase); fail error; }
+        else error graphVerify.InvalidGraph { try budget.finishPhase(phase); fail error; };
+    let description be managed.descriptor(table,phase,listType)
+        else error budget.LimitError { try budget.finishPhase(phase); fail error; };
+    try budget.finishPhase(phase);
+    try require(description.kind == 2 and description.elementDomain == 0 and
+        description.element == 2 and description.copyPolicy == 1,
+        "native List profile requires verified managed List of i64");
+    try emit(fn,g,carrier,p);
+}
+
+function fault(fn identity build.Function,p identity budget.Phase,inst Int,location Int)
+    fails budget.LimitError {
+    let data be fn.metadata; let current be location;
+    let source be try get(data.locations,p,(current-1)*7);
+    while source == 0 and (try get(data.locations,p,(current-1)*7+6)) > 0 {
+        current=try get(data.locations,p,(current-1)*7+6);
+        source=try get(data.locations,p,(current-1)*7);
+    }
+    let id be format.integer(inst); output(".section .rodata");
+    output("erist_u2_origin_"+id+":");
+    let length be 0;
+    if source > 0 {
+        let first be try get(data.sources,p,(source-1)*4);
+        length=try get(data.sources,p,(source-1)*4+1); let j be 0;
+        while j < length {
+            output(".byte "+format.integer(try get(data.bytes,p,first+j))); j=j+1;
+        }
+    }
+    let suffix be ":"+format.integer(try get(data.locations,p,(current-1)*7+4))+":"+
+        format.integer(try get(data.locations,p,(current-1)*7+5))+": ";
+    if source == 0 { suffix="synthetic UIR LocId "+format.integer(location)+": "; }
+    let j be 0;
+    while j < suffix.bytes.count { output(".byte "+format.integer(suffix.bytes[j])); j=j+1; }
+    length=length+suffix.bytes.count;
+    output(".text\nerist_u2_bounds_"+id+":");
+    line("movl $2,%edi");
+    line("leaq erist_u2_origin_"+id+"(%rip),%rsi");
+    line("movq $"+format.integer(length)+",%rdx"); line("call erist_rt_write_all");
+    line("jmp erist_rt_graph_fault_bounds");
+}

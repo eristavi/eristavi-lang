@@ -1,0 +1,14 @@
+{
+  "status": "pass",
+  "scope": "owned execution of the ownership verifier; not resource adapter execution",
+  "seconds": 24.454460258999916,
+  "stdout": "u2-scoped-owners:ok\n",
+  "stderr": "",
+  "exit": 0,
+  "fixture_sha256": "75204bc51d0ff38bb092f650c75414cd3e98d57ac989c5b28364a8e6074cfbc8",
+  "app_assembly_sha256": "c70ebe7a656360487e380a8bdf91136afeae4697c7e9be23da3395f45ac760c9",
+  "runtime_assembly_sha256": "dad392a24099e22d4d79090f34bbdaf5cd1ff08a50c5e93be493efafc40cad49",
+  "binary_sha256": "01c4e45b7ea3b0cf2136887605e276fa06ccc32d6efe06e48e40ac637ce6883b",
+  "cc": "cc",
+  "cflags": "-O2"
+}

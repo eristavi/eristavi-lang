@@ -3,6 +3,10 @@ name: Eristavi CI
 # Incremental commits need fast feedback, not four full native test builds.
 # Full matrix is an explicit final-revision gate; qualification remains separate.
 on:
+  # Temporary branch-only smoke route for remote U2 development. No CI on main
+  # push; no full matrix. Document-only commits are classified below.
+  push:
+    branches: [compiler/u2-cleanup-foundation-20261102]
   pull_request:
     types: [opened, reopened, synchronize, ready_for_review, labeled]
   workflow_dispatch:
@@ -35,12 +39,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [ "$GITHUB_EVENT_NAME" != "pull_request" ]; then
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
             echo "code=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          git diff --check HEAD^1 HEAD
-          git diff --name-only -z HEAD^1 HEAD > "$RUNNER_TEMP/changed-paths"
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            git diff --check HEAD^ HEAD
+            git diff --name-only -z HEAD^ HEAD > "$RUNNER_TEMP/changed-paths"
+          else
+            git diff --check HEAD^1 HEAD
+            git diff --name-only -z HEAD^1 HEAD > "$RUNNER_TEMP/changed-paths"
+          fi
           python - <<'PY'
           import os
           from pathlib import Path
@@ -57,6 +66,8 @@ jobs:
     needs: scope
     if: >-
       (github.event_name == 'workflow_dispatch' && inputs.profile == 'smoke') ||
+      (github.event_name == 'push' && needs.scope.outputs.code == 'true' &&
+       github.ref == 'refs/heads/compiler/u2-cleanup-foundation-20261102') ||
       (github.event_name == 'pull_request' && needs.scope.outputs.code == 'true' &&
        (github.event.action == 'opened' || github.event.action == 'reopened' ||
         github.event.action == 'synchronize'))

@@ -1,0 +1,94 @@
+// Private bounded x86-64 placement of canonical checked-failure roots.
+// A placement is NOT machine SSA liveness, an executable IR or a GC root.
+// Verified metadata must precede native helper emission; no fallback slots.
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+import compiler.u1_meta as meta;
+import compiler.u1_builder as build;
+import compiler.u1_aggregate as aggregate;
+import compiler.u2_root_map as roots;
+
+public type Plan {
+    version Int; owner identity budget.Owner; functionKey identity meta.Key;
+    typeKey identity meta.Key; revision Int; rootMap identity roots.Map;
+    records identity words.Words; control identity budget.Allocation; closed Bool;
+}
+public type Report {
+    roots Int; rootBytes Int; scopeOffset Int; frameBytes Int; revision Int;
+}
+public error InvalidSlots { message Text; }
+function require(ok Bool,message Text) fails InvalidSlots {
+    if not ok { fail InvalidSlots { message=message; }; }
+}
+public function close(plan identity Plan) fails budget.LimitError {
+    if plan.closed { try budget.reject("U2 native slot plan already closed"); }
+    plan.closed=true;
+    try words.close(plan.records);
+    try budget.release(plan.control);
+}
+function fill(plan identity Plan,map identity roots.Map,phase identity budget.Phase,count Int)
+    fails budget.LimitError {
+    let index be 0;
+    while index < count {
+        try budget.work(phase,1);
+        let instruction be try words.get(map.records,phase,index*6);
+        let ignored be try words.push(plan.records,phase,instruction);
+        ignored=try words.push(plan.records,phase,index*8);
+        ignored=try words.push(plan.records,phase,5);
+        index=index+1;
+    }
+    try words.freeze(plan.records);
+}
+public function create(map identity roots.Map,routine identity build.Function,
+    graph identity aggregate.Registry,phase identity budget.Phase)
+    returns identity Plan fails budget.LimitError,roots.InvalidRoots,InvalidSlots {
+    let proof be try roots.verify(map,routine,graph,phase);
+    try require(proof.roots > 0 and proof.roots <= 128,
+        "x86-64 root slot profile requires one to 128 checked invokes");
+    let pending be try budget.reserve(routine.owner,512);
+    let records be words.create(routine.owner,384)
+        else error budget.LimitError { try budget.cancelReservation(pending); fail error; };
+    let control be try budget.commit(pending);
+    let plan be identity Plan { version=1; owner=routine.owner; functionKey=routine.key;
+        typeKey=graph.key; revision=routine.revision; rootMap=map;
+        records=records; control=control; closed=false; };
+    fill(plan,map,phase,proof.roots)
+        else error budget.LimitError { try close(plan); fail error; };
+    return plan;
+}
+public function verify(plan identity Plan,map identity roots.Map,
+    routine identity build.Function,graph identity aggregate.Registry,
+    phase identity budget.Phase)
+    returns Report fails budget.LimitError,roots.InvalidRoots,InvalidSlots {
+    // Independent from the emitter, including all unreachable checked invokes.
+    let proof be try roots.verify(map,routine,graph,phase);
+    try require(proof.roots > 0 and proof.roots <= 128 and
+        not plan.closed and plan.version == 1 and plan.owner == routine.owner and
+        plan.functionKey == routine.key and plan.typeKey == graph.key and
+        plan.revision == routine.revision and plan.rootMap == map and
+        plan.control.owner == routine.owner and plan.control.state == 0 and
+        plan.records.owner == routine.owner and not plan.records.closed and
+        plan.records.frozen and plan.records.length == proof.roots*3 and
+        plan.records.limit == 384,
+        "stale, foreign, missing or malformed native root slot plan");
+    let index be 0;
+    while index < proof.roots {
+        try budget.work(phase,1);
+        let instruction be try words.get(map.records,phase,index*6);
+        let declared be try words.get(plan.records,phase,index*3);
+        let offset be try words.get(plan.records,phase,index*3+1);
+        let rootClass be try words.get(plan.records,phase,index*3+2);
+        // Closed one-word-per-invoke profile: exact contiguous placement
+        // proves alignment, uniqueness, nonoverlap and no scope-word alias
+        // in O(R), without an uncharged seen-set or quadratic slot scan.
+        try require(declared == instruction and offset == index*8 and
+            rootClass == 5,
+            "reordered, overlapped, misaligned or wrong-class x86-64 root slot");
+        index=index+1;
+    }
+    let bytes be proof.roots*8;
+    // One separate scope pointer word; preserve SysV 16-byte frame alignment.
+    let frame be ((bytes+8+15)/16)*16;
+    return Report { roots=proof.roots; rootBytes=bytes;
+        scopeOffset=bytes; frameBytes=frame; revision=routine.revision; };
+}

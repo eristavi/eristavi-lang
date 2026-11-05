@@ -1,0 +1,83 @@
+{
+  "status": "focused-tested; not full U2 qualification or merge",
+  "date": "2026-11-02",
+  "branch": "compiler/u2-cleanup-foundation-20261102",
+  "base_commit": "27cf0f1628f630c84d00bcf4c3d0b1770158df86",
+  "smoke": {
+    "collected": 68,
+    "passed": 66,
+    "skipped": 2,
+    "seconds": 273.396,
+    "report": "u2-canonical-smoke.json"
+  },
+  "focused_u2": {
+    "collected": 13,
+    "passed": 13,
+    "seconds": 80.777,
+    "actual_owned_invoke_and_transfers": true
+  },
+  "scoped_owner_bootstrap": {
+    "passed": 5,
+    "seconds": 24.998
+  },
+  "scoped_owner_owned": {
+    "status": "pass",
+    "scope": "owned execution of the ownership verifier; not resource adapter execution",
+    "seconds": 24.454460258999916,
+    "stdout": "u2-scoped-owners:ok\n",
+    "stderr": "",
+    "exit": 0,
+    "fixture_sha256": "75204bc51d0ff38bb092f650c75414cd3e98d57ac989c5b28364a8e6074cfbc8",
+    "app_assembly_sha256": "c70ebe7a656360487e380a8bdf91136afeae4697c7e9be23da3395f45ac760c9",
+    "runtime_assembly_sha256": "dad392a24099e22d4d79090f34bbdaf5cd1ff08a50c5e93be493efafc40cad49",
+    "binary_sha256": "01c4e45b7ea3b0cf2136887605e276fa06ccc32d6efe06e48e40ac637ce6883b",
+    "cc": "cc",
+    "cflags": "-O2"
+  },
+  "note": "The additional opt-in owner-native test was added after smoke collection and independently passed; hosted smoke will discover it as an extra opt-in skip.",
+  "u1_physical_regression": {
+    "scope": "existing U1 forced-collision fixture; not U2 physical attribution",
+    "peak_bytes": 7830976,
+    "traffic_bytes": 21974768,
+    "peak_limit": 8388608,
+    "traffic_limit": 67108864,
+    "all_tagged_backing_reclaimed": true
+  },
+  "source_sha256": {
+    "src/compiler/u1_ops.eri": "23a2f7cb9ad61c188dd514ba04b672369c6644e90eca3d44ff6fcc3637843232",
+    "src/compiler/u1_successors.eri": "5178daf49ef94074834cab2e2a0a7e527fe70041443bbfd7ee2830b25a2c0800",
+    "src/compiler/u1_verify.eri": "6f6224f1d0846d65669bb6a98dc732b92d74b8e3991236f6cae02d811142872d",
+    "src/compiler/u2_continuation_bind.eri": "93a6b56f72c2a1ff0e2db32038c07fa45c2d94f6b1a3dbed4a0bf77b481113d5",
+    "src/compiler/u2_invoke_build.eri": "22634d7e02f64c0f761268f23128668d8061db08a3637579255112c6b3636027",
+    "src/compiler/u2_invoke_contract.eri": "f4cd6a60d3e2bdbbb88c327edda8a84e014d3216c4107294898540ae9198775c",
+    "src/compiler/u2_invoke_reference.eri": "b6acda381865373cae2a0c57eb7765eba3fabb44bb67b0a5012bd11855c44b9e",
+    "src/compiler/u2_invoke_transfer.eri": "f3aa5de79b950ce5bf1e0e62282299337e29507bccdda193bb60e950fb822cf9",
+    "src/compiler/u2_scoped_owners.eri": "012803de5802affc8bcfed7a4a6ced288ba5c95762db82834d427510e232db2e",
+    "tests/fixtures/u2_fallible_registry.eri": "1ad2ad5d0c21d7677da3555d129cd2138bfc18506bf81c414956fa69eb2d995b",
+    "tests/fixtures/u2_scoped_owners.eri": "75204bc51d0ff38bb092f650c75414cd3e98d57ac989c5b28364a8e6074cfbc8",
+    "tests/test_u1_foundation.py": "3fcdbc43be1c2d6f8863ff9890fc7eafcfe46d8c648d995d33d8760825bbf901",
+    "tests/test_u2_continuation_bind.py": "a6cd10d24dcb94504d6fea12a56c100a52c9d30ca154b2078c45651909c362a0",
+    "tests/test_u2_fallible_registry.py": "7002f558c446133893acf51f18ed3b96be7a34bb67fdde677e2e6ac91a84ece7",
+    "tests/test_u2_invoke.py": "04eee09ec0c65df7881a95fbf7c2e34d57998410fb84f435687c6df4993d09df",
+    "tests/test_u2_invoke_transfers.py": "9d0194b0d5b16501cd4412e46bfc25677265e83504533d050cf23d6b5c971bb8",
+    "tests/test_u2_scoped_owners.py": "b14fffc5c4fd9d266afab2e0b9f204334d45ca17f8df45571b5eb33ef7569419",
+    "tools/run_ci_tests.py": "183720acef6538f0c38eb491aa0482e66119c3afb43fe50fca119682904c0e61"
+  },
+  "archive_sha256": "4bea42f5648c0b2c8a3c69627fd1f612beb440405190e009d15eb673b2c6cda6",
+  "archive_crc_and_input_hashes_verified": true,
+  "host": {
+    "platform": "Linux-6.18.57-x86_64-with-glibc2.39",
+    "python": "3.12.14",
+    "cc": "cc (Ubuntu 13.3.0-6ubuntu2~24.04) 13.3.0",
+    "cflags": "-O2"
+  },
+  "deferred": [
+    "complete managed Text/List/identity and type/root contracts",
+    "managed FailureContext and stable primary/ordered secondary composition",
+    "semantic cleanup-plan lowering and production resource adapters",
+    "deep independent depth/exit/GC/physical acceptance",
+    "full four-platform CI and completed-batch qualification"
+  ],
+  "optimization_issue_51": "open / paused",
+  "owned_full_self_build": "not selected"
+}
