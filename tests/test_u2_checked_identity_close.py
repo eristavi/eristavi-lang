@@ -130,11 +130,10 @@ class U2CheckedIdentityCloseTests(unittest.TestCase):
             "    xorl %edx,%edx",
             "    call erist_rt_file_open",
             "    movq %rax,0(%rsp)",
-            "    call evn_empty_failure",
-            "    movq %rax,.Lu2_saved_failure(%rip)",
-            # The returned pointer is the real 96-byte FailureContext record.
-            # Keep it rooted during identity object construction, then let the
-            # composed emitter publish its own class-5 root before File.close.
+            # The native adapter owns a stable, caller-provided 96-byte
+            # failure record, not a pointer to a heap-allocated record.
+            # Its class-5 root protects typed secondary payloads under GC.
+            "    leaq .Lu2_saved_failure(%rip),%rax",
             "    movq %rax,.Lu2_failure_root(%rip)",
         ]
         # The independently observed native identity carries three cyclic
@@ -163,7 +162,7 @@ class U2CheckedIdentityCloseTests(unittest.TestCase):
             "    movq $0,.Lu2_temporary_root(%rip)",
             "    movq $0,.Lu2_failure_root(%rip)",
             "    leaq 0(%rsp),%rdi",
-            "    movq .Lu2_saved_failure(%rip),%rsi",
+            "    leaq .Lu2_saved_failure(%rip),%rsi",
             "    leaq .Lu2_failure_root(%rip),%rdx",
             "    leaq .Lu2_ssa(%rip),%rcx",
             "    movq 40(%rsp),%r8",
@@ -195,7 +194,7 @@ class U2CheckedIdentityCloseTests(unittest.TestCase):
                 "    cmpq $"+str(pending)+",.Lu2_ssa+"+
                     str(offsets["failed_scalar"])+"(%rip)",
                 "    jne .Lresource_test_fail",
-                "    movq .Lu2_saved_failure(%rip),%rax",
+                "    leaq .Lu2_saved_failure(%rip),%rax",
                 "    cmpq %rax,.Lu2_failure_root(%rip)",
                 "    jne .Lresource_test_fail",
                 "    cmpq %rax,.Lu2_ssa+"+
