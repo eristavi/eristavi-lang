@@ -1,0 +1,61 @@
+// U2 opt-in identity-root admission gate for an EXISTING canonical UIR.
+// This is source-neutral type/liveness metadata, NOT a new identity opcode,
+// native identity-object lowering, resource-ownership conversion or root map.
+// The selected U1b aggregate carrier is interpreted as a managed identity
+// handle ONLY by a closed caller that also verifies its native representation.
+import compiler.u1_budget as budget;
+import compiler.u1_builder as build;
+import compiler.u1_aggregate as aggregate;
+import compiler.u1_aggregate_verify as graphVerify;
+import compiler.u1_verify as canonical;
+import compiler.u2_managed_types as managed;
+import compiler.u2_invoke_contract as contracts;
+import compiler.u2_ssa_liveness as ssa;
+
+public error InvalidIdentityRoot { message Text; }
+function require(ok Bool,message Text) fails InvalidIdentityRoot {
+    if not ok { fail InvalidIdentityRoot { message=message; }; }
+}
+
+// Bind a frozen version-one identity-of-structural-payload descriptor to the
+// exact structural carrier used by a verified canonical Function. The
+// managed type registry is independently verified before any SSA-plan work.
+// No File handle or arbitrary graph structural value becomes an identity
+// merely because its TypeId has the same numeric index.
+public function create(routine identity build.Function,
+    graph identity aggregate.Registry,contract identity contracts.Registry,
+    phase identity budget.Phase,registry identity managed.Registry,
+    carrier aggregate.TypeId,identityType managed.TypeId)
+    returns identity ssa.Plan
+    fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,
+        InvalidIdentityRoot,managed.InvalidManagedTypes,graphVerify.InvalidGraph {
+    try require(carrier.owner == graph.key and
+        carrier.index >= 7 and carrier.index <= 6+graph.records.length/4 and
+        identityType.owner == registry.key and
+        registry.graph == graph and registry.graphKey == graph.key and
+        registry.owner == graph.owner and
+        phase.owner == routine.owner and phase.state == 0 and
+        routine.owner.parent == graph.owner.parent,
+        "foreign identity carrier, registry or SSA root owner");
+    let read be try budget.verificationPhase(registry.owner);
+    let verified be managed.verify(registry,graph,read)
+        else error budget.LimitError { try budget.finishPhase(read); fail error; }
+        else error managed.InvalidManagedTypes {
+            try budget.finishPhase(read); fail error;
+        }
+        else error graphVerify.InvalidGraph {
+            try budget.finishPhase(read); fail error;
+        };
+    let description be managed.descriptor(registry,read,identityType)
+        else error budget.LimitError { try budget.finishPhase(read); fail error; };
+    try budget.finishPhase(read);
+    try require(verified.identities >= 1 and
+        description.kind == 3 and description.copyPolicy == 2 and
+        description.elementDomain == 0 and
+        description.element == carrier.index,
+        "identity root requires exact immutable descriptor and shared-handle policy");
+    // Independently verify complete UIR (including dead CFG and any checked
+    // invoke contracts) and recompute the selected SSA facts. This metadata
+    // gate alone never authorizes a native class-1 root store.
+    return try ssa.create(routine,graph,contract,phase,[carrier]);
+}
