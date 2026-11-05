@@ -111,7 +111,7 @@ class U2IdentityNativePublicationTests(unittest.TestCase):
         for index,offset in re.findall(
             r"^\.set erist_u2_identity_slot_73_(\d+), (\d+)$",
             asm,re.M):
-            root_offsets[int(name)]=int(index)
+            root_offsets[int(index)]=int(offset)
         self.assertGreaterEqual(len(root_offsets),2)
         self.assertIn(current,root_offsets)
         self.assertIn(next_value,root_offsets)
