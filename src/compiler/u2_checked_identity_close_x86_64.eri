@@ -1,0 +1,204 @@
+// Opt-in verified canonical identity + checked File.close native composition.
+// One independently verified opcode-46, one exiting File owner, one carried
+// immutable shared-handle identity and one pending i64. No new UIR or ABI.
+// Unlike the separate edge helper, this emitter binds and publishes the live
+// class-1 identity root BEFORE executing an actual allocating File.close.
+// The caller supplies an open, unbound identity scope and a stable root word.
+// On return the class-1 root remains live; its owner releases it after the
+// selected successor consumes the identity. The class-5 failure root is
+// independently bound by the caller and released on ordinary success.
+import compiler.u1_budget as budget;
+import compiler.u1_builder as build;
+import compiler.u1_aggregate as aggregate;
+import compiler.u1_aggregate_verify as graphVerify;
+import compiler.u1_meta as meta;
+import compiler.u1_verify as canonical;
+import compiler.u2_scoped_owners as owners;
+import compiler.u2_invoke_contract as fallible;
+import compiler.u2_root_map as roots;
+import compiler.u2_continuation_bind as continuation;
+import compiler.u2_cleanup_plan as cleanup;
+import compiler.u2_cleanup_verify as planVerify;
+import compiler.u2_cleanup_native_x86_64 as nativeCleanup;
+import compiler.u2_checked_identity_ssa_bind as identitySSA;
+import compiler.u2_managed_types as managed;
+import compiler.u2_ssa_liveness as liveness;
+import compiler.u2_identity_root_gate as identityRoots;
+import compiler.format as format;
+
+public error Unsupported { message Text; }
+function require(ok Bool,message Text) fails Unsupported {
+    if not ok { fail Unsupported { message=message; }; }
+}
+function line(s Text) { output("    "+s); }
+
+// Private SysV x86-64 ABI:
+// RDI: one live File owner word, consumed by generated checked cleanup
+// RSI: caller-owned 96-byte saved FailureContext record
+// RDX: already scope-registered class-5 root word, empty on entry
+// RCX: original ValueId-indexed canonical SSA frame (>=8*frameWords)
+// R8:  caller-owned newly entered, unbound class-1 scope
+// R9:  separate caller-owned, writable 8-byte class-1 root word
+// Both root-word allocations and SSA frame must remain stable until return.
+// Caller must leave class-1 scope AFTER releasing the selected live identity.
+// The checked failure record remains rooted until handled on failed exit.
+public function emit(routine identity build.Function,
+    graph identity aggregate.Registry,profile identity owners.Profile,
+    contracts identity fallible.Registry,phase identity budget.Phase,
+    map identity roots.Map,pair continuation.Pair,instruction build.InstId,
+    plan identity cleanup.Plan,active,survive Int,exit meta.LocId,
+    registry identity managed.Registry,carrier aggregate.TypeId,
+    identityType managed.TypeId,label Int)
+    fails budget.LimitError,canonical.InvalidIR,owners.InvalidOwnership,
+        roots.InvalidRoots,continuation.InvalidBinding,planVerify.InvalidPlan,
+        identitySSA.InvalidSSA,liveness.InvalidLiveness,
+        identityRoots.InvalidIdentityRoot,managed.InvalidManagedTypes,
+        graphVerify.InvalidGraph,Unsupported {
+    // All source-neutral graph, owner, SSA, type, root and cleanup checks
+    // happen before the first assembler byte is produced.
+    let checked be try identitySSA.verifyManagedIdentity(routine,graph,
+        profile,contracts,phase,map,pair,instruction,plan,active,survive,
+        exit,registry,carrier,identityType);
+    try require(label > 0 and label <= 2147483647 and
+        checked.ownerCount == 1 and checked.survivingOwners == 0 and
+        survive == 0 and active.count == 1 and plan.depth == 1 and
+        checked.frameWords > 0 and checked.frameWords <= 128 and
+        checked.identitySource > 0 and checked.identityNormal > 0 and
+        checked.identityFailure > 0 and
+        checked.identitySource != checked.identityNormal and
+        checked.identitySource != checked.identityFailure and
+        checked.identityNormal != checked.identityFailure and
+        checked.sourceValue != checked.normalValue and
+        checked.sourceValue != checked.failureCarry and
+        checked.normalValue != checked.failureCarry and
+        checked.failureValue != checked.failureCarry and
+        checked.failureValue != checked.identityFailure and
+        checked.failureValue != checked.identityNormal and
+        checked.failureValue != checked.identitySource,
+        "unsupported canonical checked identity plus File close profile");
+    let consumed cleanup.Scope be active[0];
+    try require(consumed.value > 0 and
+        consumed.value <= checked.frameWords and
+        consumed.value != checked.identitySource and
+        consumed.value != checked.identityNormal and
+        consumed.value != checked.identityFailure,
+        "invalid canonical consumed File owner SSA word");
+    try budget.work(phase,96);
+    // Emit the existing REAL resource closer, from the freshly verified
+    // original cleanup plan. It consumes File on BOTH checked outcomes.
+    nativeCleanup.emit(routine.metadata,phase,plan,active,0,exit,false,label)
+        else error nativeCleanup.Unsupported {
+            fail Unsupported { message=error.message; };
+        }
+        else error budget.LimitError { fail error; }
+        else error planVerify.InvalidPlan { fail error; };
+    let suffix be format.integer(label);
+    let base be "erist_u2_identity_close_"+suffix;
+    let from be format.integer((checked.identitySource-1)*8);
+    let normal be format.integer((checked.identityNormal-1)*8);
+    let failed be format.integer((checked.identityFailure-1)*8);
+    let scalar be format.integer((checked.sourceValue-1)*8);
+    let normalScalar be format.integer((checked.normalValue-1)*8);
+    let failedScalar be format.integer((checked.failureCarry-1)*8);
+    let failedRecord be format.integer((checked.failureValue-1)*8);
+    let consumedOffset be format.integer((consumed.value-1)*8);
+    // Stable, auditor-readable offsets are canonical ValueId derived.
+    output(".set "+base+"_source, "+from);
+    output(".set "+base+"_normal, "+normal);
+    output(".set "+base+"_failed, "+failed);
+    output(".set "+base+"_scalar, "+scalar);
+    output(".set "+base+"_normal_scalar, "+normalScalar);
+    output(".set "+base+"_failed_scalar, "+failedScalar);
+    output(".set "+base+"_failure_record, "+failedRecord);
+    output(".set "+base+"_consumed, "+consumedOffset);
+    output(".section .rodata");
+    output(".p2align 3");
+    output(base+"_classes:");
+    output(".byte 1");
+    output(".text");
+    output(".globl "+base);
+    output(".type "+base+",@function");
+    output(base+":");
+    // Five callee-saved registers plus a 32-byte spill area preserve
+    // 16-byte SysV alignment at every runtime/native close call.
+    line("pushq %rbx"); line("pushq %r12"); line("pushq %r13");
+    line("pushq %r14"); line("pushq %r15");
+    line("subq $32,%rsp");
+    line("movq %rdi,%r12"); line("movq %rsi,%r13");
+    line("movq %rdx,%r14"); line("movq %rcx,%r15");
+    line("movq %r9,%rbx"); line("movq %r8,0(%rsp)");
+    line("testq %r12,%r12"); line("je erist_rt_value_fault_internal");
+    line("testq %r13,%r13"); line("je erist_rt_value_fault_internal");
+    line("testq %r14,%r14"); line("je erist_rt_value_fault_internal");
+    line("testq %r15,%r15"); line("je erist_rt_value_fault_internal");
+    line("testq %rbx,%rbx"); line("je erist_rt_value_fault_internal");
+    line("cmpq $0,0(%rsp)"); line("je erist_rt_value_fault_internal");
+    line("cmpq $0,(%r13)"); line("jne erist_rt_value_fault_internal");
+    line("cmpq $0,(%r14)"); line("jne erist_rt_value_fault_internal");
+    line("movq "+from+"(%r15),%rax");
+    line("testq %rax,%rax"); line("je erist_rt_value_fault_internal");
+    // Root memory is zero before publication to the live scope. The bind
+    // is non-allocating; no File.close or GC safepoint occurs before storing
+    // the proven managed identity handle into the registered class-1 word.
+    line("movq $0,(%rbx)");
+    line("movq 0(%rsp),%rdi");
+    line("movq %rbx,%rsi");
+    line("leaq "+base+"_classes(%rip),%rdx");
+    line("movl $1,%ecx");
+    line("call evn_bind_roots");
+    line("movq "+from+"(%r15),%rax");
+    line("testq %rax,%rax"); line("je erist_rt_value_fault_internal");
+    line("movq %rax,(%rbx)");
+    // Publish the separately registered class-5 record and snapshot the
+    // pending i64 while both original canonical SSA sources remain alive.
+    line("movq %r13,(%r14)");
+    line("movq "+scalar+"(%r15),%rax");
+    line("movq %rax,8(%rsp)");
+    line("movq $0,"+normal+"(%r15)");
+    line("movq $0,"+failed+"(%r15)");
+    line("movq $0,"+normalScalar+"(%r15)");
+    line("movq $0,"+failedScalar+"(%r15)");
+    line("movq $0,"+failedRecord+"(%r15)");
+    line("movq %r12,%rdi"); line("movq %r13,%rsi");
+    line("call erist_u2_cleanup_"+suffix);
+    // The native resource adapter consumed its owned File transfer word.
+    // Invalidate the canonical predecessor File SSA handle on both edges.
+    line("movq $0,"+consumedOffset+"(%r15)");
+    line("cmpq $0,%rax"); line("je "+base+"_success");
+    line("cmpq $-1,%rax"); line("jne erist_rt_value_fault_internal");
+    line("cmpq $0,(%r13)"); line("je erist_rt_value_fault_internal");
+    line("cmpq %r13,(%r14)"); line("jne erist_rt_value_fault_internal");
+    line("movq %r13,"+failedRecord+"(%r15)");
+    line("movq 8(%rsp),%rax");
+    line("movq %rax,"+failedScalar+"(%r15)");
+    line("movq $-1,16(%rsp)");
+    line("jmp "+base+"_identity");
+    output(base+"_success:");
+    line("cmpq $0,(%r13)"); line("jne erist_rt_value_fault_internal");
+    line("movq $0,(%r14)");
+    line("movq 8(%rsp),%rax");
+    line("movq %rax,"+normalScalar+"(%r15)");
+    line("movq $0,16(%rsp)");
+    output(base+"_identity:");
+    // After actual File cleanup, transfer ONE verified identity source to
+    // the selected normal/failure parameter, never both. Keep the class-1
+    // root published across the following GC safepoint in the caller.
+    line("movq "+from+"(%r15),%rax");
+    line("testq %rax,%rax"); line("je erist_rt_value_fault_internal");
+    line("cmpq %rax,(%rbx)"); line("jne erist_rt_value_fault_internal");
+    line("movq $0,"+from+"(%r15)");
+    line("cmpq $0,16(%rsp)"); line("je "+base+"_normal");
+    line("movq %rax,"+failed+"(%r15)");
+    line("movq $-1,%rax");
+    line("jmp "+base+"_leave");
+    output(base+"_normal:");
+    line("movq %rax,"+normal+"(%r15)");
+    line("xorl %eax,%eax");
+    output(base+"_leave:");
+    line("addq $32,%rsp");
+    line("popq %r15"); line("popq %r14"); line("popq %r13");
+    line("popq %r12"); line("popq %rbx");
+    line("ret");
+    output(".size "+base+",.-"+base);
+    output(".section .note.GNU-stack,\"\",@progbits");
+}
