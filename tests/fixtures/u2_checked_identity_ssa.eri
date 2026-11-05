@@ -23,7 +23,7 @@ import compiler.u2_root_map as roots;
 import compiler.u2_native_slots_x86_64 as slots;
 import compiler.u2_native_root_x86_64 as nativeRoots;
 import compiler.u2_cleanup_native_x86_64 as nativeCleanup;
-import compiler.u2_checked_ssa_bind as ssa;
+import compiler.u2_checked_identity_ssa_bind as ssa;
 import compiler.u2_checked_ssa_x86_64 as native;
 
 error ProbeError { message Text; }
