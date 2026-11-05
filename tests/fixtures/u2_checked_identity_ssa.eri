@@ -21,10 +21,7 @@ import compiler.u2_cleanup_plan as cleanup;
 import compiler.u2_cleanup_verify as planVerify;
 import compiler.u2_root_map as roots;
 import compiler.u2_native_slots_x86_64 as slots;
-import compiler.u2_native_root_x86_64 as nativeRoots;
-import compiler.u2_cleanup_native_x86_64 as nativeCleanup;
 import compiler.u2_checked_identity_ssa_bind as ssa;
-import compiler.u2_checked_ssa_x86_64 as native;
 
 error ProbeError { message Text; }
 function check(ok Bool,message Text) fails ProbeError {
@@ -53,8 +50,7 @@ function rejects(fn identity build.Function,graph identity aggregate.Registry,
 function run() fails budget.LimitError,canonical.InvalidIR,
     owners.InvalidOwnership,continuation.InvalidBinding,
     planVerify.InvalidPlan,roots.InvalidRoots,slots.InvalidSlots,
-    nativeRoots.Unsupported,nativeCleanup.Unsupported,
-    ssa.InvalidSSA,native.Unsupported,ProbeError {
+    ssa.InvalidSSA,ProbeError {
     let root be try budget.developmentRequest();
     let shared be try budget.metadataOwner(root);
     let mp be try budget.constructionPhase(shared);
@@ -243,8 +239,5 @@ else error continuation.InvalidBinding { output("binding:"+error.message); proce
 else error planVerify.InvalidPlan { output("plan:"+error.message); process.setExitCode(1); }
 else error roots.InvalidRoots { output("root:"+error.message); process.setExitCode(1); }
 else error slots.InvalidSlots { output("slots:"+error.message); process.setExitCode(1); }
-else error nativeRoots.Unsupported { output("nativeRoot:"+error.message); process.setExitCode(1); }
-else error nativeCleanup.Unsupported { output("cleanup:"+error.message); process.setExitCode(1); }
 else error ssa.InvalidSSA { output("ssa:"+error.message); process.setExitCode(1); }
-else error native.Unsupported { output("native:"+error.message); process.setExitCode(1); }
 else error ProbeError { output("probe:"+error.message); process.setExitCode(1); };
