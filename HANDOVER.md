@@ -5,6 +5,14 @@ Historical checkpoints are evidence, not instructions to restart old work.
 
 ## Resume here
 
+### 5 November 2026 — bounded Text CFG per-instruction roots VERIFIED on Linux
+
+- **Exact implementation revision:** [ca88c31](https://github.com/eristavi/eristavi-lang/commit/ca88c3120236cad790d3269efa0d308afebffde6), draft [PR #111](https://github.com/eristavi/eristavi-lang/pull/111), unchanged source/32-byte ABI/default compiler. The original candidate f3958d2 failed Python syntax from a malformed test insertion; commit fe60595 restored the original recursive test, and ca88c31 fixed Eristavi `try` propagation syntax in the new Text adapter. Failure evidence remains in Actions history, not a passing claim.
+- **Focused Text Linux Clang:** [#41985303525](https://github.com/eristavi/eristavi-lang/actions/runs/41985303525) **SUCCESS: 8 / 8 test methods, 0 failures** (124.807s). Native Unicode 17, exact Text views/NFC/bounds, malformed descriptor/import, recursive parent/root frames and checked typed FailureContext reference retain existing behavior; new test directly reads emitted native frame slots before a real GC safepoint and checks a dead concat input is cleared while a loop-carried snapshot and cross-block accent remain rooted.
+- **Broader exact-code Linux Clang smoke:** [#41985303605](https://github.com/eristavi/eristavi-lang/actions/runs/41985303605) **SUCCESS: 107 run / 104 passed / 0 failed / 3 intentional skips** (596.283s), including the new precise Text regression. These are incremental Linux gates, NOT four-platform completed-batch qualification.
+- **Scope/algorithm:** the independently reverified canonical `ssa.Plan` for the frozen opaque Text carrier (<=32 tracked Text SSA values) controls after-instruction root-word retirement and successor-edge pruning *after* simultaneous phi copies; only bounded multi-block non-recursive Text uses the plan. Existing single-block cases, local 32-frame recursion and profiles with >32 tracked Text values keep conservative roots. Native temporary Unicode view roots remain separately registered. No general identity, aggregates containing Text, checked opcode-46 managed failure, cross-function recursion or root-map publication in this change. No RSS/GC pause or whole-compiler speedup claim.
+- **Still OPEN:** full managed Text/List/identity and failure-context precision across all safe points and exits, native checked FailureContext/cleanup integration, >32-slot scaling, malformed/foreign/dead root and allocation-fault matrix, independent Stage-0/owned differential proof, physical resource data and final four-platform CI/qualification. Keep #74 OPEN, #111 DRAFT/unmerged; optimization #51 remains paused; excluded owned compiler self-build not run.
+
 ### 5 November 2026 — selected CFG List root retirement VERIFIED on Linux (bounded)
 
 - **Exact implementation revision:** [78828f4](https://github.com/eristavi/eristavi-lang/commit/78828f4bac0da9675331b05cb3170d320aca8983) on `compiler/u2-cleanup-foundation-20261102`, draft [PR #111](https://github.com/eristavi/eristavi-lang/pull/111). A preceding candidate [6b85eef](https://github.com/eristavi/eristavi-lang/commit/6b85eef3392395b7f8c9eff87e9e4cfe8056a47f) initially failed Python syntax because its generated test insertion was malformed; [1ead8b8](https://github.com/eristavi/eristavi-lang/commit/1ead8b8ada98587e2ac3fdc3fa3307dda12d768b) restored the full original test file with one isolated native regression. Smoke [#41981392040](https://github.com/eristavi/eristavi-lang/actions/runs/41981392040) then found a single Eristavi compiler semantic cause behind 19 test failures: `plan.values` was read from an optional `maybe identity ssa.Plan` in a combined Boolean guard. Commit 78828f4 fixed this by nesting explicit `if plan != none` presence proof without weakening optional-value semantics.
@@ -12,12 +20,6 @@ Historical checkpoints are evidence, not instructions to restart old work.
 - **Broader exact-implementation Linux smoke:** [#41983294307](https://github.com/eristavi/eristavi-lang/actions/runs/41983294307) **SUCCESS: 106 run / 103 passed / 0 failed / 3 intentional skips**, 599.047 seconds, with syntax check and current U2 regression. The subsequent documentation-only commits do not alter that tested implementation.
 - **What is verified:** for this closed bounded native List-i64 profile with <=32 selected List carrier values, per-instruction `ssa.liveAfter` clears dead managed List root words after their last nonterminal use, before later collections, while live loop-carried snapshots remain rooted. The same function's simultaneous SSA edge copies still occur before successor-specific cleanup, and the legacy single-block and >32-value conservative fallback remain unchanged. This is actual emitted machine-code behavior checked with collector-time root-word tests; **it is not universal managed-machine-root validation or measured RSS/collector-pause efficiency**.
 - **Still OPEN:** general Text/List/identity per-instruction publication, checked-failure/cleanup managed safepoints, root corruption and allocation-pressure matrix, removal of conservative >32 limit, source/Stage-0 differential evidence, memory/performance evidence and exact final four-platform qualification. U2 issue #74 stays OPEN, PR #111 DRAFT/unmerged, production syntax/ABI/toolchain unchanged; owned self-build not run.
-
-### 5 November 2026 — U2 CFG per-instruction List root retirement CANDIDATE (validation pending)
-
-- **Candidate only, NOT verified or accepted:** commits [6b85eef](https://github.com/eristavi/eristavi-lang/commit/6b85eef3392395b7f8c9eff87e9e4cfe8056a47f) and [1ead8b8](https://github.com/eristavi/eristavi-lang/commit/1ead8b8ada98587e2ac3fdc3fa3307dda12d768b) on draft PR #111 implement per-instruction after-use clearing for independently selected/reverified List-carrier SSA values in the <=32-value multi-block native profile. Edge simultaneous transfer behavior, single-block legacy cleanup and >32-carrier conservative fallback remain unchanged. No production compiler/ABI changes.
-- Added adversarial after-invoke publication assertions (valid roots, dead-published owner refusal, missing root refusal) and an emitted-loop native collector-time root-word check. These are **new test assertions, not yet passing evidence**. An initial test-file substitution error caused CI #41981347445 to fail Python compilation; repaired from the exact unchanged parent test source in commit 1ead8b8. New [CI #41981385918](https://github.com/eristavi/eristavi-lang/actions/runs/41981385918) and [#41981392040](https://github.com/eristavi/eristavi-lang/actions/runs/41981392040) were triggered; neither is claimed successful until complete.
-- **Important risk:** this is selected List-i64 per-instruction root retirement only; no general Text/identity/checked-failure GC publication, no true physical retained-memory/collector-pause/RSS proof, no 32-slot limit removal and no final four-platform qualification. If focused tests fail, repair or revert on the draft before continuing. Keep #74 OPEN, #111 DRAFT; no U2 merge.
 
 ### 4 November 2026 — two-stage canonical checked File cleanup + recursive failure roots VERIFIED (bounded)
 
@@ -196,9 +198,9 @@ on main does not merge U2 implementation. Fetch current refs before continuing.
 | Checked continuations | Canonical opcode-46 invokes and version-two predecessor SSA carries; bounded native checked File.close now admits 1–8 lexical File owners with verified surviving prefix, exact i64 and typed failure successor ValueIds, pinned GC-root, consumed SSA slot poison; general whole-Function checked CFG and all managed failures remain OPEN. |
 | Cleanup and owners | Independently verified reverse-cleanup plans, bounded canonical close construction, lexical owner signatures, success-only acquisition and consumption on both close outcomes. Complete resource adapters remain open. |
 | Failure contexts | Typed Unicode17 primary/ordered-secondary reference models, class-5 saved-failure publisher probes, and **real native File close failure composition** from verified private cleanup plans. A bounded one-owner checked-edge admission now verifies canonical metadata before emitting the existing native adapter. Whole canonical opcode-46 native failure dispatch, all SSA/handler exits and complete cleanup integration remain open. |
-| Liveness | Independently recomputed CFG/SSA plan and publication obligations; the native List-i64 profile now applies verified successor live-in facts to retire dead List roots after edge transfers for <=32 tracked List values. Per-instruction/all-managed-root coverage remains open. |
+| Liveness | Independently recomputed CFG/SSA plan and publication obligations; bounded native List-i64 and Text CFG profiles now retire selected roots after individual instructions and successor edges for <=32 tracked carrier values. General identity/failure/cleanup roots, >32-slot scaling and all-managed-type verification remain OPEN. |
 | Managed types | Owner-scoped Text/List/identity descriptors, independent corruption rejection and Unicode17 copy/view contracts; expanded Stage-0/C/owned parity oracle with predeclared accent/flag/ZWJ/empty/ASCII/copy values. This is not general canonical managed execution. |
-| Native Text/Unicode17 | Twelve exact runtime imports support scalar creation, immutable concat/copy/equality, byte/scalar/grapheme counts/indexing, explicit NFC and collection. Bounded CFG and 32-frame local self-recursion retain managed roots. A separate native verified-plan File cleanup adapter composes real saved failures; no arbitrary opcode-46 Text checked failure, general recursion, precise root retirement or full Text integration. |
+| Native Text/Unicode17 | Twelve exact runtime imports support scalar creation, immutable concat/copy/equality, byte/scalar/grapheme counts/indexing, explicit NFC and collection. Bounded non-recursive multi-block CFG now retires selected Text roots per instruction/edge, with focused native GC evidence; 32-frame local self-recursion retains conservative managed roots. No arbitrary opcode-46 Text checked failure, general recursion or full Text integration. |
 | Native List-i64 | Eristavi-written optional x86-64 adapter for empty/copy/append/replace/count/get/collection, branches/joins/backedges/cyclic transfers; verified successor-edge root retirement now focused-tested for <=32 selected List values. |
 | Native boundaries | Managed-registry entry validation, Int/Bool/List runtime descriptor checks, List bounds source name/line/column, independent fixture frame-layout checks, GC/snapshot/reclamation and fault probes. |
 
@@ -207,18 +209,23 @@ The native List profile is capped at **64 blocks, 512 edges, 128 SSA values and
 structural carrier interpreted only by that legal profile. It is not a general
 managed-type encoding or frontend integration.
 
-Single-block roots use last-use clearing. In the closed multi-block List-i64
-profile, up to 32 selected List-carrier SSA values now receive independently
-verified successor live-in-based dead-root clears **after** simultaneous edge
-copies and before the next allocation. Other managed value families are not
-classified by this adapter. More than 32 selected List values retain bounded
-conservative all-block retention; other boxed values and deaths inside blocks
-also remain conservatively rooted. This is not general exact machine root
+The closed bounded native List-i64 and Text multi-block CFG adapters use
+independently reverified canonical SSA liveness to clear selected carrier
+root words after their last nonterminal instruction use and on the
+appropriate successor after simultaneous edge copies. Both profiles
+conservatively retain all selected values when more than 32 are tracked.
+The Text profile also keeps the established single-block and local
+self-recursion cases conservative; the List single-block path retains its
+original last-use logic. Unselected boxed values remain conservatively
+rooted. This is NOT general identity/checked-failure machine-root
 publication/release. Managed-local promotion, arbitrary runtime/descriptor
 compatibility and physical retention bounds are still outstanding.
 
 ## Validation and evidence
 
+| `ca88c3120236cad790d3269efa0d308afebffde6` — [Text focus #41985303525](https://github.com/eristavi/eristavi-lang/actions/runs/41985303525) | **SUCCESS:** 8/8 focused methods (124.807s), including native collector-time precise Text CFG root probe, recursion and Unicode17 faults. |
+| Same implementation — [Linux smoke #41985303605](https://github.com/eristavi/eristavi-lang/actions/runs/41985303605) | **SUCCESS:** 107 run / **104 passed / 0 failed / 3 intentional skips** (596.283s); exact current Text root code, no four-platform matrix. |
+| `78828f4bac0da9675331b05cb3170d320aca8983` — [List focus #41983294418](https://github.com/eristavi/eristavi-lang/actions/runs/41983294418) / [smoke #41983294307](https://github.com/eristavi/eristavi-lang/actions/runs/41983294307) | **SUCCESS:** 8/8 focused and 106 run / 103 passed / 0 failed / 3 skips. Earlier bounded List roots. |
 | Revision / run | Verified result |
 | --- | --- |
 | `87c244abc912d13f54b2730a69991ded050c36d1` — [Linux smoke #41886934726](https://github.com/eristavi/eristavi-lang/actions/runs/41886934726) | **SUCCESS:** 105 run / 102 passed / 0 failed / 3 intentional skips, 579.788s, checked two-stage native cleanup and recursive primary/secondary failure+GC; full four-platform matrix skipped. |
@@ -273,11 +280,12 @@ evidence only.
    roots), explicit collection at the destination, and actual retained-owner,
    collector/traffic/RSS evidence; avoid interpreting assembly pattern checks
    as full physical proof. Measure compile/emit overhead on matched inputs.
-2. Move from bounded successor-only List root retirement to exact per-instruction
-   managed-value publication/release on verified canonical CFG, preserving
-   loop/recursion, checked-failure, terminal fault and cleanup boundaries.
-   Resolve the current 32-tracked-List-value profile limit deliberately;
-   keep conservative fallback until new proof is qualified.
+2. Expand the now **verified bounded per-instruction List-i64/Text CFG
+   root retirement** to full canonical managed Text/List/identity safe-point
+   publication/release, including identity cycles, recursion, checked
+   failure, terminal fault and cleanup boundaries. Resolve the per-profile
+   32-tracked-carrier-value limit deliberately; retain conservative
+   fallback until the scalable proof is independently qualified.
 3. Complete general canonical managed representation and eligible-local
    promotion; the bounded Text/Unicode17 adapter now has view indexes, NFC,
    conservative CFG-loop roots and an exact local self-recursion profile with
