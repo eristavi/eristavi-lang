@@ -184,3 +184,33 @@ This advances **machine-neutral checked SSA admission only**.
 No actual combined class-1/class-5 x86-64 root mapping or checked
 native branch/value transfer is claimed, no generic managed identity
 codegen exists, and U2 remains OPEN/DRAFT.
+
+## 5 November 2026 — native identity SSA checked continuation (focused verified)
+
+The opt-in `u2_checked_identity_edge_x86_64.eri` generates one
+target-specific identity-handle continuation mover from the **same canonical**
+opcode-46 Function tables after the separate `verifyManagedIdentity` proof.
+It is not another IR and does not change source semantics. The verified
+normal/failure SSA ValueIds and their 8-byte frame offsets are the only
+addresses emitted by the adapter. It requires an already registered live
+class-1 root word matching the predecessor identity handle and a bound
+class-5 checked failure word. A normal outcome requires the failure slot
+empty; a failure outcome requires the failure root nonempty. Both outcomes
+clear the dead predecessor and mutually exclusive destination and retain
+the live class-1 root across the next collection. An unsupported status or
+unrooted identity faults rather than continuing.
+
+[Focused Linux Clang CI #42083946201](https://github.com/eristavi/eristavi-lang/actions/runs/42083946201)
+passed 10/10 methods, including the two new native GC and wrong-descriptor
+probes against exact implementation
+[57391a4](https://github.com/eristavi/eristavi-lang/commit/57391a4ab7b72862975f38ef1238449521e0f9a2).
+The new test's success/failure frame-offset oracle was fixed after the
+candidate failures; no erroneous candidate is claimed verified.
+
+**What this does not prove:** automatic root registration and checked File
+execution before this edge fragment; full canonical Function instruction
+lowering or handler routing; general managed Text/List/identity, arbitrary
+recursion and cleanup, source-level parity, or physical memory/pause limits.
+U2 acceptance and final four-platform qualification remain OPEN.
+
+Broader exact-code Linux Clang smoke [#42083946227](https://github.com/eristavi/eristavi-lang/actions/runs/42083946227) **PASSED 117 tests executed / 114 passed / zero failures / three intentional skips** (698.767s), on the same 57391a4 implementation revision. The four-platform final U2 matrix remains deliberately unrun.
