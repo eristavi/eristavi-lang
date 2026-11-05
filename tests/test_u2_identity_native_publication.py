@@ -108,7 +108,7 @@ class U2IdentityNativePublicationTests(unittest.TestCase):
         current=symbol("u2_identity_current")
         next_value=symbol("u2_identity_next")
         root_offsets={}
-        for name,index,offset in re.findall(
+        for index,offset in re.findall(
             r"^\.set erist_u2_identity_slot_73_(\d+), (\d+)$",
             asm,re.M):
             root_offsets[int(name)]=int(index)
