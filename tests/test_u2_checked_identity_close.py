@@ -281,6 +281,30 @@ class U2CheckedIdentityCloseTests(unittest.TestCase):
                         "u2-identity-close-%d-%d"%(pending,int(failed)),
                         identities.identity_file_descriptors()+code,
                         runtime=runtime,types=False)
+                    if result.returncode != 0:
+                        # Temporary diagnostics distinguish faults in the
+                        # composed call from failures in its caller's GC and
+                        # final teardown. No shortcut counts as a passing test.
+                        call="    call erist_u2_identity_close_95\n"
+                        self.assertEqual(code.count(call),1)
+                        after=code.replace(call,call+
+                            "    xorl %edi,%edi\n    jmp erist_rt_exit\n",1)
+                        call_result=self.run_probe(
+                            "u2-id-close-return-%d-%d"%(pending,int(failed)),
+                            identities.identity_file_descriptors()+after,
+                            runtime=runtime,types=False)
+                        mark="    call erist_rt_graph_live_objects\n"
+                        self.assertEqual(code.count(mark),3)
+                        gc_code=code.replace(mark,mark+
+                            "    xorl %edi,%edi\n    jmp erist_rt_exit\n",1)
+                        gc_result=self.run_probe(
+                            "u2-id-close-gc-%d-%d"%(pending,int(failed)),
+                            identities.identity_file_descriptors()+gc_code,
+                            runtime=runtime,types=False)
+                        self.fail("native checked identity close %r; "
+                            "post-wrapper checkpoint=%r post-first-GC=%r"%
+                            (result.returncode,call_result.returncode,
+                             gc_result.returncode))
                     self.assertEqual(
                         (result.returncode,result.stdout,result.stderr),
                         (0,b"",b""))
