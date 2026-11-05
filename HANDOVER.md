@@ -5,6 +5,12 @@ Historical checkpoints are evidence, not instructions to restart old work.
 
 ## Resume here
 
+### 5 November 2026 — U2 CFG per-instruction List root retirement CANDIDATE (validation pending)
+
+- **Candidate only, NOT verified or accepted:** commits [6b85eef](https://github.com/eristavi/eristavi-lang/commit/6b85eef3392395b7f8c9eff87e9e4cfe8056a47f) and [1ead8b8](https://github.com/eristavi/eristavi-lang/commit/1ead8b8ada98587e2ac3fdc3fa3307dda12d768b) on draft PR #111 implement per-instruction after-use clearing for independently selected/reverified List-carrier SSA values in the <=32-value multi-block native profile. Edge simultaneous transfer behavior, single-block legacy cleanup and >32-carrier conservative fallback remain unchanged. No production compiler/ABI changes.
+- Added adversarial after-invoke publication assertions (valid roots, dead-published owner refusal, missing root refusal) and an emitted-loop native collector-time root-word check. These are **new test assertions, not yet passing evidence**. An initial test-file substitution error caused CI #41981347445 to fail Python compilation; repaired from the exact unchanged parent test source in commit 1ead8b8. New [CI #41981385918](https://github.com/eristavi/eristavi-lang/actions/runs/41981385918) and [#41981392040](https://github.com/eristavi/eristavi-lang/actions/runs/41981392040) were triggered; neither is claimed successful until complete.
+- **Important risk:** this is selected List-i64 per-instruction root retirement only; no general Text/identity/checked-failure GC publication, no true physical retained-memory/collector-pause/RSS proof, no 32-slot limit removal and no final four-platform qualification. If focused tests fail, repair or revert on the draft before continuing. Keep #74 OPEN, #111 DRAFT; no U2 merge.
+
 ### 4 November 2026 — two-stage canonical checked File cleanup + recursive failure roots VERIFIED (bounded)
 
 - **Latest implementation source revision**: `87c244abc912d13f54b2730a69991ded050c36d1` on `compiler/u2-cleanup-foundation-20261102`, draft/unmerged [PR #111](https://github.com/eristavi/eristavi-lang/pull/111), U2 [issue #74](https://github.com/eristavi/eristavi-lang/issues/74) OPEN. Subsequent docs-only commits do not qualify new compiler code or change the public ABI.
