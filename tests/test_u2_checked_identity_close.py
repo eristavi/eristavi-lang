@@ -43,7 +43,9 @@ class U2CheckedIdentityCloseTests(unittest.TestCase):
             "import compiler.u2_checked_identity_close_x86_64 as nativeClose;",1)
         marker='    output("u2-identity-checked-ssa:ok");'
         self.assertEqual(source.count(marker),1)
-        descriptor=("identityType" if negative else
+        # The negative case must use a non-identity descriptor. Reusing the
+        # accepted identity TypeId would never exercise the rejection path.
+        descriptor=("managed.text(managedRegistry)" if negative else
                     "identityType")
         source=source.replace(marker,
             "    try nativeClose.emit(fn,graph,profile,registry,phase,map,"
