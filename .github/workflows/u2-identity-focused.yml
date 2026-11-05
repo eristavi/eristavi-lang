@@ -10,6 +10,7 @@ on:
       - src/compiler/u2_identity_root_x86_64.eri
       - tests/test_u2_identity_native_publication.py
       - src/compiler/u2_checked_ssa_bind.eri
+      - src/compiler/u2_checked_identity_ssa_bind.eri
       - tests/fixtures/u2_checked_identity_ssa.eri
       - tests/test_u2_checked_identity_ssa.py
       - tests/test_u2_identity_gc_cleanup.py
