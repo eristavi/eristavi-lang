@@ -170,16 +170,16 @@ _start:
                 # Retain an independent exit code for EACH native assertion.
                 # A generic 99 from the test runtime otherwise hides which
                 # root/checked outcome was lost during collection.
-                checks=re.findall(r"\\b(?:jne|je|jb|ja|jbe|jae) \\.Lgraph_test_fail",body)
+                checks=re.findall(r"\b(?:jne|je|jb|ja|jbe|jae) \.Lgraph_test_fail",body)
                 targets=[]
                 for index,check in enumerate(checks):
                     label=".Lu2_checked_assert_"+str(index)
                     body=body.replace(check,check.replace(".Lgraph_test_fail",label),1)
                     targets.append((label,30+index))
                 for label,exit_code in targets:
-                    body+=("\\n.text\\n"+label+":\\n"
-                           "    movl $"+str(exit_code)+",%edi\\n"
-                           "    jmp erist_rt_exit\\n")
+                    body+=("\n.text\n"+label+":\n"
+                           "    movl $"+str(exit_code)+",%edi\n"
+                           "    jmp erist_rt_exit\n")
                 result=self.run_probe("checked-identity-edge-"+str(int(failed)),
                      asm+body+graph.FINISH)
                 self.assertEqual((result.returncode,result.stdout,result.stderr),
