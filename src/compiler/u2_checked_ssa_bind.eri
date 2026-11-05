@@ -22,6 +22,9 @@ public type Report {
     failureValue Int; failureCarry Int;
     rootIndex Int; frameWords Int;
     ownerCount Int; survivingOwners Int;
+    // Optional machine-neutral managed identity carried through both edges.
+    // Zero means the original File-only checked profile.
+    identitySource Int; identityNormal Int; identityFailure Int;
 }
 public error InvalidSSA { message Text; }
 function require(ok Bool,message Text) fails InvalidSSA {
@@ -40,11 +43,12 @@ function read(w identity words.Words,p identity budget.Phase,index Int)
 // on the failure edge; a pre-existing pending return can still be carried
 // for handler context but MUST NOT be committed as successful completion.
 // Full canonical SSA/dominance and all-block scoped owner checks run first.
-public function verify(routine identity build.Function,
+function verifyCore(routine identity build.Function,
     graph identity aggregate.Registry,profile identity owners.Profile,
     contracts identity fallible.Registry,phase identity budget.Phase,
     map identity roots.Map,pair continuation.Pair,instruction build.InstId,
-    plan identity cleanup.Plan,active,survive Int,exit meta.LocId)
+    plan identity cleanup.Plan,active,survive Int,exit meta.LocId,
+    identityCarrier Int)
     returns Report
     fails budget.LimitError,canonical.InvalidIR,owners.InvalidOwnership,
         roots.InvalidRoots,continuation.InvalidBinding,
@@ -55,6 +59,11 @@ public function verify(routine identity build.Function,
     let prepared be try planVerify.verify(routine.metadata,phase,plan,
         active,survive,exit,false);
     let valueCount be routine.values.length/4;
+    let extra be 0;
+    if identityCarrier != 0 { extra=1; }
+    try require(identityCarrier == 0 or
+        (identityCarrier >= 7 and identityCarrier <= 6+graph.records.length/4),
+        "invalid optional structural identity carrier");
     try require(routine.state == 1 and pair.version == 2 and
         instruction.owner == routine.key and instruction.index >= 1 and
         instruction.index <= routine.instructions.length/10 and
@@ -67,8 +76,9 @@ public function verify(routine identity build.Function,
     let sourceBase be (pair.source.index-1)*5;
     let sourceFirst be try read(routine.blocks,phase,sourceBase);
     let sourceCount be try read(routine.blocks,phase,sourceBase+1);
-    let sourceScalar be sourceFirst+active.count;
-    try require(sourceCount == active.count+1 and sourceFirst >= 1 and
+    let sourceIdentity be sourceFirst+active.count;
+    let sourceScalar be sourceIdentity+extra;
+    try require(sourceCount == active.count+1+extra and sourceFirst >= 1 and
         sourceScalar <= valueCount and
         (try read(routine.blocks,phase,sourceBase+4)) == instruction.index and
         (try read(routine.values,phase,(sourceScalar-1)*4)) == meta.i64().index and
@@ -76,6 +86,14 @@ public function verify(routine identity build.Function,
         (try read(routine.values,phase,(sourceScalar-1)*4+2)) == pair.source.index and
         (try read(routine.values,phase,(sourceScalar-1)*4+3)) == active.count,
         "source must have live File parameters and last predecessor i64");
+    if extra == 1 {
+        try require(sourceIdentity >= 1 and
+            (try read(routine.values,phase,(sourceIdentity-1)*4)) == identityCarrier and
+            (try read(routine.values,phase,(sourceIdentity-1)*4+1)) == 0 and
+            (try read(routine.values,phase,(sourceIdentity-1)*4+2)) == pair.source.index and
+            (try read(routine.values,phase,(sourceIdentity-1)*4+3)) == active.count,
+            "source identity must be exact canonical SSA block parameter");
+    }
     let ownerBase be (pair.source.index-1)*2;
     let ownerFirst be try read(profile.blocks,phase,ownerBase);
     try require((try read(profile.blocks,phase,ownerBase+1)) == active.count and
@@ -121,25 +139,42 @@ public function verify(routine identity build.Function,
     let failedFirst be try read(routine.edges,phase,failedRow+1);
     let normalStart be try read(routine.blocks,phase,(pair.normal.index-1)*5);
     let failureValue be try read(routine.blocks,phase,(pair.failure.index-1)*5);
-    let normalValue be normalStart+survive;
-    let failureCarry be failureValue+1+survive;
+    let normalIdentity be normalStart+survive;
+    let failureIdentity be failureValue+1+survive;
+    let normalValue be normalIdentity+extra;
+    let failureCarry be failureIdentity+extra;
     try require((try read(routine.edges,phase,normalRow)) == pair.normal.index and
         (try read(routine.edges,phase,failedRow)) == pair.failure.index and
-        (try read(routine.edges,phase,normalRow+2)) == survive+1 and
-        (try read(routine.edges,phase,failedRow+2)) == survive+2 and
-        normalFirst >= 0 and normalFirst+survive < routine.arguments.length and
-        failedFirst >= 0 and failedFirst+survive+1 < routine.arguments.length and
-        (try read(routine.blocks,phase,(pair.normal.index-1)*5+1)) == survive+1 and
-        (try read(routine.blocks,phase,(pair.failure.index-1)*5+1)) == survive+2 and
+        (try read(routine.edges,phase,normalRow+2)) == survive+1+extra and
+        (try read(routine.edges,phase,failedRow+2)) == survive+2+extra and
+        normalFirst >= 0 and normalFirst+survive+extra < routine.arguments.length and
+        failedFirst >= 0 and failedFirst+survive+1+extra < routine.arguments.length and
+        (try read(routine.blocks,phase,(pair.normal.index-1)*5+1)) == survive+1+extra and
+        (try read(routine.blocks,phase,(pair.failure.index-1)*5+1)) == survive+2+extra and
         normalStart >= 1 and normalValue <= valueCount and
         failureValue >= 1 and failureCarry <= valueCount and
-        (try read(routine.arguments,phase,normalFirst+survive)) == sourceScalar and
+        (try read(routine.arguments,phase,normalFirst+survive+extra)) == sourceScalar and
         (try read(routine.arguments,phase,failedFirst)) == -1 and
-        (try read(routine.arguments,phase,failedFirst+survive+1)) == sourceScalar and
+        (try read(routine.arguments,phase,failedFirst+survive+1+extra)) == sourceScalar and
         (try read(routine.values,phase,(normalValue-1)*4)) == meta.i64().index and
         (try read(routine.values,phase,(failureCarry-1)*4)) == meta.i64().index and
         (try read(routine.values,phase,(failureValue-1)*4)) > 6,
         "canonical checked SSA successor arity, marker or pending i64 mismatch");
+    if extra == 1 {
+        try require((try read(routine.arguments,phase,normalFirst+survive)) ==
+                sourceIdentity and
+            (try read(routine.arguments,phase,failedFirst+survive+1)) ==
+                sourceIdentity and
+            (try read(routine.values,phase,(normalIdentity-1)*4)) ==
+                identityCarrier and
+            (try read(routine.values,phase,(failureIdentity-1)*4)) ==
+                identityCarrier and
+            (try read(routine.values,phase,(normalIdentity-1)*4+1)) == 0 and
+            (try read(routine.values,phase,(failureIdentity-1)*4+1)) == 0 and
+            (try read(routine.values,phase,(normalIdentity-1)*4+2)) == pair.normal.index and
+            (try read(routine.values,phase,(failureIdentity-1)*4+2)) == pair.failure.index,
+            "identity value must carry to both canonical checked successors");
+    }
     item=0;
     while item < survive {
         try budget.work(phase,1);
@@ -179,5 +214,42 @@ public function verify(routine identity build.Function,
         failureValue=failureValue; failureCarry=failureCarry;
         rootIndex=rootIndex; frameWords=valueCount;
         ownerCount=active.count; survivingOwners=survive;
+        identitySource=sourceIdentity*extra;
+        identityNormal=normalIdentity*extra;
+        identityFailure=failureIdentity*extra;
     };
+}
+
+// Preserve the old canonical File-only verifier/API exactly. Any extra
+// managed payload needs the explicit identity-specific entry below.
+public function verify(routine identity build.Function,
+    graph identity aggregate.Registry,profile identity owners.Profile,
+    contracts identity fallible.Registry,phase identity budget.Phase,
+    map identity roots.Map,pair continuation.Pair,instruction build.InstId,
+    plan identity cleanup.Plan,active,survive Int,exit meta.LocId)
+    returns Report
+    fails budget.LimitError,canonical.InvalidIR,owners.InvalidOwnership,
+        roots.InvalidRoots,continuation.InvalidBinding,
+        planVerify.InvalidPlan,InvalidSSA {
+    return try verifyCore(routine,graph,profile,contracts,phase,map,pair,
+        instruction,plan,active,survive,exit,0);
+}
+
+// The caller must ALSO verify the closed identity descriptor and native root
+// class before emitting machine instructions. A structural TypeId alone does
+// not make ordinary aggregates managed identities.
+public function verifyIdentity(routine identity build.Function,
+    graph identity aggregate.Registry,profile identity owners.Profile,
+    contracts identity fallible.Registry,phase identity budget.Phase,
+    map identity roots.Map,pair continuation.Pair,instruction build.InstId,
+    plan identity cleanup.Plan,active,survive Int,exit meta.LocId,
+    identityCarrier aggregate.TypeId)
+    returns Report
+    fails budget.LimitError,canonical.InvalidIR,owners.InvalidOwnership,
+        roots.InvalidRoots,continuation.InvalidBinding,
+        planVerify.InvalidPlan,InvalidSSA {
+    try require(identityCarrier.owner == graph.key and identityCarrier.index >= 7,
+        "foreign or primitive identity carrier");
+    return try verifyCore(routine,graph,profile,contracts,phase,map,pair,
+        instruction,plan,active,survive,exit,identityCarrier.index);
 }
