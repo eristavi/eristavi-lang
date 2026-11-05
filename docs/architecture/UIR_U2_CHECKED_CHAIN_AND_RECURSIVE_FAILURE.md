@@ -147,3 +147,40 @@ qualification are still OPEN.
 Keep PR #111 **draft/unmerged**, issue #74 **open**, default production
 compiler/32-byte public ABI unchanged, U3/U4 migration separate, optimization
 #51 paused. Do not run the excluded owned compiler self-build as a shortcut.
+
+## 5 November — checked identity SSA carrier (machine-neutral development)
+
+The canonical checked File-close helper now has a separate opt-in
+`u2_checked_identity_ssa_bind.eri` verifier that checks one actual
+structural carrier ValueId alongside the File owner and pending i64
+across both checked continuations. Its normal successor shape is
+`(surviving File owners, identity carrier, pending i64)`; the failure
+shape is `(typed structural failure, surviving File owners, identity
+carrier, pending i64)`. The owner is still consumed exactly once;
+the identity is shared, not consumed, and its exact SSA predecessor
+ValueId must match on both paths. All predecessor/root metadata is
+independently rechecked against the same canonical Function revision.
+
+`verifyManagedIdentity` requires the separate frozen managed identity
+descriptor (kind 3; shared-handle policy 2) and a recomputed canonical
+SSA root-liveness plan before it accepts this carrier. Plain U1b
+aggregate construction in the regression is a *type/metadata fixture*,
+not an identity-allocation opcode and not native runtime semantics.
+The production File-only verifier and native checked File stub remain
+byte-identically unchanged.
+
+Focused development proof at
+[CI #42078309510](https://github.com/eristavi/eristavi-lang/actions/runs/42078309510)
+passed 7/7 Linux Clang tests with no failures at
+[b7aaac4](https://github.com/eristavi/eristavi-lang/commit/b7aaac43bfb7538c22e84fd91d45934a43f3cfb6).
+The follow-up descriptor-corruption test at a6fa74e passed with all
+eight focused methods in [CI #42078580294](https://github.com/eristavi/eristavi-lang/actions/runs/42078580294).
+The first broader Linux smoke at that revision was blocked by git diff
+--check (extra blank line in the new test file). That formatting issue
+is fixed in the following source-neutral patch; do not treat the
+blocked run as a completed smoke or four-platform qualification.
+
+This advances **machine-neutral checked SSA admission only**.
+No actual combined class-1/class-5 x86-64 root mapping or checked
+native branch/value transfer is claimed, no generic managed identity
+codegen exists, and U2 remains OPEN/DRAFT.

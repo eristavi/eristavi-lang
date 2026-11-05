@@ -49,4 +49,3 @@ class U2CheckedIdentitySSATests(unittest.TestCase):
             self.assertTrue(run.stdout.startswith('identity:'),run.stdout)
             self.assertNotIn('u2-identity-checked-ssa:ok',run.stdout)
             self.assertEqual(run.stderr,'')
-
