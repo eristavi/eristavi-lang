@@ -21,7 +21,26 @@ temporary source root and places further GAS-comment phase markers around
 SSA verification, function-table snapshots, publication construction,
 independent publication verification and initial assembly emission.
 Both owned and C generators use that identical isolated instrumented source;
-the production `src/compiler` is unmodified. This is still diagnostic
+the production `src/compiler` is unmodified. Second hosted test-only diagnostic
+[#42260926729](https://github.com/eristavi/eristavi-lang/actions/runs/42260926729)
+confirmed **17 of 18 tests passed** and the generator again stopped after
+`U2_NATIVE_TRACE:publication-build` but before
+`U2_NATIVE_TRACE:publication-verify`. SSA verification, metadata, exact
+canonical snapshot and checked admission completed. This establishes
+the per-instruction root-publication *producer* as the first observed hang.
+
+The next development revision replaces repeated tail rescans in the emitter
+with bounded reverse suffix-use and forward definition sweeps, using the
+original frozen linked instruction order and original global SSA IDs.
+Every resulting root bit remains subject to the **unchanged independent
+`ssa.verifyPublications` oracle**, including dead instructions and
+foreign/stale/missing-root refusals. No new trusted flag, output ABI or
+resource semantics. The bounded implementation is **UNQUALIFIED until
+the owned generator, focused negatives, and independent bit comparison
+actually pass**. If the unchanged verifier becomes the next time bottleneck,
+diagnose it separately rather than weakening its checks.
+
+This is still diagnostic
 evidence only; **do not mark the latest code green** until the watchdog and
 exact-source validation pass. The previous unqualified implementation
 stop checkpoint and detailed recovery instructions follow.

@@ -623,10 +623,20 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
     }
     try require(admissible,
         "unsupported whole-Function managed producer, opcode or budget");
-    // Independently prove EACH publication obligation, including dead blocks.
+    // Build the publication product in two bounded sweeps per canonical block,
+    // rather than rescanning its linked instruction tail for EVERY SSA/value
+    // pair. The independent whole-product verifier below is unchanged: it
+    // still reruns original liveEntry/liveBefore/liveAfter for every row.
+    // This is only an optimized producer, never an unverified root authority.
     let entryBits be [];
     let beforeBits be [];
     let afterBits be [];
+    let rowCount be (instructions.count/10)*selected.count;
+    let rowIndex be 0;
+    while rowIndex < rowCount {
+        beforeBits.add(0); afterBits.add(0);
+        rowIndex=rowIndex+1;
+    }
     let block be 1;
     while block <= blocks.count/5 {
         let j be 0;
@@ -637,23 +647,72 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
             if try ssa.liveEntry(plan,routine,phase,blockId,tyId) { bit=1; }
             entryBits.add(bit); j=j+1;
         }
-        block=block+1;
-    }
-    let inst be 1;
-    while inst <= instructions.count/10 {
-        let j be 0;
+        // Preserve the original linked instruction order; global IDs may be
+        // interleaved across blocks. The canonical verifier already checked
+        // all reachable AND unreachable chains; retain an additional cap.
+        let order be [];
+        let cursor be blocks[(block-1)*5+2];
+        while cursor != 0 {
+            try budget.work(phase,1);
+            try require(order.count < instructions.count/10,
+                "cyclic canonical instruction list in root publication");
+            order.add(cursor);
+            cursor=instructions[(cursor-1)*10+9];
+        }
+        let terminator be blocks[(block-1)*5+4];
+        order.add(terminator);
+        j=0;
         while j < selected.count {
-            let tyId be build.ValueId { owner=routine.key; index=selected[j]; };
-            let at be build.InstId { owner=routine.key; index=inst; };
-            let pre be try ssa.liveBefore(plan,routine,phase,at,tyId);
-            let post be try ssa.liveAfter(plan,routine,phase,at,tyId);
-            if pre { beforeBits.add(1); }
-            else { beforeBits.add(0); }
-            if post { afterBits.add(1); }
-            else { afterBits.add(0); }
+            let valueId be selected[j];
+            let usedLater be 0;
+            let position be order.count-1;
+            // The output buffers also hold the temporary inclusive/exclusive
+            // suffix-use bits; no extra per-value matrix is retained.
+            while position >= 0 {
+                try budget.work(phase,1);
+                let id be order[position];
+                let instructionRow be (id-1)*10;
+                let outputRow be (id-1)*selected.count+j;
+                afterBits[outputRow]=usedLater;
+                let first be instructions[instructionRow+2];
+                let operandCount be instructions[instructionRow+3];
+                let operand be 0;
+                while operand < operandCount {
+                    try budget.work(phase,1);
+                    if operands[first+operand] == valueId { usedLater=1; }
+                    operand=operand+1;
+                }
+                beforeBits[outputRow]=usedLater;
+                position=position-1;
+            }
+            let definition be (valueId-1)*4;
+            let kind be values[definition+1];
+            let definedAt be values[definition+2];
+            let definitionBlock be try words.get(plan.values,phase,j*4+3);
+            let defined be kind == 0 or definitionBlock != block;
+            let liveOut be (try words.get(plan.outputs,phase,
+                (block-1)*selected.count+j)) == 1;
+            position=0;
+            while position < order.count {
+                try budget.work(phase,1);
+                let id be order[position];
+                let outputRow be (id-1)*selected.count+j;
+                let before be defined and (beforeBits[outputRow] == 1 or liveOut);
+                if before { beforeBits[outputRow]=1; }
+                else { beforeBits[outputRow]=0; }
+                // A nonterminal SSA result becomes defined AFTER its
+                // producer; terminal instructions cannot define result words.
+                if position+1 < order.count and kind == 1 and definedAt == id {
+                    defined=true;
+                }
+                let after be defined and (afterBits[outputRow] == 1 or liveOut);
+                if after { afterBits[outputRow]=1; }
+                else { afterBits[outputRow]=0; }
+                position=position+1;
+            }
             j=j+1;
         }
-        inst=inst+1;
+        block=block+1;
     }
     // Verify the entire immutable publication product at one boundary instead
     // of reconstructing the full CFG/liveness twice per instruction. Every
