@@ -51,6 +51,10 @@ function run() fails budget.LimitError,verify.InvalidIR,lower.Unsupported,ProbeE
     let result1 be try build.parameter(fn,exit,1);
     try ab.returnValues(fn,graph,exit,[result0,result1],loc);
     let dead be try ab.block(fn,graph,[i64]);
+    let deadEntry be try build.block(fn,[]);
+    let deadTarget be try build.block(fn,[meta.i64()]);
+    try build.jump(fn,deadEntry,deadTarget,[input],loc);
+    try ab.returnValues(fn,graph,deadTarget,[eleven,eleven],loc);
     let deadValue be try build.parameter(fn,dead,0);
     let never be try build.wrapAdd(fn,dead,deadValue,eleven,loc);
     try ab.returnValues(fn,graph,dead,[never,eleven],loc);
