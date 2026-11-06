@@ -121,6 +121,100 @@ class U2FunctionImportIntegrationTests(unittest.TestCase):
                     "lists.name(3),2,0,1);")
         return source
 
+    def mixed_source(self,wrong_list_descriptor=False):
+        # Start from the SAME verified Unicode17 canonical Function fixture.
+        # Add only a List<i64> import and SSA-carried List value. There is no
+        # second IR builder or duplicated Text/List runtime implementation.
+        source=self.text_source()
+        def change(old,new):
+            nonlocal source
+            self.assertEqual(source.count(old),1,old)
+            source=source.replace(old,new,1)
+        change("import compiler.u2_text_native as textNative;",
+               "import compiler.u2_text_native as textNative;\n"
+               "import compiler.u2_list_i64 as listNative;")
+        change("    try aggregate.freeze(graph);",
+               "    let listCarrier be try aggregate.aggregate(graph,p,[intType]);\n"
+               "    let listEmptySig be try sig.signature(data,graph,p,[],[listCarrier]);\n"
+               "    let listEmpty be try meta.declaration(data,p,listEmptySig,"
+               "listNative.name(1),2,63,1);\n"
+               "    let listAppendSig be try sig.signature(data,graph,p,"
+               "[listCarrier,intType],[listCarrier]);\n"
+               "    let listAppend be try meta.declaration(data,p,listAppendSig,"
+               "listNative.name(3),2,63,1);\n"
+               "    let listCountSig be try sig.signature(data,graph,p,"
+               "[listCarrier],[intType]);\n"
+               "    let listCount be try meta.declaration(data,p,listCountSig,"
+               "listNative.name(5),2,63,1);\n"
+               "    try aggregate.freeze(graph);")
+        change("    let textType be managed.text(registry);",
+               "    let textType be managed.text(registry);\n"
+               "    let listType be try managed.listOfBase(registry,p,intType);")
+        for block in ("loopBlock","bodyBlock","doneBlock"):
+            change("let "+block+" be try ab.block(fn,graph,[carrier,carrier]);",
+                   "let "+block+" be try ab.block(fn,graph,"
+                   "[carrier,carrier,listCarrier]);")
+        change("    try ab.jump(fn,graph,entryBlock,loopBlock,[original,original],loc);",
+               "    let listCall be try ab.call(fn,graph,entryBlock,"
+               "listEmpty,[],loc);\n"
+               "    let emptyList be try build.result(fn,listCall,0);\n"
+               "    listCall=try ab.call(fn,graph,entryBlock,"
+               "listAppend,[emptyList,limit],loc);\n"
+               "    let retainedList be try build.result(fn,listCall,0);\n"
+               "    try ab.jump(fn,graph,entryBlock,loopBlock,"
+               "[original,original,retainedList],loc);")
+        change("    let held be try build.parameter(fn,loopBlock,1);",
+               "    let held be try build.parameter(fn,loopBlock,1);\n"
+               "    let loopList be try build.parameter(fn,loopBlock,2);")
+        change("    try ab.branch(fn,graph,loopBlock,condition,bodyBlock,"
+               "[current,held],\n"
+               "        doneBlock,[current,held],loc);",
+               "    try ab.branch(fn,graph,loopBlock,condition,bodyBlock,"
+               "[current,held,loopList],\n"
+               "        doneBlock,[current,held,loopList],loc);")
+        change("    let snapshot be try build.parameter(fn,bodyBlock,1);",
+               "    let snapshot be try build.parameter(fn,bodyBlock,1);\n"
+               "    let bodyList be try build.parameter(fn,bodyBlock,2);")
+        change("    try ab.jump(fn,graph,bodyBlock,loopBlock,[next,snapshot],loc);",
+               "    try ab.jump(fn,graph,bodyBlock,loopBlock,"
+               "[next,snapshot,bodyList],loc);")
+        change("    let originalSnapshot be try build.parameter(fn,doneBlock,1);",
+               "    let originalSnapshot be try build.parameter(fn,doneBlock,1);\n"
+               "    let doneList be try build.parameter(fn,doneBlock,2);")
+        change("    try build.returnValues(fn,doneBlock,[oldCount],loc);",
+               "    listCall=try ab.call(fn,graph,doneBlock,listCount,"
+               "[doneList],loc);\n"
+               "    let listLength be try build.result(fn,listCall,0);\n"
+               "    let answer be try build.wrapAdd(fn,doneBlock,"
+               "oldCount,listLength,loc);\n"
+               "    try build.returnValues(fn,doneBlock,[answer],loc);")
+        change("[carrier],[textType],true,95);",
+               "[carrier,listCarrier],[textType,listType],true,95);")
+        if wrong_list_descriptor:
+            change("let listType be try managed.listOfBase(registry,p,intType);",
+                   "let listType be try managed.identityOfBase(registry,p,intType);")
+        return source
+
+    def test_mixed_text_list_calls_share_exact_whole_function_root_map(self):
+        created=self.generator("u2-text-and-list-same-function",
+                               self.mixed_source())
+        self.assertEqual((created.returncode,created.stderr),
+                         (0,""),created.stdout[-3500:])
+        for symbol in ("erist_rt_unicode_from_scalar","erist_rt_text_concat",
+                       "erist_rt_view_count","evn_object","evn_copy",
+                       "evn_int","evn_add","evn_count"):
+            self.assertIn("call "+symbol,created.stdout)
+        self.run_native(created.stdout,
+                        "u2-text-list-combined-canonical-native",2,"95")
+
+    def test_mixed_list_cannot_masquerade_as_identity_descriptor(self):
+        created=self.generator("u2-mixed-wrong-list-type",
+                               self.mixed_source(wrong_list_descriptor=True))
+        self.assertEqual(created.returncode,1,created.stdout[-2500:])
+        self.assertIn("roots:",created.stdout)
+        self.assertNotIn("erist_u2_rooted_function_95:",created.stdout)
+        self.assertNotIn(".section",created.stdout)
+
     def run_native(self,asm,name,expected,suffix):
         body=("\n.text\n.globl _start\n_start:\n"
               "    xorl %edi,%edi\n"
