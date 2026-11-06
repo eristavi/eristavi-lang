@@ -5,6 +5,8 @@ on:
     paths:
       - src/compiler/u2_function_managed_x86_64.eri
       - tests/fixtures/u2_function_managed_cfg.eri
+      - tests/fixtures/u2_function_managed_recursive.eri
+      - tests/fixtures/u2_function_managed_recursive_reference.eri
       - tests/test_u2_function_managed_native.py
       - .github/workflows/u2-function-managed-focused.yml
 permissions:

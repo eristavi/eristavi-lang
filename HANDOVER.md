@@ -5,6 +5,40 @@ Historical checkpoints are evidence, not instructions to restart old work.
 
 ## Resume here
 
+### 6 November 2026 — active whole-Function recursive managed call integration (not U2 acceptance)
+
+Current work continues on `compiler/u2-cleanup-foundation-20261102` / draft PR #111,
+based on `a94014985e768cebb248cc5143494cbe331c34ba`. This checkpoint supersedes
+older statements that the whole-Function backend admits no local calls.
+
+- `u2_function_managed_x86_64.emitRecursive` binds one exact defined nonfallible
+  FunctionId/signature to the original verified Function body. It reuses the
+  existing SSA liveness, frame registration, runtime imports and root handoff.
+  Actual native recursive calls stage typed arguments in private frame scratch,
+  retain parent roots through the call, and publish up to two managed child
+  results into the parent's already registered temporary root words before the
+  child retires its scope. No process-global depth counter or root table.
+- Original four managed-Function tests passed locally after the emitter change.
+  New recursive tests exercise parent-only Text across 0/1/5/32/64 child frames,
+  identity cycles, scalar and two-managed-result handoff, physical collection
+  counts, post-return Text reclamation and complete final graph/allocator audit.
+  New source oracle compares Stage-0, old C-native and original UIR native
+  results for the same nonfallible recursion behavior. The consolidated local
+  Linux GCC run passed **7/7 methods** (55.714 s) before adding the final two
+  zero/foreign FunctionId negative cases. The updated boundary checks and
+  bootstrap-generator sanitizer check are RUNNING; hosted CI remains pending.
+- This is **nonfallible self recursion only**. Canonical opcode-46 calls,
+  recursive checked failure propagation, all handlers/cleanup exits, arbitrary
+  nested managed producers/copies and comprehensive root refusal remain OPEN.
+  The present canonical instruction set has an invoke terminator but no general
+  typed function failure-return producer; complete checked recursion needs a
+  coherent verified body/exit contract, not a scalar status or hidden flag.
+- Deep allocator/RSS/pause/sanitizer evidence for the combined U2 path and final
+  exact-head four-platform/completed-batch qualification are NOT performed.
+  Do not mistake bootstrap C generator sanitization for instrumentation of
+  emitted owned x86-64 assembly. #74 remains OPEN, #111 DRAFT/unmerged.
+
+
 ### 6 November 2026 — native two-stage checked File-close routing and independent whole-Function List.get bounds VERIFIED (bounded)
 
 - **Exact implementation/test source** `be1386580083752068d9b31b14a38173b46831b1` on `compiler/u2-cleanup-foundation-20261102` / draft [PR #111](https://github.com/eristavi/eristavi-lang/pull/111), not main. **Existing verified modules are reused, NOT rewritten:** original canonical opcode-46 SSA and checked owner-prefix verifiers, native `u2_checked_ssa_x86_64`, original `u2_cleanup_native_x86_64` reverse File closer, class-5 checked-failure root helpers, whole-Function Text/Unicode17/List/identity roots and existing List get/replace semantics remain intact. The public 32-byte ABI, default compiler, source semantics and paused optimization #51 are unchanged.
@@ -314,7 +348,7 @@ on main does not merge U2 implementation. Fetch current refs before continuing.
 | Imported List<i64> | The original standalone List<i64> immutable snapshot/get/replace/copy/append/count/collect helpers are reused without changed semantics in canonical whole-Function native lowering. Existing import version/effects/descriptor preflight, rooted temporary GC, exact original LocId fault handlers; negative/out-of-range GET and REPLACE separately proven. Dedicated 12/12 native integration success and combined 144-test Linux smoke green. Non-i64/nested managed List and general aggregate-copy Function lowering remain OPEN. |
 | Checked continuations and File owners | Verified canonical opcode-46 fallible invoke/SSA normal+failed typed edges and File surviving-prefix transport, independent scoped owners and reverse-close plans, bounded opt-in real native close/FailureContext root helpers, consumed owner SSA words and checked primary/secondary FileError composition. The general whole-Function emitter still rejects opcode-46; these adapters must be connected to arbitrary handlers/exits/recursive checked calls. |
 | FailureContext / recursion | Physical class-5 saved File failure roots survive forced GC; independent typed Unicode17 primary/ordered-secondary reference tests. Bounded 1-8-owner actual File-close cases and runtime recursive depth-2/5 failure-context tests verified; bounded 32-frame Text local self-recursion also verified. Complete checked managed Text/List failure rooting and compiler-emitted recursive canonical call frames remain OPEN. |
-| Independent validation and compatibility | Malformed descriptors/effects, stale revisions, dead CFG, source provenance, root GC and selected identity-cycle reclamation tested in bounded profiles; prior Stage-0/C parity baseline exists. Do not treat any as full new canonical-native vs production Stage-0 differential acceptance. Current exact-head indexed List build is RED; deep allocator refusal/RSS/GC pause/sanitizers and full four-platform + batch qualification remain OPEN. |
+| Independent validation and compatibility | Malformed descriptors/effects, stale revisions, dead CFG, source provenance, root GC and selected identity-cycle reclamation tested in bounded profiles; prior Stage-0/C parity baseline exists. Do not treat any as full new canonical-native vs production Stage-0 differential acceptance. The previous indexed List harness failure is corrected and exact-code Linux checks are GREEN; deep allocator refusal/RSS/GC pause/sanitizers and full four-platform + batch qualification remain OPEN. |
 
 **Current exact implementation/test CI:** dedicated whole-Function Text/List [#42238773766](https://github.com/eristavi/eristavi-lang/actions/runs/42238773766) **12/12 PASS**, native checked File cleanup [#42240837403](https://github.com/eristavi/eristavi-lang/actions/runs/42240837403) **8/8 PASS**, broad Linux Clang [#42240837299](https://github.com/eristavi/eristavi-lang/actions/runs/42240837299) **144 run / 141 passed / 0 failed / 3 opt-in skips** (677.985 s), patch/scope **SUCCESS**. The four-platform final matrix and U2 completed-batch qualification remain **UNRUN**. New tests and code are opt-in on the U2 draft branch, not main; documentation-only follow-ups do not change the tested compiler implementation.
 

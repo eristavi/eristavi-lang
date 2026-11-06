@@ -1,7 +1,8 @@
 // Opt-in original whole-Function managed-parameter native CFG profile.
 // Uses verified canonical SSA liveness at every instruction and block entry.
 // Text/List runtime imports reuse the existing verified native adapters;
-// no new semantics, checked invokes, recursion or public ABI changes.
+// no new semantics, checked invokes or public ABI changes.
+// Defined self calls are opt-in, verified by exact FunctionId/signature.
 import compiler.u1_budget as budget;
 import compiler.u1_words as words;
 import compiler.u1_builder as build;
@@ -247,8 +248,29 @@ function emitInstruction(base Text,id Int,frameBytes Int,
         line("jmp "+name(base,"edge",switches[header+2]));
     }
     if op == 34 {
-        emitNativeImport(result,first,operands,
-            importKinds[id-1],importOperations[id-1],tempOffset,base,id);
+        if importKinds[id-1] == 3 {
+            // Arguments remain live in the caller's registered vector until
+            // the child publishes its own roots. The child transfers managed
+            // results into our registered temporary words before scope leave.
+            let scratchOffset be rootOffset-256;
+            let argument be 0;
+            while argument < count {
+                line("movq "+slot(operands[first+argument])+",%rax");
+                line("movq %rax,"+format.integer(scratchOffset+argument*8)+"(%rsp)");
+                argument=argument+1;
+            }
+            line("leaq "+format.integer(scratchOffset)+"(%rsp),%rdi");
+            line("leaq "+format.integer(tempOffset)+"(%rsp),%rsi");
+            line("movl $2,%edx");
+            line("call "+base);
+            line("movq %rax,"+slot(result));
+            if instructions[row+5] == 2 {
+                line("movq %rdx,"+slot(result+1));
+            }
+        } else {
+            emitNativeImport(result,first,operands,
+                importKinds[id-1],importOperations[id-1],tempOffset,base,id);
+        }
     }
     if op == 8 {
         if count >= 1 { line("movq "+slot(operands[first])+",%rax"); }
@@ -321,14 +343,15 @@ function nativeSafepoint(forceGC Bool) {
 
 // This is real native lowering over an original whole canonical Function,
 // with managed (Text/List/identity) values admitted as already boxed inputs
-// and block parameters ONLY. The typed caller retains its own incoming root
-// until this frame's class-1 vector is safely registered; no producer op43
-// or managed return/call is authorized. A test flag can force physical GC
+// and block parameters, admitted runtime imports and explicit self calls.
+// The typed caller retains its own incoming root until this frame's class-1
+// vector is safely registered. Aggregate producers/op46 remain unsupported.
+// A test flag can force physical GC
 // on EVERY block entry to prove exact root lifetime during CFG transitions.
 function compile(plan identity ssa.Plan,routine identity build.Function,
     graph identity aggregate.Registry,table identity contracts.Registry,
     phase identity budget.Phase,registry identity managed.Registry,
-    carriers,descriptors,forceGC Bool,label Int)
+    carriers,descriptors,forceGC Bool,label Int,selfTarget Int)
     fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,Unsupported {
     let proof be try ssa.verify(plan,routine,graph,table,phase);
     let admissible be label >= 1 and label <= 2147483647 and
@@ -346,6 +369,19 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
     let results be try words.get(routine.metadata.signatures,phase,signatureStart+5);
     let resultStart be try words.get(routine.metadata.signatures,phase,signatureStart+4);
     if params > 8 or results < 1 or results > 2 { admissible=false; }
+    if selfTarget != 0 {
+        try require(selfTarget >= 1 and
+            selfTarget <= routine.metadata.declarations.length/6,
+            "invalid recursive FunctionId");
+        let selfRow be (selfTarget-1)*6;
+        try require((try words.get(routine.metadata.declarations,phase,selfRow)) ==
+            routine.signature.index and
+            (try words.get(routine.metadata.declarations,phase,selfRow+3)) == 1 and
+            (try words.get(routine.metadata.declarations,phase,selfRow+4)) == 63 and
+            (try words.get(routine.metadata.declarations,phase,selfRow+5)) == 0 and
+            (try words.get(table.entries,phase,(selfTarget-1)*2+1)) == 0,
+            "recursive target must be the exact defined nonfallible signature");
+    }
     let managedReturn be false;
     let managedReturnSecond be false;
     let selected be [];
@@ -459,13 +495,17 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
         let op be instructions[row];
         let importKind be 0; let importOperation be 0;
         if op == 34 {
-            let resolved be nativeImports.inspect(routine.metadata,graph,phase,
-                instructions[row+7],textCarrier,listCarrier)
-                else error budget.LimitError { fail error; }
-                else error nativeImports.Unsupported {
-                    fail Unsupported { message=error.message; };
-                };
-            importKind=resolved.kind; importOperation=resolved.operation;
+            if selfTarget != 0 and instructions[row+7] == selfTarget {
+                importKind=3;
+            } else {
+                let resolved be nativeImports.inspect(routine.metadata,graph,phase,
+                    instructions[row+7],textCarrier,listCarrier)
+                    else error budget.LimitError { fail error; }
+                    else error nativeImports.Unsupported {
+                        fail Unsupported { message=error.message; };
+                    };
+                importKind=resolved.kind; importOperation=resolved.operation;
+            }
         }
         importKinds.add(importKind); importOperations.add(importOperation);
         if op != 1 and op != 2 and op != 4 and
@@ -683,7 +723,30 @@ public function emit(routine identity build.Function,
     let plan be try roots.create(routine,graph,table,phase,registry,
         carriers,descriptors);
     compile(plan,routine,graph,table,phase,registry,carriers,descriptors,
-        forceGC,label)
+        forceGC,label,0)
+        else error budget.LimitError { try ssa.close(plan); fail error; }
+        else error canonical.InvalidIR { try ssa.close(plan); fail error; }
+        else error ssa.InvalidLiveness { try ssa.close(plan); fail error; }
+        else error Unsupported { try ssa.close(plan); fail error; };
+    try ssa.close(plan);
+}
+
+// Explicitly bind a defined metadata FunctionId to THIS independently
+// verified body. Other defined targets still fail closed. No process-global
+// recursion counter, shared root storage or unchecked symbol substitution.
+public function emitRecursive(routine identity build.Function,
+    graph identity aggregate.Registry,table identity contracts.Registry,
+    phase identity budget.Phase,registry identity managed.Registry,
+    carriers,descriptors,forceGC Bool,label Int,target meta.FunctionId)
+    fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,
+        roots.InvalidManagedRoots,managed.InvalidManagedTypes,
+        graphVerify.InvalidGraph,Unsupported {
+    try require(target.owner == routine.metadata.key and target.index >= 1,
+        "foreign recursive FunctionId");
+    let plan be try roots.create(routine,graph,table,phase,registry,
+        carriers,descriptors);
+    compile(plan,routine,graph,table,phase,registry,carriers,descriptors,
+        forceGC,label,target.index)
         else error budget.LimitError { try ssa.close(plan); fail error; }
         else error canonical.InvalidIR { try ssa.close(plan); fail error; }
         else error ssa.InvalidLiveness { try ssa.close(plan); fail error; }

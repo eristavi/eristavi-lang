@@ -1,0 +1,23 @@
+// Frozen source behavior oracle, independent of the canonical UIR fixture.
+import std.unicode;
+type Counter { value Int; }
+type Result { counter identity Counter; total Int; }
+function walk(value identity Counter,text Text,depth Int) returns Result {
+    if depth > 0 {
+        let child be unicode.fromScalar(depth);
+        let returned be walk(value,child,depth-1);
+        return Result { counter=returned.counter; total=returned.total+text.bytes.count; };
+    }
+    return Result { counter=value; total=text.bytes.count; };
+}
+function probe(depth Int) returns Int {
+    let input be identity Counter { value=7; };
+    let result be walk(input,"parent",depth);
+    if result.counter != input { return -10000; }
+    return result.total;
+}
+output(probe(0));
+output(probe(1));
+output(probe(5));
+output(probe(32));
+output(probe(64));
