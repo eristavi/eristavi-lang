@@ -94,8 +94,8 @@ function select(plan identity Plan,routine identity build.Function,
             i=i+1;
         }
         if selected {
-            try require(plan.values.length/4 < 32,
-                "managed SSA profile exceeds 32 value slots");
+            try require(plan.values.length/4 < 64,
+                "managed SSA profile exceeds 64 value slots");
             let kind be try words.get(routine.values,phase,offset+1);
             let definition be try words.get(routine.values,phase,offset+2);
             let block be definition;
@@ -244,13 +244,13 @@ public function create(routine identity build.Function,
     let pending be try budget.reserve(routine.owner,512);
     let selected be words.create(routine.owner,8)
         else error budget.LimitError { try budget.cancelReservation(pending); fail error; };
-    let values be words.create(routine.owner,128)
+    let values be words.create(routine.owner,256)
         else error budget.LimitError { try words.close(selected); try budget.cancelReservation(pending); fail error; };
-    let used be words.create(routine.owner,2048)
+    let used be words.create(routine.owner,4096)
         else error budget.LimitError { try words.close(values); try words.close(selected); try budget.cancelReservation(pending); fail error; };
-    let input be words.create(routine.owner,2048)
+    let input be words.create(routine.owner,4096)
         else error budget.LimitError { try words.close(used); try words.close(values); try words.close(selected); try budget.cancelReservation(pending); fail error; };
-    let output be words.create(routine.owner,2048)
+    let output be words.create(routine.owner,4096)
         else error budget.LimitError { try words.close(input); try words.close(used); try words.close(values); try words.close(selected); try budget.cancelReservation(pending); fail error; };
     let control be try budget.commit(pending);
     let plan be identity Plan { version=1; owner=routine.owner;
@@ -296,7 +296,7 @@ public function verify(plan identity Plan,routine identity build.Function,
         not plan.types.closed and not plan.values.closed and
         not plan.uses.closed and not plan.inputs.closed and not plan.outputs.closed and
         plan.types.length >= 1 and plan.types.length <= 8 and
-        plan.values.length%4 == 0 and plan.values.length <= 128 and
+        plan.values.length%4 == 0 and plan.values.length <= 256 and
         plan.inputs.length == plan.blocks*plan.values.length/4 and
         plan.outputs.length == plan.inputs.length and
         plan.uses.length == plan.inputs.length,
