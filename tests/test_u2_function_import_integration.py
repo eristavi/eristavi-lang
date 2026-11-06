@@ -129,6 +129,30 @@ class U2FunctionImportIntegrationTests(unittest.TestCase):
               "    jne .Lgraph_test_fail\n"
               "    jmp .Lgraph_finish\n")
         result=self.run_probe(name,asm+body+graph.FINISH)
+        if result.returncode != 0 and suffix == "95":
+            # First-fault placement is native-only diagnostic code; the
+            # original full program remains mandatory for acceptance.
+            checkpoints={}
+            for index,symbol in enumerate((
+                    "erist_rt_unicode_from_scalar",
+                    "evn_view",
+                    "erist_rt_view_count",
+                    "erist_rt_text_concat",
+                    "erist_rt_slots_collect",
+                    "erist_rt_text_collect")):
+                needle="    call "+symbol
+                if needle not in asm:
+                    continue
+                short=asm.replace(needle,
+                    "    xorl %edi,%edi\n    jmp erist_rt_exit\n"+needle,1)
+                probe=self.run_probe(name+"-before-"+str(index),
+                                     short+body+graph.FINISH)
+                checkpoints[symbol]=(
+                    probe.returncode,probe.stderr.decode("utf-8",
+                                                         errors="replace")[:100])
+            self.fail("Text whole-Function native result=%r; "
+                      "checkpoints=%r; stderr=%r" %
+                      (result.returncode,checkpoints,result.stderr))
         self.assertEqual((result.returncode,result.stdout,result.stderr),
                          (0,b"",b""))
 
@@ -157,7 +181,10 @@ class U2FunctionImportIntegrationTests(unittest.TestCase):
         result=self.generator("u2-text-bad-import",
                               self.text_source(bad_contract=True))
         self.assertEqual(result.returncode,1,result.stdout[-2300:])
-        self.assertIn("native:",result.stdout)
+        # The frozen builder rejects invalid import versions even before
+        # our bridge sees them; the fail-closed outcome is still required.
+        self.assertIn("budget:invalid U1a import contract version",
+                      result.stdout)
         self.assertNotIn("erist_u2_rooted_function_95:",result.stdout)
         self.assertNotIn(".section",result.stdout)
 
