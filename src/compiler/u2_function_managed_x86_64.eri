@@ -451,7 +451,8 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
         publish(selected,beforeBits,(term-1)*selected.count,rootOffset);
         emitInstruction(base,term,frameBytes,
             instructions,operands,switches,cases,
-            selected.count,rootOffset,scopeOffset,returnOffset);
+            selected.count,rootOffset,scopeOffset,returnOffset,
+            managedReturn,callerRootOffset);
         block=block+1;
     }
     i=1;
