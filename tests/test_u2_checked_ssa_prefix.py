@@ -240,43 +240,43 @@ class U2CheckedSSAPrefixTests(unittest.TestCase):
             for fails in (False,True):
                 with self.subTest(pending=pending,fails=fails):
                     original=self.assembly(emitted,paths,pending,fails,offsets)
-                    marker="\\n.text\\n.globl _start\\n_start:\\n"
+                    marker="\n.text\n.globl _start\n_start:\n"
                     self.assertEqual(original.count(marker),1)
                     index=original.index(marker)
                     body=original[index+1:]
-                    call="    call erist_u2_ssa_71\\n"
+                    call="    call erist_u2_ssa_71\n"
                     self.assertEqual(body.count(call),1)
                     setup=body.split(call,1)[0]
-                    rodata_marker=".section .rodata\\n.Lowner_classes:\\n"
+                    rodata_marker=".section .rodata\n.Lowner_classes:\n"
                     self.assertEqual(body.count(rodata_marker),1)
                     suffix=body[body.index(rodata_marker):]
                     final=(
-                        "    call erist_u2_chain_71\\n"
-                        "    cmpq $%d,%%rax\\n"
-                        "    jne .Lresource_test_fail\\n"
-                        "    call erist_rt_open_resources\\n"
-                        "    testq %%rax,%%rax\\n"
-                        "    jne .Lresource_test_fail\\n"
-                        "    movq $0,16(%%rsp)\\n"
+                        "    call erist_u2_chain_71\n"
+                        "    cmpq $%d,%%rax\n"
+                        "    jne .Lresource_test_fail\n"
+                        "    call erist_rt_open_resources\n"
+                        "    testq %%rax,%%rax\n"
+                        "    jne .Lresource_test_fail\n"
+                        "    movq $0,16(%%rsp)\n"
                     )%(-1 if fails else 0)
                     # Retire all six canonical class-5 checked roots before
                     # leaving the registered failure scope. The File words
                     # are consumed by the native checked cleanup adapter.
                     for offset in range(24,80,8):
-                        final+="    movq $0,%d(%%rsp)\\n"%offset
+                        final+="    movq $0,%d(%%rsp)\n"%offset
                     final+=(
-                        "    call evn_void\\n"
-                        "    movq %rax,%rsi\\n"
-                        "    movq 80(%rsp),%rdi\\n"
-                        "    call evn_scope_leave\\n"
-                        "    call evn_void\\n"
-                        "    movq %rax,%rsi\\n"
-                        "    movq 88(%rsp),%rdi\\n"
-                        "    call evn_scope_leave\\n"
-                        "    addq $1024,%rsp\\n"
-                        "    call .Lresource_finish\\n"
-                        "    xorl %edi,%edi\\n"
-                        "    jmp erist_rt_exit\\n"
+                        "    call evn_void\n"
+                        "    movq %rax,%rsi\n"
+                        "    movq 80(%rsp),%rdi\n"
+                        "    call evn_scope_leave\n"
+                        "    call evn_void\n"
+                        "    movq %rax,%rsi\n"
+                        "    movq 88(%rsp),%rdi\n"
+                        "    call evn_scope_leave\n"
+                        "    addq $1024,%rsp\n"
+                        "    call .Lresource_finish\n"
+                        "    xorl %edi,%edi\n"
+                        "    jmp erist_rt_exit\n"
                     )
                     assembled=original[:index+1]+setup+final+suffix
                     runtime=(resource.close_failures(self.runtime) if fails
