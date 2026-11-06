@@ -229,11 +229,14 @@ _start:
         # No tracked identity may silently disappear from the native root
         # vector merely because its liveness bit happens to be zero.
         source=self.source()
-        marker="    try ab.jump(fn,graph,entry,loop,[initial,on],loc);"
+        marker="    try build.jump(fn,dead,deadDestination,[input],loc);"
         self.assertEqual(source.count(marker),1)
-        extra="".join(
-            "    let rootCandidate%d be try ab.make(fn,graph,entry,pair,"
-            "[eleven,eleven],loc);\n"%index
+        extra=(
+            "    let deadRootLeft be try build.integer(fn,dead,11,loc);\n"
+            "    let deadRootRight be try build.integer(fn,dead,17,loc);\n"
+        )+"".join(
+            "    let rootCandidate%d be try ab.make(fn,graph,dead,pair,"
+            "[deadRootLeft,deadRootRight],loc);\n"%index
             for index in range(40))
         source=source.replace(marker,extra+marker,1)
         generated=self.generator("native-identity-ssa-wide",source)
