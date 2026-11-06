@@ -376,6 +376,33 @@ class U2FunctionImportIntegrationTests(unittest.TestCase):
                 self.assertIn(b"List index out of bounds",result.stderr)
                 self.assertIn(b"list-probe:1:1: ",result.stderr)
 
+    def test_original_list_get_bounds_independently_keep_source_location(self):
+        # Previous bounds cases deliberately fault the first indexed REPLACE.
+        # This checks the distinct native get() path: replacement at index 0
+        # succeeds, then get(changed, one) must fail for -1 and length 2.
+        # Reuse the original canonical source, indexed imports and LocId.
+        for index in (-1,2):
+            with self.subTest(index=index):
+                source=self.list_source(fixture="u2_list_i64.eri")
+                target="let one be try build.integer(fn,b,1,loc);"
+                self.assertEqual(source.count(target),1)
+                source=source.replace(target,
+                    "let one be try build.integer(fn,b,"+str(index)+",loc);",1)
+                generated=self.generator("u2-list-get-bounds-"+str(index),
+                                         source)
+                self.assertEqual((generated.returncode,generated.stderr),
+                                 (0,""),generated.stdout[-2400:])
+                self.assertIn("call evn_index",generated.stdout)
+                self.assertIn("call evn_store",generated.stdout)
+                starter=("\n.text\n.globl _start\n_start:\n"
+                         " call erist_u2_rooted_function_96\n"
+                         " movl $99,%edi\n jmp erist_rt_exit\n")
+                result=self.run_probe("u2-list-get-bounds-"+str(index),
+                                      generated.stdout+starter)
+                self.assertEqual(result.returncode,1,result.stderr)
+                self.assertIn(b"List index out of bounds",result.stderr)
+                self.assertIn(b"list-probe:1:1: ",result.stderr)
+
     def test_wrong_list_effects_refused_before_native_assembly(self):
         result=self.generator("u2-list-bad-import",
                               self.list_source(bad_contract=True))
