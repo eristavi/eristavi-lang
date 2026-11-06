@@ -1,0 +1,40 @@
+name: U2 whole-Function scalar native focused checks
+on:
+  push:
+    branches: [compiler/u2-cleanup-foundation-20261102]
+    paths:
+      - src/compiler/u2_function_scalar_x86_64.eri
+      - tests/fixtures/u2_function_scalar_cfg.eri
+      - tests/test_u2_function_scalar_native.py
+      - .github/workflows/u2-function-scalar-focused.yml
+permissions:
+  contents: read
+concurrency:
+  group: u2-function-scalar-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  scalar-cfg:
+    runs-on: ubuntu-latest
+    env:
+      CC: clang
+      CFLAGS: -O2
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install compiler bootstrap
+        run: python -m pip install -e .
+      - name: Compile Python test
+        run: python -m compileall -q tests/test_u2_function_scalar_native.py compiler
+      - name: Run exact canonical whole-Function scalar native tests
+        run: |
+          set -o pipefail
+          PYTHONPATH=tests python -u -m unittest -v test_u2_function_scalar_native 2>&1 | tee "$RUNNER_TEMP/u2-function-scalar.log"
+      - name: Preserve focused logs
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: u2-function-scalar-${{ github.run_attempt }}
+          retention-days: 14
+          path: ${{ runner.temp }}/u2-function-scalar.log
