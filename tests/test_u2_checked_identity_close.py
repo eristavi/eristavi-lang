@@ -89,6 +89,11 @@ class U2CheckedIdentityCloseTests(unittest.TestCase):
                         native.index("call erist_u2_cleanup_95"))
         self.assertIn("movq %rax,(%rbx)",native)
         self.assertIn("movq $0,"+str(offsets["consumed"])+"(%r15)",native)
+        # The canonical normal successor is also an ELF .set offset symbol.
+        # A machine branch must target a separately named code label.
+        self.assertIn("je "+base+"_identity_normal",native)
+        self.assertIn(base+"_identity_normal:",native)
+        self.assertNotIn(base+"_normal:",native)
         return offsets
 
     def assembly(self,emitted,offsets,path,pending,fail):
@@ -277,62 +282,16 @@ class U2CheckedIdentityCloseTests(unittest.TestCase):
             for failed in (False,True):
                 with self.subTest(pending=pending,failed=failed):
                     code=self.assembly(emitted,offsets,path,pending,failed)
+                    # A scope mark created after the producer would silently
+                    # retain the graph even after the last explicit root dies.
+                    self.assertLess(code.index("movq %rax,40(%rsp)"),
+                                    code.index("call erist_rt_graph_new_object"))
                     runtime=(resource.close_failures(self.runtime) if failed
                              else self.runtime)
                     result=self.run_probe(
                         "u2-identity-close-%d-%d"%(pending,int(failed)),
                         identities.identity_file_descriptors()+code,
                         runtime=runtime,types=False)
-                    if result.returncode != 0:
-                        # Diagnostic: distinguish every explicit caller and
-                        # teardown assertion without weakening any invariant.
-                        # Each failing branch gets a distinct process status.
-                        pattern=r"\b(?:jne|je|jb|ja|jge|jl|jbe)\s+\.Lresource_test_fail\b"
-                        guards=list(re.finditer(pattern,code))
-                        instrumented=code
-                        for index in range(len(guards)-1,-1,-1):
-                            match=guards[index]
-                            updated=match.group().replace(
-                                ".Lresource_test_fail",
-                                ".Lu2_failure_guard_"+str(index))
-                            instrumented=(instrumented[:match.start()]+
-                                          updated+instrumented[match.end():])
-                        instrumented+="\n.text\n"
-                        for index in range(len(guards)):
-                            instrumented+=(
-                                ".Lu2_failure_guard_%d:\n"
-                                "    movl $%d,%%edi\n"
-                                "    jmp erist_rt_exit\n"%
-                                (index,100+index))
-                        diagnostic=self.run_probe(
-                            "u2-id-close-guard-%d-%d"%(pending,int(failed)),
-                            identities.identity_file_descriptors()+instrumented,
-                            runtime=runtime,types=False)
-                        guard=diagnostic.returncode-100
-                        context=("none"
-                            if guard<0 or guard>=len(guards) else
-                            code[max(0,guards[guard].start()-180):
-                                 guards[guard].end()])
-                        count_probe=code
-                        final_scan=(
-                            "    call erist_rt_graph_live_objects\n"
-                            "    testq %rax,%rax\n"
-                            "    jne .Lresource_test_fail\n")
-                        self.assertEqual(count_probe.count(final_scan),1)
-                        count_probe=count_probe.replace(final_scan,
-                            "    call erist_rt_graph_live_objects\n"
-                            "    movl %eax,%edi\n"
-                            "    jmp erist_rt_exit\n",1)
-                        count_result=self.run_probe(
-                            "u2-id-close-count-%d-%d"%(pending,int(failed)),
-                            identities.identity_file_descriptors()+count_probe,
-                            runtime=runtime,types=False)
-                        self.fail("native integration status=%r; guard=%r, "
-                                  "retained graph objects=%r, context=%r, "
-                                  "stderr=%r"%
-                                  (result.returncode,diagnostic.returncode,
-                                   count_result.returncode,context,
-                                   diagnostic.stderr))
                     self.assertEqual(
                         (result.returncode,result.stdout,result.stderr),
                         (0,b"",b""))
