@@ -310,10 +310,26 @@ class U2CheckedIdentityCloseTests(unittest.TestCase):
                             if guard<0 or guard>=len(guards) else
                             code[max(0,guards[guard].start()-180):
                                  guards[guard].end()])
-                        self.fail("native integration status=%r; selected "
-                                  "assertion=%r, context=%r, stderr=%r"%
+                        count_probe=code
+                        final_scan=(
+                            "    call erist_rt_graph_live_objects\n"
+                            "    testq %rax,%rax\n"
+                            "    jne .Lresource_test_fail\n")
+                        self.assertEqual(count_probe.count(final_scan),1)
+                        count_probe=count_probe.replace(final_scan,
+                            "    call erist_rt_graph_live_objects\n"
+                            "    movl %eax,%edi\n"
+                            "    jmp erist_rt_exit\n",1)
+                        count_result=self.run_probe(
+                            "u2-id-close-count-%d-%d"%(pending,int(failed)),
+                            identities.identity_file_descriptors()+count_probe,
+                            runtime=runtime,types=False)
+                        self.fail("native integration status=%r; guard=%r, "
+                                  "retained graph objects=%r, context=%r, "
+                                  "stderr=%r"%
                                   (result.returncode,diagnostic.returncode,
-                                   context,diagnostic.stderr))
+                                   count_result.returncode,context,
+                                   diagnostic.stderr))
                     self.assertEqual(
                         (result.returncode,result.stdout,result.stderr),
                         (0,b"",b""))
