@@ -257,6 +257,75 @@ _start:
         self.assertIn("erist_u2_identity_after_73:",generated.stdout)
         self.assertIn("erist_u2_identity_release_73:",generated.stdout)
 
+    def mixed_source(self,invalid=False):
+        source=self.source()
+        def once(old,new):
+            nonlocal source
+            self.assertEqual(source.count(old),1,old)
+            source=source.replace(old,new,1)
+        once("import compiler.u2_identity_root_x86_64 as rootEmitter;",
+             "import compiler.u2_identity_root_x86_64 as rootEmitter;\n"
+             "import compiler.u2_managed_root_gate as managedRoots;\n"
+             "import compiler.u2_managed_root_x86_64 as mixedRoot;")
+        once("    try aggregate.freeze(graph);",
+             "    let empty be try aggregate.aggregate(graph,mp,[]);\n"
+             "    let triple be try aggregate.aggregate(graph,mp,[i64,i64,i64]);\n"
+             "    try aggregate.freeze(graph);")
+        once("    let identityType be try managed.identityOfBase(registry,mp,pair);",
+             "    let identityType be try managed.identityOfBase(registry,mp,pair);\n"
+             "    let listType be try managed.listOfBase(registry,mp,triple);")
+        once("    try build.jump(fn,dead,deadDestination,[input],loc);",
+             "    let deadA be try build.integer(fn,dead,3,loc);\n"
+             "    let deadB be try build.integer(fn,dead,5,loc);\n"
+             "    let opaqueText be try ab.make(fn,graph,dead,empty,[],loc);\n"
+             "    let opaqueList be try ab.make(fn,graph,dead,triple,"
+             "[deadA,deadB,deadA],loc);\n"
+             "    try build.jump(fn,dead,deadDestination,[input],loc);")
+        marker='    output(".set u2_identity_current, "+format.integer(current.index));'
+        carriers="[empty,triple,pair]"
+        types=("[managed.text(registry),identityType,listType]" if invalid
+               else "[managed.text(registry),listType,identityType]")
+        once(marker,
+             "    try mixedRoot.emit(fn,graph,table,read,registry,"+
+             carriers+","+types+",at,74);\n"+marker)
+        once("ProbeError,rootEmitter.Unsupported,",
+             "ProbeError,rootEmitter.Unsupported,mixedRoot.Unsupported,"
+             "managedRoots.InvalidManagedRoots,")
+        marker=" } else error graphVerify.InvalidGraph {"
+        once(marker,
+             ' } else error mixedRoot.Unsupported {'
+             ' output("mixed-native:"+error.message);'
+             ' process.setExitCode(1); return;'
+             ' } else error managedRoots.InvalidManagedRoots {'
+             ' output("mixed-roots:"+error.message);'
+             ' process.setExitCode(1); return;'+marker)
+        return source
+
+    def test_mixed_text_list_identity_root_publication(self):
+        result=self.generator("mixed-managed-native",self.mixed_source())
+        self.assertEqual((result.returncode,result.stderr),(0,""),
+                         result.stdout[-2000:])
+        slots=re.findall(
+            r"^\.set erist_u2_managed_slot_74_(\d+), (\d+)$",
+            result.stdout,re.M)
+        self.assertGreaterEqual(len(slots),6)
+        self.assertEqual(len(set(int(v) for v,_ in slots)),len(slots))
+        self.assertEqual([int(o) for _,o in slots],
+                         list(range(0,len(slots)*8,8)))
+        for name in ("bind","before","after","release"):
+            self.assertIn("erist_u2_managed_"+name+"_74:",result.stdout)
+        self.assertIn("erist_u2_managed_classes_74:",result.stdout)
+        self.assertIn("    movl $"+str(len(slots))+",%ecx",
+                      result.stdout)
+
+    def test_mismatched_mixed_managed_descriptor_refuses_before_emission(self):
+        result=self.generator("mixed-managed-invalid",
+                              self.mixed_source(invalid=True))
+        self.assertEqual(result.returncode,1,result.stdout[-1800:])
+        self.assertIn("mixed-roots:",result.stdout)
+        self.assertNotIn("erist_u2_managed_bind_74:",result.stdout)
+        self.assertNotIn("erist_u2_managed_classes_74:",result.stdout)
+
     def test_invalid_identity_descriptor_rejected_without_assembly(self):
         source=self.source()
         before="identityType,at,73);"
