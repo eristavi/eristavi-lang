@@ -135,6 +135,11 @@ class U2CheckedIdentityCloseTests(unittest.TestCase):
             # Its class-5 root protects typed secondary payloads under GC.
             "    leaq .Lu2_saved_failure(%rip),%rax",
             "    movq %rax,.Lu2_failure_root(%rip)",
+            # Enter the consumer scope BEFORE the identity is constructed.
+            # Otherwise its runtime slot mark pins the identity producer
+            # even after the explicit last class-1 root is retired.
+            "    call evn_scope_enter",
+            "    movq %rax,40(%rsp)",
         ]
         # The independently observed native identity carries three cyclic
         # graph nodes. A temporary producer root protects construction only;
@@ -155,8 +160,6 @@ class U2CheckedIdentityCloseTests(unittest.TestCase):
             "    movq 0(%rsp),%rax",
             "    movq %rax,.Lu2_ssa+"+str(offsets["consumed"])+"(%rip)",
             "    movq $"+str(pending)+",.Lu2_ssa+"+str(offsets["scalar"])+"(%rip)",
-            "    call evn_scope_enter",
-            "    movq %rax,40(%rsp)",
             # No allocation, GC, or scope leave may intervene until the new
             # native emitter binds and publishes the two required roots.
             "    movq $0,.Lu2_temporary_root(%rip)",
