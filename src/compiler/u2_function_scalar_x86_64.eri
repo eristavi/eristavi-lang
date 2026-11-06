@@ -1,0 +1,292 @@
+// Private, opt-in whole-canonical-Function scalar native CFG lowering.
+// Consume the REAL independently verified U1b Function tables, including
+// unreachable blocks. No shadow executable UIR, frontend, or public ABI.
+// Closed supported ops: constants (1,2), predicate (4,13,14), wrap i64
+// arithmetic (15..17), full i64 compare (18), jump/branch/return (6..8)
+// and unsigned-order switch (35). Every other opcode rejects BEFORE output.
+// No checked failures, resources, aggregate producers or managed roots yet.
+// Private SysV x86-64: RDI = input i64/pred word-array (0 if no inputs);
+// output RAX = return[0], RDX = return[1] (zero for omitted values).
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+import compiler.u1_builder as build;
+import compiler.u1_meta as meta;
+import compiler.u1_aggregate as aggregate;
+import compiler.u1_verify as canonical;
+import compiler.format as format;
+
+public error Unsupported { message Text; }
+function require(ok Bool,message Text) fails Unsupported {
+    if not ok { fail Unsupported { message=message; }; }
+}
+function line(value Text) { output("    "+value); }
+function slot(index Int) returns Text {
+    return format.integer((index-1)*8)+"(%rsp)";
+}
+function name(base Text,kind Text,index Int) returns Text {
+    return base+"_"+kind+"_"+format.integer(index);
+}
+// All edge sources are staged before ANY block parameter is overwritten.
+// This includes self-loop swaps, repeated inputs, and different edges that
+// share the same destination. Scratch is separate from every SSA slot.
+function emitEdge(base Text,edgeId Int,blocks,edges,arguments,
+    scratchOffset Int) {
+    let row be (edgeId-1)*3;
+    let target be edges[row];
+    let first be edges[row+1];
+    let count be edges[row+2];
+    let destination be blocks[(target-1)*5];
+    output(name(base,"edge",edgeId)+":");
+    let i be 0;
+    while i < count {
+        line("movq "+slot(arguments[first+i])+",%rax");
+        line("movq %rax,"+format.integer(scratchOffset+i*8)+"(%rsp)");
+        i=i+1;
+    }
+    i=0;
+    while i < count {
+        line("movq "+format.integer(scratchOffset+i*8)+"(%rsp),%rax");
+        line("movq %rax,"+slot(destination+i));
+        i=i+1;
+    }
+    line("jmp "+name(base,"block",target));
+}
+function emitInstruction(base Text,id Int,frameBytes Int,
+    instructions,operands,switches,cases) {
+    let row be (id-1)*10;
+    let op be instructions[row];
+    let first be instructions[row+2];
+    let count be instructions[row+3];
+    let result be instructions[row+4];
+    let payload be instructions[row+7];
+    if op == 1 or op == 2 {
+        line("movabsq $"+format.integer(payload)+",%rax");
+        line("movq %rax,"+slot(result));
+    }
+    if op == 4 {
+        line("movq "+slot(operands[first])+",%rax");
+        line("testq %rax,%rax");
+        line("sete %al"); line("movzbq %al,%rax");
+        line("movq %rax,"+slot(result));
+    }
+    if op == 13 or op == 14 {
+        line("movq "+slot(operands[first])+",%rax");
+        line("movq "+slot(operands[first+1])+",%rcx");
+        if op == 13 { line("andq %rcx,%rax"); }
+        else { line("orq %rcx,%rax"); }
+        line("testq %rax,%rax");
+        line("setne %al"); line("movzbq %al,%rax");
+        line("movq %rax,"+slot(result));
+    }
+    if op >= 15 and op <= 18 {
+        line("movq "+slot(operands[first])+",%rax");
+        line("movq "+slot(operands[first+1])+",%rcx");
+        if op == 15 { line("addq %rcx,%rax"); }
+        if op == 16 { line("subq %rcx,%rax"); }
+        if op == 17 { line("imulq %rcx,%rax"); }
+        if op == 18 {
+            line("cmpq %rcx,%rax");
+            let condition be "sete";
+            if payload == 2 { condition="setne"; }
+            if payload == 3 { condition="setl"; }
+            if payload == 4 { condition="setle"; }
+            if payload == 5 { condition="setg"; }
+            if payload == 6 { condition="setge"; }
+            if payload == 7 { condition="setb"; }
+            if payload == 8 { condition="setbe"; }
+            if payload == 9 { condition="seta"; }
+            if payload == 10 { condition="setae"; }
+            line(condition+" %al"); line("movzbq %al,%rax");
+        }
+        line("movq %rax,"+slot(result));
+    }
+    if op == 6 {
+        line("jmp "+name(base,"edge",payload));
+    }
+    if op == 7 {
+        line("movq "+slot(operands[first])+",%rax");
+        line("testq %rax,%rax");
+        line("jne "+name(base,"edge",payload));
+        line("jmp "+name(base,"edge",instructions[row+8]));
+    }
+    if op == 35 {
+        let header be (payload-1)*3;
+        let start be switches[header];
+        let number be switches[header+1];
+        line("movq "+slot(operands[first])+",%rax");
+        let i be 0;
+        while i < number {
+            line("movabsq $"+format.integer(cases[(start+i)*2])+",%rcx");
+            line("cmpq %rcx,%rax");
+            line("je "+name(base,"edge",cases[(start+i)*2+1]));
+            i=i+1;
+        }
+        line("jmp "+name(base,"edge",switches[header+2]));
+    }
+    if op == 8 {
+        if count >= 1 { line("movq "+slot(operands[first])+",%rax"); }
+        else { line("xorl %eax,%eax"); }
+        if count >= 2 { line("movq "+slot(operands[first+1])+",%rdx"); }
+        else { line("xorl %edx,%edx"); }
+        line("addq $"+format.integer(frameBytes)+",%rsp");
+        line("popq %rbx");
+        line("ret");
+    }
+}
+public function emit(routine identity build.Function,
+    graph identity aggregate.Registry,label Int)
+    fails budget.LimitError,canonical.InvalidIR,Unsupported {
+    // The independent verifier processes the ENTIRE frozen Function:
+    // malformed dead blocks, stale facts and wrong SSA edges are not skipped.
+    let verifyPhase be try budget.verificationPhase(routine.owner);
+    let verified be try canonical.verifyAggregates(routine,graph,verifyPhase);
+    let phase be try budget.verificationPhase(routine.owner);
+    let acceptable be label >= 1 and label <= 2147483647 and
+        routine.blocks.length > 0 and routine.blocks.length/5 <= 64 and
+        routine.values.length/4 <= 256 and
+        routine.instructions.length/10 <= 512 and
+        routine.operands.length <= 2048 and
+        routine.edges.length/3 <= 256 and
+        routine.arguments.length <= 2048 and
+        routine.switches.length/3 <= 64 and routine.cases.length/2 <= 512;
+    let params be try meta.parameterCount(routine.metadata,phase,routine.signature);
+    let results be try meta.resultCount(routine.metadata,phase,routine.signature);
+    if params > 8 or results > 2 { acceptable=false; }
+    let i be 0;
+    while i < params {
+        if (try meta.parameterType(routine.metadata,phase,routine.signature,i)).index > 2 {
+            acceptable=false;
+        }
+        i=i+1;
+    }
+    i=0;
+    while i < results {
+        if (try meta.resultType(routine.metadata,phase,routine.signature,i)).index > 2 {
+            acceptable=false;
+        }
+        i=i+1;
+    }
+    // Snapshot all original canonical table fields BEFORE first emitted byte.
+    // Once the phase is finished emission is pure and has no fallible reads.
+    let blocks be []; i=0;
+    while i < routine.blocks.length {
+        blocks.add(try words.get(routine.blocks,phase,i)); i=i+1;
+    }
+    let values be []; i=0;
+    while i < routine.values.length {
+        values.add(try words.get(routine.values,phase,i)); i=i+1;
+    }
+    let instructions be []; i=0;
+    while i < routine.instructions.length {
+        instructions.add(try words.get(routine.instructions,phase,i)); i=i+1;
+    }
+    let operands be []; i=0;
+    while i < routine.operands.length {
+        operands.add(try words.get(routine.operands,phase,i)); i=i+1;
+    }
+    let edges be []; i=0;
+    while i < routine.edges.length {
+        edges.add(try words.get(routine.edges,phase,i)); i=i+1;
+    }
+    let arguments be []; i=0;
+    while i < routine.arguments.length {
+        arguments.add(try words.get(routine.arguments,phase,i)); i=i+1;
+    }
+    let switches be []; i=0;
+    while i < routine.switches.length {
+        switches.add(try words.get(routine.switches,phase,i)); i=i+1;
+    }
+    let cases be []; i=0;
+    while i < routine.cases.length {
+        cases.add(try words.get(routine.cases,phase,i)); i=i+1;
+    }
+    i=0;
+    while i < values.count/4 {
+        let t be values[i*4];
+        if t != 1 and t != 2 { acceptable=false; }
+        i=i+1;
+    }
+    i=0;
+    while i < instructions.count/10 {
+        let row be i*10;
+        let op be instructions[row];
+        if op != 1 and op != 2 and op != 4 and
+            op != 6 and op != 7 and op != 8 and
+            op != 13 and op != 14 and
+            (op < 15 or op > 18) and op != 35 {
+            acceptable=false;
+        }
+        if op == 35 {
+            let selected be instructions[row+7];
+            if selected < 1 or selected > switches.count/3 {
+                acceptable=false;
+            } else {
+                if switches[(selected-1)*3+1] > 32 {
+                    acceptable=false;
+                }
+            }
+        }
+        i=i+1;
+    }
+    i=0;
+    while i < edges.count/3 {
+        if edges[i*3+2] > 32 { acceptable=false; }
+        i=i+1;
+    }
+    try budget.finishPhase(phase);
+    try require(acceptable,
+        "whole Function has unsupported native scalar type, opcode or budget");
+    // Eight-byte canonical ValueId slots; edge scratch cannot overlap any.
+    let count be values.count/4;
+    let scratchOffset be count*8;
+    let bytes be (count+32)*8;
+    let frameBytes be ((bytes+15)/16)*16;
+    let base be "erist_u2_function_"+format.integer(label);
+    output(".set "+base+"_frame_words, "+format.integer(count));
+    output(".set "+base+"_ssa_bytes, "+format.integer(count*8));
+    output(".section .text");
+    output(".globl "+base);
+    output(".type "+base+",@function");
+    output(base+":");
+    line("pushq %rbx");
+    line("subq $"+format.integer(frameBytes)+",%rsp");
+    // Zero only real SSA slots, never infer validity from garbage stack data.
+    i=0;
+    while i < count { line("movq $0,"+format.integer(i*8)+"(%rsp)"); i=i+1; }
+    if params > 0 {
+        line("testq %rdi,%rdi");
+        line("je erist_rt_value_fault_internal");
+        let entry be blocks[0];
+        i=0;
+        while i < params {
+            line("movq "+format.integer(i*8)+"(%rdi),%rax");
+            if values[(entry+i-1)*4] == 1 {
+                line("cmpq $1,%rax");
+                line("ja erist_rt_value_fault_internal");
+            }
+            line("movq %rax,"+slot(entry+i));
+            i=i+1;
+        }
+    }
+    line("jmp "+name(base,"block",1));
+    let b be 1;
+    while b <= blocks.count/5 {
+        output(name(base,"block",b)+":");
+        let current be blocks[(b-1)*5+2];
+        while current != 0 {
+            emitInstruction(base,current,frameBytes,
+                instructions,operands,switches,cases);
+            current=instructions[(current-1)*10+9];
+        }
+        emitInstruction(base,blocks[(b-1)*5+4],frameBytes,
+            instructions,operands,switches,cases);
+        b=b+1;
+    }
+    i=1;
+    while i <= edges.count/3 {
+        emitEdge(base,i,blocks,edges,arguments,scratchOffset);
+        i=i+1;
+    }
+    output(".size "+base+",.-"+base);
+    output(".section .note.GNU-stack,\"\",@progbits");
+}
