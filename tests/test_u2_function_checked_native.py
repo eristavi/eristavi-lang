@@ -54,7 +54,7 @@ def capture_traced_owned_generator(command,env,timeout):
                     lines=pending.split(b"\n")
                     pending=lines.pop()
                     for line in lines:
-                        if b"U2_GENERATOR_TRACE:" in line or b"U2_NATIVE_TRACE:" in line:
+                        if b"U2_GENERATOR_TRACE:" in line or b"U2_NATIVE_TRACE:" in line or b"U2_SSA_TRACE:" in line:
                             print("U2_GENERATOR_PHASE_SECONDS="+
                                   format(time.monotonic()-begun,".3f")+
                                   " marker="+line.decode(errors="replace"),flush=True)
@@ -518,6 +518,39 @@ class U2FunctionCheckedNativeTests(unittest.TestCase):
             self.assertEqual(traced_code.count(needle),1)
             traced_code=traced_code.replace(needle,marker+needle,1)
         traced_emitter.write_text(traced_code,encoding="utf-8")
+
+        # Test-only instrumentation of the SAME temporary compiler modules
+        # imported by both independent C and owned source generators.
+        module_stages=(
+            ("compiler/u2_ssa_liveness.eri", (
+                ("    let verification be try budget.verificationPhase(routine.owner);","create-verification-phase"),
+                ("    let checked be try canonical.verifyFallibleRegistry(","canonical-begin"),
+                ("    let pending be try budget.reserve(routine.owner,512);","canonical-complete"),
+                ("    construct(plan,routine,graph,phase,managedTypes)","construct-begin"),
+                ("    return plan;","create-complete"),
+                ("    let derived be try create(routine,graph,contractsTable,phase,typeList);","reverify-create-begin"),
+                ("    let good be samePlan(plan,derived,phase)","reverify-create-complete"),
+                ("    return report;","reverify-complete"),
+            )),
+            ("compiler/u2_managed_root_gate.eri", (
+                ("    return try ssa.create(routine,graph,table,phase,selected);","rootgate-create-ssa"),
+            )),
+            ("compiler/u2_function_managed_x86_64.eri", (
+                ("    let admissible be label >= 1 and label <= 2147483647 and","compile-ssa-complete"),
+                ("        try verifyCheckedRoots(routine,graph,phase,failureType);","rootcheck-begin"),
+                ("        try require(routine.definedTarget == selfTarget,","rootcheck-complete"),
+            )),
+        )
+        for relative,stages in module_stages:
+            module=folder/relative
+            content=module.read_text(encoding="utf-8")
+            for needle,stage in stages:
+                self.assertEqual(content.count(needle),1)
+                indent=needle[:len(needle)-len(needle.lstrip())]
+                content=content.replace(
+                    needle,indent+'output("# U2_SSA_TRACE:'+stage+'");\n'+needle,1)
+            module.write_text(content,encoding="utf-8")
+
         source=folder/"generator.eri"
         # Test-only GAS comment markers make a timed-out generator observable.
         # The independent C generator receives the same annotated source.
@@ -581,7 +614,7 @@ class U2FunctionCheckedNativeTests(unittest.TestCase):
             markers=[line.decode("utf-8",errors="replace")
                      for line in partial.splitlines()
                      if b"U2_GENERATOR_TRACE:" in line or
-                        b"U2_NATIVE_TRACE:" in line]
+                        b"U2_NATIVE_TRACE:" in line or b"U2_SSA_TRACE:" in line]
             print("U2_GENERATOR_TIMEOUT_PARTIAL_BYTES="+str(len(partial)),
                   "U2_GENERATOR_PHASES="+repr(markers),flush=True)
             raise

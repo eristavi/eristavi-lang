@@ -78,6 +78,22 @@ splits on a real newline and uses an exact post-insertion anchor, verified
 against the source. This is *not* a compiler/runtime fix, does not alter
 the 120-second watchdog, and requires hosted validation.
 
+**Measured U2 owned-generator timeline:** [#42266043455](https://github.com/eristavi/eristavi-lang/actions/runs/42266043455)
+records native emitter entry at **4.111 s**, initial `ssa.verify` entry
+at **57.436 s** (root-plan creation took ~53 s), completion of that
+verification + checked-root admission at **113.668 s** (~56 s), and
+root-publication entry at **119.584 s**. The test timed out at 120 s.
+Prior last-marker-only attribution to publication itself was misleading.
+The primary cost lies in repeated SSA plan construction/verification.
+
+The next test-only source-copy diagnostics timestamp
+`ssa.create`, full canonical fallible-registry verification,
+liveness plan construction, `ssa.verify` rebuild and
+checked-root verification separately. Both owned and C generators
+consume the SAME traced temporary compiler files, preserving the
+byte-identical comparator and original 120-second watchdog.
+No production semantics, verifier gate or ABI is relaxed.
+
 **Next diagnostic (test-only):** measure monotonic elapsed seconds when
 each owned generator phase marker actually arrives on stdout, preserving
 the exact 120-second watchdog, ELF checks and byte-exact comparison.

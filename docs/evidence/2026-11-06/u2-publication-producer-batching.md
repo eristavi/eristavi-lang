@@ -79,6 +79,25 @@ forged backing and refusal cleanup remain required.
 - [`c63f2a6` managed Function #42264207710](https://github.com/eristavi/eristavi-lang/actions/runs/42264207710): 18 methods, 17 pass, 1 unchanged 120-second owned generator timeout. Last marker `publication-build`, not `publication-verify`. Exact performance bottleneck is not yet conclusively explained; this stage position can change across hosted runs.
 - The next revision adds **test-only monotonic timestamps** from stdout lines during the owned binary execution and finer block-level markers in a temporary compiler copy. It retains the absolute watchdog, bytes, status, and independent C comparison. No source-language, verifier, API or production compiler change; validation pending.
 
+## Source-stage timing and refined diagnosis
+
+Hosted [#42266043455](https://github.com/eristavi/eristavi-lang/actions/runs/42266043455)
+failed only the existing owned-generator watchdog (17 other focused
+methods passed). Timestamped phases from generator start:
+0.000 begin; 0.832 metadata; 4.003 Function construction;
+4.111 native emitter entry; 57.436 at `ssa.verify` call entry;
+113.668 after its return and checked-root admission;
+113.821 snapshot; 119.584 publication builder entry;
+120.000 deadline. The original interpretation that root publication
+itself dominated was unsupported: **~110 seconds elapsed in the
+earlier two verification/plan phases**. No performance pass or
+regression claim follows from this incomplete run.
+
+Next isolated source tracing marks canonical verification,
+plan construction, independent plan comparison and checked-root
+verification. Instrumentation changes no production compiler,
+public point-queries, owned-runtime behavior, or timeout.
+
 ## Validation status
 
 - Exact `e40a64b` [Text/List integration #42262075150](https://github.com/eristavi/eristavi-lang/actions/runs/42262075150): **12/12 passed**.
