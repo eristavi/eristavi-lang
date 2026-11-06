@@ -53,7 +53,8 @@ function emitEdge(base Text,edgeId Int,blocks,edges,arguments,
 function emitInstruction(base Text,id Int,frameBytes Int,
     instructions,operands,switches,cases,
     rootCount Int,rootOffset Int,scopeOffset Int,returnOffset Int,
-    transferManaged Bool,callerRootOffset Int) {
+    transferManaged Bool,transferManagedSecond Bool,
+    callerRootOffset Int) {
     let row be (id-1)*10;
     let op be instructions[row];
     let first be instructions[row+2];
@@ -132,13 +133,20 @@ function emitInstruction(base Text,id Int,frameBytes Int,
         // A managed result transfers into an ALREADY REGISTERED caller root
         // before the callee retires any class-1 root or leaves its scope.
         // No collecting runtime call may intervene in this transfer window.
-        if transferManaged {
+        if transferManaged or transferManagedSecond {
             line("movq "+format.integer(callerRootOffset)+"(%rsp),%rdi");
             line("testq %rdi,%rdi");
             line("je erist_rt_value_fault_internal");
-            line("testq %rax,%rax");
-            line("je erist_rt_value_fault_internal");
-            line("movq %rax,(%rdi)");
+            if transferManaged {
+                line("testq %rax,%rax");
+                line("je erist_rt_value_fault_internal");
+                line("movq %rax,(%rdi)");
+            }
+            if transferManagedSecond {
+                line("testq %rdx,%rdx");
+                line("je erist_rt_value_fault_internal");
+                line("movq %rdx,8(%rdi)");
+            }
         }
         line("movq %rax,"+format.integer(returnOffset)+"(%rsp)");
         line("movq %rdx,"+format.integer(returnOffset+8)+"(%rsp)");
@@ -213,6 +221,7 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
     let resultStart be try words.get(routine.metadata.signatures,phase,signatureStart+4);
     if params > 8 or results != 2 { admissible=false; }
     let managedReturn be false;
+    let managedReturnSecond be false;
     let selected be [];
     let i be 0;
     while i < plan.values.length/4 {
@@ -228,8 +237,11 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
                 if ty == (try words.get(plan.types,phase,j)) { found=true; }
                 j=j+1;
             }
-            if i != 0 or not found { admissible=false; }
-            else { managedReturn=true; }
+            if not found { admissible=false; }
+            else {
+                if i == 0 { managedReturn=true; }
+                else { managedReturnSecond=true; }
+            }
         }
         i=i+1;
     }
@@ -388,9 +400,14 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
     line("subq $"+format.integer(frameBytes)+",%rsp");
     line("movq %rdi,%rbx");
     line("movq %rsi,"+format.integer(callerRootOffset)+"(%rsp)");
-    if managedReturn {
+    if managedReturn or managedReturnSecond {
         line("testq %rsi,%rsi");
         line("je erist_rt_value_fault_internal");
+    }
+    if managedReturnSecond {
+        // A second native managed result needs at least two caller root words.
+        line("cmpq $2,%rdx");
+        line("jb erist_rt_value_fault_internal");
     }
     // Clear full SSA and registered root-vector storage first.
     i=0;
@@ -443,7 +460,7 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
             emitInstruction(base,current,frameBytes,
                 instructions,operands,switches,cases,
                 selected.count,rootOffset,scopeOffset,returnOffset,
-                managedReturn,callerRootOffset);
+                managedReturn,managedReturnSecond,callerRootOffset);
             publish(selected,afterBits,(current-1)*selected.count,rootOffset);
             current=instructions[(current-1)*10+9];
         }
@@ -452,7 +469,7 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
         emitInstruction(base,term,frameBytes,
             instructions,operands,switches,cases,
             selected.count,rootOffset,scopeOffset,returnOffset,
-            managedReturn,callerRootOffset);
+            managedReturn,managedReturnSecond,callerRootOffset);
         block=block+1;
     }
     i=1;
