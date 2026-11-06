@@ -1,0 +1,103 @@
+// U2 opt-in mixed Text/List/identity root admission for canonical SSA.
+// DESCRIPTOR METADATA ONLY: this cannot manufacture an ev_value slot, assign
+// a native managed representation or make an unrooted allocation safe.
+// Native callers must independently establish stable boxed slot pointers.
+// Separate structural carriers are mandatory: no ambiguous same-TypeId cast.
+import compiler.u1_budget as budget;
+import compiler.u1_builder as build;
+import compiler.u1_aggregate as aggregate;
+import compiler.u1_aggregate_verify as graphVerify;
+import compiler.u1_verify as canonical;
+import compiler.u2_managed_types as managed;
+import compiler.u2_invoke_contract as contracts;
+import compiler.u2_ssa_liveness as ssa;
+
+public error InvalidManagedRoots { message Text; }
+function require(ok Bool,message Text) fails InvalidManagedRoots {
+    if not ok { fail InvalidManagedRoots { message=message; }; }
+}
+
+// Closed bounded selection: canonical opaque empty aggregate for Text;
+// version-one List/identity descriptor of exact structural carrier for
+// List/identity. Nested managed element descriptors remain unsupported,
+// not silently treated as another root class or shared identity.
+// The resulting Plan independently verifies the ENTIRE Function, including
+// dead CFG and checked-call arguments, at the current source revision.
+public function create(routine identity build.Function,
+    graph identity aggregate.Registry,table identity contracts.Registry,
+    phase identity budget.Phase,registry identity managed.Registry,
+    carriers,descriptors)
+    returns identity ssa.Plan
+    fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,
+        managed.InvalidManagedTypes,graphVerify.InvalidGraph,
+        InvalidManagedRoots {
+    try require(carriers.count >= 1 and carriers.count <= 8 and
+        descriptors.count == carriers.count and
+        registry.graph == graph and registry.graphKey == graph.key and
+        registry.owner == graph.owner and
+        routine.owner.parent == graph.owner.parent and
+        phase.owner == routine.owner and phase.state == 0 and
+        routine.state == 1,
+        "foreign or unsupported mixed managed SSA root profile");
+    let read be try budget.verificationPhase(registry.owner);
+    let report be managed.verify(registry,graph,read)
+        else error budget.LimitError {
+            try budget.finishPhase(read); fail error;
+        }
+        else error managed.InvalidManagedTypes {
+            try budget.finishPhase(read); fail error;
+        }
+        else error graphVerify.InvalidGraph {
+            try budget.finishPhase(read); fail error;
+        };
+    let acceptable be report.types >= descriptors.count;
+    let selected be [];
+    let i be 0;
+    while i < carriers.count {
+        let carrier aggregate.TypeId be carriers[i];
+        let selectedType managed.TypeId be descriptors[i];
+        let shape be managed.descriptor(registry,read,selectedType)
+            else error budget.LimitError {
+                try budget.finishPhase(read); fail error;
+            };
+        if carrier.owner != graph.key or carrier.index < 7 or
+            carrier.index > 6+graph.records.length/4 {
+            acceptable=false;
+        } else {
+            if shape.kind == 1 {
+                if selectedType.index != 1 or shape.copyPolicy != 1 or
+                    shape.elementDomain != 0 or shape.element != 0 or
+                    (try aggregate.fieldCount(graph,read,carrier)) != 0 {
+                    acceptable=false;
+                }
+            } else {
+                if shape.elementDomain != 0 or shape.element != carrier.index {
+                    acceptable=false;
+                }
+                if shape.kind == 2 {
+                    if shape.copyPolicy != 1 { acceptable=false; }
+                } else {
+                    if shape.kind != 3 or shape.copyPolicy != 2 {
+                        acceptable=false;
+                    }
+                }
+            }
+        }
+        let j be 0;
+        while j < i {
+            let previous aggregate.TypeId be carriers[j];
+            let previousType managed.TypeId be descriptors[j];
+            if previous.index == carrier.index or
+                previousType.index == selectedType.index {
+                acceptable=false;
+            }
+            j=j+1;
+        }
+        selected.add(carrier);
+        i=i+1;
+    }
+    try budget.finishPhase(read);
+    try require(acceptable,
+        "ambiguous, unsupported or noncanonical managed root descriptors");
+    return try ssa.create(routine,graph,table,phase,selected);
+}
