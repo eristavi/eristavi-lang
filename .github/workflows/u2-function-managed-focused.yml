@@ -6,6 +6,7 @@ on:
       - src/compiler/u2_function_managed_x86_64.eri
       - src/compiler/u2_function_contract.eri
       - src/compiler/u2_ssa_liveness.eri
+      - src/compiler/u1_words.eri
       - src/compiler/u2_managed_root_gate.eri
       - src/compiler/u1_builder.eri
       - src/compiler/u1_ops.eri
@@ -38,6 +39,10 @@ jobs:
         run: python -m pip install -e .
       - name: Compile Python tests and compiler
         run: python -m compileall -q tests/test_u2_function_managed_native.py tests/test_u2_function_checked_native.py compiler
+      - name: Check original U1a exact radix backing and refusal work accounting
+        run: |
+          set -o pipefail
+          PYTHONPATH=tests python -u -m unittest -v test_u1_words_path 2>&1 | tee "$RUNNER_TEMP/u1a-word-path.log"
       - name: Run physical owned-runtime managed Function tests
         run: |
           set -o pipefail
@@ -48,4 +53,6 @@ jobs:
         with:
           name: u2-managed-function-${{ github.run_attempt }}
           retention-days: 14
-          path: ${{ runner.temp }}/u2-managed-function.log
+          path: |
+            ${{ runner.temp }}/u2-managed-function.log
+            ${{ runner.temp }}/u1a-word-path.log

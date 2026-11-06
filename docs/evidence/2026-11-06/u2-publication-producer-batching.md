@@ -168,6 +168,41 @@ The optional trace remains available without contaminating standard
 qualification. No production compiler/runtime/ABI change in this patch.
 Exact-head qualification pending.
 
+## Candidate: fast successful radix read with original refusal path
+
+After the clean uninstrumented
+[run #42271055504](https://github.com/eristavi/eristavi-lang/actions/runs/42271055504)
+failed the unchanged 120-second owned/C generator watchdog (17/18 passed),
+we traced hot canonical verification to repeated frozen word-store reads.
+The accepted `u1_words.get` implementation invokes `budget.work(phase,1)`
+at entry and then six additional times at the individual 6-level radix
+child reads. Each owner/phase work call validates accounting state and
+polls cancellation. For many legitimate SSA/verifier reads this is
+substantial repeated work. We did **not** relax the watchdog or skip a proof.
+
+The proposed *source* fast path:
+- Reread the **current** complete six-level radix node/page graph on
+  every call (no cache / trusted summary / retained pointer).
+- Enter fast path only with a fully present page and capacity to charge
+  **all seven units** under the phase, owner and parent work limits;
+  then call `budget.work(phase,7)` exactly once, returning the original
+  page word.
+- For any incomplete backing or inadequate work budget, delegate to
+  the byte-for-byte original slow per-level `budget.work(1)` path.
+  Thus missing root/child/page and limited-budget exact failure
+  categories, requested/remaining figures, and `phase.used` advances
+  remain unchanged. Every successful read still charges exactly 7 units.
+- No changes to `set`, `push`, phase/owner schema, source syntax,
+  allocator ownership, emission, root verification or public ABI.
+
+**Acceptance gates:** `test_u1_words_path` on original C and owned
+native runtimes; U2 checked generator still at original 120 seconds with
+independent byte-for-byte C/owned output and depth-32 forced-GC oracle;
+checked/managed, Text/List, SSA/identity roots, malformed/stale/dead/
+owner fault matrix and documented physical resource limits. Roll back
+candidate if those fail; do not treat structural reasoning as a pass.
+No exact-head results or speedup recorded yet.
+
 ## Validation status
 
 - Exact `e40a64b` [Text/List integration #42262075150](https://github.com/eristavi/eristavi-lang/actions/runs/42262075150): **12/12 passed**.

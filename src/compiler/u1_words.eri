@@ -73,8 +73,48 @@ function pageAt(words identity Words,phase identity budget.Phase,index Int,creat
     return try needPage(node.page);
 }
 public function get(words identity Words,phase identity budget.Phase,index Int) returns Int fails budget.LimitError {
-    try context(words,phase,false); if index < 0 or index >= words.length { try budget.reject("U1a word index out of range"); }
-    try budget.work(phase,1); let page be try readPath(words,phase,index); return readPage(page,index%16);
+    try context(words,phase,false);
+    if index < 0 or index >= words.length { try budget.reject("U1a word index out of range"); }
+    // Hot, valid frozen verifier/SSA reads cost seven word-work units:
+    // one entry unit and one per radix child. When the CURRENT complete
+    // backing is present and ALL seven units are available, charge exactly
+    // those units in a single bounded budget.work call. No cache, owner
+    // bypass or backing snapshot: every access re-reads the current path.
+    //
+    // On missing/corrupt paths or insufficient budgets, take the ORIGINAL
+    // per-level path below. Its early-failure work, cancellation, requested
+    // amount and remaining count are part of the accepted U1a contract.
+    let owner be phase.owner;
+    let enough be phase.state == 0 and
+        phase.limit-phase.used >= 7 and
+        owner.workLimit-owner.work >= 7;
+    let parent be owner.parent;
+    if parent != none {
+        let root identity budget.Owner be parent;
+        if root.workLimit-root.work < 7 { enough=false; }
+    }
+    if enough {
+        let pageIndex be index/16;
+        let cursor be words.root;
+        let divisor be 1048576;
+        while cursor != none and divisor >= 1 {
+            let node identity Node be cursor;
+            cursor=readChild(node,pageIndex/divisor%16);
+            divisor=divisor/16;
+        }
+        if cursor != none and divisor == 0 {
+            let leaf identity Node be cursor;
+            let optionalPage be leaf.page;
+            if optionalPage != none {
+                let present identity Page be optionalPage;
+                try budget.work(phase,7);
+                return readPage(present,index%16);
+            }
+        }
+    }
+    try budget.work(phase,1);
+    let page be try readPath(words,phase,index);
+    return readPage(page,index%16);
 }
 public function set(words identity Words,phase identity budget.Phase,index Int,value Int) fails budget.LimitError {
     try context(words,phase,true); if index < 0 or index >= words.length { try budget.reject("U1a word index out of range"); }

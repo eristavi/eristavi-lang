@@ -1,6 +1,6 @@
 # Eristavi compiler — current handover
 
-Updated 6 November 2026 (Asia/Nicosia). Checked-root verified emission performance candidate.
+Updated 6 November 2026 (Asia/Nicosia). U2 verifier word-read performance candidate; exact-source acceptance pending.
 Branch: `compiler/u2-cleanup-foundation-20261102`; [PR #111](https://github.com/eristavi/eristavi-lang/pull/111) remains DRAFT; #74 remains OPEN.
 Original checked-return checkpoint: `3100dc8e82f8e496d61fd38d0cdab5311416bd36`.
 Prior publication implementation: `e40a64b3c8b7774dc68d3220f6b208ee38854ca6`. Earlier exact diagnostic: `a51182e663e645777186e9f6551bdc7081f36916`.
@@ -8,6 +8,32 @@ Current checked-only deferred-middle-proof implementation is in this containing 
 Current development is not qualified or merged. Optimization #51 remains PAUSED.
 
 ## Current blocker and next action
+
+**Current production implementation candidate (containing commit):**
+`src/compiler/u1_words.eri` now has a bounded, *valid-read-only* fast
+path. All seven original work units are charged on a successful read with
+an unchanged six-child radix traversal, using one budget call **only if**
+the current path/page is complete and the phase, owner and parent limits
+can pay the entire charge. No cached path, owner trust flag, ownership
+change, extra allocation or ABI change. A bad/missing radix child/page,
+a closed/cancelled state or a low remaining work budget takes the
+**original exact per-level slow path** and error order. Source-level
+safety tests `test_u1_words_path` cover every corrupted radix depth,
+frozen current backing, owner traffic and budget limits 0..6, and must
+PASS on both C-bootstrap and owned runtimes. This change targets the
+**measured U2 canonical-verifier/liveness read overhead**; independent
+canonical/root verification is unchanged, and separate optimization
+#51 stays PAUSED. No speedup is claimed until exact-head tests.
+
+**Latest clean baseline:** [managed #42271055504](https://github.com/eristavi/eristavi-lang/actions/runs/42271055504)
+at `dc0ce3f` ran **18 methods / 17 pass / 1 uninstrumented
+120-second owned-generator timeout**; it emitted no output before deadline.
+[Text/List integration #42270143006](https://github.com/eristavi/eristavi-lang/actions/runs/42270143006)
+on same production compiler (prior test-only commit) **12/12 PASS**.
+The prior checked-only deferred middle verifier improvement remains
+implemented but not qualified. **New word-read fast path is untested**;
+first run exact depth/failure-accounting test and hosted owned/C generator
+comparison; do not mark U2 accepted, PR #111 merged, or issue #74 closed.
 
 **Source state:** current development candidate is the containing commit after
 `a51182e`. The checked-profile-only producer now **defers** the middle
