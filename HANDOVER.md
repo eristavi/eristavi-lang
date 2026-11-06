@@ -70,6 +70,14 @@ the last observed marker was again `publication-build`. No
 exact-head passing generator result, performance speedup, or full U2
 qualification has been established.
 
+**Diagnostic harness correction before hosted measurement:** the
+first test-only tracing patch accidentally encoded a double-escaped newline
+in the Python stdout reader and inserted one progress marker at an anchor
+that the earlier phase markers had already split. The corrected test now
+splits on a real newline and uses an exact post-insertion anchor, verified
+against the source. This is *not* a compiler/runtime fix, does not alter
+the 120-second watchdog, and requires hosted validation.
+
 **Next diagnostic (test-only):** measure monotonic elapsed seconds when
 each owned generator phase marker actually arrives on stdout, preserving
 the exact 120-second watchdog, ELF checks and byte-exact comparison.

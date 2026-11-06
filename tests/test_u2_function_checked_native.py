@@ -51,7 +51,7 @@ def capture_traced_owned_generator(command,env,timeout):
                 if stream is process.stdout:
                     stdout.extend(chunk)
                     pending+=chunk
-                    lines=pending.split(b"\\n")
+                    lines=pending.split(b"\n")
                     pending=lines.pop()
                     for line in lines:
                         if b"U2_GENERATOR_TRACE:" in line or b"U2_NATIVE_TRACE:" in line:
@@ -504,15 +504,15 @@ class U2FunctionCheckedNativeTests(unittest.TestCase):
         # progress without altering original compiler sources.
         progress_marks=(
             ("    let rowCount be (instructions.count/10)*selected.count;",
-             '    output("# U2_NATIVE_TRACE:buffer-start");\\n'),
+             '    output("# U2_NATIVE_TRACE:buffer-start");\n'),
             ("        // Preserve the original linked instruction order;",
-             '        output("# U2_NATIVE_TRACE:entry:"+format.integer(block));\\n'),
+             '        output("# U2_NATIVE_TRACE:entry:"+format.integer(block));\n'),
             ("        let terminator be blocks[(block-1)*5+4];",
-             '        output("# U2_NATIVE_TRACE:chain:"+format.integer(block));\\n'),
+             '        output("# U2_NATIVE_TRACE:chain:"+format.integer(block));\n'),
             ("            let liveOut be (try words.get(plan.outputs,phase,",
-             '            if j == 0 { output("# U2_NATIVE_TRACE:first-suffix:"+format.integer(block)); }\\n'),
-            ("        block=block+1;\\n    }\\n    // Verify the entire immutable publication product at one boundary instead",
-             '        output("# U2_NATIVE_TRACE:block-done:"+format.integer(block));\\n'),
+             '            if j == 0 { output("# U2_NATIVE_TRACE:first-suffix:"+format.integer(block)); }\n'),
+            ("        block=block+1;\n    }\n    output(\"# U2_NATIVE_TRACE:publication-verify\");\n    // Verify the entire immutable publication product at one boundary instead",
+             '        output("# U2_NATIVE_TRACE:block-done:"+format.integer(block));\n'),
         )
         for needle,marker in progress_marks:
             self.assertEqual(traced_code.count(needle),1)
