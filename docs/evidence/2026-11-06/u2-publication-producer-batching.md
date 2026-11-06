@@ -98,6 +98,27 @@ plan construction, independent plan comparison and checked-root
 verification. Instrumentation changes no production compiler,
 public point-queries, owned-runtime behavior, or timeout.
 
+## Verification vs plan construction — measured breakdown
+
+Exact-head [run #42267466631](https://github.com/eristavi/eristavi-lang/actions/runs/42267466631)
+at `8d94a439`: 18 checked+managed focused tests, 17 pass, 1 owned
+source-generator watchdog timeout at unchanged 120 seconds. Host-monotonic
+timestamps around two independent liveness proofs:
+
+| Phase | Start | End | Observed elapsed |
+| --- | ---: | ---: | ---: |
+| First canonical verification | 9.895 s | 40.990 s | **31.095 s** |
+| First SSA plan construction | 40.998 s | 57.633 s | **16.635 s** |
+| Second canonical verification | 57.653 s | 91.442 s | **33.789 s** |
+| Second SSA plan construction | 91.451 s | 109.300 s | **17.849 s** |
+| Comparison and admission | 109.300 s | 114.198 s | ~4.898 s |
+
+No independent owned/C generator parity result or wall-clock speedup.
+Next narrow diagnostic instruments `u1_verify.inspect` stages (bounds,
+metadata, contracts, structure, dominance/SSA) and the SSA plan's
+select/uses/flow, **only inside the temporary test compiler source**. No
+production compiler, ABI, watchdog, root verifier or owner semantics change.
+
 ## Validation status
 
 - Exact `e40a64b` [Text/List integration #42262075150](https://github.com/eristavi/eristavi-lang/actions/runs/42262075150): **12/12 passed**.

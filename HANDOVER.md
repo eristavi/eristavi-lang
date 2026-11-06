@@ -9,6 +9,20 @@ Current development is not qualified or merged. Optimization #51 remains PAUSED.
 
 ## Current blocker and next action
 
+**Latest exact-head diagnostic (previous session):** commit `8d94a439`,
+[focused run #42267466631](https://github.com/eristavi/eristavi-lang/actions/runs/42267466631),
+18 methods: **17 passed, 1 owned-generator timeout at unchanged 120 s**.
+Timestamped `ssa.create`/reverify trace: first
+`canonical.verifyFallibleRegistry` **31.1 s**, first liveness construct
+**16.6 s**; independently repeated canonical verification **33.8 s**,
+second liveness construct **17.8 s**, plan comparison approximately **4.2 s**.
+These measured times dominate the remaining budget *before* root publication.
+The current test-only revision adds more granular markers in isolated copies
+of `u1_verify.inspect` and `u2_ssa_liveness.construct` to locate the
+costliest substage. **No production code changed in this diagnostic commit.**
+Keep verification, malformed/dead block refusals and budgets fully intact;
+do not call this a speedup or accepted work.
+
 The owned-versus-C source-generator comparison exceeds its **120-second**
 watchdog. Hosted diagnostic [#42259784644](https://github.com/eristavi/eristavi-lang/actions/runs/42259784644)
 passed **17/18 tests**; the remaining test timed out after markers `begin`,

@@ -523,6 +523,11 @@ class U2FunctionCheckedNativeTests(unittest.TestCase):
         # imported by both independent C and owned source generators.
         module_stages=(
             ("compiler/u2_ssa_liveness.eri", (
+                ("    try select(plan,routine,graph,phase,chosen);","liveness-select-begin"),
+                ("    let total be plan.blocks*(plan.values.length/4);","liveness-select-done"),
+                ("    try markUses(plan,routine,phase);","liveness-use-scan"),
+                ("    try flow(plan,routine,phase);","liveness-flow"),
+                ("    try words.freeze(plan.types); try words.freeze(plan.values);","liveness-flow-done"),
                 ("    let verification be try budget.verificationPhase(routine.owner);","create-verification-phase"),
                 ("    let checked be try canonical.verifyFallibleRegistry(","canonical-begin"),
                 ("    let pending be try budget.reserve(routine.owner,512);","canonical-complete"),
@@ -531,6 +536,14 @@ class U2FunctionCheckedNativeTests(unittest.TestCase):
                 ("    let derived be try create(routine,graph,contractsTable,phase,typeList);","reverify-create-begin"),
                 ("    let good be samePlan(plan,derived,phase)","reverify-create-complete"),
                 ("    return report;","reverify-complete"),
+            )),
+            ("compiler/u1_verify.eri", (
+                ("    try bounds(context);","canonical-inspect-start"),
+                ("    try signatures(context); try sources(context); try declarations(context);","canonical-bounds-done"),
+                ("    try fallibleContracts(context);","canonical-metadata-done"),
+                ("    try structure(context);","canonical-contract-done"),
+                ("    try locations(context); try reachableSSA(context);","canonical-structure-done"),
+                ("    return Report { reachableBlocks=context.graph.reachable;","canonical-dominance-done"),
             )),
             ("compiler/u2_managed_root_gate.eri", (
                 ("    return try ssa.create(routine,graph,table,phase,selected);","rootgate-create-ssa"),
