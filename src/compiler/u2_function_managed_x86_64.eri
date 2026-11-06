@@ -318,10 +318,12 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
     let typeRead be try budget.verificationPhase(registry.owner);
     let marker be 0;
     while marker < carriers.count {
-        let desc be try managed.descriptor(registry,typeRead,descriptors[marker]);
-        if desc.kind == 1 { textCarrier=carriers[marker].index; }
+        let carrier aggregate.TypeId be carriers[marker];
+        let descriptor managed.TypeId be descriptors[marker];
+        let desc be try managed.descriptor(registry,typeRead,descriptor);
+        if desc.kind == 1 { textCarrier=carrier.index; }
         if desc.kind == 2 and desc.elementDomain == 0 and desc.element == 2 {
-            listCarrier=carriers[marker].index;
+            listCarrier=carrier.index;
         }
         marker=marker+1;
     }
