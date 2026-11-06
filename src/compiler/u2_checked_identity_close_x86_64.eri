@@ -187,11 +187,11 @@ public function emit(routine identity build.Function,
     line("testq %rax,%rax"); line("je erist_rt_value_fault_internal");
     line("cmpq %rax,(%rbx)"); line("jne erist_rt_value_fault_internal");
     line("movq $0,"+from+"(%r15)");
-    line("cmpq $0,16(%rsp)"); line("je "+base+"_normal");
+    line("cmpq $0,16(%rsp)"); line("je "+base+"_identity_normal");
     line("movq %rax,"+failed+"(%r15)");
     line("movq $-1,%rax");
     line("jmp "+base+"_leave");
-    output(base+"_normal:");
+    output(base+"_identity_normal:");
     line("movq %rax,"+normal+"(%r15)");
     line("xorl %eax,%eax");
     output(base+"_leave:");
