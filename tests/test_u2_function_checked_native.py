@@ -1,6 +1,7 @@
 """Canonical checked Function recursion: native branches, typed failures and roots."""
 from pathlib import Path
 import platform
+import shutil
 import subprocess
 import time
 import unittest
@@ -421,7 +422,30 @@ class U2FunctionCheckedNativeTests(unittest.TestCase):
     def test_owned_and_c_bootstrap_generators_emit_identical_checked_function(self):
         folder=self.directory/"checked-owned-generator"
         folder.mkdir()
-        (folder/"compiler").symlink_to(ROOT/"src/compiler",target_is_directory=True)
+        # Isolate profiling annotations from the original compiler sources.
+        # Both owned and C generators below use this exact temporary copy.
+        shutil.copytree(ROOT/"src/compiler",folder/"compiler")
+        traced_emitter=folder/"compiler/u2_function_managed_x86_64.eri"
+        traced_code=traced_emitter.read_text(encoding="utf-8")
+        phases=(
+            ("    let proof be try ssa.verify(plan,routine,graph,table,phase);",
+             "ssa-verified"),
+            ("    let managedReturn be false;", "signature-admitted"),
+            ("    // Snapshot the frozen canonical Function tables before emitting any code.",
+             "snapshot"),
+            ("    // Independently prove EACH publication obligation, including dead blocks.",
+             "publication-build"),
+            ("    // Verify the entire immutable publication product at one boundary instead",
+             "publication-verify"),
+            ("    // Precharge ALL output work. From here only pure string/array operations.",
+             "publication-done"),
+            ('    output(".section .rodata");', "assembly-begin"),
+        )
+        for needle,checkpoint in phases:
+            self.assertEqual(traced_code.count(needle),1)
+            traced_code=traced_code.replace(
+                needle,'    output("# U2_NATIVE_TRACE:'+checkpoint+'");\n'+needle,1)
+        traced_emitter.write_text(traced_code,encoding="utf-8")
         source=folder/"generator.eri"
         # Test-only GAS comment markers make a timed-out generator observable.
         # The independent C generator receives the same annotated source.
@@ -484,7 +508,8 @@ class U2FunctionCheckedNativeTests(unittest.TestCase):
             partial=error.stdout or b""
             markers=[line.decode("utf-8",errors="replace")
                      for line in partial.splitlines()
-                     if b"U2_GENERATOR_TRACE:" in line]
+                     if b"U2_GENERATOR_TRACE:" in line or
+                        b"U2_NATIVE_TRACE:" in line]
             print("U2_GENERATOR_TIMEOUT_PARTIAL_BYTES="+str(len(partial)),
                   "U2_GENERATOR_PHASES="+repr(markers),flush=True)
             raise
@@ -492,7 +517,15 @@ class U2FunctionCheckedNativeTests(unittest.TestCase):
               flush=True)
         self.assertEqual((owned.returncode,owned.stderr),(0,b""),
                          owned.stdout[-2000:].decode(errors="replace"))
-        bootstrap=self.generator("checked-c-generator",traced_source)
+        c_folder=self.directory/"checked-c-generator"
+        c_folder.mkdir()
+        (c_folder/"compiler").symlink_to(folder/"compiler",target_is_directory=True)
+        c_source=c_folder/"generator.eri"
+        c_source.write_text(traced_source,encoding="utf-8")
+        c_generator=c_folder/"generator"
+        self.assertEqual(build_native(c_source,c_generator,c_folder),0)
+        bootstrap=subprocess.run([str(c_generator)],capture_output=True,
+                                 text=True,timeout=150)
         self.assertEqual((bootstrap.returncode,bootstrap.stderr),(0,""),
                          bootstrap.stdout[-2000:])
         self.assertEqual(owned.stdout,bootstrap.stdout.encode())

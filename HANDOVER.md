@@ -10,9 +10,21 @@ This continuation adds **test-only**, identical GAS-comment phase markers
 to both generator inputs, plus partial-stdout phase extraction on the existing
 120-second owned-generator timeout. It changes no compiler implementation,
 source-language semantics, 32-byte public ABI, U2 gate, or watchdog threshold.
-This is diagnostic evidence only; **do not mark the latest code green** until
-the watchdog and exact-source validation pass. The previous unqualified
-implementation stop checkpoint and detailed recovery instructions follow.
+Initial hosted diagnostic [#42259784644](https://github.com/eristavi/eristavi-lang/actions/runs/42259784644)
+confirmed **17 of 18 tests passed**, and the owned generator timed out at the
+unchanged 120-second watchdog after exactly five phase markers:
+`begin`, `metadata`, `function`, `native-phase`, `native-emit`.
+This confines the stall to `native.emitChecked`, not metadata/Function
+construction. The initial diagnostic adds no semantics or ABI change. The
+next test-only revision copies the compiler modules into the fixture's
+temporary source root and places further GAS-comment phase markers around
+SSA verification, function-table snapshots, publication construction,
+independent publication verification and initial assembly emission.
+Both owned and C generators use that identical isolated instrumented source;
+the production `src/compiler` is unmodified. This is still diagnostic
+evidence only; **do not mark the latest code green** until the watchdog and
+exact-source validation pass. The previous unqualified implementation
+stop checkpoint and detailed recovery instructions follow.
 
 ## Exact recovery point
 
