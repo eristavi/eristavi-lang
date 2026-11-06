@@ -75,6 +75,45 @@ _start:
         self.assertEqual((executed.returncode,executed.stdout,
                           executed.stderr),(0,b"",b""))
 
+    def test_sparse_unsigned_switch_parallel_edges(self):
+        source=self.fixture()
+        original=("    try ab.branch(fn,graph,loop,again,loop,[second,first,off],\n"
+                  "        exit,[second,first],loc);")
+        self.assertEqual(source.count(original),1)
+        replacement=(
+            "    let repeatEdge be try build.edge(fn,loop,[second,first,off]);\n"
+            "    let negativeEdge be try build.edge(fn,exit,[first,second]);\n"
+            "    let defaultEdge be try build.edge(fn,exit,[second,first]);\n"
+            "    try build.switchInteger(fn,loop,first,[37,-1],"
+            "[repeatEdge,negativeEdge],defaultEdge,loc);")
+        source=source.replace(original,replacement,1)
+        created=self.generator("native-scalar-switch",source)
+        self.assertEqual((created.returncode,created.stderr),(0,""),
+                         created.stdout[-2400:])
+        asm=created.stdout
+        self.assertIn("movabsq $-1,%rcx",asm)
+        self.assertIn("movabsq $37,%rcx",asm)
+        self.assertIn("erist_u2_function_83_edge_5:",asm)
+        checks=((37,37,11),(8,11,8),(-1,-1,11))
+        for index,(value,first,second) in enumerate(checks):
+            body=(
+                "\n.text\n.globl _start\n_start:\n"
+                "    leaq .Lu2_cfg_input(%rip),%rdi\n"
+                "    call erist_u2_function_83\n"
+                "    movabsq $"+str(first)+",%rcx\n"
+                "    cmpq %rcx,%rax\n"
+                "    jne .Lgraph_test_fail\n"
+                "    movabsq $"+str(second)+",%rcx\n"
+                "    cmpq %rcx,%rdx\n"
+                "    jne .Lgraph_test_fail\n"
+                "    jmp .Lgraph_finish\n"
+                ".section .rodata\n.p2align 3\n.Lu2_cfg_input:\n"
+                ".quad "+str(value)+"\n")
+            done=self.run_probe("u2-native-switch-"+str(index),
+                                asm+body+graph.FINISH)
+            self.assertEqual((done.returncode,done.stdout,done.stderr),
+                             (0,b"",b""), (value,done.stderr))
+
     def test_unsupported_dead_aggregate_rejected_before_assembly(self):
         source=self.fixture()
         anchor="    try ab.returnValues(fn,graph,dead,[never,eleven],loc);"
