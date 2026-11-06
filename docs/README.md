@@ -102,5 +102,12 @@ a performance pass, source-compilation speedup or full owned self-build.
 The [complete pre-cleanup snapshot](history/2026-11-02/HANDOVER_BEFORE_CLEANUP.md)
 preserves former §§1–92, intermediate failures, measurements and publication
 identities. Its commands and pending statuses are historical, not instructions
-to restart completed or paused work. Development remains stopped at the tested
-U2 foundation pending a new user instruction.
+to restart completed or paused work. This 2 November stop is superseded by the
+current handover and subsequent explicit authorization to continue U2.
+
+## Whole-Function managed recursion — 6 November 2026
+
+[Managed recursive native calls](architecture/UIR_U2_FUNCTION_MANAGED_RECURSION.md)
+documents the original canonical Function self-call boundary, automatic parent
+and child roots, managed result handoff, budgets, evidence and remaining checked
+failure/nested-value acceptance. This is opt-in U2 development, not #74 closure.
