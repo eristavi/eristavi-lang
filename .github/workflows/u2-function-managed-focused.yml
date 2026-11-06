@@ -1,0 +1,40 @@
+name: U2 whole-Function managed root and GC focused checks
+on:
+  push:
+    branches: [compiler/u2-cleanup-foundation-20261102]
+    paths:
+      - src/compiler/u2_function_managed_x86_64.eri
+      - tests/fixtures/u2_function_managed_cfg.eri
+      - tests/test_u2_function_managed_native.py
+      - .github/workflows/u2-function-managed-focused.yml
+permissions:
+  contents: read
+concurrency:
+  group: u2-function-managed-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  managed-function:
+    runs-on: ubuntu-latest
+    env:
+      CC: clang
+      CFLAGS: -O2
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install compiler bootstrap
+        run: python -m pip install -e .
+      - name: Compile Python tests and compiler
+        run: python -m compileall -q tests/test_u2_function_managed_native.py compiler
+      - name: Run physical owned-runtime managed Function tests
+        run: |
+          set -o pipefail
+          PYTHONPATH=tests python -u -m unittest -v test_u2_function_managed_native 2>&1 | tee "$RUNNER_TEMP/u2-managed-function.log"
+      - name: Preserve managed Function logs
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: u2-managed-function-${{ github.run_attempt }}
+          retention-days: 14
+          path: ${{ runner.temp }}/u2-managed-function.log
