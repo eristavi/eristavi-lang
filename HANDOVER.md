@@ -50,7 +50,15 @@ change public point APIs, skip a validation row, weaken cleanup/root
 requirements or alter public ABI. The verifier is structurally independent
 of the emitter's reverse suffix-use producer. Synthetic randomized
 reference-model parity: **3,093,668 cases, zero mismatches** (not a native
-qualification). **Hosted exact-source owned-generator tests are pending**;
+qualification). **First attempted verifier-build result:** [#42263997707](https://github.com/eristavi/eristavi-lang/actions/runs/42263997707)
+FAILED at frontend semantic analysis, before source execution: the candidate
+redeclared existing local `i` in a nested lexical block
+(`name 'i' is already visible` at `u2_ssa_liveness.eri:516`).
+This is a candidate-source scoping error, not a root liveness failure.
+The next corrected revision reuses the existing mutable binding (`i=0`);
+no language semantics or check is relaxed. The initial red builds do not
+provide execution, sanitizer or speedup evidence.
+**Hosted exact-source owned-generator tests are pending**;
 no speedup or completion is claimed. `U2` and #74 remain unaccepted/open.
 
 The newest development revision replaces repeated emitter tail rescans with

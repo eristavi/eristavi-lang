@@ -513,7 +513,7 @@ public function verifyPublications(plan identity Plan,routine identity build.Fun
     let block be 1;
     while block <= proof.blocks {
         let offset be (block-1)*size;
-        let i be 0;
+        i=0;
         while i < size {
             try budget.work(phase,1);
             let expected be 0;
