@@ -22,7 +22,7 @@ function check(ok Bool,message Text) fails ProbeError {
 }
 function run()
     fails budget.LimitError,canonical.InvalidIR,graphVerify.InvalidGraph,
-        contracts.InvalidContract,managed.InvalidManagedTypes,
+        managed.InvalidManagedTypes,
         roots.InvalidManagedRoots,ssa.InvalidLiveness,native.Unsupported,
         ProbeError {
     let root be try budget.developmentRequest();
@@ -92,8 +92,6 @@ function main() {
         output("invalid:"+error.message); process.setExitCode(1);
     } else error graphVerify.InvalidGraph {
         output("graph:"+error.message); process.setExitCode(1);
-    } else error contracts.InvalidContract {
-        output("contract:"+error.message); process.setExitCode(1);
     } else error managed.InvalidManagedTypes {
         output("managed:"+error.message); process.setExitCode(1);
     } else error roots.InvalidManagedRoots {
