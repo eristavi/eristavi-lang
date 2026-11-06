@@ -61,6 +61,24 @@ provide execution, sanitizer or speedup evidence.
 **Hosted exact-source owned-generator tests are pending**;
 no speedup or completion is claimed. `U2` and #74 remain unaccepted/open.
 
+**Latest hosted check of corrected last-use verifier `c63f2a6`:**
+[SSA/List #42264207607](https://github.com/eristavi/eristavi-lang/actions/runs/42264207607)
+**8/8 PASS**; [identity roots #42264207644](https://github.com/eristavi/eristavi-lang/actions/runs/42264207644)
+**15/15 PASS**. [Managed whole-Function #42264207710](https://github.com/eristavi/eristavi-lang/actions/runs/42264207710)
+executed **18 methods: 17 pass, 1 owned generator timeout at 120 seconds**;
+the last observed marker was again `publication-build`. No
+exact-head passing generator result, performance speedup, or full U2
+qualification has been established.
+
+**Next diagnostic (test-only):** measure monotonic elapsed seconds when
+each owned generator phase marker actually arrives on stdout, preserving
+the exact 120-second watchdog, ELF checks and byte-exact comparison.
+Additional markers expose buffer allocation, block-entry production,
+per-block instruction chains, first suffix calculation and completed
+blocks; all are injected into an isolated compiler copy, never production
+source. This resolves whether repeated expensive allocations or a specific
+block/value phase dominates before choosing another production edit.
+
 The newest development revision replaces repeated emitter tail rescans with
 bounded reverse suffix-use and forward definition sweeps, preserving frozen
 linked instruction order and global SSA IDs. Every produced root bit still

@@ -1,6 +1,8 @@
 """Canonical checked Function recursion: native branches, typed failures and roots."""
 from pathlib import Path
+import os
 import platform
+import select
 import shutil
 import subprocess
 import time
@@ -15,6 +17,59 @@ import test_u2_function_managed_native as managedTests
 from test_freestanding_text_lifetimes import audit_slot_count
 
 ROOT=Path(__file__).resolve().parents[1]
+
+
+
+def capture_traced_owned_generator(command,env,timeout):
+    """Read static owned-generator output, timestamping original phase markers.
+
+    The elapsed watchdog remains unchanged; captured bytes and exit status
+    remain available for the exact independent C-generator comparison.
+    """
+    begun=time.monotonic()
+    stdout=bytearray()
+    stderr=bytearray()
+    pending=b""
+    process=subprocess.Popen(command,env=env,stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE)
+    streams={process.stdout:stdout,process.stderr:stderr}
+    try:
+        while streams:
+            remaining=timeout-(time.monotonic()-begun)
+            if remaining<=0:
+                raise subprocess.TimeoutExpired(command,timeout,
+                                                bytes(stdout),bytes(stderr))
+            ready,_,_=select.select(list(streams),[],[],remaining)
+            if not ready:
+                raise subprocess.TimeoutExpired(command,timeout,
+                                                bytes(stdout),bytes(stderr))
+            for stream in ready:
+                chunk=os.read(stream.fileno(),8192)
+                if not chunk:
+                    del streams[stream]
+                    continue
+                if stream is process.stdout:
+                    stdout.extend(chunk)
+                    pending+=chunk
+                    lines=pending.split(b"\\n")
+                    pending=lines.pop()
+                    for line in lines:
+                        if b"U2_GENERATOR_TRACE:" in line or b"U2_NATIVE_TRACE:" in line:
+                            print("U2_GENERATOR_PHASE_SECONDS="+
+                                  format(time.monotonic()-begun,".3f")+
+                                  " marker="+line.decode(errors="replace"),flush=True)
+                else:
+                    stderr.extend(chunk)
+        remaining=max(0,timeout-(time.monotonic()-begun))
+        status=process.wait(timeout=remaining)
+        return subprocess.CompletedProcess(command,status,
+                                           bytes(stdout),bytes(stderr))
+    finally:
+        if process.poll() is None:
+            process.kill()
+        process.wait()
+        process.stdout.close()
+        process.stderr.close()
 
 
 @unittest.skipUnless(platform.system()=="Linux" and
@@ -445,6 +500,23 @@ class U2FunctionCheckedNativeTests(unittest.TestCase):
             self.assertEqual(traced_code.count(needle),1)
             traced_code=traced_code.replace(
                 needle,'    output("# U2_NATIVE_TRACE:'+checkpoint+'");\n'+needle,1)
+        # Supplemental TEST-ONLY markers identify per-block root-production
+        # progress without altering original compiler sources.
+        progress_marks=(
+            ("    let rowCount be (instructions.count/10)*selected.count;",
+             '    output("# U2_NATIVE_TRACE:buffer-start");\\n'),
+            ("        // Preserve the original linked instruction order;",
+             '        output("# U2_NATIVE_TRACE:entry:"+format.integer(block));\\n'),
+            ("        let terminator be blocks[(block-1)*5+4];",
+             '        output("# U2_NATIVE_TRACE:chain:"+format.integer(block));\\n'),
+            ("            let liveOut be (try words.get(plan.outputs,phase,",
+             '            if j == 0 { output("# U2_NATIVE_TRACE:first-suffix:"+format.integer(block)); }\\n'),
+            ("        block=block+1;\\n    }\\n    // Verify the entire immutable publication product at one boundary instead",
+             '        output("# U2_NATIVE_TRACE:block-done:"+format.integer(block));\\n'),
+        )
+        for needle,marker in progress_marks:
+            self.assertEqual(traced_code.count(needle),1)
+            traced_code=traced_code.replace(needle,marker+needle,1)
         traced_emitter.write_text(traced_code,encoding="utf-8")
         source=folder/"generator.eri"
         # Test-only GAS comment markers make a timed-out generator observable.
@@ -502,8 +574,8 @@ class U2FunctionCheckedNativeTests(unittest.TestCase):
         # qualification watchdog, without relaxing memory/work budgets.
         started=time.monotonic()
         try:
-            owned=subprocess.run([str(binary)],env={"PATH":"/unavailable"},
-                                  capture_output=True,timeout=120)
+            owned=capture_traced_owned_generator(
+                [str(binary)],env={"PATH":"/unavailable"},timeout=120)
         except subprocess.TimeoutExpired as error:
             partial=error.stdout or b""
             markers=[line.decode("utf-8",errors="replace")
