@@ -150,6 +150,13 @@ class U2FunctionImportIntegrationTests(unittest.TestCase):
                 checkpoints[symbol]=(
                     probe.returncode,probe.stderr.decode("utf-8",
                                                          errors="replace")[:100])
+            before="    call evn_view"
+            if before in asm:
+                probeAsm=asm.replace(before,
+                    "    movq 0(%rsi),%rdi\n    jmp erist_rt_exit\n"+before,1)
+                tag=self.run_probe(name+"-text-value-tag",
+                                   probeAsm+body+graph.FINISH)
+                checkpoints["before_view_value_type"]=tag.returncode
             self.fail("Text whole-Function native result=%r; "
                       "checkpoints=%r; stderr=%r" %
                       (result.returncode,checkpoints,result.stderr))
@@ -166,6 +173,18 @@ class U2FunctionImportIntegrationTests(unittest.TestCase):
         self.assertIn("call erist_rt_text_collect",result.stdout)
         self.run_native(result.stdout,"u2-text-original-function-imports",1,
                         "95")
+
+    def test_text_without_forced_block_gc_is_still_valid(self):
+        # Differential diagnostic: distinguish native ABI/integer-boxing
+        # problems from a generated safe-point root publication error.
+        source=self.text_source().replace(
+            "[carrier],[textType],true,95);",
+            "[carrier],[textType],false,95);")
+        generated=self.generator("u2-text-no-block-gc",source)
+        self.assertEqual((generated.returncode,generated.stderr),
+                         (0,""),generated.stdout[-2100:])
+        self.run_native(generated.stdout,
+                        "u2-text-no-forced-block-gc",1,"95")
 
     def test_existing_list_snapshot_append_count_gc_in_whole_function(self):
         result=self.generator("u2-list-existing-loop",self.list_source())
