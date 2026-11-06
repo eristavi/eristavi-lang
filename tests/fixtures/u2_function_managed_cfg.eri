@@ -1,0 +1,109 @@
+// Original canonical UIR Function with an identity-carrier input and output.
+// Native managed ingress, SSA backedge and one boxed return root. No managed
+// producer op43, shadow IR, checked opcode46 or altered public ABI.
+import std.process;
+import compiler.u1_budget as budget;
+import compiler.u1_meta as meta;
+import compiler.u1_builder as build;
+import compiler.u1_aggregate as aggregate;
+import compiler.u1_aggregate_signature as sig;
+import compiler.u1_aggregate_build as ab;
+import compiler.u1_verify as canonical;
+import compiler.u1_aggregate_verify as graphVerify;
+import compiler.u2_invoke_contract as contracts;
+import compiler.u2_managed_types as managed;
+import compiler.u2_managed_root_gate as roots;
+import compiler.u2_function_managed_x86_64 as native;
+import compiler.u2_ssa_liveness as ssa;
+
+error ProbeError { message Text; }
+function check(ok Bool,message Text) fails ProbeError {
+    if not ok { fail ProbeError { message=message; }; }
+}
+function run()
+    fails budget.LimitError,canonical.InvalidIR,graphVerify.InvalidGraph,
+        contracts.InvalidContract,managed.InvalidManagedTypes,
+        roots.InvalidManagedRoots,ssa.InvalidLiveness,native.Unsupported,
+        ProbeError {
+    let root be try budget.developmentRequest();
+    let shared be try budget.metadataOwner(root);
+    let mp be try budget.constructionPhase(shared);
+    let data be try meta.create(shared,mp);
+    let graph be try aggregate.create(shared,mp);
+    let i64 be try aggregate.primitive(graph,meta.i64());
+    let pred be try aggregate.primitive(graph,meta.pred());
+    let carrier be try aggregate.aggregate(graph,mp,[i64,i64]);
+    let signature be try sig.signature(data,graph,mp,[carrier,i64],[carrier,i64]);
+    let src be try meta.source(data,mp,"u2-managed-function",
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",192);
+    let loc be try meta.location(data,mp,src,0,7,1,1,1);
+    try aggregate.freeze(graph);
+    let registry be try managed.create(graph,mp);
+    let identityType be try managed.identityOfBase(registry,mp,carrier);
+    try managed.freeze(registry);
+    try meta.freeze(data);
+    let table be try contracts.create(data,graph,mp);
+    try contracts.freeze(table);
+    try budget.finishPhase(mp);
+
+    let owner be try budget.functionOwner(root,false);
+    let cp be try budget.constructionPhase(owner);
+    let fn be try build.create(data,signature,owner,cp);
+    let entry be try ab.block(fn,graph,[carrier,i64]);
+    let managedInput be try build.parameter(fn,entry,0);
+    let input be try build.parameter(fn,entry,1);
+    let on be try build.predicate(fn,entry,true,loc);
+    let off be try build.predicate(fn,entry,false,loc);
+    let loop be try ab.block(fn,graph,[carrier,i64,pred]);
+    let exit be try ab.block(fn,graph,[carrier,i64]);
+    try ab.jump(fn,graph,entry,loop,[managedInput,input,on],loc);
+    let current be try build.parameter(fn,loop,0);
+    let carried be try build.parameter(fn,loop,1);
+    let once be try build.parameter(fn,loop,2);
+    try ab.branch(fn,graph,loop,once,loop,[current,carried,off],
+        exit,[current,carried],loc);
+    let managedResult be try build.parameter(fn,exit,0);
+    let scalarResult be try build.parameter(fn,exit,1);
+    try ab.returnValues(fn,graph,exit,[managedResult,scalarResult],loc);
+
+    // Dead, independently verified block also establishes the existing U1a
+    // concrete edge specialization required by the bootstrap compiler.
+    let dead be try build.block(fn,[]);
+    let deadDestination be try build.block(fn,[meta.i64()]);
+    let deadValue be try build.integer(fn,dead,0,loc);
+    try build.jump(fn,dead,deadDestination,[deadValue],loc);
+    try ab.returnValues(fn,graph,deadDestination,[managedInput,deadValue],loc);
+    try ab.complete(fn,graph);
+    try budget.finishPhase(cp);
+
+    let phase be try budget.constructionPhase(owner);
+    try native.emit(fn,graph,table,phase,registry,
+        [carrier],[identityType],true,91);
+    try budget.finishPhase(phase);
+    try contracts.close(table); try managed.close(registry);
+    try build.close(fn); try aggregate.close(graph); try meta.close(data);
+    try budget.close(owner); try budget.close(shared); try budget.close(root);
+}
+function main() {
+    run()
+    else error budget.LimitError {
+        output("limit:"+error.message); process.setExitCode(1);
+    } else error canonical.InvalidIR {
+        output("invalid:"+error.message); process.setExitCode(1);
+    } else error graphVerify.InvalidGraph {
+        output("graph:"+error.message); process.setExitCode(1);
+    } else error contracts.InvalidContract {
+        output("contract:"+error.message); process.setExitCode(1);
+    } else error managed.InvalidManagedTypes {
+        output("managed:"+error.message); process.setExitCode(1);
+    } else error roots.InvalidManagedRoots {
+        output("roots:"+error.message); process.setExitCode(1);
+    } else error ssa.InvalidLiveness {
+        output("liveness:"+error.message); process.setExitCode(1);
+    } else error native.Unsupported {
+        output("unsupported:"+error.message); process.setExitCode(1);
+    } else error ProbeError {
+        output("probe:"+error.message); process.setExitCode(1);
+    };
+}
+main();
