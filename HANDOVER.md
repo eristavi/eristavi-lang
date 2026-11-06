@@ -1,118 +1,68 @@
 # Eristavi compiler — current handover
 
-Updated 6 November 2026 (Asia/Nicosia). U2 verifier word-read performance candidate; exact-source acceptance pending.
+Updated 6 November 2026 (Asia/Nicosia). Focused checked/managed source-green; U2 functionality and final qualification pending.
 Branch: `compiler/u2-cleanup-foundation-20261102`; [PR #111](https://github.com/eristavi/eristavi-lang/pull/111) remains DRAFT; #74 remains OPEN.
 Original checked-return checkpoint: `3100dc8e82f8e496d61fd38d0cdab5311416bd36`.
 Prior publication implementation: `e40a64b3c8b7774dc68d3220f6b208ee38854ca6`. Earlier exact diagnostic: `a51182e663e645777186e9f6551bdc7081f36916`.
-Current checked-only deferred-middle-proof implementation is in this containing commit (unqualified).
-Current development is not qualified or merged. Optimization #51 remains PAUSED.
+Latest implementation/test commit: `4b71966deb60da883b325936987b7f558ac7fe23` — focused and smoke green, not U2-complete.
+No final four-platform qualification or merge. Optimization #51 remains PAUSED.
 
-## Current blocker and next action
+## Latest verified development checkpoint — 6 November 2026
 
-**First fast-read test (compile-only failure):**
-[run #42272459327](https://github.com/eristavi/eristavi-lang/actions/runs/42272459327)
-failed immediately while compiling the `u1_words` candidate:
-`semantic error at 101:13: initializer expected identity Node, got
-maybe identity Node`. No native execution or work accounting was
-reached. The next small correction uses the existing
-`needNode` / `needPage` checked unwrap helpers inside branches
-whose inputs are already required to be non-none. This is a
-source-type correction only; no change to budget/owner/fast-path
-selection or fallback. Qualify this corrected revision separately.
+**The owned/C generator watchdog blocker is RESOLVED for the focused
+checked Function fixture.** Implementation/tests latest exact head
+`4b71966deb60da883b325936987b7f558ac7fe23`, tested on
+[managed Function run #42272620378](https://github.com/eristavi/eristavi-lang/actions/runs/42272620378):
+**18/18 PASS**, including original uninstrumented, statically linked,
+byte-identical owned-vs-C generated assembly and depth-32 forced-GC
+checked recursion. The owned source generator took **98.399 seconds**
+within the unchanged **120-second watchdog**, with original malformed
+root/refusal cases still tested. A separate prerequisite
+`test_u1_words_path` passed **1/1 on both bootstrap C and owned
+runtimes**, including exact missing-path depth and work-budget failure
+charges. All checked/managed class tests and the dedicated radix gate
+completed successfully; no test was deleted or timeout raised.
 
-**Current production implementation candidate (containing commit):**
-`src/compiler/u1_words.eri` now has a bounded, *valid-read-only* fast
-path. All seven original work units are charged on a successful read with
-an unchanged six-child radix traversal, using one budget call **only if**
-the current path/page is complete and the phase, owner and parent limits
-can pay the entire charge. No cached path, owner trust flag, ownership
-change, extra allocation or ABI change. A bad/missing radix child/page,
-a closed/cancelled state or a low remaining work budget takes the
-**original exact per-level slow path** and error order. Source-level
-safety tests `test_u1_words_path` cover every corrupted radix depth,
-frozen current backing, owner traffic and budget limits 0..6, and must
-PASS on both C-bootstrap and owned runtimes. This change targets the
-**measured U2 canonical-verifier/liveness read overhead**; independent
-canonical/root verification is unchanged, and separate optimization
-#51 stays PAUSED. No speedup is claimed until exact-head tests.
-
-**Latest clean baseline:** [managed #42271055504](https://github.com/eristavi/eristavi-lang/actions/runs/42271055504)
-at `dc0ce3f` ran **18 methods / 17 pass / 1 uninstrumented
-120-second owned-generator timeout**; it emitted no output before deadline.
-[Text/List integration #42270143006](https://github.com/eristavi/eristavi-lang/actions/runs/42270143006)
-on same production compiler (prior test-only commit) **12/12 PASS**.
-The prior checked-only deferred middle verifier improvement remains
-implemented but not qualified. **New word-read fast path is untested**;
-first run exact depth/failure-accounting test and hosted owned/C generator
-comparison; do not mark U2 accepted, PR #111 merged, or issue #74 closed.
-
-**Source state:** current development candidate is the containing commit after
-`a51182e`. The checked-profile-only producer now **defers** the middle
-`ssa.verify` reconstruction, rather than deleting the mandatory proof.
-`roots.create` still freshly verifies the ENTIRE original frozen canonical
-Function and builds the local Plan; `ssa.verifyPublications` still freshly
-rederives the complete original Plan and independently checks ALL
-entry/before/after bits, including dead blocks, **before the first assembly
-output**. The untouched standalone `ssa.verify` and `requirePublished`
-APIs remain strict. Unchecked `emit` and `emitRecursive` still perform
-their original middle verification. No trusted stamp, new ABI, source syntax,
-collector or work-limit change. Exact source `7b17207` passed
+[Linux smoke #42272620164](https://github.com/eristavi/eristavi-lang/actions/runs/42272620164)
+also **PASS: 159 run / 156 passed / 3 intentionally skipped** on the
+exact implementation, with patch/scope SUCCESS; the full four-platform
+matrix was **SKIPPED, not qualified**. Earlier
 [Text/List #42270143006](https://github.com/eristavi/eristavi-lang/actions/runs/42270143006)
-**12/12** and [managed focused #42270142869](https://github.com/eristavi/eristavi-lang/actions/runs/42270142869)
-**17/18**. The sole failed method was the **instrumented** owned-generator
-comparison, still timing out at 120 s; the second full proof was reached,
-at ~58 s, and its canonical verification completed at ~102 s. It was
-still calculating SSA flow when the 120-second watchdog expired.
-This confirms that both full proof boundaries executed; it does
-**not** qualify the generator or establish uninstrumented performance.
+**12/12 PASS** on the previous production source before the word-reader
+change; Linux smoke covers current Text/List behavior. Original
+U2 checked Function `roots.create` proof and independent final
+`ssa.verifyPublications` proof remain; private checked emission
+no longer repeats the intermediate full plan reconstruction.
+Successful radix `words.get` reads now charge the same seven work units
+in one bounded call when complete/affordable, with original per-level
+fallback for invalid backing or limited budget. No public source/ABI,
+allocator, GC or frozen semantic change. **This is a passing focused
+candidate, NOT complete #74 acceptance or production qualification.**
 
-**Measured blocker, exact earlier source:**
-[focused #42268931408](https://github.com/eristavi/eristavi-lang/actions/runs/42268931408)
-on `a51182e`: 18 methods, **17 pass, 1 owned-generator 120-second
-timeout**. In a temporary instrumented source copy, canonical root-plan
-verification starts at 12.141 s and finishes 54.962 s, with checked
-liveness construction ending at 77.873 s. The next *identical* independent
-verification starts at 77.900 s and has still not completed by the 120-second
-deadline. Detailed substage evidence is in
-[publication/verification evidence](docs/evidence/2026-11-06/u2-publication-producer-batching.md).
-Earlier [#42267466631](https://github.com/eristavi/eristavi-lang/actions/runs/42267466631)
-measured canonical verification twice at 31.1/33.8 s, plan construction
-twice at 16.6/17.8 s, and comparison ~4.2 s on an earlier trace. These
-measurements support the redundant middle pass as a serious performance
-cost, but **do not yet establish a speedup**.
+**Current next step — implementation (do not rerun solved stages):**
+complete GENERAL whole-Function checked UIR integration beyond bounded
+self-recursion: arbitrary and mutual calls; original typed
+`File` acquisition, move/consume and exactly-once reverse cleanup on
+every normal/checked/handler exit; nested managed List/aggregate value
+copy/identity and new typed FailureContext construction; complete
+class-1/class-5 roots and root/owner/fault negatives. Then run broad
+independent Stage-0/current-native/new-native source-origin outcome
+comparisons; allocator/sanitizer/physical backing, traffic, RSS, GC-pause
+and fault-injection evidence under existing budgets. Reconcile main
+(conflicts previously seen in `HANDOVER.md` and checked-chain
+architecture; inspect current merge base), qualify the single final
+implementation on four platforms and completed-batch gates, then
+merge PR #111 / close #74 **only when its eight DoD conditions pass**.
+There is no justified % completion claim while these functional gates
+remain open. Separate performance #51 remains PAUSED.
 
-**Why this is safe to test:** all three private compile entrypoints obtain
-their Plan via `roots.create` immediately before `compile`. Only the
-checked path skips the middle redundant proof; it does not emit any bytes,
-expose a verified token, or execute owned code until the *later*
-`ssa.verifyPublications` independently rejects or approves the original
-canonical Function, Plan and the complete root publication bitmaps.
-That checker still reconstructs from the original source, not the
-emitter's table snapshots. Failures must still produce no native assembly.
-The immutable input and private Plan do not leave this call; preserve
-negative/owner/physical refusal tests, and treat every remaining limitation
-as open until verified on the exact head.
-
-**Next action:** run the corrected **uninstrumented** owned-versus-C
-generator comparison against the exact new head. In the standard test, the
-compiler source is an unchanged symlink to `src/compiler` and the fixture
-source is original. The same C/owned assembly-byte equality, static
-ELF/no-loader/undefined-symbol/non-executable-stack checks, exact
-120-second watchdog and forced-GC depth-32 output oracle remain.
-Host-side phase capture and isolated source-copy comments are still
-available **only** with `ERISTAVI_U2_OWNED_GENERATOR_TRACE=1` for
-future diagnostics. Instrumenting canonical verification changes runtime
-work/allocations and can distort the qualification cutoff; no such
-instrumentation belongs in the normal performance gate.
-If the uninstrumented generator passes, verify independent checks,
-negative matrix and ASan/UBSan within documented scope, then continue
-the uncompleted U2 semantics and physical/CI gates. If not, measure the
-remaining performance bottleneck without weakening verification,
-native-output gating or exact failed-work accounting.
-In particular `tests/test_u1_words_path.py` requires exact work charges on
-failed radix paths; do not replace the word-store budget calls with a
-single up-front charge. Preserve default ABI and avoid full owned
-self-build. Keep #111 DRAFT and #74 OPEN.
+**Release state:** PR #111 DRAFT, unmerged and currently GitHub reports
+`mergeable=false`; issue #74 OPEN and eight top-level DoD checkboxes
+unchecked. Keep the production default and 32-byte ABI unchanged.
+The final full owned-compiler self-build is explicitly excluded without
+authorization. This documentation-only checkpoint follows the exact
+`4b71966` passing implementation; do not call a docs-only commit a
+new tested compiler.
 
 Targeted reproduction:
 
@@ -127,11 +77,13 @@ non-executable-stack checks. Keep the test and its gate; do not skip it or silen
 increase the timeout. Local `ptrace` was denied (EPERM). No measured speedup is
 established. This probe is not a full owned-compiler self-build.
 
-After resolving it, validate the coherent current checked class (11 methods),
-existing managed class (7) and Text/List integration (12), relevant SSA/checked/
-owner/registry negatives and changed-input ASan/UBSan; then focused hosted smoke.
-Reuse unchanged physical evidence only within its documented scope. Reserve full
-four-platform CI and completed-batch qualification for the completed final batch.
+The solved checked/managed classes (18 methods) and latest Linux smoke
+are verified on `4b71966`; do not repeat them without changed relevant inputs.
+After completing the remaining generalized U2 semantics, validate new
+SSA/root/owner/registry negatives, changed-input ASan/UBSan and physical/fault
+evidence; then run the full four-platform and completed-batch qualification
+once for the coherent final revision. Existing sanitizer/physical evidence is
+only reusable within its documented older source scope.
 
 ## Implemented scope — reuse rather than repeat
 
@@ -161,13 +113,13 @@ as validation of later implementation changes.
 | Bootstrap C ASan/UBSan, before batching | **9/9 pass**, 298.642 s, `-O0`, `halt_on_error=1`, `detect_leaks=0`. LSan unavailable due to thread-inspection restrictions. Does not sanitize emitted owned assembly. |
 | Owner physical/foundation/cleanup guards | **5/5 pass**, 52.557 s; actual backing/traffic/reclamation, 18-field schema and cleanup bypass refusal. Relevant builder/observer source unchanged since that run. |
 | Publication corruption/refusal matrix after batching/fix | **1/1 pass**, 10.573 s: duplicate/foreign IDs, missing/dead/nonbinary flags, dead-entry corruption, forged backing, stale revision, extra rows and budget-refusal reclamation. Existing public SSA liveness negative also passed. |
-| Owned/C comparison | Still failing 120-second watchdog; later hosted diagnostic **17/18 pass**, as above. No matching owned-generator assembly observed. |
-| Last green implementation baseline | `50113f7`, Linux smoke [#42245608877](https://github.com/eristavi/eristavi-lang/actions/runs/42245608877): **147 run / 144 pass / 0 fail / 3 skips**. Does not qualify current WIP. |
+| Owned/C comparison | **PASS on `4b71966`**: full focused **18/18**, 98.399 s generator (120 s limit), byte-identical C/owned assembly, static ELF checks and depth-32 checked recursion/GC, [#42272620378](https://github.com/eristavi/eristavi-lang/actions/runs/42272620378). |
+| Latest Linux smoke | **`4b71966` 159 run / 156 pass / 0 fail / 3 skips**, [#42272620164](https://github.com/eristavi/eristavi-lang/actions/runs/42272620164); full cross-platform matrix intentionally skipped. |
 | Final acceptance | Four-platform full CI and completed-batch qualification **not performed** for current implementation. No merge, production promotion or public 32-byte ABI change. |
 
 ## Remaining before #74 can close
 
-1. Qualify current checked self-invoke, then integrate arbitrary/mutually recursive
+1. Reuse *qualified focused evidence* for current checked self-invoke; integrate arbitrary/mutually recursive
    targets, File acquisition/consumption, owner proof, reverse cleanup, pending
    returns and all handler exits in original whole-Function lowering.
 2. Generalize typed managed constructors, nested List elements and aggregate
@@ -192,7 +144,7 @@ as validation of later implementation changes.
 | --- | --- |
 | U1a | Accepted within documented scalar/SSA/call/Float/provenance/physical scope; #77 closed, PR #105 merged. |
 | U1b | Bounded immutable aggregates/reference linked execution accepted; #73 closed, PR #106 merged. |
-| U2 | Unaccepted, active diagnostic blocker above; #74 open, #111 draft. |
+| U2 | Bounded checked self-recursion and resource word-read optimization focused/smoke green; broader U2 semantics, deep proof and final qualification unaccepted; #74 open, #111 draft. |
 | U3 | Isolated Python shadow/planning foundation merged in #119; #75 open; production AST-to-owned-UIR integration unfinished. |
 | U4 | Initial parallel-move foundation in draft #120; #102 open; machine migration unfinished. |
 | Production | Existing frontend/default compiler and 32-byte ABI retained; latest recorded qualified optimization #110. |

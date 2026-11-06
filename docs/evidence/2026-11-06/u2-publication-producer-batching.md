@@ -217,13 +217,44 @@ owner fault matrix and documented physical resource limits. Roll back
 candidate if those fail; do not treat structural reasoning as a pass.
 No exact-head results or speedup recorded yet.
 
+## Latest exact-source successful qualification of the focused blocker
+
+Source `4b71966deb60da883b325936987b7f558ac7fe23` after
+the source-type correction of the optional radix unwrap:
+
+- [U1a complete radix path + exact failure accounting](https://github.com/eristavi/eristavi-lang/actions/runs/42272620378):
+  **1/1 PASS** in 12.638 s; C and owned runtimes, malformed/missing
+  root/child/page, no stale backing, original 0..6 work-budget
+  failures and per-owner charges.
+- [Checked/managed Function focused run](https://github.com/eristavi/eristavi-lang/actions/runs/42272620378):
+  **18/18 PASS** in 272.861 s, including **98.399118497 s** for the
+  uninstrumented individual owned source generator under unchanged
+  **120 s** watchdog. Includes exact owned-vs-C assembly comparison,
+  static linker/loader/undefined symbol and executable-stack checks,
+  checked recursion with parent roots and depth-32 forced GC, as well
+  as malformed/dead root/failure/owner refusals.
+- [Linux Clang smoke #42272620164](https://github.com/eristavi/eristavi-lang/actions/runs/42272620164):
+  **159 run / 156 pass / 3 intentional skips / 0 failures**,
+  scoped checks PASS. Explicitly skipped final four-platform matrix.
+- [Earlier exact pre-word-reader Text/List #42270143006](https://github.com/eristavi/eristavi-lang/actions/runs/42270143006)
+  **12/12 PASS**; newest smoke also includes current unchanged behavior.
+
+This is a **measured, passing focused generator result**, not
+general Eristavi compiler speedup or completed U2 acceptance.
+Still open: arbitrary/mutual calls, nested generic managed values and
+typed new FailureContexts, general whole-Function File/handler cleanup,
+comprehensive combined root/owner/fault/physical evidence, independent
+cross-compiler comparisons, final 4-platform CI and completed-batch
+qualification. No final merge. Subsequent docs-only commits must not
+be confused with changes to this passing source tree.
+
 ## Validation status
 
 - Exact `e40a64b` [Text/List integration #42262075150](https://github.com/eristavi/eristavi-lang/actions/runs/42262075150): **12/12 passed**.
 - Exact `e40a64b` [managed focused #42262075162](https://github.com/eristavi/eristavi-lang/actions/runs/42262075162): **18 run, 17 pass, 1 diagnostic-fixture failure**. The fixture asserted its obsolete `// Independently prove EACH publication obligation` marker was present. The optimization removed that comment; execution never reached the owned generator. **No owned-generator time/success/120s result on this head**. The next patch corrects only that marker.
 
-Pending exact-head clean owned-generator comparison and whole-Function managed,
-saved primary/secondary, root/owner negative tests. Text/List on `7b17207`
-passed 12/12; do not repeat unaffected checks absent a changed input.
-The old 120-second watchdog remains unchanged. Full four-platform and
-completed-batch qualification are NOT claimed; #74 stays OPEN and #111 DRAFT.
+Owned/C checked generator and focused managed tests now PASS on
+`4b71966`, as do radix exact-refusal and broad Linux smoke. Only
+the broader U2 functional/physical/fault/oracle gates and final four-platform
+and completed-batch qualification remain unaccepted. The unchanged
+120-second watchdog is preserved; #74 stays OPEN and #111 DRAFT.
