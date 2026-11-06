@@ -313,6 +313,37 @@ class U2FunctionImportIntegrationTests(unittest.TestCase):
         self.assertNotIn("erist_u2_rooted_function_95:",result.stdout)
         self.assertNotIn(".section",result.stdout)
 
+    def test_existing_list_copy_import_inside_original_loop(self):
+        source=self.list_source()
+        anchor=("call=try ab.call(fn,g,b,f3,[empty,ten],loc); "
+                "let initial be try build.result(fn,call,0);")
+        self.assertEqual(source.count(anchor),1)
+        source=source.replace(anchor,anchor+
+            "\n call=try ab.call(fn,g,b,f2,[initial],loc);"
+            " let copied be try build.result(fn,call,0);",1)
+        source=source.replace(
+            "try ab.jump(fn,g,b,loop,[initial,initial],loc);",
+            "try ab.jump(fn,g,b,loop,[copied,initial],loc);",1)
+        created=self.generator("u2-list-native-copy-import",source)
+        self.assertEqual((created.returncode,created.stderr),(0,""),
+                         created.stdout[-2500:])
+        self.assertGreaterEqual(created.stdout.count("call evn_copy"),3)
+        self.run_native(created.stdout,
+                        "u2-list-copy-through-Function",1,"96")
+
+    def test_list_indexed_operation_without_source_fault_mapping_refused(self):
+        source=self.list_source()
+        original="try build.returnValues(fn,done,[oldCount],loc);"
+        self.assertEqual(source.count(original),1)
+        source=source.replace(original,
+            "let unsupportedIndex be try ab.call(fn,g,done,"
+            "f6,[resultList,zero],loc); "+original,1)
+        result=self.generator("u2-list-native-index-rejected",source)
+        self.assertEqual(result.returncode,1,result.stdout[-2400:])
+        self.assertIn("native:List indexed bounds adapter",result.stdout)
+        self.assertNotIn("erist_u2_rooted_function_96:",result.stdout)
+        self.assertNotIn(".section",result.stdout)
+
     def test_wrong_list_effects_refused_before_native_assembly(self):
         result=self.generator("u2-list-bad-import",
                               self.list_source(bad_contract=True))
