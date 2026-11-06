@@ -233,14 +233,14 @@ _start:
         self.assertEqual(source.count(marker),1)
         extra="".join(
             "    let rootCandidate%d be try ab.make(fn,graph,entry,pair,"
-            "[eleven,eleven],loc);\\n"%index
+            "[eleven,eleven],loc);\n"%index
             for index in range(40))
         source=source.replace(marker,extra+marker,1)
         generated=self.generator("native-identity-ssa-wide",source)
         self.assertEqual((generated.returncode,generated.stderr),
                          (0,""),generated.stdout[-3500:])
         roots=re.findall(
-            r"^\\.set erist_u2_identity_slot_73_(\\d+), (\\d+)$",
+            r"^\.set erist_u2_identity_slot_73_(\d+), (\d+)$",
             generated.stdout,re.M)
         count=len(roots)
         self.assertGreater(count,32)
