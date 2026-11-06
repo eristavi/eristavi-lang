@@ -9,6 +9,17 @@ Current development is not qualified or merged. Optimization #51 remains PAUSED.
 
 ## Current blocker and next action
 
+**First fast-read test (compile-only failure):**
+[run #42272459327](https://github.com/eristavi/eristavi-lang/actions/runs/42272459327)
+failed immediately while compiling the `u1_words` candidate:
+`semantic error at 101:13: initializer expected identity Node, got
+maybe identity Node`. No native execution or work accounting was
+reached. The next small correction uses the existing
+`needNode` / `needPage` checked unwrap helpers inside branches
+whose inputs are already required to be non-none. This is a
+source-type correction only; no change to budget/owner/fast-path
+selection or fallback. Qualify this corrected revision separately.
+
 **Current production implementation candidate (containing commit):**
 `src/compiler/u1_words.eri` now has a bounded, *valid-read-only* fast
 path. All seven original work units are charged on a successful read with

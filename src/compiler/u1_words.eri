@@ -98,15 +98,15 @@ public function get(words identity Words,phase identity budget.Phase,index Int) 
         let cursor be words.root;
         let divisor be 1048576;
         while cursor != none and divisor >= 1 {
-            let node identity Node be cursor;
+            let node be try needNode(cursor);
             cursor=readChild(node,pageIndex/divisor%16);
             divisor=divisor/16;
         }
         if cursor != none and divisor == 0 {
-            let leaf identity Node be cursor;
+            let leaf be try needNode(cursor);
             let optionalPage be leaf.page;
             if optionalPage != none {
-                let present identity Page be optionalPage;
+                let present be try needPage(optionalPage);
                 try budget.work(phase,7);
                 return readPage(present,index%16);
             }

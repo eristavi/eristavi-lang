@@ -168,6 +168,20 @@ The optional trace remains available without contaminating standard
 qualification. No production compiler/runtime/ABI change in this patch.
 Exact-head qualification pending.
 
+## First hosted fast-read build gate
+
+[Run #42272459327](https://github.com/eristavi/eristavi-lang/actions/runs/42272459327):
+the original U1a exact-path test was added as the **first**
+test in the focused managed-Function workflow. It correctly blocked
+the rest of testing because the fast-path candidate tried to bind a
+`maybe identity Node` directly to a nonoptional Node in the loop.
+The source compiler refused at `u1_words.eri:101:13`.
+This is a candidate compile error, not evidence of a runtime fault
+or budget-accounting regression. The corrected code invokes the
+existing `needNode` and `needPage` unwrap helpers only after
+explicit non-none checks. No production semantics or resource
+policies are changed. Corrected exact-source tests pending.
+
 ## Candidate: fast successful radix read with original refusal path
 
 After the clean uninstrumented
