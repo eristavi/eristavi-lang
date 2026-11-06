@@ -171,7 +171,10 @@ _start:
                    "        (try execute.result(reference,1)) == 11,\n"
                    "        \"canonical SSA loop backedge reference mismatch\");\n")
         self.assertEqual(source.count(reference),1)
-        source=source.replace(reference,"",1)
+        source=source.replace(reference,
+            "    let unsupported be try execute.run(fn,graph,fnOwner,[37],64);\n"
+            "    try check(unsupported.kind == 3 and unsupported.code == 15,"
+            "\"legacy U1b reference must refuse scalar wrap op15\");\n",1)
         generated=self.generator("native-scalar-wrap-arithmetic",source)
         self.assertEqual((generated.returncode,generated.stderr),(0,""),
                          generated.stdout[-2000:])
