@@ -24,6 +24,7 @@ import compiler.u2_cleanup_native_x86_64 as nativeCleanup;
 import compiler.u2_checked_ssa_bind as ssa;
 import compiler.u2_checked_chain_verify as chain;
 import compiler.u2_checked_ssa_x86_64 as native;
+import compiler.u2_checked_chain_x86_64 as chainNative;
 
 error ProbeError { message Text; }
 function check(ok Bool,message Text) fails ProbeError {
@@ -37,7 +38,8 @@ function handledReturn(fn identity build.Function,from build.BlockId,
 function run() fails budget.LimitError,canonical.InvalidIR,
     owners.InvalidOwnership,continuation.InvalidBinding,planVerify.InvalidPlan,
     roots.InvalidRoots,slots.InvalidSlots,nativeRoots.Unsupported,
-    nativeCleanup.Unsupported,ssa.InvalidSSA,chain.InvalidChain,native.Unsupported,ProbeError {
+    nativeCleanup.Unsupported,ssa.InvalidSSA,chain.InvalidChain,
+    native.Unsupported,chainNative.Unsupported,ProbeError {
     let root be try budget.developmentRequest();
     let shared be try budget.metadataOwner(root);
     let mp be try budget.constructionPhase(shared);
@@ -312,10 +314,18 @@ function run() fails budget.LimitError,canonical.InvalidIR,
         outerNormalOwners,0,loc,false,73);
     try nativeCleanup.emit(data,checkedPhase,outerFailedPlan,
         outerFailedOwners,0,loc,true,74);
-    try cleanup.close(outerNormalPlan); try cleanup.close(outerFailedPlan);
-
     try native.emit(fn,graph,profile,registry,checkedPhase,
         map,placement,checkedPair,innerClose,plan,original,1,innerLoc,71);
+    // Real native routing of two checked stages, using the SAME verified
+    // canonical Function and previously emitted File SSA/cleanup helpers.
+    // No new File semantics, SSA executable shadow or caller-synthesized
+    // branch outcome is introduced by this generated native entry.
+    try chainNative.emit(fn,graph,profile,registry,checkedPhase,map,placement,
+        checkedPair,innerClose,plan,original,innerLoc,
+        normalPair,exitClose,outerNormalPlan,outerNormalOwners,loc,
+        failedPair,innerFailureClose,outerFailedPlan,outerFailedOwners,
+        71,73,74);
+    try cleanup.close(outerNormalPlan); try cleanup.close(outerFailedPlan);
 
     try slots.close(placement); try roots.close(map); try cleanup.close(plan);
     try budget.finishPhase(checkedPhase);
@@ -337,4 +347,5 @@ else error nativeCleanup.Unsupported { output("cleanup:"+error.message); process
 else error ssa.InvalidSSA { output("ssa:"+error.message); process.setExitCode(1); }
 else error chain.InvalidChain { output("chain:"+error.message); process.setExitCode(1); }
 else error native.Unsupported { output("native:"+error.message); process.setExitCode(1); }
+else error chainNative.Unsupported { output("chainNative:"+error.message); process.setExitCode(1); }
 else error ProbeError { output("probe:"+error.message); process.setExitCode(1); };
