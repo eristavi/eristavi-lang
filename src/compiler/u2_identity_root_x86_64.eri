@@ -30,7 +30,7 @@ function emitVerified(plan identity ssa.Plan,routine identity build.Function,
     try require(label >= 1 and label <= 2147483647 and
         at.owner == routine.key and at.index >= 1 and
         at.index <= report.instructions and
-        report.tracked >= 1 and report.tracked <= 32 and
+        report.tracked >= 1 and report.tracked <= 64 and
         routine.values.length/4 <= 512,
         "invalid selected native identity publication profile");
     let values be [];
