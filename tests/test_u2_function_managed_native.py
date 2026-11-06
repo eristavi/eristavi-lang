@@ -145,6 +145,164 @@ _start:
         self.assertEqual((executed.returncode,executed.stdout,
                           executed.stderr),(0,b"",b""))
 
+    def mixed_source(self):
+        source=self.source()
+        def unique(old,new):
+            nonlocal source
+            self.assertEqual(source.count(old),1,old)
+            source=source.replace(old,new,1)
+        unique("    let carrier be try aggregate.aggregate(graph,mp,[i64,i64]);",
+               "    let carrier be try aggregate.aggregate(graph,mp,[i64,i64]);\n"
+               "    let textCarrier be try aggregate.aggregate(graph,mp,[]);")
+        unique("[carrier,i64],[carrier,i64]);",
+               "[carrier,textCarrier,i64],[carrier,textCarrier]);")
+        unique("    let entry be try ab.block(fn,graph,[carrier,i64]);",
+               "    let entry be try ab.block(fn,graph,[carrier,textCarrier,i64]);")
+        unique("    let input be try build.parameter(fn,entry,1);",
+               "    let textInput be try build.parameter(fn,entry,1);\n"
+               "    let input be try build.parameter(fn,entry,2);")
+        unique("    let loop be try ab.block(fn,graph,[carrier,i64,pred]);",
+               "    let loop be try ab.block(fn,graph,"
+               "[carrier,textCarrier,i64,pred]);")
+        unique("    let exit be try ab.block(fn,graph,[carrier,i64]);",
+               "    let exit be try ab.block(fn,graph,[carrier,textCarrier]);")
+        unique("[managedInput,input,on],loc);",
+               "[managedInput,textInput,input,on],loc);")
+        unique("    let carried be try build.parameter(fn,loop,1);",
+               "    let textCurrent be try build.parameter(fn,loop,1);\n"
+               "    let carried be try build.parameter(fn,loop,2);")
+        unique("    let once be try build.parameter(fn,loop,2);",
+               "    let once be try build.parameter(fn,loop,3);")
+        unique("    try ab.branch(fn,graph,loop,once,loop,[current,carried,off],\n"
+               "        exit,[current,carried],loc);",
+               "    try ab.branch(fn,graph,loop,once,loop,"
+               "[current,textCurrent,carried,off],\n"
+               "        exit,[current,textCurrent],loc);")
+        unique("    let scalarResult be try build.parameter(fn,exit,1);",
+               "    let textResult be try build.parameter(fn,exit,1);")
+        unique("[managedResult,scalarResult],loc);",
+               "[managedResult,textResult],loc);")
+        unique("[managedInput,deadValue],loc);",
+               "[managedInput,textInput],loc);")
+        unique("[carrier],[identityType],true,91);",
+               "[carrier,textCarrier],[identityType,managed.text(registry)],true,91);")
+        return source
+
+    def test_mixed_text_and_identity_roots_across_loop_and_return(self):
+        generated=self.generator("managed-text-identity",self.mixed_source())
+        self.assertEqual((generated.returncode,generated.stderr),
+                         (0,""),generated.stdout[-2800:])
+        asm=generated.stdout
+        base="erist_u2_rooted_function_91"
+        slots=re.findall(r"^\.set "+base+r"_root_(\d+), (\d+)$",
+                         asm,re.M)
+        self.assertGreaterEqual(len(slots),6)
+        self.assertIn("movq %rdx,8(%rdi)",asm)
+        self.assertIn("cmpq $2,%rdx",asm)
+        body=r"""
+.text
+.globl _start
+_start:
+    xorl %ebp,%ebp
+    # Two distinct, already-registered caller roots. No graph or Text
+    # allocation precedes the initial scope mark.
+    call evn_scope_enter
+    movq %rax,%r15
+    movq %rax,%rdi
+    leaq .Lu2_managed_caller_roots(%rip),%rsi
+    leaq .Lu2_managed_caller_classes(%rip),%rdx
+    movl $2,%ecx
+    call evn_bind_roots
+
+    movl $1,%edi
+    call erist_rt_graph_new_object
+    movq %rax,%r12
+    movl $1,%edi
+    call erist_rt_graph_new_object
+    movq %rax,%r13
+    movl $1,%edi
+    call erist_rt_graph_new_object
+    movq %rax,%r14
+    movq 8(%r12),%rax
+    movq $8,(%rax)
+    movq %r13,8(%rax)
+    movq 8(%r13),%rax
+    movq $9,(%rax)
+    movq %r14,8(%rax)
+    movq 8(%r14),%rax
+    movq $10,(%rax)
+    movq %r12,8(%rax)
+    movl $10,%edi
+    movq %r12,%rsi
+    call erist_rt_value_new
+    movq %rax,.Lu2_managed_mixed_inputs(%rip)
+
+    leaq .Lu2_mixed_text(%rip),%rdi
+    movl $7,%esi
+    call evn_text
+    movq %rax,.Lu2_managed_mixed_inputs+8(%rip)
+    movq $37,.Lu2_managed_mixed_inputs+16(%rip)
+
+    leaq .Lu2_managed_mixed_inputs(%rip),%rdi
+    leaq .Lu2_managed_caller_roots(%rip),%rsi
+    movl $2,%edx
+    call erist_u2_rooted_function_91
+    cmpq %rax,.Lu2_managed_caller_roots(%rip)
+    jne .Lgraph_test_fail
+    cmpq %rdx,.Lu2_managed_caller_roots+8(%rip)
+    jne .Lgraph_test_fail
+    xorl %edi,%edi
+    call erist_rt_slots_collect
+    call erist_rt_text_collect
+    call erist_rt_graph_live_objects
+    cmpq $3,%rax
+    jne .Lgraph_test_fail
+    call erist_rt_text_live_buffers
+    testq %rax,%rax
+    je .Lgraph_test_fail
+
+    # Retire identity while Text remains rooted.
+    movq $0,.Lu2_managed_caller_roots(%rip)
+    xorl %edi,%edi
+    call erist_rt_slots_collect
+    call erist_rt_text_collect
+    call erist_rt_graph_live_objects
+    testq %rax,%rax
+    jne .Lgraph_test_fail
+    call erist_rt_text_live_buffers
+    testq %rax,%rax
+    je .Lgraph_test_fail
+
+    # Then retire the remaining Text root and reclaim the backing.
+    movq $0,.Lu2_managed_caller_roots+8(%rip)
+    xorl %edi,%edi
+    call erist_rt_slots_collect
+    call erist_rt_text_collect
+    call erist_rt_text_live_buffers
+    testq %rax,%rax
+    jne .Lgraph_test_fail
+    call evn_void
+    movq %rax,%rsi
+    movq %r15,%rdi
+    call evn_scope_leave
+    jmp .Lgraph_finish
+.bss
+.p2align 3
+.Lu2_managed_mixed_inputs:
+.zero 24
+.Lu2_managed_caller_roots:
+.zero 16
+.section .rodata
+.Lu2_managed_caller_classes:
+.byte 1,1
+.Lu2_mixed_text:
+.ascii "managed"
+"""
+        executed=self.run_probe("u2-mixed-text-identity-rooted-function",
+                                asm+body+graph.FINISH)
+        self.assertEqual((executed.returncode,executed.stdout,
+                          executed.stderr),(0,b"",b""))
+
     def test_reject_mismatched_identity_descriptor_before_emission(self):
         source=self.source()
         original="[carrier],[identityType],true,91);"
