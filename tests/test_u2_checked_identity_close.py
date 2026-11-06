@@ -281,82 +281,39 @@ class U2CheckedIdentityCloseTests(unittest.TestCase):
                         identities.identity_file_descriptors()+code,
                         runtime=runtime,types=False)
                     if result.returncode != 0:
-                        # Temporary diagnostics distinguish faults in the
-                        # composed call from failures in its caller's GC and
-                        # final teardown. No shortcut counts as a passing test.
-                        call="    call erist_u2_identity_close_95\n"
-                        self.assertEqual(code.count(call),1)
-                        after=code.replace(call,call+
-                            "    xorl %edi,%edi\n    jmp erist_rt_exit\n",1)
-                        call_result=self.run_probe(
-                            "u2-id-close-return-%d-%d"%(pending,int(failed)),
-                            identities.identity_file_descriptors()+after,
+                        # Diagnostic: distinguish every explicit caller and
+                        # teardown assertion without weakening any invariant.
+                        # Each failing branch gets a distinct process status.
+                        pattern=r"\\b(?:jne|je|jb|ja|jge|jl|jbe)\\s+\\.Lresource_test_fail\\b"
+                        guards=list(re.finditer(pattern,code))
+                        instrumented=code
+                        for index in range(len(guards)-1,-1,-1):
+                            match=guards[index]
+                            updated=match.group().replace(
+                                ".Lresource_test_fail",
+                                ".Lu2_failure_guard_"+str(index))
+                            instrumented=(instrumented[:match.start()]+
+                                          updated+instrumented[match.end():])
+                        instrumented+="\\n.text\\n"
+                        for index in range(len(guards)):
+                            instrumented+=(
+                                ".Lu2_failure_guard_%d:\\n"
+                                "    movl $%d,%%edi\\n"
+                                "    jmp erist_rt_exit\\n"%
+                                (index,100+index))
+                        diagnostic=self.run_probe(
+                            "u2-id-close-guard-%d-%d"%(pending,int(failed)),
+                            identities.identity_file_descriptors()+instrumented,
                             runtime=runtime,types=False)
-                        mark="    call erist_rt_graph_live_objects\n"
-                        self.assertEqual(code.count(mark),3)
-                        gc_code=code.replace(mark,mark+
-                            "    xorl %edi,%edi\n    jmp erist_rt_exit\n",1)
-                        gc_result=self.run_probe(
-                            "u2-id-close-gc-%d-%d"%(pending,int(failed)),
-                            identities.identity_file_descriptors()+gc_code,
-                            runtime=runtime,types=False)
-                        native_mark="    call erist_u2_cleanup_95\n"
-                        self.assertEqual(code.count(native_mark),1)
-                        native_code=code.replace(native_mark,native_mark+
-                            "    xorl %edi,%edi\n    jmp erist_rt_exit\n",1)
-                        native_result=self.run_probe(
-                            "u2-id-close-native-%d-%d"%(pending,int(failed)),
-                            identities.identity_file_descriptors()+native_code,
-                            runtime=runtime,types=False)
-                        second=code.index(mark,code.index(mark)+len(mark))+len(mark)
-                        second_code=code[:second]+(
-                            "    xorl %edi,%edi\n    jmp erist_rt_exit\n"
-                            )+code[second:]
-                        second_result=self.run_probe(
-                            "u2-id-close-second-gc-%d-%d"%(pending,int(failed)),
-                            identities.identity_file_descriptors()+second_code,
-                            runtime=runtime,types=False)
-                        stage={}
-                        if not failed:
-                            for name in ("success","identity","normal","leave"):
-                                label="erist_u2_identity_close_95_"+name+":\n"
-                                self.assertEqual(code.count(label),1)
-                                stepped=code.replace(label,label+
-                                    "    xorl %edi,%edi\n    jmp erist_rt_exit\n",1)
-                                probe=self.run_probe(
-                                    "u2-id-close-stage-%s-%d"%(name,pending),
-                                    identities.identity_file_descriptors()+stepped,
-                                    runtime=runtime,types=False)
-                                stage[name]=probe.returncode
-                            identity_start=code.index(
-                                "erist_u2_identity_close_95_identity:\n")
-                            identity_end=code.index(
-                                "erist_u2_identity_close_95_normal:\n",
-                                identity_start)
-                            for key,asm in (
-                                ("load","    movq "+str(offsets["source"])+"(%r15),%rax\n"),
-                                ("nonzero","    testq %rax,%rax\n"),
-                                ("rootcompare","    cmpq %rax,(%rbx)\n"),
-                                ("poison","    movq $0,"+str(offsets["source"])+"(%r15)\n"),
-                                ("branch","    cmpq $0,16(%rsp)\n")):
-                                suffix=code[identity_start:identity_end]
-                                self.assertEqual(suffix.count(asm),1,(key,asm))
-                                at=identity_start+suffix.index(asm)+len(asm)
-                                stepped=code[:at]+(
-                                    "    xorl %edi,%edi\n    jmp erist_rt_exit\n"
-                                    )+code[at:]
-                                probe=self.run_probe(
-                                    "u2-id-step-%s-%d"%(key,pending),
-                                    identities.identity_file_descriptors()+stepped,
-                                    runtime=runtime,types=False)
-                                stage[key]=probe.returncode
-                        self.fail("native checked identity close %r; "
-                            "post-native-close=%r post-wrapper=%r "
-                            "post-first-GC=%r post-second-GC=%r "
-                            "normal-branch-stages=%r"%
-                            (result.returncode,native_result.returncode,
-                             call_result.returncode,gc_result.returncode,
-                             second_result.returncode,stage))
+                        guard=diagnostic.returncode-100
+                        context=("none"
+                            if guard<0 or guard>=len(guards) else
+                            code[max(0,guards[guard].start()-180):
+                                 guards[guard].end()])
+                        self.fail("native integration status=%r; selected "
+                                  "assertion=%r, context=%r, stderr=%r"%
+                                  (result.returncode,diagnostic.returncode,
+                                   context,diagnostic.stderr))
                     self.assertEqual(
                         (result.returncode,result.stdout,result.stderr),
                         (0,b"",b""))
