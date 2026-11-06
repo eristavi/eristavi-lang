@@ -284,7 +284,7 @@ class U2CheckedIdentityCloseTests(unittest.TestCase):
                         # Diagnostic: distinguish every explicit caller and
                         # teardown assertion without weakening any invariant.
                         # Each failing branch gets a distinct process status.
-                        pattern=r"\\b(?:jne|je|jb|ja|jge|jl|jbe)\\s+\\.Lresource_test_fail\\b"
+                        pattern=r"\b(?:jne|je|jb|ja|jge|jl|jbe)\s+\.Lresource_test_fail\b"
                         guards=list(re.finditer(pattern,code))
                         instrumented=code
                         for index in range(len(guards)-1,-1,-1):
@@ -294,12 +294,12 @@ class U2CheckedIdentityCloseTests(unittest.TestCase):
                                 ".Lu2_failure_guard_"+str(index))
                             instrumented=(instrumented[:match.start()]+
                                           updated+instrumented[match.end():])
-                        instrumented+="\\n.text\\n"
+                        instrumented+="\n.text\n"
                         for index in range(len(guards)):
                             instrumented+=(
-                                ".Lu2_failure_guard_%d:\\n"
-                                "    movl $%d,%%edi\\n"
-                                "    jmp erist_rt_exit\\n"%
+                                ".Lu2_failure_guard_%d:\n"
+                                "    movl $%d,%%edi\n"
+                                "    jmp erist_rt_exit\n"%
                                 (index,100+index))
                         diagnostic=self.run_probe(
                             "u2-id-close-guard-%d-%d"%(pending,int(failed)),
