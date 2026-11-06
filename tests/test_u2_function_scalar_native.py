@@ -114,6 +114,93 @@ _start:
             self.assertEqual((done.returncode,done.stdout,done.stderr),
                              (0,b"",b""), (value,done.stderr))
 
+    def test_native_comparison_branch_matches_canonical_reference(self):
+        source=self.fixture()
+        before="    try ab.branch(fn,graph,loop,again,loop,[second,first,off],\n"
+        before+="        exit,[second,first],loc);"
+        self.assertEqual(source.count(before),1)
+        source=source.replace(before,
+            "    let bigger be try build.compareInteger("
+            "fn,loop,first,second,5,loc);\n"
+            "    try ab.branch(fn,graph,loop,bigger,loop,[second,first,off],"
+            "exit,[second,first],loc);",1)
+        generated=self.generator("native-scalar-comparison",source)
+        self.assertEqual((generated.returncode,generated.stderr),(0,""),
+                         generated.stdout[-2200:])
+        self.assertIn("setg %al",generated.stdout)
+        # First comparison with 37 is true and the swapped backedge is
+        # false. With 8 the first comparison is already false.
+        for i,(operand,left,right) in enumerate(((37,37,11),(8,11,8),
+                                                  (-1,11,-1))):
+            body=(
+                "\n.text\n.globl _start\n_start:\n"
+                "    leaq .Lu2_cfg_input(%rip),%rdi\n"
+                "    call erist_u2_function_83\n"
+                "    movabsq $"+str(left)+",%rcx\n"
+                "    cmpq %rcx,%rax\n    jne .Lgraph_test_fail\n"
+                "    movabsq $"+str(right)+",%rcx\n"
+                "    cmpq %rcx,%rdx\n    jne .Lgraph_test_fail\n"
+                "    jmp .Lgraph_finish\n"
+                ".section .rodata\n.p2align 3\n.Lu2_cfg_input:\n"
+                ".quad "+str(operand)+"\n")
+            result=self.run_probe("u2-native-comparison-"+str(i),
+                                  generated.stdout+body+graph.FINISH)
+            self.assertEqual((result.returncode,result.stdout,result.stderr),
+                             (0,b"",b""),operand)
+
+    def test_native_signed_wrap_arithmetic(self):
+        source=self.fixture()
+        before="    try ab.branch(fn,graph,loop,again,loop,[second,first,off],\n"
+        before+="        exit,[second,first],loc);"
+        self.assertEqual(source.count(before),1)
+        source=source.replace(before,
+            "    let addition be try build.wrapAdd("
+            "fn,loop,first,second,loc);\n"
+            "    let multiply be try build.wrapMultiply("
+            "fn,loop,first,second,loc);\n"
+            "    let difference be try build.wrapSubtract("
+            "fn,loop,multiply,addition,loc);\n"
+            "    try ab.branch(fn,graph,loop,again,loop,[second,first,off],"
+            "exit,[difference,addition],loc);",1)
+        # The independent U1b aggregate reference executor deliberately
+        # refuses scalar op15-17; it must not be used as evidence here.
+        # The Python 64-bit bit-vector oracle is independent of native asm.
+        reference=("    let reference be try execute.run(fn,graph,fnOwner,[37],64);\n"
+                   "    try check(reference.kind == 0 and reference.count == 2 and\n"
+                   "        (try execute.result(reference,0)) == 37 and\n"
+                   "        (try execute.result(reference,1)) == 11,\n"
+                   "        \"canonical SSA loop backedge reference mismatch\");\n")
+        self.assertEqual(source.count(reference),1)
+        source=source.replace(reference,"",1)
+        generated=self.generator("native-scalar-wrap-arithmetic",source)
+        self.assertEqual((generated.returncode,generated.stderr),(0,""),
+                         generated.stdout[-2000:])
+        asm=generated.stdout
+        for instruction in ("addq %rcx,%rax","imulq %rcx,%rax",
+                            "subq %rcx,%rax"):
+            self.assertIn(instruction,asm)
+        def signed64(value):
+            return ((value+(1<<63))%(1<<64))-(1<<63)
+        for index,operand in enumerate((37,8,-1,(1<<63)-1,-(1<<63))):
+            added=signed64(11+operand)
+            multiplied=signed64(11*operand)
+            difference=signed64(multiplied-added)
+            body=(
+                "\n.text\n.globl _start\n_start:\n"
+                "    leaq .Lu2_cfg_input(%rip),%rdi\n"
+                "    call erist_u2_function_83\n"
+                "    movabsq $"+str(difference)+",%rcx\n"
+                "    cmpq %rcx,%rax\n    jne .Lgraph_test_fail\n"
+                "    movabsq $"+str(added)+",%rcx\n"
+                "    cmpq %rcx,%rdx\n    jne .Lgraph_test_fail\n"
+                "    jmp .Lgraph_finish\n"
+                ".section .rodata\n.p2align 3\n.Lu2_cfg_input:\n"
+                ".quad "+str(operand)+"\n")
+            result=self.run_probe("u2-native-signed-wrap-"+str(index),
+                                  asm+body+graph.FINISH)
+            self.assertEqual((result.returncode,result.stdout,result.stderr),
+                             (0,b"",b""),operand)
+
     def test_unsupported_dead_aggregate_rejected_before_assembly(self):
         source=self.fixture()
         anchor="    try ab.returnValues(fn,graph,dead,[never,eleven],loc);"
