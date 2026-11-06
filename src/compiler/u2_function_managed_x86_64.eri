@@ -422,9 +422,20 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
     phase identity budget.Phase,registry identity managed.Registry,
     carriers,descriptors,forceGC Bool,label Int,selfTarget Int,checked Bool)
     fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,Unsupported {
-    let proof be try ssa.verify(plan,routine,graph,table,phase);
+    // roots.create has just verified the frozen original Function, including
+    // dead CFG, while constructing this private liveness Plan. On checked
+    // emission, the FULL independent ssa.verifyPublications transaction below
+    // rederives that Plan and checks every root bit BEFORE any assembly output.
+    // Avoid a redundant third complete canonical/SSA reconstruction between
+    // these two mandatory proofs. Unchecked/legacy emission is unchanged.
+    // No public verifier API is bypassed or given a reusable trust stamp.
+    let tracked be plan.values.length/4;
+    if not checked {
+        let proof be try ssa.verify(plan,routine,graph,table,phase);
+        tracked=proof.tracked;
+    }
     let admissible be label >= 1 and label <= 2147483647 and
-        proof.tracked >= 1 and proof.tracked <= 64 and
+        tracked >= 1 and tracked <= 64 and
         routine.blocks.length/5 >= 1 and routine.blocks.length/5 <= 64 and
         routine.values.length/4 <= 256 and
         routine.instructions.length/10 <= 512 and

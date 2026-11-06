@@ -482,9 +482,14 @@ class U2FunctionCheckedNativeTests(unittest.TestCase):
         shutil.copytree(ROOT/"src/compiler",folder/"compiler")
         traced_emitter=folder/"compiler/u2_function_managed_x86_64.eri"
         traced_code=traced_emitter.read_text(encoding="utf-8")
+        # The checked-path fast path cannot publish machine instructions
+        # before its independent, fresh whole-publication oracle succeeds.
+        self.assertLess(
+            traced_code.index("    let verifiedPublications be try ssa.verifyPublications("),
+            traced_code.index('    output(".section .rodata");'))
         phases=(
-            ("    let proof be try ssa.verify(plan,routine,graph,table,phase);",
-             "ssa-verified"),
+            ("    let tracked be plan.values.length/4;",
+             "checked-root-plan-admitted"),
             ("    let managedReturn be false;", "signature-admitted"),
             ("    // Snapshot the frozen canonical Function tables before emitting any code.",
              "snapshot"),
@@ -549,7 +554,7 @@ class U2FunctionCheckedNativeTests(unittest.TestCase):
                 ("    return try ssa.create(routine,graph,table,phase,selected);","rootgate-create-ssa"),
             )),
             ("compiler/u2_function_managed_x86_64.eri", (
-                ("    let admissible be label >= 1 and label <= 2147483647 and","compile-ssa-complete"),
+                ("    let admissible be label >= 1 and label <= 2147483647 and","compile-admission"),
                 ("        try verifyCheckedRoots(routine,graph,phase,failureType);","rootcheck-begin"),
                 ("        try require(routine.definedTarget == selfTarget,","rootcheck-complete"),
             )),

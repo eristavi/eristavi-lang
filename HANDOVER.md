@@ -1,131 +1,65 @@
 # Eristavi compiler — current handover
 
-Updated 6 November 2026 (Asia/Nicosia). Active incremental U2 performance/verification work.
+Updated 6 November 2026 (Asia/Nicosia). Checked-root verified emission performance candidate.
 Branch: `compiler/u2-cleanup-foundation-20261102`; [PR #111](https://github.com/eristavi/eristavi-lang/pull/111) remains DRAFT; #74 remains OPEN.
 Original checked-return checkpoint: `3100dc8e82f8e496d61fd38d0cdab5311416bd36`.
-Latest prior implementation: `e40a64b3c8b7774dc68d3220f6b208ee38854ca6`; diagnostic fix `ac475bb71e0a78808eb08c450895edaaa0442ca9`.
-The current independent-verifier batching candidate is in this containing commit (not yet qualified).
+Prior publication implementation: `e40a64b3c8b7774dc68d3220f6b208ee38854ca6`. Earlier exact diagnostic: `a51182e663e645777186e9f6551bdc7081f36916`.
+Current checked-only deferred-middle-proof implementation is in this containing commit (unqualified).
 Current development is not qualified or merged. Optimization #51 remains PAUSED.
 
 ## Current blocker and next action
 
-**Latest exact-head diagnostic (previous session):** commit `8d94a439`,
-[focused run #42267466631](https://github.com/eristavi/eristavi-lang/actions/runs/42267466631),
-18 methods: **17 passed, 1 owned-generator timeout at unchanged 120 s**.
-Timestamped `ssa.create`/reverify trace: first
-`canonical.verifyFallibleRegistry` **31.1 s**, first liveness construct
-**16.6 s**; independently repeated canonical verification **33.8 s**,
-second liveness construct **17.8 s**, plan comparison approximately **4.2 s**.
-These measured times dominate the remaining budget *before* root publication.
-The current test-only revision adds more granular markers in isolated copies
-of `u1_verify.inspect` and `u2_ssa_liveness.construct` to locate the
-costliest substage. **No production code changed in this diagnostic commit.**
-Keep verification, malformed/dead block refusals and budgets fully intact;
-do not call this a speedup or accepted work.
+**Source state:** current development candidate is the containing commit after
+`a51182e`. The checked-profile-only producer now **defers** the middle
+`ssa.verify` reconstruction, rather than deleting the mandatory proof.
+`roots.create` still freshly verifies the ENTIRE original frozen canonical
+Function and builds the local Plan; `ssa.verifyPublications` still freshly
+rederives the complete original Plan and independently checks ALL
+entry/before/after bits, including dead blocks, **before the first assembly
+output**. The untouched standalone `ssa.verify` and `requirePublished`
+APIs remain strict. Unchecked `emit` and `emitRecursive` still perform
+their original middle verification. No trusted stamp, new ABI, source syntax,
+collector or work-limit change. **This source candidate is not yet tested or
+qualified: do not infer a pass from prior source/CI.**
 
-The owned-versus-C source-generator comparison exceeds its **120-second**
-watchdog. Hosted diagnostic [#42259784644](https://github.com/eristavi/eristavi-lang/actions/runs/42259784644)
-passed **17/18 tests**; the remaining test timed out after markers `begin`,
-`metadata`, `function`, `native-phase`, `native-emit`. The stall is inside
-`native.emitChecked`, after metadata/Function construction.
+**Measured blocker, exact earlier source:**
+[focused #42268931408](https://github.com/eristavi/eristavi-lang/actions/runs/42268931408)
+on `a51182e`: 18 methods, **17 pass, 1 owned-generator 120-second
+timeout**. In a temporary instrumented source copy, canonical root-plan
+verification starts at 12.141 s and finishes 54.962 s, with checked
+liveness construction ending at 77.873 s. The next *identical* independent
+verification starts at 77.900 s and has still not completed by the 120-second
+deadline. Detailed substage evidence is in
+[publication/verification evidence](docs/evidence/2026-11-06/u2-publication-producer-batching.md).
+Earlier [#42267466631](https://github.com/eristavi/eristavi-lang/actions/runs/42267466631)
+measured canonical verification twice at 31.1/33.8 s, plan construction
+twice at 16.6/17.8 s, and comparison ~4.2 s on an earlier trace. These
+measurements support the redundant middle pass as a serious performance
+cost, but **do not yet establish a speedup**.
 
-The second hosted test-only diagnostic
-[#42260926729](https://github.com/eristavi/eristavi-lang/actions/runs/42260926729)
-also passed **17/18 tests** and stopped after `U2_NATIVE_TRACE:publication-build`
-but before `U2_NATIVE_TRACE:publication-verify`. SSA verification, metadata,
-exact canonical snapshots and checked admission completed: root-publication
-construction is the first observed hang. Identical GAS-comment instrumentation
-runs in isolated compiler copies for C and owned generators.
+**Why this is safe to test:** all three private compile entrypoints obtain
+their Plan via `roots.create` immediately before `compile`. Only the
+checked path skips the middle redundant proof; it does not emit any bytes,
+expose a verified token, or execute owned code until the *later*
+`ssa.verifyPublications` independently rejects or approves the original
+canonical Function, Plan and the complete root publication bitmaps.
+That checker still reconstructs from the original source, not the
+emitter's table snapshots. Failures must still produce no native assembly.
+The immutable input and private Plan do not leave this call; preserve
+negative/owner/physical refusal tests, and treat every remaining limitation
+as open until verified on the exact head.
 
-**Exact `e40a64b` hosted check:** [Text/List integration #42262075150](https://github.com/eristavi/eristavi-lang/actions/runs/42262075150)
-**12/12 PASS**. [Managed focused #42262075162](https://github.com/eristavi/eristavi-lang/actions/runs/42262075162)
-**18 run, 17 pass, 1 test-harness failure**: the isolated trace fixture
-looked for a source comment removed by the optimized producer and asserted
-`count == 1` before compiling/executing the owned/C generator. Therefore
-**the owned-generator watchdog was NOT exercised on `e40a64b`**; this failure
-is not a compiler liveness mismatch. The next test-only change updates the
-trace anchor to the new producer comment, with unchanged watchdog and oracle.
-The active candidate remains unqualified.
-
-**Latest exact diagnostic:** [focused #42262947027](https://github.com/eristavi/eristavi-lang/actions/runs/42262947027)
-on `ac475bb` executed 18 methods (17 passed, 1 timeout); all
-generator source construction and publication-table production completed.
-The last output marker is `U2_NATIVE_TRACE:publication-verify`: the
-**independent per-instruction publication verifier** is now the first
-measured 120-second bottleneck. Earlier diagnostic fixture failure is fixed.
-
-The next narrow source candidate updates only
-`ssa.verifyPublications`: it still freshly calls `verify` to independently
-reconstruct the original whole Function/Plan, checks ordered tracked ValueIds,
-then checks ALL canonical entry, before, and after root bits (including
-unreachable blocks) by last-use and SSA definition ordinal from the ORIGINAL
-owned Function tables. It does not trust emitter-generated table data,
-change public point APIs, skip a validation row, weaken cleanup/root
-requirements or alter public ABI. The verifier is structurally independent
-of the emitter's reverse suffix-use producer. Synthetic randomized
-reference-model parity: **3,093,668 cases, zero mismatches** (not a native
-qualification). **First attempted verifier-build result:** [#42263997707](https://github.com/eristavi/eristavi-lang/actions/runs/42263997707)
-FAILED at frontend semantic analysis, before source execution: the candidate
-redeclared existing local `i` in a nested lexical block
-(`name 'i' is already visible` at `u2_ssa_liveness.eri:516`).
-This is a candidate-source scoping error, not a root liveness failure.
-The next corrected revision reuses the existing mutable binding (`i=0`);
-no language semantics or check is relaxed. The initial red builds do not
-provide execution, sanitizer or speedup evidence.
-**Hosted exact-source owned-generator tests are pending**;
-no speedup or completion is claimed. `U2` and #74 remain unaccepted/open.
-
-**Latest hosted check of corrected last-use verifier `c63f2a6`:**
-[SSA/List #42264207607](https://github.com/eristavi/eristavi-lang/actions/runs/42264207607)
-**8/8 PASS**; [identity roots #42264207644](https://github.com/eristavi/eristavi-lang/actions/runs/42264207644)
-**15/15 PASS**. [Managed whole-Function #42264207710](https://github.com/eristavi/eristavi-lang/actions/runs/42264207710)
-executed **18 methods: 17 pass, 1 owned generator timeout at 120 seconds**;
-the last observed marker was again `publication-build`. No
-exact-head passing generator result, performance speedup, or full U2
-qualification has been established.
-
-**Diagnostic harness correction before hosted measurement:** the
-first test-only tracing patch accidentally encoded a double-escaped newline
-in the Python stdout reader and inserted one progress marker at an anchor
-that the earlier phase markers had already split. The corrected test now
-splits on a real newline and uses an exact post-insertion anchor, verified
-against the source. This is *not* a compiler/runtime fix, does not alter
-the 120-second watchdog, and requires hosted validation.
-
-**Measured U2 owned-generator timeline:** [#42266043455](https://github.com/eristavi/eristavi-lang/actions/runs/42266043455)
-records native emitter entry at **4.111 s**, initial `ssa.verify` entry
-at **57.436 s** (root-plan creation took ~53 s), completion of that
-verification + checked-root admission at **113.668 s** (~56 s), and
-root-publication entry at **119.584 s**. The test timed out at 120 s.
-Prior last-marker-only attribution to publication itself was misleading.
-The primary cost lies in repeated SSA plan construction/verification.
-
-The next test-only source-copy diagnostics timestamp
-`ssa.create`, full canonical fallible-registry verification,
-liveness plan construction, `ssa.verify` rebuild and
-checked-root verification separately. Both owned and C generators
-consume the SAME traced temporary compiler files, preserving the
-byte-identical comparator and original 120-second watchdog.
-No production semantics, verifier gate or ABI is relaxed.
-
-**Next diagnostic (test-only):** measure monotonic elapsed seconds when
-each owned generator phase marker actually arrives on stdout, preserving
-the exact 120-second watchdog, ELF checks and byte-exact comparison.
-Additional markers expose buffer allocation, block-entry production,
-per-block instruction chains, first suffix calculation and completed
-blocks; all are injected into an isolated compiler copy, never production
-source. This resolves whether repeated expensive allocations or a specific
-block/value phase dominates before choosing another production edit.
-
-The newest development revision replaces repeated emitter tail rescans with
-bounded reverse suffix-use and forward definition sweeps, preserving frozen
-linked instruction order and global SSA IDs. Every produced root bit still
-passes through the **unchanged independent `ssa.verifyPublications` oracle**,
-including dead instructions and foreign/stale/missing-root refusal. No trusted
-flag, output ABI or resource semantics changes. This revision is **UNQUALIFIED**;
-inspect its owned-generator, focused negative and independent-bit-comparison
-results first. If the verifier becomes the next bottleneck, diagnose it
-separately without weakening checks. Do not repeat superseded diagnostics.
+**Next action:** inspect exact-head checked/managed focused and Text/List
+hosted results. If the owned-vs-C generator passes within unchanged
+120 s, require byte-identical generated assembly, forced-GC depth-32
+execution, negative matrix, sanitizer, owner/resource physical evidence
+and remaining #74 functionality. If it still times out, follow the
+timestamped first/second proof traces and optimize a measured hot
+substage *without weakening verification or fixed work accounting*.
+In particular `tests/test_u1_words_path.py` requires exact work charges on
+failed radix paths; do not replace the word-store budget calls with a
+single up-front charge. Preserve default ABI and avoid full owned
+self-build. Keep #111 DRAFT and #74 OPEN.
 
 Targeted reproduction:
 

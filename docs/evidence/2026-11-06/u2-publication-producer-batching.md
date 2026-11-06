@@ -119,6 +119,39 @@ metadata, contracts, structure, dominance/SSA) and the SSA plan's
 select/uses/flow, **only inside the temporary test compiler source**. No
 production compiler, ABI, watchdog, root verifier or owner semantics change.
 
+## Detailed last verification trace and scoped reduction candidate
+
+Exact [#42268931408](https://github.com/eristavi/eristavi-lang/actions/runs/42268931408)
+on `a51182e`: **18 methods / 17 pass / 1 owned-generator timeout**.
+Host-time measured in the same test-only isolated source:
+
+| Step | Start s | End s | Elapsed s |
+| --- | ---: | ---: | ---: |
+| First canonical fallible verification including bootstrap | 12.141 | 54.962 | 42.821 |
+| Nested canonical inspect to structure | 21.734 | 44.922 | 23.188 |
+| Locations/dominance/SSA and final canonical checks | 44.922 | 54.961 | 10.039 |
+| First liveness selection/use scan | 54.972 | 63.057 | 8.085 |
+| First liveness flow fixpoint | 63.057 | 77.871 | 14.814 |
+| Second full canonical re-verification | 77.900 | >120 | Not completed |
+
+The enclosing run observes startup/temporary instrumentation overhead,
+so these values must not be compared to uninstrumented whole-program speed.
+
+**Next source candidate**: inside *private checked Function emission only*,
+remove the redundant middle `ssa.verify` call immediately after
+`roots.create`, which already reverified the source and created the Plan.
+The independent fresh whole-Function and all-root-bit oracle
+`ssa.verifyPublications` continues as the mandatory final gate
+**before any output**; it reconstructs original canonical source and
+compares the plan (including dead blocks). Nonchecked paths unchanged;
+`ssa.verify` and `ssa.requirePublished` public APIs unchanged.
+No acceptance or speedup claim until exact-head owned-vs-C and negative tests.
+
+**Explicit rejected shortcut**: do not up-front batch all radix-word
+`budget.work` calls; `tests/test_u1_words_path.py` pins exact
+failed-read work charges at each missing depth and resource limit.
+This project contract must not be weakened to achieve a benchmark win.
+
 ## Validation status
 
 - Exact `e40a64b` [Text/List integration #42262075150](https://github.com/eristavi/eristavi-lang/actions/runs/42262075150): **12/12 passed**.
