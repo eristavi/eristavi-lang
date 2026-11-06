@@ -36,9 +36,8 @@ class U2FunctionImportIntegrationTests(unittest.TestCase):
         return subprocess.run([str(executable)],capture_output=True,
                               text=True,timeout=180)
 
-    def text_source(self,bad_contract=False):
-        source=(REF/"u2_text_unicode17_cfg.eri").read_text(
-            encoding="utf-8")
+    def text_source(self,bad_contract=False,fixture="u2_text_unicode17_cfg.eri"):
+        source=(REF/fixture).read_text(encoding="utf-8")
         def replace(old,new):
             nonlocal source
             self.assertEqual(source.count(old),1,old)
@@ -194,6 +193,41 @@ class U2FunctionImportIntegrationTests(unittest.TestCase):
             change("let listType be try managed.listOfBase(registry,p,intType);",
                    "let listType be try managed.identityOfBase(registry,p,intType);")
         return source
+
+    def test_existing_unicode17_full_operation_corpus_through_whole_function(self):
+        # The OLD original canonical Text corpus already encodes all twelve
+        # runtime imports. Only replace its final selected result and the
+        # emitter: this adds no new Text operation implementation.
+        cases=(
+            ("accentByte1",204,False),
+            ("emojiCharacters",1,False),
+            ("accentGraphemeMatches",1,True),
+            ("normalizedMatches",1,True),
+        )
+        for expression,expected,predicate in cases:
+            with self.subTest(expression=expression):
+                source=self.text_source(
+                    fixture="u2_text_unicode17.eri")
+                source=source.replace(
+                    "[accentCharacters],loc);",
+                    "["+expression+"],loc);")
+                if predicate:
+                    source=source.replace(
+                        "let entrySig be try meta.signature(data,p,[],[meta.i64()]);",
+                        "let entrySig be try meta.signature(data,p,[],[meta.pred()]);")
+                created=self.generator("u2-text-entire-"+expression,source)
+                self.assertEqual((created.returncode,created.stderr),
+                                 (0,""),created.stdout[-3000:])
+                for symbol in ("erist_rt_unicode_from_scalar",
+                               "erist_rt_text_concat",
+                               "erist_rt_text_binary",
+                               "erist_rt_view_count",
+                               "erist_rt_view_index",
+                               "erist_rt_unicode_normalize_nfc"):
+                    self.assertIn("call "+symbol,created.stdout)
+                self.run_native(created.stdout,
+                                "u2-text-original-full-"+expression,
+                                expected,"95")
 
     def test_mixed_text_list_calls_share_exact_whole_function_root_map(self):
         created=self.generator("u2-text-and-list-same-function",
