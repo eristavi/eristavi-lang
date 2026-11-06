@@ -1,0 +1,145 @@
+// Opt-in native dispatch for an EXACT independently verified canonical
+// two-stage File.close chain. Reuses the previously emitted checked SSA and
+// cleanup machine functions. No new executable IR, resource semantics, GC
+// collector, public ABI or production path.
+// A caller owns and binds the File roots and class-5 vector before entry.
+// This module only replaces handwritten inter-stub control routing;
+// general whole-Function opcode-46 lowering remains a separate U2 gate.
+import compiler.u1_budget as budget;
+import compiler.u1_meta as meta;
+import compiler.u1_builder as build;
+import compiler.u1_aggregate as aggregate;
+import compiler.u1_verify as canonical;
+import compiler.u2_scoped_owners as owners;
+import compiler.u2_invoke_contract as fallible;
+import compiler.u2_root_map as roots;
+import compiler.u2_continuation_bind as continuation;
+import compiler.u2_cleanup_plan as cleanup;
+import compiler.u2_cleanup_verify as planVerify;
+import compiler.u2_checked_ssa_bind as ssa;
+import compiler.u2_checked_chain_verify as chain;
+import compiler.u2_native_slots_x86_64 as slots;
+import compiler.format as format;
+
+public error Unsupported { message Text; }
+function require(ok Bool,reason Text) fails Unsupported {
+    if not ok { fail Unsupported { message=reason; }; }
+}
+function line(s Text) { output("    "+s); }
+
+// Entry private SysV ABI: RDI=File root words, RSI=saved FailureContext,
+// RDX=already bound class-5 root vector, RCX=original ValueId SSA frame.
+// First and outer native helpers MUST have been emitted from the EXACT
+// independently verified canonical plans before assembler/linker execution.
+// RAX: zero only when both closes succeed; -1 on any checked close failure.
+// This bounded entry does NOT yet create/dispatch all final canonical SSA
+// block parameters: its success/failed status is consumed by the test caller.
+public function emit(routine identity build.Function,
+    graph identity aggregate.Registry,profile identity owners.Profile,
+    contracts identity fallible.Registry,phase identity budget.Phase,
+    map identity roots.Map,placement identity slots.Plan,
+    first continuation.Pair,firstCall build.InstId,
+    innerPlan identity cleanup.Plan,innerOwners,innerExit meta.LocId,
+    normal continuation.Pair,normalCall build.InstId,
+    normalPlan identity cleanup.Plan,normalOwners,outerExit meta.LocId,
+    failed continuation.Pair,failedCall build.InstId,
+    failedPlan identity cleanup.Plan,failedOwners,
+    firstLabel Int,normalLabel Int,failedLabel Int)
+    fails budget.LimitError,canonical.InvalidIR,owners.InvalidOwnership,
+        roots.InvalidRoots,continuation.InvalidBinding,
+        planVerify.InvalidPlan,ssa.InvalidSSA,chain.InvalidChain,
+        slots.InvalidSlots,Unsupported {
+    // Fully verify the ORIGINAL immutable Function, both checked successor
+    // pairs and the already-failing outer cleanup before emitting anything.
+    let route be try chain.verify(routine,graph,profile,contracts,phase,map,
+        first,firstCall,innerPlan,innerOwners,innerExit,
+        normal,normalCall,normalPlan,normalOwners,outerExit,
+        failed,failedCall,failedPlan,failedOwners);
+    let placementProof be try slots.verify(placement,map,routine,graph,phase);
+    let inner be try ssa.verify(routine,graph,profile,contracts,phase,map,
+        first,firstCall,innerPlan,innerOwners,innerOwners.count-1,innerExit);
+    try require(firstLabel > 0 and normalLabel > 0 and failedLabel > 0 and
+        firstLabel <= 2147483647 and normalLabel <= 2147483647 and
+        failedLabel <= 2147483647 and
+        firstLabel != normalLabel and firstLabel != failedLabel and
+        normalLabel != failedLabel and
+        placementProof.roots >= 3 and
+        inner.rootIndex >= 0 and inner.rootIndex < placementProof.roots and
+        route.rootIndex >= 0 and route.rootIndex < placementProof.roots and
+        normalOwners.count == 1 and failedOwners.count == 1 and
+        route.firstClose == firstCall.index and
+        route.normalClose == normalCall.index and
+        route.failingClose == failedCall.index and
+        route.survivingOwner == failedOwners[0].value.index,
+        "unsupported or stale canonical native checked chain");
+    try budget.work(phase,96);
+    let name be format.integer(firstLabel);
+    let normalName be format.integer(normalLabel);
+    let failedName be format.integer(failedLabel);
+    let entry be "erist_u2_chain_"+name;
+    let normalBranch be entry+"_normal";
+    let failedBranch be entry+"_failed";
+    let normalFailed be entry+"_normal_failed";
+    let suffixNormal be name+"_"+format.integer(normalCall.index);
+    let suffixFailed be name+"_"+format.integer(failedCall.index);
+    let normalOwnerOffset be format.integer(
+        (normalOwners[0].value.index-1)*8);
+    let failedOwnerOffset be format.integer(
+        (failedOwners[0].value.index-1)*8);
+    output(".text");
+    output(".globl "+entry);
+    output(".type "+entry+",@function");
+    output(entry+":");
+    // Entry RSP=8 mod 16: five callee-saved pushes align all native calls.
+    line("pushq %rbx"); line("pushq %r12"); line("pushq %r13");
+    line("pushq %r14"); line("pushq %r15");
+    line("movq %rdi,%r12"); line("movq %rsi,%r13");
+    line("movq %rdx,%r14"); line("movq %rcx,%r15");
+    line("testq %r12,%r12"); line("je erist_rt_value_fault_internal");
+    line("testq %r13,%r13"); line("je erist_rt_value_fault_internal");
+    line("testq %r14,%r14"); line("je erist_rt_value_fault_internal");
+    line("testq %r15,%r15"); line("je erist_rt_value_fault_internal");
+    line("call erist_u2_ssa_"+name);
+    line("cmpq $0,%rax"); line("je "+normalBranch);
+    line("cmpq $-1,%rax"); line("jne erist_rt_value_fault_internal");
+    line("jmp "+failedBranch);
+    output(normalBranch+":");
+    // Inner success retires its own checked root. Publish the NEW outer
+    // checked root before its allocating File.close. Cleanup consumes File
+    // even when it appends a new primary checked failure.
+    line("movq %r14,%rdi"); line("movq %r13,%rsi");
+    line("call erist_u2_publish_"+suffixNormal);
+    line("movq %r12,%rdi"); line("movq %r13,%rsi");
+    line("call erist_u2_cleanup_"+normalName);
+    // A consumed lexical File must not survive in the previous SSA slot.
+    line("movq $0,"+normalOwnerOffset+"(%r15)");
+    line("testq %rax,%rax"); line("jne "+normalFailed);
+    line("cmpq $0,(%r13)"); line("jne erist_rt_value_fault_internal");
+    line("movq %r14,%rdi");
+    line("call erist_u2_release_"+suffixNormal);
+    line("xorl %eax,%eax");
+    line("jmp "+entry+"_leave");
+    output(normalFailed+":");
+    line("cmpq $-1,%rax"); line("jne erist_rt_value_fault_internal");
+    line("cmpq $0,(%r13)"); line("je erist_rt_value_fault_internal");
+    line("movq $-1,%rax"); line("jmp "+entry+"_leave");
+    output(failedBranch+":");
+    // Inner failure's class-5 root remains published. A second, distinct
+    // class-5 word pins the SAME saved primary while outer close adds any
+    // new failure as ordered secondary. The primary cannot be replaced.
+    line("cmpq $0,(%r13)"); line("je erist_rt_value_fault_internal");
+    line("movq %r14,%rdi"); line("movq %r13,%rsi");
+    line("call erist_u2_publish_"+suffixFailed);
+    line("movq %r12,%rdi"); line("movq %r13,%rsi");
+    line("call erist_u2_cleanup_"+failedName);
+    line("movq $0,"+failedOwnerOffset+"(%r15)");
+    line("cmpq $-1,%rax"); line("jne erist_rt_value_fault_internal");
+    line("cmpq $0,(%r13)"); line("je erist_rt_value_fault_internal");
+    line("movq $-1,%rax");
+    output(entry+"_leave:");
+    line("popq %r15"); line("popq %r14");
+    line("popq %r13"); line("popq %r12"); line("popq %rbx");
+    line("ret");
+    output(".size "+entry+",.-"+entry);
+    output(".section .note.GNU-stack,\\\"\\\",@progbits");
+}
