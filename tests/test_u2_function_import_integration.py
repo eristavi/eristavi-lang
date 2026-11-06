@@ -367,9 +367,9 @@ class U2FunctionImportIntegrationTests(unittest.TestCase):
                                          source)
                 self.assertEqual((generated.returncode,generated.stderr),
                                  (0,""),generated.stdout[-2400:])
-                starter=("\\n.text\\n.globl _start\\n_start:\\n"
-                         " call erist_u2_rooted_function_96\\n"
-                         " movl $99,%edi\\n jmp erist_rt_exit\\n")
+                starter=("\n.text\n.globl _start\n_start:\n"
+                         " call erist_u2_rooted_function_96\n"
+                         " movl $99,%edi\n jmp erist_rt_exit\n")
                 result=self.run_probe("u2-list-bounds-"+str(index),
                                       generated.stdout+starter)
                 self.assertEqual(result.returncode,1,result.stderr)
