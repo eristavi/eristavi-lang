@@ -224,6 +224,36 @@ _start:
         self.assertEqual((result.returncode,result.stdout,result.stderr),
                          (0,b"",b""))
 
+    def test_more_than_32_selected_identity_roots_emit_exact_offsets(self):
+        # A large dead-value cohort still belongs to the canonical Function.
+        # No tracked identity may silently disappear from the native root
+        # vector merely because its liveness bit happens to be zero.
+        source=self.source()
+        marker="    try ab.jump(fn,graph,entry,loop,[initial,on],loc);"
+        self.assertEqual(source.count(marker),1)
+        extra="".join(
+            "    let rootCandidate%d be try ab.make(fn,graph,entry,pair,"
+            "[eleven,eleven],loc);\\n"%index
+            for index in range(40))
+        source=source.replace(marker,extra+marker,1)
+        generated=self.generator("native-identity-ssa-wide",source)
+        self.assertEqual((generated.returncode,generated.stderr),
+                         (0,""),generated.stdout[-3500:])
+        roots=re.findall(
+            r"^\\.set erist_u2_identity_slot_73_(\\d+), (\\d+)$",
+            generated.stdout,re.M)
+        count=len(roots)
+        self.assertGreater(count,32)
+        self.assertLessEqual(count,64)
+        ids=[int(item[0]) for item in roots]
+        self.assertEqual(len(set(ids)),count)
+        self.assertEqual([int(item[1]) for item in roots],
+                         list(range(0,count*8,8)))
+        self.assertIn("    movl $"+str(count)+",%ecx",generated.stdout)
+        self.assertIn("erist_u2_identity_before_73:",generated.stdout)
+        self.assertIn("erist_u2_identity_after_73:",generated.stdout)
+        self.assertIn("erist_u2_identity_release_73:",generated.stdout)
+
     def test_invalid_identity_descriptor_rejected_without_assembly(self):
         source=self.source()
         before="identityType,at,73);"
