@@ -19,8 +19,15 @@ entry/before/after bits, including dead blocks, **before the first assembly
 output**. The untouched standalone `ssa.verify` and `requirePublished`
 APIs remain strict. Unchecked `emit` and `emitRecursive` still perform
 their original middle verification. No trusted stamp, new ABI, source syntax,
-collector or work-limit change. **This source candidate is not yet tested or
-qualified: do not infer a pass from prior source/CI.**
+collector or work-limit change. Exact source `7b17207` passed
+[Text/List #42270143006](https://github.com/eristavi/eristavi-lang/actions/runs/42270143006)
+**12/12** and [managed focused #42270142869](https://github.com/eristavi/eristavi-lang/actions/runs/42270142869)
+**17/18**. The sole failed method was the **instrumented** owned-generator
+comparison, still timing out at 120 s; the second full proof was reached,
+at ~58 s, and its canonical verification completed at ~102 s. It was
+still calculating SSA flow when the 120-second watchdog expired.
+This confirms that both full proof boundaries executed; it does
+**not** qualify the generator or establish uninstrumented performance.
 
 **Measured blocker, exact earlier source:**
 [focused #42268931408](https://github.com/eristavi/eristavi-lang/actions/runs/42268931408)
@@ -49,13 +56,22 @@ The immutable input and private Plan do not leave this call; preserve
 negative/owner/physical refusal tests, and treat every remaining limitation
 as open until verified on the exact head.
 
-**Next action:** inspect exact-head checked/managed focused and Text/List
-hosted results. If the owned-vs-C generator passes within unchanged
-120 s, require byte-identical generated assembly, forced-GC depth-32
-execution, negative matrix, sanitizer, owner/resource physical evidence
-and remaining #74 functionality. If it still times out, follow the
-timestamped first/second proof traces and optimize a measured hot
-substage *without weakening verification or fixed work accounting*.
+**Next action:** run the corrected **uninstrumented** owned-versus-C
+generator comparison against the exact new head. In the standard test, the
+compiler source is an unchanged symlink to `src/compiler` and the fixture
+source is original. The same C/owned assembly-byte equality, static
+ELF/no-loader/undefined-symbol/non-executable-stack checks, exact
+120-second watchdog and forced-GC depth-32 output oracle remain.
+Host-side phase capture and isolated source-copy comments are still
+available **only** with `ERISTAVI_U2_OWNED_GENERATOR_TRACE=1` for
+future diagnostics. Instrumenting canonical verification changes runtime
+work/allocations and can distort the qualification cutoff; no such
+instrumentation belongs in the normal performance gate.
+If the uninstrumented generator passes, verify independent checks,
+negative matrix and ASan/UBSan within documented scope, then continue
+the uncompleted U2 semantics and physical/CI gates. If not, measure the
+remaining performance bottleneck without weakening verification,
+native-output gating or exact failed-work accounting.
 In particular `tests/test_u1_words_path.py` requires exact work charges on
 failed radix paths; do not replace the word-store budget calls with a
 single up-front charge. Preserve default ABI and avoid full owned

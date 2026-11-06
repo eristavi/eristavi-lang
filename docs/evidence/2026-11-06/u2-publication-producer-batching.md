@@ -152,12 +152,29 @@ No acceptance or speedup claim until exact-head owned-vs-C and negative tests.
 failed-read work charges at each missing depth and resource limit.
 This project contract must not be weakened to achieve a benchmark win.
 
+## Checked-only deferred verifier: instrumented hosted results
+
+Exact commit `7b17207`:
+
+- [Text/List #42270143006](https://github.com/eristavi/eristavi-lang/actions/runs/42270143006): **12/12 pass**, code changed in private checked path and normal Text/List behavior preserved.
+- [Managed Function #42270142869](https://github.com/eristavi/eristavi-lang/actions/runs/42270142869): **18 run / 17 pass / 1 owned-source-generator timeout**. In the instrumented binary, root-plan construction completed at 45.350 s, publication production at 58.339 s, independent `ssa.verifyPublications` entered at 58.339 s, its fresh canonical verifier completed at 101.779 s, and independent liveness reconstruction reached flow at 110.848 s. The unchanged watchdog expired at 120 s; no byte-identical C generator output or depth-32 probe was reached in this method.
+- **Important measurement caveat:** this test injects many `output` calls and comments into both compiled source-generator inputs, including canonical verifier hotspots, and those allocations/IO are inside the timed program. The timestamps are phase-local evidence only, **not** a clean production generator performance result.
+
+Next test-only change makes all `output`-based source annotations
+**opt-in** via `ERISTAVI_U2_OWNED_GENERATOR_TRACE=1`. The standard
+test runs the unchanged original fixture and compiler modules, its
+original 120-second watchdog and byte-exact C/owned generator comparison.
+The optional trace remains available without contaminating standard
+qualification. No production compiler/runtime/ABI change in this patch.
+Exact-head qualification pending.
+
 ## Validation status
 
 - Exact `e40a64b` [Text/List integration #42262075150](https://github.com/eristavi/eristavi-lang/actions/runs/42262075150): **12/12 passed**.
 - Exact `e40a64b` [managed focused #42262075162](https://github.com/eristavi/eristavi-lang/actions/runs/42262075162): **18 run, 17 pass, 1 diagnostic-fixture failure**. The fixture asserted its obsolete `// Independently prove EACH publication obligation` marker was present. The optimization removed that comment; execution never reached the owned generator. **No owned-generator time/success/120s result on this head**. The next patch corrects only that marker.
 
-Pending exact-head focused owned-generation and whole-Function managed,
-Text/List integration, saved primary/secondary, root/owner negative tests.
+Pending exact-head clean owned-generator comparison and whole-Function managed,
+saved primary/secondary, root/owner negative tests. Text/List on `7b17207`
+passed 12/12; do not repeat unaffected checks absent a changed input.
 The old 120-second watchdog remains unchanged. Full four-platform and
 completed-batch qualification are NOT claimed; #74 stays OPEN and #111 DRAFT.

@@ -477,115 +477,131 @@ class U2FunctionCheckedNativeTests(unittest.TestCase):
     def test_owned_and_c_bootstrap_generators_emit_identical_checked_function(self):
         folder=self.directory/"checked-owned-generator"
         folder.mkdir()
-        # Isolate profiling annotations from the original compiler sources.
-        # Both owned and C generators below use this exact temporary copy.
-        shutil.copytree(ROOT/"src/compiler",folder/"compiler")
-        traced_emitter=folder/"compiler/u2_function_managed_x86_64.eri"
-        traced_code=traced_emitter.read_text(encoding="utf-8")
-        # The checked-path fast path cannot publish machine instructions
-        # before its independent, fresh whole-publication oracle succeeds.
+        # The normal performance/parity gate must run original, unmodified
+        # compiler and fixture sources. Detailed GAS comment tracing is opt-in
+        # so diagnostic output/allocation cannot distort a 120-second cutoff.
+        raw_emitter=(ROOT/"src/compiler/u2_function_managed_x86_64.eri").read_text(
+            encoding="utf-8")
         self.assertLess(
-            traced_code.index("    let verifiedPublications be try ssa.verifyPublications("),
-            traced_code.index('    output(".section .rodata");'))
-        phases=(
-            ("    let tracked be plan.values.length/4;",
-             "checked-root-plan-admitted"),
-            ("    let managedReturn be false;", "signature-admitted"),
-            ("    // Snapshot the frozen canonical Function tables before emitting any code.",
-             "snapshot"),
-            ("    // Build the publication product in two bounded sweeps per canonical block,",
-             "publication-build"),
-            ("    // Verify the entire immutable publication product at one boundary instead",
-             "publication-verify"),
-            ("    // Precharge ALL output work. From here only pure string/array operations.",
-             "publication-done"),
-            ('    output(".section .rodata");', "assembly-begin"),
-        )
-        for needle,checkpoint in phases:
-            self.assertEqual(traced_code.count(needle),1)
-            traced_code=traced_code.replace(
-                needle,'    output("# U2_NATIVE_TRACE:'+checkpoint+'");\n'+needle,1)
-        # Supplemental TEST-ONLY markers identify per-block root-production
-        # progress without altering original compiler sources.
-        progress_marks=(
-            ("    let rowCount be (instructions.count/10)*selected.count;",
-             '    output("# U2_NATIVE_TRACE:buffer-start");\n'),
-            ("        // Preserve the original linked instruction order;",
-             '        output("# U2_NATIVE_TRACE:entry:"+format.integer(block));\n'),
-            ("        let terminator be blocks[(block-1)*5+4];",
-             '        output("# U2_NATIVE_TRACE:chain:"+format.integer(block));\n'),
-            ("            let liveOut be (try words.get(plan.outputs,phase,",
-             '            if j == 0 { output("# U2_NATIVE_TRACE:first-suffix:"+format.integer(block)); }\n'),
-            ("        block=block+1;\n    }\n    output(\"# U2_NATIVE_TRACE:publication-verify\");\n    // Verify the entire immutable publication product at one boundary instead",
-             '        output("# U2_NATIVE_TRACE:block-done:"+format.integer(block));\n'),
-        )
-        for needle,marker in progress_marks:
-            self.assertEqual(traced_code.count(needle),1)
-            traced_code=traced_code.replace(needle,marker+needle,1)
-        traced_emitter.write_text(traced_code,encoding="utf-8")
+            raw_emitter.index("    let verifiedPublications be try ssa.verifyPublications("),
+            raw_emitter.index('    output(".section .rodata");'))
+        tracing=os.environ.get("ERISTAVI_U2_OWNED_GENERATOR_TRACE","") == "1"
+        if tracing:
+            # Isolate profiling annotations from the original compiler sources.
+            # Both owned and C generators below use this exact temporary copy.
+            shutil.copytree(ROOT/"src/compiler",folder/"compiler")
+            traced_emitter=folder/"compiler/u2_function_managed_x86_64.eri"
+            traced_code=traced_emitter.read_text(encoding="utf-8")
+            # The checked-path fast path cannot publish machine instructions
+            # before its independent, fresh whole-publication oracle succeeds.
+            self.assertLess(
+                traced_code.index("    let verifiedPublications be try ssa.verifyPublications("),
+                traced_code.index('    output(".section .rodata");'))
+            phases=(
+                ("    let tracked be plan.values.length/4;",
+                 "checked-root-plan-admitted"),
+                ("    let managedReturn be false;", "signature-admitted"),
+                ("    // Snapshot the frozen canonical Function tables before emitting any code.",
+                 "snapshot"),
+                ("    // Build the publication product in two bounded sweeps per canonical block,",
+                 "publication-build"),
+                ("    // Verify the entire immutable publication product at one boundary instead",
+                 "publication-verify"),
+                ("    // Precharge ALL output work. From here only pure string/array operations.",
+                 "publication-done"),
+                ('    output(".section .rodata");', "assembly-begin"),
+            )
+            for needle,checkpoint in phases:
+                self.assertEqual(traced_code.count(needle),1)
+                traced_code=traced_code.replace(
+                    needle,'    output("# U2_NATIVE_TRACE:'+checkpoint+'");\n'+needle,1)
+            # Supplemental TEST-ONLY markers identify per-block root-production
+            # progress without altering original compiler sources.
+            progress_marks=(
+                ("    let rowCount be (instructions.count/10)*selected.count;",
+                 '    output("# U2_NATIVE_TRACE:buffer-start");\n'),
+                ("        // Preserve the original linked instruction order;",
+                 '        output("# U2_NATIVE_TRACE:entry:"+format.integer(block));\n'),
+                ("        let terminator be blocks[(block-1)*5+4];",
+                 '        output("# U2_NATIVE_TRACE:chain:"+format.integer(block));\n'),
+                ("            let liveOut be (try words.get(plan.outputs,phase,",
+                 '            if j == 0 { output("# U2_NATIVE_TRACE:first-suffix:"+format.integer(block)); }\n'),
+                ("        block=block+1;\n    }\n    output(\"# U2_NATIVE_TRACE:publication-verify\");\n    // Verify the entire immutable publication product at one boundary instead",
+                 '        output("# U2_NATIVE_TRACE:block-done:"+format.integer(block));\n'),
+            )
+            for needle,marker in progress_marks:
+                self.assertEqual(traced_code.count(needle),1)
+                traced_code=traced_code.replace(needle,marker+needle,1)
+            traced_emitter.write_text(traced_code,encoding="utf-8")
 
-        # Test-only instrumentation of the SAME temporary compiler modules
-        # imported by both independent C and owned source generators.
-        module_stages=(
-            ("compiler/u2_ssa_liveness.eri", (
-                ("    try select(plan,routine,graph,phase,chosen);","liveness-select-begin"),
-                ("    let total be plan.blocks*(plan.values.length/4);","liveness-select-done"),
-                ("    try markUses(plan,routine,phase);","liveness-use-scan"),
-                ("    try flow(plan,routine,phase);","liveness-flow"),
-                ("    try words.freeze(plan.types); try words.freeze(plan.values);","liveness-flow-done"),
-                ("    let verification be try budget.verificationPhase(routine.owner);","create-verification-phase"),
-                ("    let checked be try canonical.verifyFallibleRegistry(","canonical-begin"),
-                ("    let pending be try budget.reserve(routine.owner,512);","canonical-complete"),
-                ("    construct(plan,routine,graph,phase,managedTypes)","construct-begin"),
-                ("    return plan;","create-complete"),
-                ("    let derived be try create(routine,graph,contractsTable,phase,typeList);","reverify-create-begin"),
-                ("    let good be samePlan(plan,derived,phase)","reverify-create-complete"),
-                ("    return report;","reverify-complete"),
-            )),
-            ("compiler/u1_verify.eri", (
-                ("    try bounds(context);","canonical-inspect-start"),
-                ("    try signatures(context); try sources(context); try declarations(context);","canonical-bounds-done"),
-                ("    try fallibleContracts(context);","canonical-metadata-done"),
-                ("    try structure(context);","canonical-contract-done"),
-                ("    try locations(context); try reachableSSA(context);","canonical-structure-done"),
-                ("    return Report { reachableBlocks=context.graph.reachable;","canonical-dominance-done"),
-            )),
-            ("compiler/u2_managed_root_gate.eri", (
-                ("    return try ssa.create(routine,graph,table,phase,selected);","rootgate-create-ssa"),
-            )),
-            ("compiler/u2_function_managed_x86_64.eri", (
-                ("    let admissible be label >= 1 and label <= 2147483647 and","compile-admission"),
-                ("        try verifyCheckedRoots(routine,graph,phase,failureType);","rootcheck-begin"),
-                ("        try require(routine.definedTarget == selfTarget,","rootcheck-complete"),
-            )),
-        )
-        for relative,stages in module_stages:
-            module=folder/relative
-            content=module.read_text(encoding="utf-8")
-            for needle,stage in stages:
-                self.assertEqual(content.count(needle),1)
-                indent=needle[:len(needle)-len(needle.lstrip())]
-                content=content.replace(
-                    needle,indent+'output("# U2_SSA_TRACE:'+stage+'");\n'+needle,1)
-            module.write_text(content,encoding="utf-8")
+            # Test-only instrumentation of the SAME temporary compiler modules
+            # imported by both independent C and owned source generators.
+            module_stages=(
+                ("compiler/u2_ssa_liveness.eri", (
+                    ("    try select(plan,routine,graph,phase,chosen);","liveness-select-begin"),
+                    ("    let total be plan.blocks*(plan.values.length/4);","liveness-select-done"),
+                    ("    try markUses(plan,routine,phase);","liveness-use-scan"),
+                    ("    try flow(plan,routine,phase);","liveness-flow"),
+                    ("    try words.freeze(plan.types); try words.freeze(plan.values);","liveness-flow-done"),
+                    ("    let verification be try budget.verificationPhase(routine.owner);","create-verification-phase"),
+                    ("    let checked be try canonical.verifyFallibleRegistry(","canonical-begin"),
+                    ("    let pending be try budget.reserve(routine.owner,512);","canonical-complete"),
+                    ("    construct(plan,routine,graph,phase,managedTypes)","construct-begin"),
+                    ("    return plan;","create-complete"),
+                    ("    let derived be try create(routine,graph,contractsTable,phase,typeList);","reverify-create-begin"),
+                    ("    let good be samePlan(plan,derived,phase)","reverify-create-complete"),
+                    ("    return report;","reverify-complete"),
+                )),
+                ("compiler/u1_verify.eri", (
+                    ("    try bounds(context);","canonical-inspect-start"),
+                    ("    try signatures(context); try sources(context); try declarations(context);","canonical-bounds-done"),
+                    ("    try fallibleContracts(context);","canonical-metadata-done"),
+                    ("    try structure(context);","canonical-contract-done"),
+                    ("    try locations(context); try reachableSSA(context);","canonical-structure-done"),
+                    ("    return Report { reachableBlocks=context.graph.reachable;","canonical-dominance-done"),
+                )),
+                ("compiler/u2_managed_root_gate.eri", (
+                    ("    return try ssa.create(routine,graph,table,phase,selected);","rootgate-create-ssa"),
+                )),
+                ("compiler/u2_function_managed_x86_64.eri", (
+                    ("    let admissible be label >= 1 and label <= 2147483647 and","compile-admission"),
+                    ("        try verifyCheckedRoots(routine,graph,phase,failureType);","rootcheck-begin"),
+                    ("        try require(routine.definedTarget == selfTarget,","rootcheck-complete"),
+                )),
+            )
+            for relative,stages in module_stages:
+                module=folder/relative
+                content=module.read_text(encoding="utf-8")
+                for needle,stage in stages:
+                    self.assertEqual(content.count(needle),1)
+                    indent=needle[:len(needle)-len(needle.lstrip())]
+                    content=content.replace(
+                        needle,indent+'output("# U2_SSA_TRACE:'+stage+'");\n'+needle,1)
+                module.write_text(content,encoding="utf-8")
 
-        source=folder/"generator.eri"
-        # Test-only GAS comment markers make a timed-out generator observable.
-        # The independent C generator receives the same annotated source.
-        traced_source=self.source()
-        checkpoints=(
-            ("    let root be try budget.developmentRequest();", "begin"),
-            ("    try budget.finishPhase(mp);", "metadata"),
-            ("    try ab.complete(fn,graph);", "function"),
-            ("    let phase be try budget.constructionPhase(owner);", "native-phase"),
-            ("    try native.emitChecked(fn,graph,table,phase,registry,", "native-emit"),
-            ("    try budget.finishPhase(phase);", "after-emit"),
-        )
-        for needle,checkpoint in checkpoints:
-            self.assertEqual(traced_source.count(needle),1)
-            traced_source=traced_source.replace(
-                needle,'    output("# U2_GENERATOR_TRACE:'+checkpoint+'");\n'+needle,1)
-        source.write_text(traced_source,encoding="utf-8")
+            source=folder/"generator.eri"
+            # Test-only GAS comment markers make a timed-out generator observable.
+            # The independent C generator receives the same annotated source.
+            traced_source=self.source()
+            checkpoints=(
+                ("    let root be try budget.developmentRequest();", "begin"),
+                ("    try budget.finishPhase(mp);", "metadata"),
+                ("    try ab.complete(fn,graph);", "function"),
+                ("    let phase be try budget.constructionPhase(owner);", "native-phase"),
+                ("    try native.emitChecked(fn,graph,table,phase,registry,", "native-emit"),
+                ("    try budget.finishPhase(phase);", "after-emit"),
+            )
+            for needle,checkpoint in checkpoints:
+                self.assertEqual(traced_source.count(needle),1)
+                traced_source=traced_source.replace(
+                    needle,'    output("# U2_GENERATOR_TRACE:'+checkpoint+'");\n'+needle,1)
+            source.write_text(traced_source,encoding="utf-8")
+        else:
+            (folder/"compiler").symlink_to(
+                ROOT/"src/compiler",target_is_directory=True)
+            traced_source=self.source()
+            source=folder/"generator.eri"
+            source.write_text(traced_source,encoding="utf-8")
         application=subprocess.run(
             [str(self.frontend),"emit-asm",str(source),"--source-root",str(folder)],
             capture_output=True,text=True,timeout=120)
@@ -625,8 +641,12 @@ class U2FunctionCheckedNativeTests(unittest.TestCase):
         # qualification watchdog, without relaxing memory/work budgets.
         started=time.monotonic()
         try:
-            owned=capture_traced_owned_generator(
-                [str(binary)],env={"PATH":"/unavailable"},timeout=120)
+            if tracing:
+                owned=capture_traced_owned_generator(
+                    [str(binary)],env={"PATH":"/unavailable"},timeout=120)
+            else:
+                owned=subprocess.run([str(binary)],env={"PATH":"/unavailable"},
+                                     capture_output=True,timeout=120)
         except subprocess.TimeoutExpired as error:
             partial=error.stdout or b""
             markers=[line.decode("utf-8",errors="replace")
