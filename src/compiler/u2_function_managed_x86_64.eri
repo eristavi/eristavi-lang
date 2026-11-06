@@ -14,6 +14,7 @@ import compiler.u2_managed_root_gate as roots;
 import compiler.u2_managed_types as managed;
 import compiler.u1_aggregate_verify as graphVerify;
 import compiler.u2_function_native_imports as nativeImports;
+import compiler.u2_list_i64 as listNative;
 import compiler.format as format;
 
 public error Unsupported { message Text; }
@@ -57,7 +58,7 @@ function emitEdge(base Text,edgeId Int,blocks,edges,arguments,
 // their boxed scalar ABI to this Function's raw i64 SSA stack convention.
 // All calls are pre-admitted against immutable metadata before any emission.
 function emitNativeImport(result Int,first Int,operands,
-    kind Int,operation Int,tempOffset Int) {
+    kind Int,operation Int,tempOffset Int,base Text,id Int) {
     if kind == 1 {
         if operation == 1 {
             line("movq "+slot(operands[first])+",%rdi");
@@ -104,6 +105,17 @@ function emitNativeImport(result Int,first Int,operands,
         } else { line("movq %rax,"+slot(result)); }
     }
     if kind == 2 {
+        if operation == 4 or operation == 6 {
+            // The existing standalone List adapter validates the index
+            // against the live object length before any mutation or copy.
+            line("movq "+slot(operands[first])+",%rdi");
+            line("call erist_rt_graph_object_of");
+            line("movq "+slot(operands[first+1])+",%rcx");
+            line("testq %rcx,%rcx");
+            line("js "+name(base,"bounds",id));
+            line("cmpq 0(%rax),%rcx");
+            line("jae "+name(base,"bounds",id));
+        }
         if operation == 1 {
             line("movl $7,%edi");
             line("xorl %esi,%esi");
@@ -127,9 +139,32 @@ function emitNativeImport(result Int,first Int,operands,
             line("call evn_add");
             line("movq "+format.integer(tempOffset)+"(%rsp),%rax");
         }
+        if operation == 4 {
+            // Preserve snapshot value and replacement box in registered
+            // class-1 temporary roots across allocating native helpers.
+            line("movq "+slot(operands[first])+",%rdi");
+            line("call evn_copy");
+            line("movq %rax,"+format.integer(tempOffset)+"(%rsp)");
+            line("movq "+slot(operands[first+2])+",%rdi");
+            line("call evn_int");
+            line("movq %rax,"+format.integer(tempOffset+8)+"(%rsp)");
+            line("movq "+format.integer(tempOffset)+"(%rsp),%rdi");
+            line("movq "+slot(operands[first+1])+",%rsi");
+            line("call evn_index_ref");
+            line("movq %rax,%rdi");
+            line("movq "+format.integer(tempOffset+8)+"(%rsp),%rsi");
+            line("call evn_store");
+            line("movq "+format.integer(tempOffset)+"(%rsp),%rax");
+        }
         if operation == 5 {
             line("movq "+slot(operands[first])+",%rdi");
             line("call evn_count");
+            line("movq 8(%rax),%rax");
+        }
+        if operation == 6 {
+            line("movq "+slot(operands[first])+",%rdi");
+            line("movq "+slot(operands[first+1])+",%rsi");
+            line("call evn_index");
             line("movq 8(%rax),%rax");
         }
         if operation == 7 { line("call erist_rt_text_collect"); }
@@ -213,7 +248,7 @@ function emitInstruction(base Text,id Int,frameBytes Int,
     }
     if op == 34 {
         emitNativeImport(result,first,operands,
-            importKinds[id-1],importOperations[id-1],tempOffset);
+            importKinds[id-1],importOperations[id-1],tempOffset,base,id);
     }
     if op == 8 {
         if count >= 1 { line("movq "+slot(operands[first])+",%rax"); }
@@ -625,6 +660,17 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
         i=i+1;
     }
     output(".size "+base+",.-"+base);
+    // Emit exactly the source-aware, terminal bounds handlers used by the
+    // original List adapter; labels are Function-qualified to avoid clashes.
+    i=1;
+    while i <= instructions.count/10 {
+        let row be (i-1)*10;
+        if importKinds[i-1] == 2 and
+            (importOperations[i-1] == 4 or importOperations[i-1] == 6) {
+            try listNative.fault(routine,phase,i,instructions[row+6],base);
+        }
+        i=i+1;
+    }
     output(".section .note.GNU-stack,\"\",@progbits");
 }
 public function emit(routine identity build.Function,

@@ -104,10 +104,7 @@ public function inspect(data identity meta.Metadata,
         try require((try signatures.resultType(data,graph,phase,signature,0)).index ==
             expected,"native managed call has wrong canonical result type");
     }
-    // Do not route List indexed get/replace before preserving its existing
-    // precise source-location bounds faults through the new Function emitter.
-    try require(kind != 2 or
-        (operation != 4 and operation != 6),
-        "List indexed bounds adapter not yet linked in whole Function");
+    // List indexed calls use the original u2_list_i64 source-origin formatter.
+    // Their bounds guards run before snapshots or boxed-value allocation.
     return Target { kind=kind; operation=operation; };
 }

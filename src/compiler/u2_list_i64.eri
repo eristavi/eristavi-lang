@@ -239,7 +239,7 @@ function emitNative(fn identity build.Function,g identity aggregate.Registry,
         let off be (i-1)*10;
         if (try get(fn.instructions,p,off)) == 34 {
             let op be try get(fn.instructions,p,off+7);
-            if op == 4 or op == 6 { try fault(fn,p,i,try get(fn.instructions,p,off+6)); }
+            if op == 4 or op == 6 { try fault(fn,p,i,try get(fn.instructions,p,off+6),"erist_u2"); }
         }
         i=i+1;
     }
@@ -354,8 +354,8 @@ public function emitManaged(fn identity build.Function,g identity aggregate.Regi
     try emit(fn,g,carrier,p);
 }
 
-function fault(fn identity build.Function,p identity budget.Phase,inst Int,location Int)
-    fails budget.LimitError {
+public function fault(fn identity build.Function,p identity budget.Phase,
+    inst Int,location Int,prefix Text) fails budget.LimitError {
     let data be fn.metadata; let current be location;
     let source be try get(data.locations,p,(current-1)*7);
     while source == 0 and (try get(data.locations,p,(current-1)*7+6)) > 0 {
@@ -363,7 +363,7 @@ function fault(fn identity build.Function,p identity budget.Phase,inst Int,locat
         source=try get(data.locations,p,(current-1)*7);
     }
     let id be format.integer(inst); output(".section .rodata");
-    output("erist_u2_origin_"+id+":");
+    output(prefix+"_origin_"+id+":");
     let length be 0;
     if source > 0 {
         let first be try get(data.sources,p,(source-1)*4);
@@ -378,9 +378,9 @@ function fault(fn identity build.Function,p identity budget.Phase,inst Int,locat
     let j be 0;
     while j < suffix.bytes.count { output(".byte "+format.integer(suffix.bytes[j])); j=j+1; }
     length=length+suffix.bytes.count;
-    output(".text\nerist_u2_bounds_"+id+":");
+    output(".text\n"+prefix+"_bounds_"+id+":");
     line("movl $2,%edi");
-    line("leaq erist_u2_origin_"+id+"(%rip),%rsi");
+    line("leaq "+prefix+"_origin_"+id+"(%rip),%rsi");
     line("movq $"+format.integer(length)+",%rdx"); line("call erist_rt_write_all");
     line("jmp erist_rt_graph_fault_bounds");
 }

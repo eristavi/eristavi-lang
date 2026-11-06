@@ -77,8 +77,8 @@ class U2FunctionImportIntegrationTests(unittest.TestCase):
                     "textNative.name(2),1,63,1);")
         return source
 
-    def list_source(self,bad_contract=False):
-        source=(REF/"u2_list_i64_loop.eri").read_text(encoding="utf-8")
+    def list_source(self,bad_contract=False,fixture="u2_list_i64_loop.eri"):
+        source=(REF/fixture).read_text(encoding="utf-8")
         def replace(old,new):
             nonlocal source
             self.assertEqual(source.count(old),1,old)
@@ -331,18 +331,50 @@ class U2FunctionImportIntegrationTests(unittest.TestCase):
         self.run_native(created.stdout,
                         "u2-list-copy-through-Function",1,"96")
 
-    def test_list_indexed_operation_without_source_fault_mapping_refused(self):
-        source=self.list_source()
-        original="try build.returnValues(fn,done,[oldCount],loc);"
-        self.assertEqual(source.count(original),1)
-        source=source.replace(original,
-            "let unsupportedIndex be try ab.call(fn,g,done,"
-            "f6,[resultList,zero],loc); "+original,1)
-        result=self.generator("u2-list-native-index-rejected",source)
-        self.assertEqual(result.returncode,1,result.stdout[-2400:])
-        self.assertIn("native:List indexed bounds adapter",result.stdout)
-        self.assertNotIn("erist_u2_rooted_function_96:",result.stdout)
-        self.assertNotIn(".section",result.stdout)
+    def test_original_list_index_and_replace_snapshot_semantics(self):
+        # Reuse the original bounded List fixture, including its sequence
+        # of copy, append, replace and reads. No new List runtime semantics.
+        for expression,expected in (("old",10),("latest",20),
+                                    ("changedZero",20),("changedCount",2),
+                                    ("oldCount",1)):
+            with self.subTest(result=expression):
+                source=self.list_source(fixture="u2_list_i64.eri")
+                target="build.returnValues(fn,b,[old],loc);"
+                self.assertEqual(source.count(target),1)
+                source=source.replace(target,
+                    "build.returnValues(fn,b,["+expression+"],loc);",1)
+                generated=self.generator("u2-list-index-"+expression,source)
+                self.assertEqual((generated.returncode,generated.stderr),
+                                 (0,""),generated.stdout[-2400:])
+                for symbol in ("erist_rt_graph_object_of","evn_index_ref",
+                               "evn_store","evn_index","evn_copy",
+                               "erist_rt_text_collect"):
+                    self.assertIn("call "+symbol,generated.stdout)
+                self.assertIn("erist_u2_rooted_function_96_bounds_",
+                              generated.stdout)
+                self.run_native(generated.stdout,
+                                "u2-whole-list-index-"+expression,expected,"96")
+
+    def test_original_list_index_bounds_faults_keep_source_location(self):
+        for index in (-1,2):
+            with self.subTest(index=index):
+                source=self.list_source(fixture="u2_list_i64.eri")
+                target="let zero be try build.integer(fn,b,0,loc);"
+                self.assertEqual(source.count(target),1)
+                source=source.replace(target,
+                    "let zero be try build.integer(fn,b,"+str(index)+",loc);",1)
+                generated=self.generator("u2-list-index-bounds-"+str(index),
+                                         source)
+                self.assertEqual((generated.returncode,generated.stderr),
+                                 (0,""),generated.stdout[-2400:])
+                starter=("\\n.text\\n.globl _start\\n_start:\\n"
+                         " call erist_u2_rooted_function_96\\n"
+                         " movl $99,%edi\\n jmp erist_rt_exit\\n")
+                result=self.run_probe("u2-list-bounds-"+str(index),
+                                      generated.stdout+starter)
+                self.assertEqual(result.returncode,1,result.stderr)
+                self.assertIn(b"List index out of bounds",result.stderr)
+                self.assertIn(b"list-probe:1:1: ",result.stderr)
 
     def test_wrong_list_effects_refused_before_native_assembly(self):
         result=self.generator("u2-list-bad-import",
