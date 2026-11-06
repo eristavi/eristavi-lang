@@ -433,7 +433,7 @@ class U2FunctionCheckedNativeTests(unittest.TestCase):
             ("    let managedReturn be false;", "signature-admitted"),
             ("    // Snapshot the frozen canonical Function tables before emitting any code.",
              "snapshot"),
-            ("    // Independently prove EACH publication obligation, including dead blocks.",
+            ("    // Build the publication product in two bounded sweeps per canonical block,",
              "publication-build"),
             ("    // Verify the entire immutable publication product at one boundary instead",
              "publication-verify"),

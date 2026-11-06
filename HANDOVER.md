@@ -22,6 +22,16 @@ exact canonical snapshots and checked admission completed: root-publication
 construction is the first observed hang. Identical GAS-comment instrumentation
 runs in isolated compiler copies for C and owned generators.
 
+**Exact `e40a64b` hosted check:** [Text/List integration #42262075150](https://github.com/eristavi/eristavi-lang/actions/runs/42262075150)
+**12/12 PASS**. [Managed focused #42262075162](https://github.com/eristavi/eristavi-lang/actions/runs/42262075162)
+**18 run, 17 pass, 1 test-harness failure**: the isolated trace fixture
+looked for a source comment removed by the optimized producer and asserted
+`count == 1` before compiling/executing the owned/C generator. Therefore
+**the owned-generator watchdog was NOT exercised on `e40a64b`**; this failure
+is not a compiler liveness mismatch. The next test-only change updates the
+trace anchor to the new producer comment, with unchanged watchdog and oracle.
+The active candidate remains unqualified.
+
 The newest development revision replaces repeated emitter tail rescans with
 bounded reverse suffix-use and forward definition sweeps, preserving frozen
 linked instruction order and global SSA IDs. Every produced root bit still

@@ -46,6 +46,9 @@ forged backing and refusal cleanup remain required.
 
 ## Validation status
 
+- Exact `e40a64b` [Text/List integration #42262075150](https://github.com/eristavi/eristavi-lang/actions/runs/42262075150): **12/12 passed**.
+- Exact `e40a64b` [managed focused #42262075162](https://github.com/eristavi/eristavi-lang/actions/runs/42262075162): **18 run, 17 pass, 1 diagnostic-fixture failure**. The fixture asserted its obsolete `// Independently prove EACH publication obligation` marker was present. The optimization removed that comment; execution never reached the owned generator. **No owned-generator time/success/120s result on this head**. The next patch corrects only that marker.
+
 Pending exact-head focused owned-generation and whole-Function managed,
 Text/List integration, saved primary/secondary, root/owner negative tests.
 The old 120-second watchdog remains unchanged. Full four-platform and
