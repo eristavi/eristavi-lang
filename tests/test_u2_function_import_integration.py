@@ -11,6 +11,7 @@ import unittest
 
 from compiler.erist.cli import build_native
 import test_freestanding_graph_values as graph
+import test_u2_text_unicode17 as unicodeTests
 
 ROOT=Path(__file__).resolve().parents[1]
 REF=ROOT/"tests/fixtures"
@@ -128,38 +129,15 @@ class U2FunctionImportIntegrationTests(unittest.TestCase):
               "    cmpq $"+str(expected)+",%rax\n"
               "    jne .Lgraph_test_fail\n"
               "    jmp .Lgraph_finish\n")
-        result=self.run_probe(name,asm+body+graph.FINISH)
-        if result.returncode != 0 and suffix == "95":
-            # First-fault placement is native-only diagnostic code; the
-            # original full program remains mandatory for acceptance.
-            checkpoints={}
-            for index,symbol in enumerate((
-                    "erist_rt_unicode_from_scalar",
-                    "evn_view",
-                    "erist_rt_view_count",
-                    "erist_rt_text_concat",
-                    "erist_rt_slots_collect",
-                    "erist_rt_text_collect")):
-                needle="    call "+symbol
-                if needle not in asm:
-                    continue
-                short=asm.replace(needle,
-                    "    xorl %edi,%edi\n    jmp erist_rt_exit\n"+needle,1)
-                probe=self.run_probe(name+"-before-"+str(index),
-                                     short+body+graph.FINISH)
-                checkpoints[symbol]=(
-                    probe.returncode,probe.stderr.decode("utf-8",
-                                                         errors="replace")[:100])
-            before="    call evn_view"
-            if before in asm:
-                probeAsm=asm.replace(before,
-                    "    movq 0(%rsi),%rdi\n    jmp erist_rt_exit\n"+before,1)
-                tag=self.run_probe(name+"-text-value-tag",
-                                   probeAsm+body+graph.FINISH)
-                checkpoints["before_view_value_type"]=tag.returncode
-            self.fail("Text whole-Function native result=%r; "
-                      "checkpoints=%r; stderr=%r" %
-                      (result.returncode,checkpoints,result.stderr))
+        if suffix == "95":
+            # The existing Unicode17 native fixture defines the required
+            # three view descriptors (15, 16, 17) in the owned type table.
+            # Reuse it unchanged; generic graph descriptors omit these.
+            result=self.run_probe(name,asm+body+graph.FINISH+
+                                  unicodeTests.unicode_descriptors(),
+                                  types=False)
+        else:
+            result=self.run_probe(name,asm+body+graph.FINISH)
         self.assertEqual((result.returncode,result.stdout,result.stderr),
                          (0,b"",b""))
 
