@@ -501,8 +501,18 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
         inst=inst+1;
     }
     // Precharge ALL output work. From here only pure string/array operations.
-    try budget.work(phase,instructions.count+values.count+edges.count+
-        blocks.count+selected.count*32+128);
+    // Charge exactly the same verified output work, but respect U1a's
+    // strict maximum of 1024 units per budget.work() invocation. Large
+    // Text/List corpora can otherwise fail with invalid accounting state
+    // without ever reaching native emission.
+    let remainingWork be instructions.count+values.count+edges.count+
+        blocks.count+selected.count*32+128;
+    while remainingWork > 0 {
+        let charge be remainingWork;
+        if charge > 1024 { charge=1024; }
+        try budget.work(phase,charge);
+        remainingWork=remainingWork-charge;
+    }
     let rootOffset be (values.count/4+32)*8;
     // Two additional, class-1 temporary slots preserve native helper
     // intermediates: a List snapshot and boxed i64, or a Unicode view.
