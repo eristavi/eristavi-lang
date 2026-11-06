@@ -72,7 +72,7 @@ public function emit(routine identity build.Function,
         route.firstClose == firstCall.index and
         route.normalClose == normalCall.index and
         route.failingClose == failedCall.index and
-        route.survivingOwner == typedFailedOwner.value.index,
+        route.survivingOwner == typedFailedOwner.value,
         "unsupported or stale canonical native checked chain");
     try budget.work(phase,96);
     let name be format.integer(firstLabel);
@@ -85,9 +85,9 @@ public function emit(routine identity build.Function,
     let suffixNormal be name+"_"+format.integer(normalCall.index);
     let suffixFailed be name+"_"+format.integer(failedCall.index);
     let normalOwnerOffset be format.integer(
-        (typedNormalOwner.value.index-1)*8);
+        (typedNormalOwner.value-1)*8);
     let failedOwnerOffset be format.integer(
-        (typedFailedOwner.value.index-1)*8);
+        (typedFailedOwner.value-1)*8);
     output(".text");
     output(".globl "+entry);
     output(".type "+entry+",@function");
