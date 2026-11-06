@@ -33,6 +33,7 @@ function run()
     let i64 be try aggregate.primitive(graph,meta.i64());
     let pred be try aggregate.primitive(graph,meta.pred());
     let carrier be try aggregate.aggregate(graph,mp,[i64,i64]);
+    let scalarSpecialization be try meta.signature(data,mp,[meta.i64()],[meta.i64()]);
     let signature be try sig.signature(data,graph,mp,[carrier,i64],[carrier,i64]);
     let src be try meta.source(data,mp,"u2-managed-function",
         "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",192);
