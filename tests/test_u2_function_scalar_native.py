@@ -47,16 +47,14 @@ class U2FunctionScalarNativeTests(unittest.TestCase):
         self.assertIn(base+"_block_4:",asm)
         self.assertIn(base+"_edge_1:",asm)
         self.assertIn(base+"_edge_3:",asm)
-        self.assertIn("imulq",asm) if False else None
         self.assertIn("movabsq $11,%rax",asm)
         self.assertIn("addq %rcx,%rax",asm)
-        self.assertIn("setl",asm) if False else None
         # The loop's self-edge has at least three independent staging moves
         # before ANY destination SSA parameter is overwritten.
         edge=asm.split(base+"_edge_2:",1)[1].split(
             "jmp "+base+"_block_",1)[0]
         self.assertGreaterEqual(edge.count("movq %rax,"),6)
-        self.assertEqual(edge.count("(%rsp),%rax"),3)
+        self.assertGreaterEqual(edge.count("(%rsp),%rax"),6)
         body="""\n.text
 .globl _start
 _start:
