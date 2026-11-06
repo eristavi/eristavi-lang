@@ -1,6 +1,7 @@
 // Opt-in original whole-Function managed-parameter native CFG profile.
 // Uses verified canonical SSA liveness at every instruction and block entry.
-// No managed producers, checked invokes, recursion or public ABI changes.
+// Text/List runtime imports reuse the existing verified native adapters;
+// no new semantics, checked invokes, recursion or public ABI changes.
 import compiler.u1_budget as budget;
 import compiler.u1_words as words;
 import compiler.u1_builder as build;
@@ -12,6 +13,7 @@ import compiler.u2_invoke_contract as contracts;
 import compiler.u2_managed_root_gate as roots;
 import compiler.u2_managed_types as managed;
 import compiler.u1_aggregate_verify as graphVerify;
+import compiler.u2_function_native_imports as nativeImports;
 import compiler.format as format;
 
 public error Unsupported { message Text; }
@@ -50,10 +52,94 @@ function emitEdge(base Text,edgeId Int,blocks,edges,arguments,
     }
     line("jmp "+name(base,"block",target));
 }
+// Delegate native operation semantics to the SAME owned runtime entrypoints
+// proven by the original Text and List adapters. The new code only adapts
+// their boxed scalar ABI to this Function's raw i64 SSA stack convention.
+// All calls are pre-admitted against immutable metadata before any emission.
+function emitNativeImport(result Int,first Int,operands,
+    kind Int,operation Int,tempOffset Int) {
+    if kind == 1 {
+        if operation == 1 {
+            line("movq "+slot(operands[first])+",%rdi");
+            line("call erist_rt_unicode_from_scalar");
+        }
+        if operation == 2 {
+            line("movq "+slot(operands[first])+",%rdi");
+            line("movq "+slot(operands[first+1])+",%rsi");
+            line("call erist_rt_text_concat");
+        }
+        if operation == 3 or operation == 12 {
+            line("movq "+slot(operands[first])+",%rdi");
+            if operation == 3 { line("call evn_copy"); }
+            else { line("call erist_rt_unicode_normalize_nfc"); }
+        }
+        if operation == 4 {
+            line("movl $5,%edi");
+            line("movq "+slot(operands[first])+",%rsi");
+            line("movq "+slot(operands[first+1])+",%rdx");
+            line("call erist_rt_text_binary");
+            line("movq 8(%rax),%rax");
+        }
+        if operation == 5 or operation == 6 or operation == 7 or
+            operation == 9 or operation == 10 or operation == 11 {
+            let viewType be 15;
+            if operation == 6 or operation == 10 { viewType=16; }
+            if operation == 7 or operation == 11 { viewType=17; }
+            line("movl $"+format.integer(viewType)+",%edi");
+            line("movq "+slot(operands[first])+",%rsi");
+            line("call evn_view");
+            line("movq %rax,"+format.integer(tempOffset)+"(%rsp)");
+            line("movq %rax,%rdi");
+            if operation <= 7 { line("call erist_rt_view_count"); }
+            else {
+                line("movq "+slot(operands[first+1])+",%rsi");
+                line("call erist_rt_view_index");
+            }
+            if operation <= 9 { line("movq 8(%rax),%rax"); }
+        }
+        if operation == 8 {
+            line("xorl %edi,%edi");
+            line("call erist_rt_slots_collect");
+            line("call erist_rt_text_collect");
+        } else { line("movq %rax,"+slot(result)); }
+    }
+    if kind == 2 {
+        if operation == 1 {
+            line("movl $7,%edi");
+            line("xorl %esi,%esi");
+            line("call evn_object");
+        }
+        if operation == 2 {
+            line("movq "+slot(operands[first])+",%rdi");
+            line("call evn_copy");
+        }
+        if operation == 3 {
+            // Reuse original List snapshot/append semantics, with one extra
+            // exact class-1 root for each allocating intermediate.
+            line("movq "+slot(operands[first])+",%rdi");
+            line("call evn_copy");
+            line("movq %rax,"+format.integer(tempOffset)+"(%rsp)");
+            line("movq "+slot(operands[first+1])+",%rdi");
+            line("call evn_int");
+            line("movq %rax,"+format.integer(tempOffset+8)+"(%rsp)");
+            line("movq "+format.integer(tempOffset)+"(%rsp),%rdi");
+            line("movq "+format.integer(tempOffset+8)+"(%rsp),%rsi");
+            line("call evn_add");
+            line("movq "+format.integer(tempOffset)+"(%rsp),%rax");
+        }
+        if operation == 5 {
+            line("movq "+slot(operands[first])+",%rdi");
+            line("call evn_count");
+            line("movq 8(%rax),%rax");
+        }
+        if operation == 7 { line("call erist_rt_text_collect"); }
+        else { line("movq %rax,"+slot(result)); }
+    }
+}
 function emitInstruction(base Text,id Int,frameBytes Int,
-    instructions,operands,switches,cases,
-    rootCount Int,rootOffset Int,scopeOffset Int,returnOffset Int,
-    transferManaged Bool,transferManagedSecond Bool,
+    instructions,operands,switches,cases,importKinds,importOperations,
+    tempOffset Int,rootCount Int,rootOffset Int,scopeOffset Int,
+    returnOffset Int,transferManaged Bool,transferManagedSecond Bool,
     callerRootOffset Int) {
     let row be (id-1)*10;
     let op be instructions[row];
@@ -124,6 +210,10 @@ function emitInstruction(base Text,id Int,frameBytes Int,
             i=i+1;
         }
         line("jmp "+name(base,"edge",switches[header+2]));
+    }
+    if op == 34 {
+        emitNativeImport(result,first,operands,
+            importKinds[id-1],importOperations[id-1],tempOffset);
     }
     if op == 8 {
         if count >= 1 { line("movq "+slot(operands[first])+",%rax"); }
@@ -202,7 +292,8 @@ function nativeSafepoint(forceGC Bool) {
 // on EVERY block entry to prove exact root lifetime during CFG transitions.
 function compile(plan identity ssa.Plan,routine identity build.Function,
     graph identity aggregate.Registry,table identity contracts.Registry,
-    phase identity budget.Phase,forceGC Bool,label Int)
+    phase identity budget.Phase,registry identity managed.Registry,
+    carriers,descriptors,forceGC Bool,label Int)
     fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,Unsupported {
     let proof be try ssa.verify(plan,routine,graph,table,phase);
     let admissible be label >= 1 and label <= 2147483647 and
@@ -219,10 +310,22 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
     let paramStart be try words.get(routine.metadata.signatures,phase,signatureStart+2);
     let results be try words.get(routine.metadata.signatures,phase,signatureStart+5);
     let resultStart be try words.get(routine.metadata.signatures,phase,signatureStart+4);
-    if params > 8 or results != 2 { admissible=false; }
+    if params > 8 or results < 1 or results > 2 { admissible=false; }
     let managedReturn be false;
     let managedReturnSecond be false;
     let selected be [];
+    let textCarrier be 0; let listCarrier be 0;
+    let typeRead be try budget.verificationPhase(registry.owner);
+    let marker be 0;
+    while marker < carriers.count {
+        let desc be try managed.descriptor(registry,typeRead,descriptors[marker]);
+        if desc.kind == 1 { textCarrier=carriers[marker].index; }
+        if desc.kind == 2 and desc.elementDomain == 0 and desc.element == 2 {
+            listCarrier=carriers[marker].index;
+        }
+        marker=marker+1;
+    }
+    try budget.finishPhase(typeRead);
     let i be 0;
     while i < plan.values.length/4 {
         selected.add(try words.get(plan.values,phase,i*4));
@@ -289,7 +392,19 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
                 if ty == (try words.get(plan.types,phase,j)) { found=true; }
                 j=j+1;
             }
-            if not found or values[i*4+1] != 0 { admissible=false; }
+            if not found { admissible=false; }
+            if values[i*4+1] != 0 {
+                let producer be values[i*4+2];
+                if values[i*4+1] != 1 or producer < 1 or
+                    producer > instructions.count/10 { admissible=false; }
+                else {
+                    // Only typed, independently admitted runtime call
+                    // instructions can construct managed values here.
+                    if instructions[(producer-1)*10] != 34 {
+                        admissible=false;
+                    }
+                }
+            }
         }
         i=i+1;
     }
@@ -300,14 +415,26 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
         if ty != assigned { admissible=false; }
         i=i+1;
     }
+    let importKinds be []; let importOperations be [];
     i=0;
     while i < instructions.count/10 {
         let row be i*10;
         let op be instructions[row];
+        let importKind be 0; let importOperation be 0;
+        if op == 34 {
+            let resolved be nativeImports.inspect(routine.metadata,graph,phase,
+                instructions[row+7],textCarrier,listCarrier)
+                else error budget.LimitError { fail error; }
+                else error nativeImports.Unsupported {
+                    fail Unsupported { message=error.message; };
+                };
+            importKind=resolved.kind; importOperation=resolved.operation;
+        }
+        importKinds.add(importKind); importOperations.add(importOperation);
         if op != 1 and op != 2 and op != 4 and
             op != 6 and op != 7 and op != 8 and
             op != 13 and op != 14 and
-            (op < 15 or op > 18) and op != 35 {
+            (op < 15 or op > 18) and op != 35 and op != 34 {
             admissible=false;
         }
         if op == 35 {
@@ -375,7 +502,10 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
     try budget.work(phase,instructions.count+values.count+edges.count+
         blocks.count+selected.count*32+128);
     let rootOffset be (values.count/4+32)*8;
-    let scopeOffset be rootOffset+selected.count*8;
+    // Two additional, class-1 temporary slots preserve native helper
+    // intermediates: a List snapshot and boxed i64, or a Unicode view.
+    let tempOffset be rootOffset+selected.count*8;
+    let scopeOffset be tempOffset+16;
     let returnOffset be scopeOffset+8;
     let callerRootOffset be returnOffset+16;
     let bytes be callerRootOffset+8;
@@ -385,7 +515,7 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
     output(".p2align 3");
     output(base+"_classes:");
     i=0;
-    while i < selected.count { output("    .byte 1"); i=i+1; }
+    while i < selected.count+2 { output("    .byte 1"); i=i+1; }
     i=0;
     while i < selected.count {
         output(".set "+base+"_root_"+format.integer(selected[i])+", "+
@@ -415,7 +545,7 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
         line("movq $0,"+format.integer(i*8)+"(%rsp)"); i=i+1;
     }
     i=0;
-    while i < selected.count {
+    while i < selected.count+2 {
         line("movq $0,"+format.integer(rootOffset+i*8)+"(%rsp)");
         i=i+1;
     }
@@ -424,7 +554,7 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
     line("movq %rax,%rdi");
     line("leaq "+format.integer(rootOffset)+"(%rsp),%rsi");
     line("leaq "+base+"_classes(%rip),%rdx");
-    line("movl $"+format.integer(selected.count)+",%ecx");
+    line("movl $"+format.integer(selected.count+2)+",%ecx");
     line("call evn_bind_roots");
     if params > 0 {
         line("testq %rbx,%rbx");
@@ -458,17 +588,22 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
         while current != 0 {
             publish(selected,beforeBits,(current-1)*selected.count,rootOffset);
             emitInstruction(base,current,frameBytes,
-                instructions,operands,switches,cases,
-                selected.count,rootOffset,scopeOffset,returnOffset,
+                instructions,operands,switches,cases,importKinds,importOperations,
+                tempOffset,selected.count+2,rootOffset,scopeOffset,returnOffset,
                 managedReturn,managedReturnSecond,callerRootOffset);
             publish(selected,afterBits,(current-1)*selected.count,rootOffset);
+            // Publish the canonical result before retiring intermediary roots.
+            if instructions[(current-1)*10] == 34 {
+                line("movq $0,"+format.integer(tempOffset)+"(%rsp)");
+                line("movq $0,"+format.integer(tempOffset+8)+"(%rsp)");
+            }
             current=instructions[(current-1)*10+9];
         }
         let term be blocks[(block-1)*5+4];
         publish(selected,beforeBits,(term-1)*selected.count,rootOffset);
         emitInstruction(base,term,frameBytes,
-            instructions,operands,switches,cases,
-            selected.count,rootOffset,scopeOffset,returnOffset,
+            instructions,operands,switches,cases,importKinds,importOperations,
+            tempOffset,selected.count+2,rootOffset,scopeOffset,returnOffset,
             managedReturn,managedReturnSecond,callerRootOffset);
         block=block+1;
     }
@@ -489,7 +624,8 @@ public function emit(routine identity build.Function,
         graphVerify.InvalidGraph,Unsupported {
     let plan be try roots.create(routine,graph,table,phase,registry,
         carriers,descriptors);
-    compile(plan,routine,graph,table,phase,forceGC,label)
+    compile(plan,routine,graph,table,phase,registry,carriers,descriptors,
+        forceGC,label)
         else error budget.LimitError { try ssa.close(plan); fail error; }
         else error canonical.InvalidIR { try ssa.close(plan); fail error; }
         else error ssa.InvalidLiveness { try ssa.close(plan); fail error; }
