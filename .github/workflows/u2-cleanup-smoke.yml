@@ -8,6 +8,7 @@ on:
       - src/compiler/u2_checked_rooted_x86_64.eri
       - src/compiler/u2_checked_ssa_bind.eri
       - src/compiler/u2_checked_chain_verify.eri
+      - src/compiler/u2_checked_chain_x86_64.eri
       - src/compiler/u2_checked_ssa_x86_64.eri
       - tests/fixtures/u2_checked_ssa.eri
       - tests/test_u2_checked_ssa.py
