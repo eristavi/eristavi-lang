@@ -141,5 +141,5 @@ public function emit(routine identity build.Function,
     line("popq %r13"); line("popq %r12"); line("popq %rbx");
     line("ret");
     output(".size "+entry+",.-"+entry);
-    output(".section .note.GNU-stack,\\\"\\\",@progbits");
+    output(".section .note.GNU-stack,\"\",@progbits");
 }
