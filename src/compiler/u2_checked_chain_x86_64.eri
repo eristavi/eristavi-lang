@@ -58,6 +58,8 @@ public function emit(routine identity build.Function,
     let placementProof be try slots.verify(placement,map,routine,graph,phase);
     let inner be try ssa.verify(routine,graph,profile,contracts,phase,map,
         first,firstCall,innerPlan,innerOwners,innerOwners.count-1,innerExit);
+    let typedNormalOwner cleanup.Scope be normalOwners[0];
+    let typedFailedOwner cleanup.Scope be failedOwners[0];
     try require(firstLabel > 0 and normalLabel > 0 and failedLabel > 0 and
         firstLabel <= 2147483647 and normalLabel <= 2147483647 and
         failedLabel <= 2147483647 and
@@ -70,7 +72,7 @@ public function emit(routine identity build.Function,
         route.firstClose == firstCall.index and
         route.normalClose == normalCall.index and
         route.failingClose == failedCall.index and
-        route.survivingOwner == failedOwners[0].value.index,
+        route.survivingOwner == typedFailedOwner.value.index,
         "unsupported or stale canonical native checked chain");
     try budget.work(phase,96);
     let name be format.integer(firstLabel);
@@ -83,9 +85,9 @@ public function emit(routine identity build.Function,
     let suffixNormal be name+"_"+format.integer(normalCall.index);
     let suffixFailed be name+"_"+format.integer(failedCall.index);
     let normalOwnerOffset be format.integer(
-        (normalOwners[0].value.index-1)*8);
+        (typedNormalOwner.value.index-1)*8);
     let failedOwnerOffset be format.integer(
-        (failedOwners[0].value.index-1)*8);
+        (typedFailedOwner.value.index-1)*8);
     output(".text");
     output(".globl "+entry);
     output(".type "+entry+",@function");
