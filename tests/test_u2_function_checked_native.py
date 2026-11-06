@@ -423,7 +423,22 @@ class U2FunctionCheckedNativeTests(unittest.TestCase):
         folder.mkdir()
         (folder/"compiler").symlink_to(ROOT/"src/compiler",target_is_directory=True)
         source=folder/"generator.eri"
-        source.write_text(self.source(),encoding="utf-8")
+        # Test-only GAS comment markers make a timed-out generator observable.
+        # The independent C generator receives the same annotated source.
+        traced_source=self.source()
+        checkpoints=(
+            ("    let root be try budget.developmentRequest();", "begin"),
+            ("    try budget.finishPhase(mp);", "metadata"),
+            ("    try ab.complete(fn,graph);", "function"),
+            ("    let phase be try budget.constructionPhase(owner);", "native-phase"),
+            ("    try native.emitChecked(fn,graph,table,phase,registry,", "native-emit"),
+            ("    try budget.finishPhase(phase);", "after-emit"),
+        )
+        for needle,checkpoint in checkpoints:
+            self.assertEqual(traced_source.count(needle),1)
+            traced_source=traced_source.replace(
+                needle,'    output("# U2_GENERATOR_TRACE:'+checkpoint+'");\n'+needle,1)
+        source.write_text(traced_source,encoding="utf-8")
         application=subprocess.run(
             [str(self.frontend),"emit-asm",str(source),"--source-root",str(folder)],
             capture_output=True,text=True,timeout=120)
@@ -462,13 +477,22 @@ class U2FunctionCheckedNativeTests(unittest.TestCase):
         # selected source-generator gate. Use U2's existing 120-second
         # qualification watchdog, without relaxing memory/work budgets.
         started=time.monotonic()
-        owned=subprocess.run([str(binary)],env={"PATH":"/unavailable"},
-                             capture_output=True,timeout=120)
+        try:
+            owned=subprocess.run([str(binary)],env={"PATH":"/unavailable"},
+                                  capture_output=True,timeout=120)
+        except subprocess.TimeoutExpired as error:
+            partial=error.stdout or b""
+            markers=[line.decode("utf-8",errors="replace")
+                     for line in partial.splitlines()
+                     if b"U2_GENERATOR_TRACE:" in line]
+            print("U2_GENERATOR_TIMEOUT_PARTIAL_BYTES="+str(len(partial)),
+                  "U2_GENERATOR_PHASES="+repr(markers),flush=True)
+            raise
         print("U2_CHECKED_OWNED_GENERATOR_SECONDS="+str(time.monotonic()-started),
               flush=True)
         self.assertEqual((owned.returncode,owned.stderr),(0,b""),
                          owned.stdout[-2000:].decode(errors="replace"))
-        bootstrap=self.generator("checked-c-generator",self.source())
+        bootstrap=self.generator("checked-c-generator",traced_source)
         self.assertEqual((bootstrap.returncode,bootstrap.stderr),(0,""),
                          bootstrap.stdout[-2000:])
         self.assertEqual(owned.stdout,bootstrap.stdout.encode())

@@ -1,15 +1,27 @@
-# Eristavi compiler — stopped work checkpoint
+# Eristavi compiler — active U2 continuation
 
-6 November 2026 (Asia/Nicosia). **STOPPED at Revaz's explicit request because
-this session was nearing its five-hour limit.** Do not start another run now.
-Resume when the user asks to continue. Optimization #51 remains PAUSED.
+6 November 2026 (Asia/Nicosia). **Resumed at the user's explicit request** from
+the saved five-hour-limit stop checkpoint `3100dc8`. Optimization #51 stays PAUSED.
+
+### Current diagnostic — narrow, not qualification
+
+The owned-versus-C source generator comparison remains the first blocker.
+This continuation adds **test-only**, identical GAS-comment phase markers
+to both generator inputs, plus partial-stdout phase extraction on the existing
+120-second owned-generator timeout. It changes no compiler implementation,
+source-language semantics, 32-byte public ABI, U2 gate, or watchdog threshold.
+This is diagnostic evidence only; **do not mark the latest code green** until
+the watchdog and exact-source validation pass. The previous unqualified
+implementation stop checkpoint and detailed recovery instructions follow.
 
 ## Exact recovery point
 
 Branch: `compiler/u2-cleanup-foundation-20261102`, draft
 [PR #111](https://github.com/eristavi/eristavi-lang/pull/111).
-The checkpoint commit containing this handover is **work in progress, NOT
-qualified or merged**. Its parent is `2bb0c01b54b894f9de813078d0c4a70e150110c5`.
+The original unqualified stop checkpoint is `3100dc8e82f8e496d61fd38d0cdab5311416bd36`
+(parent `2bb0c01b54b894f9de813078d0c4a70e150110c5`).
+The active diagnostic continuation builds on it and is likewise **work in
+progress, NOT qualified or merged**.
 After the initial automatic approval rejection, Revaz explicitly requested
 publication of the local code to GitHub for continuation from another session.
 This checkpoint therefore includes the code, tests and evidence described below.
