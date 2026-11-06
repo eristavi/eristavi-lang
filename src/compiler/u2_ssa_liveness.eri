@@ -505,41 +505,104 @@ public function verifyPublications(plan identity Plan,routine identity build.Fun
             "missing, duplicate, foreign or reordered publication ValueId");
         i=i+1;
     }
+    // Independently check canonical publication bits using last uses and
+    // local SSA definition positions. This verifier reads ORIGINAL owned
+    // Function/Plan records, not the emitter's copied tables or suffix bits.
+    // The public liveBefore/liveAfter point-query oracle remains unchanged.
     let required be 0;
     let block be 1;
     while block <= proof.blocks {
-        i=0;
+        let offset be (block-1)*size;
+        let i be 0;
         while i < size {
             try budget.work(phase,1);
-            let value be build.ValueId { owner=routine.key; index=selected[i]; };
-            let target be build.BlockId { owner=routine.key; index=block; };
             let expected be 0;
-            if try liveEntry(plan,routine,phase,target,value) { expected=1; }
-            try require(entryBits[(block-1)*size+i] == expected,
+            if (try words.get(plan.inputs,phase,offset+i)) == 1 { expected=1; }
+            try require(entryBits[offset+i] == expected,
                 "missing or dead block-entry root publication");
             required=required+expected;
             i=i+1;
         }
-        block=block+1;
-    }
-    let inst be 1;
-    while inst <= proof.instructions {
+        // Canonical linked order must be used even for unreachable blocks:
+        // instruction IDs are global and may interleave across blocks.
+        let order be [];
+        let cursor be try words.get(routine.blocks,phase,(block-1)*5+2);
+        let seen be 0;
+        while cursor != 0 {
+            try budget.work(phase,1);
+            seen=seen+1;
+            try require(seen <= proof.instructions and cursor >= 1 and
+                cursor <= proof.instructions,
+                "cyclic or foreign canonical publication instruction chain");
+            order.add(cursor);
+            cursor=try words.get(routine.instructions,phase,(cursor-1)*10+9);
+        }
+        let terminator be try words.get(routine.blocks,phase,(block-1)*5+4);
+        try require(terminator >= 1 and terminator <= proof.instructions,
+            "missing canonical publication terminator");
+        order.add(terminator);
         i=0;
         while i < size {
-            try budget.work(phase,1);
-            let value be build.ValueId { owner=routine.key; index=selected[i]; };
-            let at be build.InstId { owner=routine.key; index=inst; };
-            let before be 0;
-            let after be 0;
-            if try liveBefore(plan,routine,phase,at,value) { before=1; }
-            if try liveAfter(plan,routine,phase,at,value) { after=1; }
-            let row be (inst-1)*size+i;
-            try require(beforeBits[row] == before and afterBits[row] == after,
-                "missing, premature or dead instruction-root publication");
-            required=required+before+after;
+            let valueId be selected[i];
+            let definitionRow be (valueId-1)*4;
+            let kind be try words.get(routine.values,phase,definitionRow+1);
+            let definition be try words.get(routine.values,phase,definitionRow+2);
+            let definingBlock be try words.get(plan.values,phase,i*4+3);
+            let locallyDefined be kind == 1 and definingBlock == block;
+            let definitionPosition be -1;
+            let lastUsePosition be -1;
+            let position be 0;
+            // Independently locate the LAST use and the first definition.
+            // A last-use ordinal is different from the emitter's reverse
+            // suffix bitmaps and is checked against the original operands.
+            while position < order.count {
+                try budget.work(phase,1);
+                let id be order[position];
+                if locallyDefined and position+1 < order.count and id == definition {
+                    definitionPosition=position;
+                }
+                let row be (id-1)*10;
+                let first be try words.get(routine.instructions,phase,row+2);
+                let count be try words.get(routine.instructions,phase,row+3);
+                let operand be 0;
+                while operand < count {
+                    try budget.work(phase,1);
+                    if (try words.get(routine.operands,phase,first+operand)) == valueId {
+                        lastUsePosition=position;
+                    }
+                    operand=operand+1;
+                }
+                position=position+1;
+            }
+            if locallyDefined {
+                try require(definitionPosition >= 0,
+                    "missing local SSA definition in verified publication");
+            }
+            let liveOut be (try words.get(plan.outputs,phase,offset+i)) == 1;
+            position=0;
+            while position < order.count {
+                try budget.work(phase,1);
+                let before be 0; let after be 0;
+                let definedBefore be not locallyDefined or
+                    position > definitionPosition;
+                let definedAfter be not locallyDefined or
+                    position >= definitionPosition;
+                if definedBefore and (liveOut or lastUsePosition >= position) {
+                    before=1;
+                }
+                if definedAfter and (liveOut or lastUsePosition > position) {
+                    after=1;
+                }
+                let id be order[position];
+                let row be (id-1)*size+i;
+                try require(beforeBits[row] == before and afterBits[row] == after,
+                    "missing, premature or dead instruction-root publication");
+                required=required+before+after;
+                position=position+1;
+            }
             i=i+1;
         }
-        inst=inst+1;
+        block=block+1;
     }
     return required;
 }

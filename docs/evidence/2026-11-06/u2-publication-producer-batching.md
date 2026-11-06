@@ -44,6 +44,29 @@ producer differs in any one bit, the emitter refuses before emitting native
 assembly. Existing negative tests for missing/foreign/dead publications,
 forged backing and refusal cleanup remain required.
 
+## Verifier bottleneck and independent last-use candidate
+
+- [`ac475bb` focused #42262947027](https://github.com/eristavi/eristavi-lang/actions/runs/42262947027):
+  18 methods executed, **17 passed / 1 unchanged 120-second owned
+  generator timeout**. The owned run emitted `U2_NATIVE_TRACE:publication-verify`,
+  confirming producer construction completed. It emitted no
+  `U2_NATIVE_TRACE:publication-done`. The next bottleneck is verifier
+  execution, not the original producer.
+- In the same `ssa.verifyPublications` function, fresh `ssa.verify`
+  reconstruction is preserved, as is exact selected-ID, entry-bit,
+  before/after-bit comparison across reachable and unreachable blocks.
+  Point-query `ssa.liveBefore` and `ssa.liveAfter` remain unmodified
+  independent references. The new checker traverses the ORIGINAL canonical
+  linked instruction records, finds each ValueId's last-use position and
+  local definition position, and compares both exact root bits at every
+  global InstId. That last-use algorithm is distinct from the producer's
+  reverse suffix bitmap. A mismatched or missing bit still rejects.
+- Separate deterministic Python model check of original point-query truth
+  versus the last-use formula: **3,093,668 randomized
+  before/after/instruction/definition/use combinations, zero mismatches**.
+  This is a *model check only*, not a compiler, runtime, sanitizer, or CI pass.
+  No test skip, watchdog extension, or accepted memory budget change.
+
 ## Validation status
 
 - Exact `e40a64b` [Text/List integration #42262075150](https://github.com/eristavi/eristavi-lang/actions/runs/42262075150): **12/12 passed**.

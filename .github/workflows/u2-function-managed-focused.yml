@@ -5,6 +5,7 @@ on:
     paths:
       - src/compiler/u2_function_managed_x86_64.eri
       - src/compiler/u2_function_contract.eri
+      - src/compiler/u2_ssa_liveness.eri
       - src/compiler/u2_managed_root_gate.eri
       - src/compiler/u1_builder.eri
       - src/compiler/u1_ops.eri

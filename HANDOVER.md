@@ -1,9 +1,10 @@
 # Eristavi compiler — current handover
 
-Updated 6 November 2026 (Asia/Nicosia). Documentation cleanup only.
+Updated 6 November 2026 (Asia/Nicosia). Active incremental U2 performance/verification work.
 Branch: `compiler/u2-cleanup-foundation-20261102`; [PR #111](https://github.com/eristavi/eristavi-lang/pull/111) remains DRAFT; #74 remains OPEN.
 Original checked-return checkpoint: `3100dc8e82f8e496d61fd38d0cdab5311416bd36`.
-Latest development checkpoint reviewed: `e40a64b3c8b7774dc68d3220f6b208ee38854ca6`.
+Latest prior implementation: `e40a64b3c8b7774dc68d3220f6b208ee38854ca6`; diagnostic fix `ac475bb71e0a78808eb08c450895edaaa0442ca9`.
+The current independent-verifier batching candidate is in this containing commit (not yet qualified).
 Current development is not qualified or merged. Optimization #51 remains PAUSED.
 
 ## Current blocker and next action
@@ -31,6 +32,26 @@ looked for a source comment removed by the optimized producer and asserted
 is not a compiler liveness mismatch. The next test-only change updates the
 trace anchor to the new producer comment, with unchanged watchdog and oracle.
 The active candidate remains unqualified.
+
+**Latest exact diagnostic:** [focused #42262947027](https://github.com/eristavi/eristavi-lang/actions/runs/42262947027)
+on `ac475bb` executed 18 methods (17 passed, 1 timeout); all
+generator source construction and publication-table production completed.
+The last output marker is `U2_NATIVE_TRACE:publication-verify`: the
+**independent per-instruction publication verifier** is now the first
+measured 120-second bottleneck. Earlier diagnostic fixture failure is fixed.
+
+The next narrow source candidate updates only
+`ssa.verifyPublications`: it still freshly calls `verify` to independently
+reconstruct the original whole Function/Plan, checks ordered tracked ValueIds,
+then checks ALL canonical entry, before, and after root bits (including
+unreachable blocks) by last-use and SSA definition ordinal from the ORIGINAL
+owned Function tables. It does not trust emitter-generated table data,
+change public point APIs, skip a validation row, weaken cleanup/root
+requirements or alter public ABI. The verifier is structurally independent
+of the emitter's reverse suffix-use producer. Synthetic randomized
+reference-model parity: **3,093,668 cases, zero mismatches** (not a native
+qualification). **Hosted exact-source owned-generator tests are pending**;
+no speedup or completion is claimed. `U2` and #74 remain unaccepted/open.
 
 The newest development revision replaces repeated emitter tail rescans with
 bounded reverse suffix-use and forward definition sweeps, preserving frozen
