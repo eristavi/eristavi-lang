@@ -71,15 +71,28 @@ public function create(routine identity build.Function,
                     acceptable=false;
                 }
             } else {
-                if shape.elementDomain != 0 or shape.element != carrier.index {
-                    acceptable=false;
-                }
                 if shape.kind == 2 {
-                    if shape.copyPolicy != 1 { acceptable=false; }
-                } else {
-                    if shape.kind != 3 or shape.copyPolicy != 2 {
-                        acceptable=false;
+                    // Retain the earlier generic List<aggregate> profile.
+                    // Also admit the existing List<i64> runtime descriptor
+                    // (element primitive #2) with its opaque empty carrier.
+                    // A one-field [i64] marker gives List<i64> a distinct
+                    // canonical carrier when Text also uses empty [].
+                    let listCarrier be shape.element == carrier.index;
+                    if shape.elementDomain == 0 and shape.element == 2 {
+                        let fields be try aggregate.fieldCount(graph,read,carrier);
+                        if fields == 0 { listCarrier=true; }
+                        if fields == 1 {
+                            if (try aggregate.field(graph,read,carrier,0)).index == 2 {
+                                listCarrier=true;
+                            }
+                        }
                     }
+                    if shape.elementDomain != 0 or not listCarrier or
+                        shape.copyPolicy != 1 { acceptable=false; }
+                } else {
+                    if shape.kind != 3 or shape.elementDomain != 0 or
+                        shape.element != carrier.index or
+                        shape.copyPolicy != 2 { acceptable=false; }
                 }
             }
         }
