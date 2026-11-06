@@ -52,7 +52,8 @@ function emitEdge(base Text,edgeId Int,blocks,edges,arguments,
 }
 function emitInstruction(base Text,id Int,frameBytes Int,
     instructions,operands,switches,cases,
-    rootCount Int,rootOffset Int,scopeOffset Int,returnOffset Int) {
+    rootCount Int,rootOffset Int,scopeOffset Int,returnOffset Int,
+    transferManaged Bool,callerRootOffset Int) {
     let row be (id-1)*10;
     let op be instructions[row];
     let first be instructions[row+2];
@@ -128,8 +129,17 @@ function emitInstruction(base Text,id Int,frameBytes Int,
         else { line("xorl %eax,%eax"); }
         if count >= 2 { line("movq "+slot(operands[first+1])+",%rdx"); }
         else { line("xorl %edx,%edx"); }
-        // Return scalar words survive the scope-leave native call. No
-        // managed root is returned by this deliberately closed profile.
+        // A managed result transfers into an ALREADY REGISTERED caller root
+        // before the callee retires any class-1 root or leaves its scope.
+        // No collecting runtime call may intervene in this transfer window.
+        if transferManaged {
+            line("movq "+format.integer(callerRootOffset)+"(%rsp),%rdi");
+            line("testq %rdi,%rdi");
+            line("je erist_rt_value_fault_internal");
+            line("testq %rax,%rax");
+            line("je erist_rt_value_fault_internal");
+            line("movq %rax,(%rdi)");
+        }
         line("movq %rax,"+format.integer(returnOffset)+"(%rsp)");
         line("movq %rdx,"+format.integer(returnOffset+8)+"(%rsp)");
         let root be 0;
@@ -201,7 +211,8 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
     let paramStart be try words.get(routine.metadata.signatures,phase,signatureStart+2);
     let results be try words.get(routine.metadata.signatures,phase,signatureStart+5);
     let resultStart be try words.get(routine.metadata.signatures,phase,signatureStart+4);
-    if params > 8 or results > 2 { admissible=false; }
+    if params > 8 or results != 2 { admissible=false; }
+    let managedReturn be false;
     let selected be [];
     let i be 0;
     while i < plan.values.length/4 {
@@ -211,7 +222,15 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
     i=0;
     while i < results {
         let ty be try words.get(routine.metadata.types,phase,resultStart+i);
-        if ty != 1 and ty != 2 { admissible=false; }
+        if ty != 1 and ty != 2 {
+            let found be false; let j be 0;
+            while j < plan.types.length {
+                if ty == (try words.get(plan.types,phase,j)) { found=true; }
+                j=j+1;
+            }
+            if i != 0 or not found { admissible=false; }
+            else { managedReturn=true; }
+        }
         i=i+1;
     }
     // Snapshot the frozen canonical Function tables before emitting any code.
@@ -346,7 +365,8 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
     let rootOffset be (values.count/4+32)*8;
     let scopeOffset be rootOffset+selected.count*8;
     let returnOffset be scopeOffset+8;
-    let bytes be returnOffset+16;
+    let callerRootOffset be returnOffset+16;
+    let bytes be callerRootOffset+8;
     let frameBytes be ((bytes+15)/16)*16;
     let base be "erist_u2_rooted_function_"+format.integer(label);
     output(".section .rodata");
@@ -367,6 +387,11 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
     line("pushq %rbx");
     line("subq $"+format.integer(frameBytes)+",%rsp");
     line("movq %rdi,%rbx");
+    line("movq %rsi,"+format.integer(callerRootOffset)+"(%rsp)");
+    if managedReturn {
+        line("testq %rsi,%rsi");
+        line("je erist_rt_value_fault_internal");
+    }
     // Clear full SSA and registered root-vector storage first.
     i=0;
     while i < values.count/4 {
@@ -417,7 +442,8 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
             publish(selected,beforeBits,(current-1)*selected.count,rootOffset);
             emitInstruction(base,current,frameBytes,
                 instructions,operands,switches,cases,
-                selected.count,rootOffset,scopeOffset,returnOffset);
+                selected.count,rootOffset,scopeOffset,returnOffset,
+                managedReturn,callerRootOffset);
             publish(selected,afterBits,(current-1)*selected.count,rootOffset);
             current=instructions[(current-1)*10+9];
         }
