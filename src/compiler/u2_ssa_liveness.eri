@@ -278,6 +278,15 @@ function same(first identity words.Words,second identity words.Words,
     }
     return true;
 }
+function samePlan(plan identity Plan,derived identity Plan,
+    phase identity budget.Phase) returns Bool fails budget.LimitError {
+    return plan.iterations == derived.iterations and
+        (try same(plan.types,derived.types,phase)) and
+        (try same(plan.values,derived.values,phase)) and
+        (try same(plan.uses,derived.uses,phase)) and
+        (try same(plan.inputs,derived.inputs,phase)) and
+        (try same(plan.outputs,derived.outputs,phase));
+}
 public function verify(plan identity Plan,routine identity build.Function,
     graph identity aggregate.Registry,contractsTable identity contracts.Registry,
     phase identity budget.Phase) returns Report
@@ -309,12 +318,8 @@ public function verify(plan identity Plan,routine identity build.Function,
         index=index+1;
     }
     let derived be try create(routine,graph,contractsTable,phase,typeList);
-    let good be plan.iterations == derived.iterations and
-        (try same(plan.types,derived.types,phase)) and
-        (try same(plan.values,derived.values,phase)) and
-        (try same(plan.uses,derived.uses,phase)) and
-        (try same(plan.inputs,derived.inputs,phase)) and
-        (try same(plan.outputs,derived.outputs,phase));
+    let good be samePlan(plan,derived,phase)
+        else error budget.LimitError { try close(derived); fail error; };
     let report be Report { blocks=derived.blocks; edges=derived.edges;
         instructions=derived.instructions; tracked=derived.values.length/4;
         iterations=derived.iterations; revision=derived.revision; };
@@ -474,6 +479,67 @@ public function requirePublished(plan identity Plan,routine identity build.Funct
             "missing, prematurely released or incorrectly retained managed root");
         if live { required=required+1; }
         i=i+1;
+    }
+    return required;
+}
+
+// One whole-Function publication boundary. Reconstruct and independently verify
+// the complete plan ON THIS CALL, then check every ordered root and every bit.
+// This returns no trusted flag/capability; callers must use a fresh call for a
+// changed function/plan/publication. No user callback or mutation occurs between
+// the full verification and the complete row checks in this transaction.
+public function verifyPublications(plan identity Plan,routine identity build.Function,
+    graph identity aggregate.Registry,contractsTable identity contracts.Registry,
+    phase identity budget.Phase,selected,entryBits,beforeBits,afterBits)
+    returns Int fails budget.LimitError,canonical.InvalidIR,InvalidLiveness {
+    let proof be try verify(plan,routine,graph,contractsTable,phase);
+    let size be proof.tracked;
+    try require(selected.count == size and
+        entryBits.count == proof.blocks*size and
+        beforeBits.count == proof.instructions*size and
+        afterBits.count == beforeBits.count,
+        "incomplete whole-Function root publication shape");
+    let i be 0;
+    while i < size {
+        try require(selected[i] == (try words.get(plan.values,phase,i*4)),
+            "missing, duplicate, foreign or reordered publication ValueId");
+        i=i+1;
+    }
+    let required be 0;
+    let block be 1;
+    while block <= proof.blocks {
+        i=0;
+        while i < size {
+            try budget.work(phase,1);
+            let value be build.ValueId { owner=routine.key; index=selected[i]; };
+            let target be build.BlockId { owner=routine.key; index=block; };
+            let expected be 0;
+            if try liveEntry(plan,routine,phase,target,value) { expected=1; }
+            try require(entryBits[(block-1)*size+i] == expected,
+                "missing or dead block-entry root publication");
+            required=required+expected;
+            i=i+1;
+        }
+        block=block+1;
+    }
+    let inst be 1;
+    while inst <= proof.instructions {
+        i=0;
+        while i < size {
+            try budget.work(phase,1);
+            let value be build.ValueId { owner=routine.key; index=selected[i]; };
+            let at be build.InstId { owner=routine.key; index=inst; };
+            let before be 0;
+            let after be 0;
+            if try liveBefore(plan,routine,phase,at,value) { before=1; }
+            if try liveAfter(plan,routine,phase,at,value) { after=1; }
+            let row be (inst-1)*size+i;
+            try require(beforeBits[row] == before and afterBits[row] == after,
+                "missing, premature or dead instruction-root publication");
+            required=required+before+after;
+            i=i+1;
+        }
+        inst=inst+1;
     }
     return required;
 }

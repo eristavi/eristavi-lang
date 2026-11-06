@@ -1,0 +1,99 @@
+// Canonical defined-Function checked outcome construction. No alternate IR.
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+import compiler.u1_meta as meta;
+import compiler.u1_builder as build;
+import compiler.u1_aggregate as aggregate;
+import compiler.u2_invoke_contract as contracts;
+
+public error InvalidBody { message Text; }
+function require(ok Bool,message Text) fails InvalidBody {
+    if not ok { fail InvalidBody { message=message; }; }
+}
+// Reread the selected frozen registry, never cache a verification capability.
+public function failureType(routine identity build.Function,
+    graph identity aggregate.Registry,table identity contracts.Registry,
+    phase identity budget.Phase) returns aggregate.TypeId
+    fails budget.LimitError,InvalidBody {
+    let data be routine.metadata;
+    try require(table.version == 1 and table.state == 1 and
+        table.metadataKey == data.key and table.typeKey == graph.key and
+        table.owner == data.owner and graph.owner == data.owner and graph.state == 1 and
+        data.frozen and not data.closed and not table.entries.closed and
+        table.entries.frozen and table.entries.length == data.declarations.length/3 and
+        phase.owner == routine.owner and phase.state == 0 and
+        routine.owner.parent == data.owner.parent and
+        routine.definedTarget >= 1 and
+        routine.definedTarget <= data.declarations.length/6,
+        "foreign, unbound or invalid checked Function context");
+    let row be (routine.definedTarget-1)*6;
+    let normal be try words.get(data.declarations,phase,row);
+    try require(normal == routine.signature.index and
+        (try words.get(data.declarations,phase,row+3)) == 1 and
+        (try words.get(data.declarations,phase,row+5)) == 0 and
+        (try words.get(table.entries,phase,(routine.definedTarget-1)*2)) == normal,
+        "checked Function binding does not name its exact defined signature");
+    let failure be try words.get(table.entries,phase,(routine.definedTarget-1)*2+1);
+    try require(failure >= 1 and failure <= data.signatures.length/6,
+        "defined Function has no valid checked failure contract");
+    let base be (failure-1)*6;
+    try require((try words.get(data.signatures,phase,base+3)) == 0 and
+        (try words.get(data.signatures,phase,base+5)) == 1,
+        "checked Function failure has invalid arity");
+    let start be try words.get(data.signatures,phase,base+4);
+    let result be try words.get(data.types,phase,start);
+    try require(result >= 7 and result <= 6+graph.records.length/4,
+        "checked Function needs a structural failure payload");
+    return aggregate.TypeId { owner=graph.key; index=result; };
+}
+public function bind(routine identity build.Function,
+    graph identity aggregate.Registry,table identity contracts.Registry,
+    target meta.FunctionId) fails budget.LimitError,InvalidBody {
+    try require(routine.state == 0 and routine.definedTarget == 0 and
+        routine.blocks.length == 0 and routine.instructions.length == 0 and
+        target.owner == routine.metadata.key and target.index >= 1,
+        "checked body binding must precede body construction");
+    // Failed construction never publishes a partially bound Function.
+    routine.definedTarget=target.index;
+    let checked be failureType(routine,graph,table,routine.phase)
+        else error budget.LimitError { routine.definedTarget=0; fail error; }
+        else error InvalidBody { routine.definedTarget=0; fail error; };
+    routine.revision=routine.revision+1;
+}
+public function returnFailure(routine identity build.Function,
+    graph identity aggregate.Registry,table identity contracts.Registry,
+    source build.BlockId,value build.ValueId,loc meta.LocId)
+    returns build.InstId fails budget.LimitError,InvalidBody {
+    let expected be try failureType(routine,graph,table,routine.phase);
+    try require(routine.state == 0 and source.owner == routine.key and
+        source.index >= 1 and source.index <= routine.blocks.length/5 and
+        value.owner == routine.key and value.index >= 1 and
+        value.index <= routine.values.length/4,
+        "foreign or closed checked return construction");
+    try meta.validLocation(routine.metadata,loc);
+    let row be (source.index-1)*5;
+    try require((try words.get(routine.blocks,routine.phase,row+4)) == 0 and
+        (try words.get(routine.values,routine.phase,(value.index-1)*4)) == expected.index,
+        "checked return payload type or source is invalid");
+    if routine.instructions.length/10 >= 1048576 or
+        routine.operands.length >= routine.operands.limit {
+        try budget.exceed(routine.owner,1,0);
+    }
+    routine.state=3;
+    let first be routine.operands.length;
+    let ignored be try words.push(routine.operands,routine.phase,value.index);
+    let index be routine.instructions.length/10+1;
+    ignored=try words.push(routine.instructions,routine.phase,47);
+    ignored=try words.push(routine.instructions,routine.phase,source.index);
+    ignored=try words.push(routine.instructions,routine.phase,first);
+    ignored=try words.push(routine.instructions,routine.phase,1);
+    ignored=try words.push(routine.instructions,routine.phase,0);
+    ignored=try words.push(routine.instructions,routine.phase,0);
+    ignored=try words.push(routine.instructions,routine.phase,loc.index);
+    ignored=try words.push(routine.instructions,routine.phase,0);
+    ignored=try words.push(routine.instructions,routine.phase,0);
+    ignored=try words.push(routine.instructions,routine.phase,0);
+    try words.set(routine.blocks,routine.phase,row+4,index);
+    routine.revision=routine.revision+1; routine.state=0;
+    return build.InstId { owner=routine.key; index=index; };
+}

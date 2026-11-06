@@ -12,6 +12,7 @@ public type Pair { value ValueId; overflow ValueId; }
 public type Function {
     key identity meta.Key; metadata identity meta.Metadata; signature meta.SignatureId;
     owner identity budget.Owner; phase identity budget.Phase; state Int; revision Int;
+    definedTarget Int; // optional U2 defined fallible body binding, zero in U1.
     control maybe identity budget.Allocation;
     blocks identity words.Words; values identity words.Words; instructions identity words.Words;
     operands identity words.Words; edges identity words.Words; arguments identity words.Words;
@@ -41,7 +42,7 @@ public function create(metadata identity meta.Metadata,signature meta.SignatureI
     let preflight be try budget.reserve(owner,8192); try budget.cancelReservation(preflight);
     let pending be try budget.reserve(owner,1024);
     let routine be identity Function { key=identity meta.Key { marker=0; }; metadata=metadata; signature=signature;
-        owner=owner; phase=phase; state=0; revision=0; control=none;
+        owner=owner; phase=phase; state=0; revision=0; definedTarget=0; control=none;
         blocks=try words.create(owner,327680); values=try words.create(owner,4194304);
         instructions=try words.create(owner,10485760); operands=try words.create(owner,16777216);
         edges=try words.create(owner,786432); arguments=try words.create(owner,4194304);

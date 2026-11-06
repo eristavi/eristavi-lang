@@ -471,7 +471,7 @@ class U1OwnerPhysicalTests(unittest.TestCase):
         schemas = {
             'u1_words.eri': {'Words': 7, 'Node': 18, 'Page': 17},
             'u1_meta.eri': {'Metadata': 14},
-            'u1_builder.eri': {'Function': 17},
+            'u1_builder.eri': {'Function': 18},
             'u1_dominance.eri': {'Graph': 12},
             'u1_module.eri': {'Program': 6, 'Entry': 5},
             'u1_imports.eri': {'Policy': 5, 'Selection': 5},

@@ -123,7 +123,7 @@ public function functionBody(routine identity build.Function,owner identity budg
     returns Backing fails budget.LimitError {
     if routine.owner != owner or routine.state == 2 { try budget.reject("foreign or closed U1 physical function"); }
     observe(routine,tag);
-    let result be block(17);
+    let result be block(18);
     result=plus(result,try wordStore(routine.blocks,owner,tag));
     result=plus(result,try wordStore(routine.values,owner,tag));
     result=plus(result,try wordStore(routine.instructions,owner,tag));

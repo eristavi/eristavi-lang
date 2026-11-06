@@ -1,7 +1,8 @@
 // Opt-in original whole-Function managed-parameter native CFG profile.
 // Uses verified canonical SSA liveness at every instruction and block entry.
 // Text/List runtime imports reuse the existing verified native adapters;
-// no new semantics, checked invokes or public ABI changes.
+// The optional checked profile uses canonical typed outcomes, not global flags.
+// No frozen source semantics or public ABI changes.
 // Defined self calls are opt-in, verified by exact FunctionId/signature.
 import compiler.u1_budget as budget;
 import compiler.u1_words as words;
@@ -16,6 +17,8 @@ import compiler.u2_managed_types as managed;
 import compiler.u1_aggregate_verify as graphVerify;
 import compiler.u2_function_native_imports as nativeImports;
 import compiler.u2_list_i64 as listNative;
+import compiler.u2_function_contract as body;
+import compiler.u2_root_map as checkedRoots;
 import compiler.format as format;
 
 public error Unsupported { message Text; }
@@ -33,7 +36,7 @@ function name(base Text,kind Text,index Int) returns Text {
 // This includes self-loop swaps, repeated inputs, and different edges that
 // share the same destination. Scratch is separate from every SSA slot.
 function emitEdge(base Text,edgeId Int,blocks,edges,arguments,
-    scratchOffset Int) {
+    scratchOffset Int,outcomeOffset Int) {
     let row be (edgeId-1)*3;
     let target be edges[row];
     let first be edges[row+1];
@@ -42,7 +45,10 @@ function emitEdge(base Text,edgeId Int,blocks,edges,arguments,
     output(name(base,"edge",edgeId)+":");
     let i be 0;
     while i < count {
-        line("movq "+slot(arguments[first+i])+",%rax");
+        let argument Int be arguments[first+i];
+        if argument < 0 {
+            line("movq "+format.integer(outcomeOffset+(0-argument-1)*8)+"(%rsp),%rax");
+        } else { line("movq "+slot(argument)+",%rax"); }
         line("movq %rax,"+format.integer(scratchOffset+i*8)+"(%rsp)");
         i=i+1;
     }
@@ -172,11 +178,26 @@ function emitNativeImport(result Int,first Int,operands,
         else { line("movq %rax,"+slot(result)); }
     }
 }
+function emitSelfCall(base Text,first Int,count Int,operands,
+    tempOffset Int,rootOffset Int,checked Bool) {
+    let scratchOffset be rootOffset-256;
+    let argument be 0;
+    while argument < count {
+        line("movq "+slot(operands[first+argument])+",%rax");
+        line("movq %rax,"+format.integer(scratchOffset+argument*8)+"(%rsp)");
+        argument=argument+1;
+    }
+    line("leaq "+format.integer(scratchOffset)+"(%rsp),%rdi");
+    line("leaq "+format.integer(tempOffset)+"(%rsp),%rsi");
+    line("movl $2,%edx");
+    if checked { line("leaq "+format.integer(tempOffset+16)+"(%rsp),%rcx"); }
+    line("call "+base);
+}
 function emitInstruction(base Text,id Int,frameBytes Int,
     instructions,operands,switches,cases,importKinds,importOperations,
     tempOffset Int,rootCount Int,rootOffset Int,scopeOffset Int,
     returnOffset Int,transferManaged Bool,transferManagedSecond Bool,
-    callerRootOffset Int) {
+    callerRootOffset Int,callerFailureOffset Int,checked Bool) {
     let row be (id-1)*10;
     let op be instructions[row];
     let first be instructions[row+2];
@@ -252,17 +273,7 @@ function emitInstruction(base Text,id Int,frameBytes Int,
             // Arguments remain live in the caller's registered vector until
             // the child publishes its own roots. The child transfers managed
             // results into our registered temporary words before scope leave.
-            let scratchOffset be rootOffset-256;
-            let argument be 0;
-            while argument < count {
-                line("movq "+slot(operands[first+argument])+",%rax");
-                line("movq %rax,"+format.integer(scratchOffset+argument*8)+"(%rsp)");
-                argument=argument+1;
-            }
-            line("leaq "+format.integer(scratchOffset)+"(%rsp),%rdi");
-            line("leaq "+format.integer(tempOffset)+"(%rsp),%rsi");
-            line("movl $2,%edx");
-            line("call "+base);
+            emitSelfCall(base,first,count,operands,tempOffset,rootOffset,false);
             line("movq %rax,"+slot(result));
             if instructions[row+5] == 2 {
                 line("movq %rdx,"+slot(result+1));
@@ -272,7 +283,25 @@ function emitInstruction(base Text,id Int,frameBytes Int,
                 importKinds[id-1],importOperations[id-1],tempOffset,base,id);
         }
     }
-    if op == 8 {
+    if op == 46 {
+        emitSelfCall(base,first,count,operands,tempOffset,rootOffset,true);
+        line("movq %rax,"+format.integer(returnOffset)+"(%rsp)");
+        line("movq %rdx,"+format.integer(returnOffset+8)+"(%rsp)");
+        line("cmpq $0,%r10");
+        line("jne "+name(base,"checked_failed",id));
+        line("cmpq $0,"+format.integer(tempOffset+16)+"(%rsp)");
+        line("jne erist_rt_value_fault_internal");
+        line("jmp "+name(base,"edge",instructions[row+8]));
+        output(name(base,"checked_failed",id)+":");
+        line("cmpq $1,%r10");
+        line("jne erist_rt_value_fault_internal");
+        line("testq %rax,%rax");
+        line("je erist_rt_value_fault_internal");
+        line("cmpq %rax,"+format.integer(tempOffset+16)+"(%rsp)");
+        line("jne erist_rt_value_fault_internal");
+        line("jmp "+name(base,"edge",instructions[row+8]+1));
+    }
+    if op == 8 or op == 47 {
         if count >= 1 { line("movq "+slot(operands[first])+",%rax"); }
         else { line("xorl %eax,%eax"); }
         if count >= 2 { line("movq "+slot(operands[first+1])+",%rdx"); }
@@ -280,7 +309,7 @@ function emitInstruction(base Text,id Int,frameBytes Int,
         // A managed result transfers into an ALREADY REGISTERED caller root
         // before the callee retires any class-1 root or leaves its scope.
         // No collecting runtime call may intervene in this transfer window.
-        if transferManaged or transferManagedSecond {
+        if op == 8 and (transferManaged or transferManagedSecond) {
             line("movq "+format.integer(callerRootOffset)+"(%rsp),%rdi");
             line("testq %rdi,%rdi");
             line("je erist_rt_value_fault_internal");
@@ -294,6 +323,16 @@ function emitInstruction(base Text,id Int,frameBytes Int,
                 line("je erist_rt_value_fault_internal");
                 line("movq %rdx,8(%rdi)");
             }
+        }
+        if checked {
+            line("movq "+format.integer(callerFailureOffset)+"(%rsp),%rdi");
+            line("testq %rdi,%rdi");
+            line("je erist_rt_value_fault_internal");
+            if op == 47 {
+                line("testq %rax,%rax");
+                line("je erist_rt_value_fault_internal");
+                line("movq %rax,(%rdi)");
+            } else { line("movq $0,(%rdi)"); }
         }
         line("movq %rax,"+format.integer(returnOffset)+"(%rsp)");
         line("movq %rdx,"+format.integer(returnOffset+8)+"(%rsp)");
@@ -310,6 +349,10 @@ function emitInstruction(base Text,id Int,frameBytes Int,
         line("movq "+format.integer(returnOffset+8)+"(%rsp),%rdx");
         line("addq $"+format.integer(frameBytes)+",%rsp");
         line("popq %rbx");
+        if checked {
+            if op == 47 { line("movl $1,%r10d"); }
+            else { line("xorl %r10d,%r10d"); }
+        }
         line("ret");
     }
 }
@@ -345,13 +388,39 @@ function nativeSafepoint(forceGC Bool) {
 // with managed (Text/List/identity) values admitted as already boxed inputs
 // and block parameters, admitted runtime imports and explicit self calls.
 // The typed caller retains its own incoming root until this frame's class-1
-// vector is safely registered. Aggregate producers/op46 remain unsupported.
+// vector is safely registered. Aggregate producers remain unsupported;
+// opcode 46 requires the explicit bound checked profile.
 // A test flag can force physical GC
 // on EVERY block entry to prove exact root lifetime during CFG transitions.
+function checkedRootTypes(map identity checkedRoots.Map,
+    phase identity budget.Phase,failureType Int) returns Bool fails budget.LimitError {
+    let i be 0;
+    while i < map.records.length/6 {
+        if (try words.get(map.records,phase,i*6+3)) != failureType { return false; }
+        i=i+1;
+    }
+    return true;
+}
+function verifyCheckedRoots(routine identity build.Function,
+    graph identity aggregate.Registry,phase identity budget.Phase,failureType Int)
+    fails budget.LimitError,Unsupported {
+    let map be checkedRoots.create(routine,graph,phase)
+        else error budget.LimitError { fail error; }
+        else error checkedRoots.InvalidRoots { fail Unsupported { message=error.message; }; };
+    let report be checkedRoots.verify(map,routine,graph,phase)
+        else error budget.LimitError { try checkedRoots.close(map); fail error; }
+        else error checkedRoots.InvalidRoots {
+            try checkedRoots.close(map); fail Unsupported { message=error.message; };
+        };
+    let compatible be checkedRootTypes(map,phase,failureType)
+        else error budget.LimitError { try checkedRoots.close(map); fail error; };
+    try checkedRoots.close(map);
+    try require(compatible,"checked roots require the exact declared native context type");
+}
 function compile(plan identity ssa.Plan,routine identity build.Function,
     graph identity aggregate.Registry,table identity contracts.Registry,
     phase identity budget.Phase,registry identity managed.Registry,
-    carriers,descriptors,forceGC Bool,label Int,selfTarget Int)
+    carriers,descriptors,forceGC Bool,label Int,selfTarget Int,checked Bool)
     fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,Unsupported {
     let proof be try ssa.verify(plan,routine,graph,table,phase);
     let admissible be label >= 1 and label <= 2147483647 and
@@ -368,19 +437,33 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
     let paramStart be try words.get(routine.metadata.signatures,phase,signatureStart+2);
     let results be try words.get(routine.metadata.signatures,phase,signatureStart+5);
     let resultStart be try words.get(routine.metadata.signatures,phase,signatureStart+4);
-    if params > 8 or results < 1 or results > 2 { admissible=false; }
+    if params > 8 or results > 2 or (not checked and results < 1) {
+        admissible=false;
+    }
+    let failureType be 0;
+    if checked {
+        let failure be body.failureType(routine,graph,table,phase)
+            else error budget.LimitError { fail error; }
+            else error body.InvalidBody { fail Unsupported { message=error.message; }; };
+        failureType=failure.index;
+        try verifyCheckedRoots(routine,graph,phase,failureType);
+        try require(routine.definedTarget == selfTarget,
+            "checked FunctionId differs from its canonical body binding");
+    } else { try require(routine.definedTarget == 0,
+        "checked body requires the checked native profile"); }
     if selfTarget != 0 {
         try require(selfTarget >= 1 and
             selfTarget <= routine.metadata.declarations.length/6,
             "invalid recursive FunctionId");
         let selfRow be (selfTarget-1)*6;
+        let failure be try words.get(table.entries,phase,(selfTarget-1)*2+1);
         try require((try words.get(routine.metadata.declarations,phase,selfRow)) ==
             routine.signature.index and
             (try words.get(routine.metadata.declarations,phase,selfRow+3)) == 1 and
             (try words.get(routine.metadata.declarations,phase,selfRow+4)) == 63 and
             (try words.get(routine.metadata.declarations,phase,selfRow+5)) == 0 and
-            (try words.get(table.entries,phase,(selfTarget-1)*2+1)) == 0,
-            "recursive target must be the exact defined nonfallible signature");
+            ((checked and failure > 0) or (not checked and failure == 0)),
+            "recursive target has an incompatible defined outcome signature");
     }
     let managedReturn be false;
     let managedReturnSecond be false;
@@ -407,6 +490,7 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
     i=0;
     while i < results {
         let ty be try words.get(routine.metadata.types,phase,resultStart+i);
+        if failureType != 0 and ty == failureType { admissible=false; }
         if ty != 1 and ty != 2 {
             let found be false; let j be 0;
             while j < plan.types.length {
@@ -494,6 +578,11 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
         let row be i*10;
         let op be instructions[row];
         let importKind be 0; let importOperation be 0;
+        if op == 46 {
+            if not checked or instructions[row+7] != selfTarget {
+                admissible=false;
+            }
+        }
         if op == 34 {
             if selfTarget != 0 and instructions[row+7] == selfTarget {
                 importKind=3;
@@ -511,7 +600,8 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
         if op != 1 and op != 2 and op != 4 and
             op != 6 and op != 7 and op != 8 and
             op != 13 and op != 14 and
-            (op < 15 or op > 18) and op != 35 and op != 34 {
+            (op < 15 or op > 18) and op != 35 and op != 34 and
+            not (checked and (op == 46 or op == 47)) {
             admissible=false;
         }
         if op == 35 {
@@ -551,30 +641,25 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
     }
     let inst be 1;
     while inst <= instructions.count/10 {
-        let beforeIds be [];
-        let afterIds be [];
         let j be 0;
         while j < selected.count {
             let tyId be build.ValueId { owner=routine.key; index=selected[j]; };
             let at be build.InstId { owner=routine.key; index=inst; };
             let pre be try ssa.liveBefore(plan,routine,phase,at,tyId);
             let post be try ssa.liveAfter(plan,routine,phase,at,tyId);
-            if pre { beforeIds.add(tyId); beforeBits.add(1); }
+            if pre { beforeBits.add(1); }
             else { beforeBits.add(0); }
-            if post { afterIds.add(tyId); afterBits.add(1); }
+            if post { afterBits.add(1); }
             else { afterBits.add(0); }
             j=j+1;
         }
-        let at be build.InstId { owner=routine.key; index=inst; };
-        let verifiedBefore be try ssa.requirePublished(
-            plan,routine,graph,table,phase,at,beforeIds,true);
-        let verifiedAfter be try ssa.requirePublished(
-            plan,routine,graph,table,phase,at,afterIds,false);
-        try require(verifiedBefore == beforeIds.count and
-            verifiedAfter == afterIds.count,
-            "incomplete per-instruction managed root plan");
         inst=inst+1;
     }
+    // Verify the entire immutable publication product at one boundary instead
+    // of reconstructing the full CFG/liveness twice per instruction. Every
+    // entry/before/after row, including dead code, is still independently checked.
+    let verifiedPublications be try ssa.verifyPublications(
+        plan,routine,graph,table,phase,selected,entryBits,beforeBits,afterBits);
     // Precharge ALL output work. From here only pure string/array operations.
     // Charge exactly the same verified output work, but respect U1a's
     // strict maximum of 1024 units per budget.work() invocation. Large
@@ -592,17 +677,28 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
     // Two additional, class-1 temporary slots preserve native helper
     // intermediates: a List snapshot and boxed i64, or a Unicode view.
     let tempOffset be rootOffset+selected.count*8;
-    let scopeOffset be tempOffset+16;
+    let temporaryRoots be 2;
+    if checked { temporaryRoots=3; }
+    let scopeOffset be tempOffset+temporaryRoots*8;
     let returnOffset be scopeOffset+8;
     let callerRootOffset be returnOffset+16;
+    let callerFailureOffset be callerRootOffset+8;
     let bytes be callerRootOffset+8;
+    if checked { bytes=bytes+8; }
     let frameBytes be ((bytes+15)/16)*16;
     let base be "erist_u2_rooted_function_"+format.integer(label);
     output(".section .rodata");
     output(".p2align 3");
     output(base+"_classes:");
     i=0;
-    while i < selected.count+2 { output("    .byte 1"); i=i+1; }
+    while i < selected.count {
+        let selectedType be values[(selected[i]-1)*4];
+        if failureType != 0 and selectedType == failureType { output("    .byte 5"); }
+        else { output("    .byte 1"); }
+        i=i+1;
+    }
+    output("    .byte 1"); output("    .byte 1");
+    if checked { output("    .byte 5"); }
     i=0;
     while i < selected.count {
         output(".set "+base+"_root_"+format.integer(selected[i])+", "+
@@ -617,6 +713,11 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
     line("subq $"+format.integer(frameBytes)+",%rsp");
     line("movq %rdi,%rbx");
     line("movq %rsi,"+format.integer(callerRootOffset)+"(%rsp)");
+    if checked {
+        line("testq %rcx,%rcx");
+        line("je erist_rt_value_fault_internal");
+        line("movq %rcx,"+format.integer(callerFailureOffset)+"(%rsp)");
+    }
     if managedReturn or managedReturnSecond {
         line("testq %rsi,%rsi");
         line("je erist_rt_value_fault_internal");
@@ -632,7 +733,7 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
         line("movq $0,"+format.integer(i*8)+"(%rsp)"); i=i+1;
     }
     i=0;
-    while i < selected.count+2 {
+    while i < selected.count+temporaryRoots {
         line("movq $0,"+format.integer(rootOffset+i*8)+"(%rsp)");
         i=i+1;
     }
@@ -641,7 +742,7 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
     line("movq %rax,%rdi");
     line("leaq "+format.integer(rootOffset)+"(%rsp),%rsi");
     line("leaq "+base+"_classes(%rip),%rdx");
-    line("movl $"+format.integer(selected.count+2)+",%ecx");
+    line("movl $"+format.integer(selected.count+temporaryRoots)+",%ecx");
     line("call evn_bind_roots");
     if params > 0 {
         line("testq %rbx,%rbx");
@@ -670,14 +771,22 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
         // Phi/edge sources are all staged, transferred and published before
         // this block's first allocating/collecting safepoint.
         publish(selected,entryBits,(block-1)*selected.count,rootOffset);
+        // Checked edge results have now moved into their canonical destination
+        // slots and exact roots. Only now retire the caller handoff words.
+        if checked {
+            line("movq $0,"+format.integer(tempOffset)+"(%rsp)");
+            line("movq $0,"+format.integer(tempOffset+8)+"(%rsp)");
+            line("movq $0,"+format.integer(tempOffset+16)+"(%rsp)");
+        }
         nativeSafepoint(forceGC);
         let current be blocks[(block-1)*5+2];
         while current != 0 {
             publish(selected,beforeBits,(current-1)*selected.count,rootOffset);
             emitInstruction(base,current,frameBytes,
                 instructions,operands,switches,cases,importKinds,importOperations,
-                tempOffset,selected.count+2,rootOffset,scopeOffset,returnOffset,
-                managedReturn,managedReturnSecond,callerRootOffset);
+                tempOffset,selected.count+temporaryRoots,rootOffset,scopeOffset,returnOffset,
+                managedReturn,managedReturnSecond,callerRootOffset,
+                callerFailureOffset,checked);
             publish(selected,afterBits,(current-1)*selected.count,rootOffset);
             // Publish the canonical result before retiring intermediary roots.
             if instructions[(current-1)*10] == 34 {
@@ -690,13 +799,14 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
         publish(selected,beforeBits,(term-1)*selected.count,rootOffset);
         emitInstruction(base,term,frameBytes,
             instructions,operands,switches,cases,importKinds,importOperations,
-            tempOffset,selected.count+2,rootOffset,scopeOffset,returnOffset,
-            managedReturn,managedReturnSecond,callerRootOffset);
+            tempOffset,selected.count+temporaryRoots,rootOffset,scopeOffset,returnOffset,
+            managedReturn,managedReturnSecond,callerRootOffset,
+            callerFailureOffset,checked);
         block=block+1;
     }
     i=1;
     while i <= edges.count/3 {
-        emitEdge(base,i,blocks,edges,arguments,(values.count/4)*8);
+        emitEdge(base,i,blocks,edges,arguments,(values.count/4)*8,returnOffset);
         i=i+1;
     }
     output(".size "+base+",.-"+base);
@@ -723,7 +833,7 @@ public function emit(routine identity build.Function,
     let plan be try roots.create(routine,graph,table,phase,registry,
         carriers,descriptors);
     compile(plan,routine,graph,table,phase,registry,carriers,descriptors,
-        forceGC,label,0)
+        forceGC,label,0,false)
         else error budget.LimitError { try ssa.close(plan); fail error; }
         else error canonical.InvalidIR { try ssa.close(plan); fail error; }
         else error ssa.InvalidLiveness { try ssa.close(plan); fail error; }
@@ -746,7 +856,25 @@ public function emitRecursive(routine identity build.Function,
     let plan be try roots.create(routine,graph,table,phase,registry,
         carriers,descriptors);
     compile(plan,routine,graph,table,phase,registry,carriers,descriptors,
-        forceGC,label,target.index)
+        forceGC,label,target.index,false)
+        else error budget.LimitError { try ssa.close(plan); fail error; }
+        else error canonical.InvalidIR { try ssa.close(plan); fail error; }
+        else error ssa.InvalidLiveness { try ssa.close(plan); fail error; }
+        else error Unsupported { try ssa.close(plan); fail error; };
+    try ssa.close(plan);
+}
+
+public function emitChecked(routine identity build.Function,
+    graph identity aggregate.Registry,table identity contracts.Registry,
+    phase identity budget.Phase,registry identity managed.Registry,
+    carriers,descriptors,forceGC Bool,label Int)
+    fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,
+        roots.InvalidManagedRoots,managed.InvalidManagedTypes,
+        graphVerify.InvalidGraph,Unsupported {
+    let plan be try roots.create(routine,graph,table,phase,registry,
+        carriers,descriptors);
+    compile(plan,routine,graph,table,phase,registry,carriers,descriptors,
+        forceGC,label,routine.definedTarget,true)
         else error budget.LimitError { try ssa.close(plan); fail error; }
         else error canonical.InvalidIR { try ssa.close(plan); fail error; }
         else error ssa.InvalidLiveness { try ssa.close(plan); fail error; }

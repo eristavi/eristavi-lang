@@ -11,6 +11,7 @@ import compiler.u1_verify as canonical;
 import compiler.u2_managed_types as managed;
 import compiler.u2_invoke_contract as contracts;
 import compiler.u2_ssa_liveness as ssa;
+import compiler.u2_function_contract as body;
 
 public error InvalidManagedRoots { message Text; }
 function require(ok Bool,message Text) fails InvalidManagedRoots {
@@ -39,6 +40,15 @@ public function create(routine identity build.Function,
         phase.owner == routine.owner and phase.state == 0 and
         routine.state == 1,
         "foreign or unsupported mixed managed SSA root profile");
+    let failureType be 0;
+    if routine.definedTarget != 0 {
+        let failure be body.failureType(routine,graph,table,phase)
+            else error budget.LimitError { fail error; }
+            else error body.InvalidBody {
+                fail InvalidManagedRoots { message=error.message; };
+            };
+        failureType=failure.index;
+    }
     let read be try budget.verificationPhase(registry.owner);
     let report be managed.verify(registry,graph,read)
         else error budget.LimitError {
@@ -108,6 +118,19 @@ public function create(routine identity build.Function,
         }
         selected.add(carrier);
         i=i+1;
+    }
+    if failureType != 0 {
+        if carriers.count >= 8 { acceptable=false; }
+        if failureType < 7 or failureType > 6+graph.records.length/4 {
+            acceptable=false;
+        }
+        i=0;
+        while i < carriers.count {
+            let carrier aggregate.TypeId be carriers[i];
+            if carrier.index == failureType { acceptable=false; }
+            i=i+1;
+        }
+        selected.add(aggregate.TypeId { owner=graph.key; index=failureType; });
     }
     try budget.finishPhase(read);
     try require(acceptable,

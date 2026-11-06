@@ -1,0 +1,27 @@
+import std.unicode;
+type Counter { value Int; }
+type Result { counter identity Counter; total Int; }
+error Problem { code Int; message Text; }
+function walk(value identity Counter,text Text,failure Problem,depth Int,shouldFail Bool)
+    returns Result fails Problem {
+    if depth > 0 {
+        let child be unicode.fromScalar(depth);
+        let returned be try walk(value,child,failure,depth-1,shouldFail);
+        return Result { counter=returned.counter; total=returned.total+text.bytes.count; };
+    }
+    if shouldFail { fail failure; }
+    return Result { counter=value; total=text.bytes.count; };
+}
+function probe(depth Int,shouldFail Bool) {
+    let input be identity Counter { value=7; };
+    let failure be Problem { code=42; message="primary-β"; };
+    let result be walk(input,"parent",failure,depth,shouldFail)
+        else error { output(error.message); return; };
+    output(result.total);
+    output(result.counter == input);
+}
+probe(0,false); probe(0,true);
+probe(1,false); probe(1,true);
+probe(5,false); probe(5,true);
+probe(32,false); probe(32,true);
+probe(64,false); probe(64,true);

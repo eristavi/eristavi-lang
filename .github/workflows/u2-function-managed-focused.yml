@@ -4,10 +4,18 @@ on:
     branches: [compiler/u2-cleanup-foundation-20261102]
     paths:
       - src/compiler/u2_function_managed_x86_64.eri
+      - src/compiler/u2_function_contract.eri
+      - src/compiler/u2_managed_root_gate.eri
+      - src/compiler/u1_builder.eri
+      - src/compiler/u1_ops.eri
+      - src/compiler/u1_verify.eri
       - tests/fixtures/u2_function_managed_cfg.eri
       - tests/fixtures/u2_function_managed_recursive.eri
       - tests/fixtures/u2_function_managed_recursive_reference.eri
+      - tests/fixtures/u2_function_checked_recursive.eri
+      - tests/fixtures/u2_function_checked_recursive_reference.eri
       - tests/test_u2_function_managed_native.py
+      - tests/test_u2_function_checked_native.py
       - .github/workflows/u2-function-managed-focused.yml
 permissions:
   contents: read
@@ -28,11 +36,11 @@ jobs:
       - name: Install compiler bootstrap
         run: python -m pip install -e .
       - name: Compile Python tests and compiler
-        run: python -m compileall -q tests/test_u2_function_managed_native.py compiler
+        run: python -m compileall -q tests/test_u2_function_managed_native.py tests/test_u2_function_checked_native.py compiler
       - name: Run physical owned-runtime managed Function tests
         run: |
           set -o pipefail
-          PYTHONPATH=tests python -u -m unittest -v test_u2_function_managed_native 2>&1 | tee "$RUNNER_TEMP/u2-managed-function.log"
+          PYTHONPATH=tests python -u -m unittest -v test_u2_function_managed_native test_u2_function_checked_native 2>&1 | tee "$RUNNER_TEMP/u2-managed-function.log"
       - name: Preserve managed Function logs
         if: always()
         uses: actions/upload-artifact@v6

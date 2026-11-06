@@ -15,7 +15,7 @@ type Context {
     routine identity build.Function; phase identity budget.Phase; graph identity dom.Graph;
     stage Int; block Int; instruction Int; location Int; visits Int; scanLimit Int;
     positions Int; buckets Int; switchClaims Int; construction Bool;
-    invokeTarget Int; failureSignature Int;
+    invokeTarget Int; failureSignature Int; bodyFailure Int;
     fallible maybe identity invokeContract.Registry;
     registry maybe identity aggregate.Registry; // opt-in U1b schema, never a trust stamp
 }
@@ -339,6 +339,10 @@ function instruction(context identity Context,index Int,terminal Bool,position I
         let failureTarget be try read(context,routine.edges,firstEdge*3);
         try require(context,normalTarget != failureTarget and normalTarget != context.block and failureTarget != context.block,"invalid invoke outcome destinations");
     }
+    if op == 47 {
+        try require(context,context.bodyFailure > 0 and context.registry != none,
+            "failure return requires a bound checked Function");
+    }
     // The default U1a verifier rejects every aggregate opcode. Only the
     // explicit graph-verified profile below may validate their type schema.
     if ops.isAggregate(op) {
@@ -392,6 +396,11 @@ function instruction(context identity Context,index Int,terminal Bool,position I
     while item < count {
         let actual be try valueType(context,try read(context,routine.operands,first+item)); let valueTypeIndex be ops.operandType(op,item);
         if ops.isCell(op) { valueTypeIndex=cellType; }
+        if op == 47 {
+            let start be try read(context,routine.metadata.signatures,
+                (context.bodyFailure-1)*6+4);
+            valueTypeIndex=try read(context,routine.metadata.types,start);
+        }
         if op == 8 { let resultStart be try read(context,routine.metadata.signatures,(routine.signature.index-1)*6+4); valueTypeIndex=try read(context,routine.metadata.types,resultStart+item); }
         if op == 34 or op == 46 {
             let start be try read(context,routine.metadata.signatures,(callSignature-1)*6+2);
@@ -432,7 +441,7 @@ function instruction(context identity Context,index Int,terminal Bool,position I
     let payload be try read(context,routine.instructions,offset+7); let extra be try read(context,routine.instructions,offset+8);
     if op == 2 { try require(context,payload == 0 or payload == 1,"invalid predicate bits"); }
     if op == 5 { try require(context,payload >= 1 and payload <= 4,"invalid trap code"); }
-    if op == 3 or op == 4 or op == 8 or op == 13 or op == 14 or (op >= 15 and op <= 17) or (op >= 19 and op <= 27) {
+    if op == 3 or op == 4 or op == 8 or op == 47 or op == 13 or op == 14 or (op >= 15 and op <= 17) or (op >= 19 and op <= 27) {
         try require(context,payload == 0,"unsupported operation payload");
     }
     if op == 18 { try require(context,payload >= 1 and payload <= 10,"invalid i64 comparison relation"); }
@@ -648,7 +657,24 @@ function inspect(context identity Context) returns Report fails budget.LimitErro
         let first be try read(context,data.signatures,offset+4);
         try require(context,try read(context,data.types,first) >= 7,"failure payload must be a declared aggregate");
     }
-    try fallibleContracts(context); try structure(context);
+    try fallibleContracts(context);
+    let bound be context.routine.definedTarget;
+    try require(context,bound >= 0,"negative defined FunctionId binding");
+    if bound != 0 {
+        let data be context.routine.metadata;
+        try require(context,context.fallible != none and context.registry != none and
+            bound <= data.declarations.length/6,
+            "defined fallible body requires its exact U2 registry");
+        try require(context,(try read(context,data.declarations,(bound-1)*6)) ==
+            context.routine.signature.index and
+            (try read(context,data.declarations,(bound-1)*6+3)) == 1 and
+            (try read(context,data.declarations,(bound-1)*6+5)) == 0,
+            "defined checked body binding has wrong kind or normal signature");
+        context.bodyFailure=try failureFor(context,bound);
+        try require(context,context.bodyFailure > 0,
+            "defined checked body has no failure contract");
+    }
+    try structure(context);
     try locations(context); try reachableSSA(context);
     if not context.construction { context.stage=5; context.block=0; context.instruction=0; context.location=0;
         try require(context,context.routine.cells.length == 0,"unpromoted cells in canonical U1"); }
@@ -664,7 +690,7 @@ function verifyMode(routine identity build.Function,phase identity budget.Phase,
     let graph be try dom.create(routine.owner,phase);
     let context be identity Context { routine=routine; phase=phase; graph=graph; stage=0; block=0; instruction=0; location=0;
         visits=0; scanLimit=0; positions=0; buckets=0; switchClaims=0;
-        construction=construction; registry=registry; invokeTarget=invokeTarget; failureSignature=failureSignature;
+        construction=construction; registry=registry; invokeTarget=invokeTarget; failureSignature=failureSignature; bodyFailure=0;
         fallible=fallible; };
     let report be inspect(context) else error InvalidIR { try dom.close(graph); try budget.finishPhase(phase); fail error; }
     else error budget.LimitError {

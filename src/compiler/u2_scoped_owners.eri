@@ -250,7 +250,7 @@ function instruction(context identity Context,index Int) fails budget.LimitError
         try require(context,context.location == (try get(context,profile.scopes,(scope-1)*2+1)),"cleanup lost its lexical source origin");
         try put(context,context.active+value,0); context.depth=context.depth-1;
     }
-    if op == 8 { try require(context,context.depth == 0,"return bypasses required cleanup"); }
+    if op == 8 or op == 47 { try require(context,context.depth == 0,"return bypasses required cleanup"); }
     let successorsCount be try successors.count(fn,context.phase,index); let ordinal be 0;
     while ordinal < successorsCount {
         try edge(context,index,try successors.edge(fn,context.phase,index,ordinal),acquiring and ordinal == 0);

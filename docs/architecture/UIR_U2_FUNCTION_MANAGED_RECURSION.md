@@ -1,6 +1,9 @@
 # Whole canonical Function managed self calls
 
-Development profile, 6 November 2026. This extends the existing whole-Function
+Development profile, 6 November 2026. The subsequent
+[checked Function extension](UIR_U2_CHECKED_FUNCTION_RETURNS.md) adds typed
+failure returns and self invokes; boundaries below describe this original
+nonfallible entry. This extends the existing whole-Function
 emitter, not the earlier standalone Text recursion adapter or handwritten
 recursive cleanup tests. Follow the frozen language value/identity semantics,
 canonical signatures, exact SSA liveness, runtime root ABI and CI qualification

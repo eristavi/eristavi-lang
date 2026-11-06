@@ -1,4 +1,4 @@
-// Single checked U1b completion adapter for the existing 17-field Function.
+// Single checked U1b completion adapter for the canonical Function.
 // Isolated from U1a scalar-only builder without importing aggregate builders
 // into the legacy U1a promotion path. Construction is NOT verification.
 import compiler.u1_budget as budget;
