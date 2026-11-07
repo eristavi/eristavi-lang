@@ -98,7 +98,7 @@ function run() fails budget.LimitError,canonical.InvalidIR,graphVerify.InvalidGr
     // A recursive checked failure is deliberately RECOVERED. Its original
     // failure value becomes dead before this frame closes its own resource.
     let recovered be try build.integer(fn,failedChild,7,loc);
-    try build.jump(fn,failedChild,closeBlock,[recovered,failedOwner],loc);
+    try ab.jump(fn,graph,failedChild,closeBlock,[recovered,failedOwner],loc);
     pair=try continuation.bindCarrying(fn,graph,cp,closeBlock,done,closeFailed,
         pendingSig,pendingFailedSig,loc);
     let closing be try transfer.emit(fn,graph,consume,pair,[closeHandle],[pending]);
