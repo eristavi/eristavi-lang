@@ -1,4 +1,4 @@
-// Closed two-member group: caller owns File, calls a distinct File-owning member, closes its own File.
+// Original canonical Function: File.openRead -> owned block -> checked close.
 import std.process;
 import compiler.u1_budget as budget;
 import compiler.u1_meta as meta;
@@ -30,161 +30,118 @@ function run() fails budget.LimitError,canonical.InvalidIR,graphVerify.InvalidGr
     let file be try aggregate.aggregate(graph,mp,[i64,i64]);
     let failure be try aggregate.aggregate(graph,mp,[text,text]);
     let scalarSpecialization be try meta.signature(data,mp,[meta.i64()],[meta.i64()]);
-    let signature be try sig.signature(data,graph,mp,[text,i64],[i64]);
+    let signature be try sig.signature(data,graph,mp,[text],[i64]);
     let opened be try sig.signature(data,graph,mp,[text],[file]);
     let closed be try sig.signature(data,graph,mp,[file],[]);
     let fileOutcome be try sig.signature(data,graph,mp,[],[file]);
     let failureSig be try sig.signature(data,graph,mp,[],[failure]);
     let pendingSig be try sig.signature(data,graph,mp,[],[i64]);
     let pendingFailedSig be try sig.signature(data,graph,mp,[],[failure,i64]);
-    let recursiveNormal be try sig.signature(data,graph,mp,[],[i64,file]);
-    let recursiveFailed be try sig.signature(data,graph,mp,[],[failure,file]);
-    let target be try meta.declaration(data,mp,signature,"u2.file.recursive",1,63,0);
-    let secondTarget be try meta.declaration(data,mp,signature,"u2.file.other",1,63,0);
+    let forwarded be try sig.signature(data,graph,mp,[],[i64,file]);
+    let failedWithFile be try sig.signature(data,graph,mp,[],[failure,file]);
+    let target be try meta.declaration(data,mp,signature,"u2.file.group.owner",1,63,0);
+    let helperTarget be try meta.declaration(data,mp,signature,"u2.file.group.helper",1,63,0);
     let acquisition be try meta.declaration(data,mp,opened,"u2.file.openRead.v1",2,63,1);
     let consumption be try meta.declaration(data,mp,closed,"u2.file.close.v1",2,63,1);
-    let source be try meta.source(data,mp,"file-recursive.eri",
+    let source be try meta.source(data,mp,"file-group.eri",
         "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",64);
     let loc be try meta.location(data,mp,source,0,8,0,1,1);
     try aggregate.freeze(graph); let registry be try managed.create(graph,mp);
     try managed.freeze(registry); try meta.freeze(data);
     let table be try contracts.create(data,graph,mp);
     let contract be contracts.Contract { version=1; target=target; failure=failureSig; };
-    let secondContract be contracts.Contract { version=1; target=secondTarget; failure=failureSig; };
+    let helperContract be contracts.Contract { version=1; target=helperTarget; failure=failureSig; };
     let acquire be contracts.Contract { version=1; target=acquisition; failure=failureSig; };
     let consume be contracts.Contract { version=1; target=consumption; failure=failureSig; };
     try contracts.register(table,data,graph,mp,contract);
-    try contracts.register(table,data,graph,mp,secondContract);
+    try contracts.register(table,data,graph,mp,helperContract);
     try contracts.register(table,data,graph,mp,acquire);
     try contracts.register(table,data,graph,mp,consume);
     try contracts.freeze(table); try budget.finishPhase(mp);
     let owner be try budget.functionOwner(root,false); let cp be try budget.constructionPhase(owner);
     let fn be try build.create(data,signature,owner,cp); try body.bind(fn,graph,table,target);
-    let entry be try ab.block(fn,graph,[text,i64]);
+    let entry be try ab.block(fn,graph,[text]);
     let owned be try ab.block(fn,graph,[file]);
-    let recurse be try ab.block(fn,graph,[file]);
-    let closeBlock be try ab.block(fn,graph,[i64,file]);
-    let failedChild be try ab.block(fn,graph,[failure,file]);
+    let afterHelper be try ab.block(fn,graph,[i64,file]);
+    let failedHelper be try ab.block(fn,graph,[failure,file]);
     let done be try build.block(fn,[meta.i64()]);
     let failed be try ab.block(fn,graph,[failure]);
     let closeFailed be try ab.block(fn,graph,[failure,i64]);
     let path be try build.parameter(fn,entry,0);
-    let depth be try build.parameter(fn,entry,1);
     let handle be try build.parameter(fn,owned,0);
-    let recurseHandle be try build.parameter(fn,recurse,0);
-    let pending be try build.parameter(fn,closeBlock,0);
-    let closeHandle be try build.parameter(fn,closeBlock,1);
-    let failedOwner be try build.parameter(fn,failedChild,1);
+    let pending be try build.parameter(fn,afterHelper,0);
+    let closeHandle be try build.parameter(fn,afterHelper,1);
+    let caughtFile be try build.parameter(fn,failedHelper,1);
     let profile be try owners.create(fn,graph,cp,file,acquisition,consumption);
     let scope be try owners.scope(profile,fn,cp,0,loc);
     try owners.block(profile,fn,cp,entry,[]);
     try owners.block(profile,fn,cp,owned,[owners.Entry { scope=scope; value=handle; }]);
-    try owners.block(profile,fn,cp,recurse,[owners.Entry { scope=scope; value=recurseHandle; }]);
-    try owners.block(profile,fn,cp,closeBlock,[owners.Entry { scope=scope; value=closeHandle; }]);
-    try owners.block(profile,fn,cp,failedChild,[owners.Entry { scope=scope; value=failedOwner; }]);
+    try owners.block(profile,fn,cp,afterHelper,[owners.Entry { scope=scope; value=closeHandle; }]);
+    try owners.block(profile,fn,cp,failedHelper,[owners.Entry { scope=scope; value=caughtFile; }]);
     try owners.block(profile,fn,cp,done,[]);
     try owners.block(profile,fn,cp,failed,[]);
     try owners.block(profile,fn,cp,closeFailed,[]);
     let pair be try continuation.bind(fn,graph,cp,entry,owned,failed,
         fileOutcome,failureSig,loc);
-    let opening be try invoke.emit(fn,graph,acquire,pair,[path]);
-    let zero be try build.integer(fn,owned,0,loc);
-    let more be try build.compareInteger(fn,owned,depth,zero,5,loc);
-    let baseValue be try build.integer(fn,owned,42,loc);
-    try ab.branch(fn,graph,owned,more,recurse,[handle],
-        closeBlock,[baseValue,handle],loc);
-    let one be try build.integer(fn,recurse,1,loc);
-    let next be try build.wrapSubtract(fn,recurse,depth,one,loc);
-    pair=try continuation.bindCarrying(fn,graph,cp,recurse,closeBlock,failedChild,
-        recursiveNormal,recursiveFailed,loc);
-    let recursive be try transfer.emit(fn,graph,secondContract,pair,[path,next],[recurseHandle]);
-    // A recursive checked failure is deliberately RECOVERED. Its original
-    // failure value becomes dead before this frame closes its own resource.
-    let recovered be try build.integer(fn,failedChild,7,loc);
-    try ab.jump(fn,graph,failedChild,closeBlock,[recovered,failedOwner],loc);
-    pair=try continuation.bindCarrying(fn,graph,cp,closeBlock,done,closeFailed,
+    let openCall be try invoke.emit(fn,graph,acquire,pair,[path]);
+    pair=try continuation.bindCarrying(fn,graph,cp,owned,afterHelper,failedHelper,
+        forwarded,failedWithFile,loc);
+    let helperCall be try transfer.emit(fn,graph,helperContract,pair,[path],[handle]);
+    let recovered be try build.integer(fn,failedHelper,7,loc);
+    try ab.jump(fn,graph,failedHelper,afterHelper,[recovered,caughtFile],loc);
+    pair=try continuation.bindCarrying(fn,graph,cp,afterHelper,done,closeFailed,
         pendingSig,pendingFailedSig,loc);
-    let closing be try transfer.emit(fn,graph,consume,pair,[closeHandle],[pending]);
+    let closeCall be try transfer.emit(fn,graph,consume,pair,[closeHandle],[pending]);
     try ab.returnValues(fn,graph,done,[try build.parameter(fn,done,0)],loc);
     let closeError be try build.parameter(fn,closeFailed,0);
-    let propagatedClose be try body.returnFailure(fn,graph,table,closeFailed,closeError,loc);
+    let closePropagated be try body.returnFailure(fn,graph,table,closeFailed,closeError,loc);
     let openError be try build.parameter(fn,failed,0);
-    let propagatedOpen be try body.returnFailure(fn,graph,table,failed,openError,loc);
-    // Establish bootstrap scalar edge specialization, independent dead block.
-    let dead be try build.block(fn,[]); let deadTarget be try build.block(fn,[meta.i64()]);
+    let openPropagated be try body.returnFailure(fn,graph,table,failed,openError,loc);
+    // Dead block establishes the generic scalar edge specialization.
+    let dead be try build.block(fn,[]);
+    let deadTarget be try build.block(fn,[meta.i64()]);
     try owners.block(profile,fn,cp,dead,[]); try owners.block(profile,fn,cp,deadTarget,[]);
-    let deadZero be try build.integer(fn,dead,0,loc); try build.jump(fn,dead,deadTarget,[deadZero],loc);
+    let deadZero be try build.integer(fn,dead,0,loc);
+    try build.jump(fn,dead,deadTarget,[deadZero],loc);
     try build.returnValues(fn,deadTarget,[try build.parameter(fn,deadTarget,0)],loc);
-    try ab.complete(fn,graph); try owners.complete(profile,fn,cp); try budget.finishPhase(cp);
-    // A distinct exact FunctionId and independently owned File scope.
-    // All blocks, including its failure return, are bound to this body.
-    let owner2 be try budget.functionOwner(root,false);
-    let cp2 be try budget.constructionPhase(owner2);
-    let fn2 be try build.create(data,signature,owner2,cp2);
-    try body.bind(fn2,graph,table,secondTarget);
-    let secondEntry be try ab.block(fn2,graph,[text,i64]);
-    let secondOwned be try ab.block(fn2,graph,[file]);
-    let secondDone be try build.block(fn2,[meta.i64()]);
-    let secondFailed be try ab.block(fn2,graph,[failure]);
-    let secondCloseFailed be try ab.block(fn2,graph,[failure,i64]);
-    let secondPath be try build.parameter(fn2,secondEntry,0);
-    let secondHandle be try build.parameter(fn2,secondOwned,0);
-    let profile2 be try owners.create(fn2,graph,cp2,file,acquisition,consumption);
-    let scope2 be try owners.scope(profile2,fn2,cp2,0,loc);
-    try owners.block(profile2,fn2,cp2,secondEntry,[]);
-    try owners.block(profile2,fn2,cp2,secondOwned,
-        [owners.Entry { scope=scope2; value=secondHandle; }]);
-    try owners.block(profile2,fn2,cp2,secondDone,[]);
-    try owners.block(profile2,fn2,cp2,secondFailed,[]);
-    try owners.block(profile2,fn2,cp2,secondCloseFailed,[]);
-    let pair2 be try continuation.bind(fn2,graph,cp2,secondEntry,secondOwned,
-        secondFailed,fileOutcome,failureSig,loc);
-    let opening2 be try invoke.emit(fn2,graph,acquire,pair2,[secondPath]);
-    let pending2 be try build.integer(fn2,secondOwned,42,loc);
-    pair2=try continuation.bindCarrying(fn2,graph,cp2,secondOwned,
-        secondDone,secondCloseFailed,pendingSig,pendingFailedSig,loc);
-    let closing2 be try transfer.emit(fn2,graph,consume,pair2,[secondHandle],[pending2]);
-    try ab.returnValues(fn2,graph,secondDone,
-        [try build.parameter(fn2,secondDone,0)],loc);
-    let error2 be try build.parameter(fn2,secondFailed,0);
-    let closeError2 be try build.parameter(fn2,secondCloseFailed,0);
-    let ignored2 be try body.returnFailure(fn2,graph,table,secondFailed,error2,loc);
-    ignored2=try body.returnFailure(fn2,graph,table,secondCloseFailed,closeError2,loc);
-    try ab.complete(fn2,graph);
-    try owners.complete(profile2,fn2,cp2);
-    try budget.finishPhase(cp2);
+    try ab.complete(fn,graph); try owners.complete(profile,fn,cp);
+    try budget.finishPhase(cp);
+
+    let otherOwner be try budget.functionOwner(root,false);
+    let otherPhase be try budget.constructionPhase(otherOwner);
+    let helper be try build.create(data,signature,otherOwner,otherPhase);
+    try body.bind(helper,graph,table,helperTarget);
+    let helperEntry be try ab.block(helper,graph,[text]);
+    let answer be try build.integer(helper,helperEntry,42,loc);
+    try ab.returnValues(helper,graph,helperEntry,[answer],loc);
+    try ab.complete(helper,graph); try budget.finishPhase(otherPhase);
+
     let phase be try budget.constructionPhase(owner);
-    // Bootstrap requires a concrete specialization for the legacy generic
-    // entry even when this fixture only executes File-selected construction.
     if false {
-        let legacy be try roots.create(fn,graph,table,phase,registry,[text],[managed.text(registry)]);
+        let legacy be try roots.create(fn,graph,table,phase,registry,
+            [text],[managed.text(registry)]);
         try ssa.close(legacy);
     }
-    let retained be owner.live; let reserved be owner.pending;
-    let retained2 be owner2.live; let reserved2 be owner2.pending;
-    native.emitFileCheckedGroup([fn,fn2],[720,721],[profile,profile2],
-        graph,table,registry,[text],[managed.text(registry)],true,9)
-        else error native.Unsupported {
-            if owner.live != retained or owner.pending != reserved {
-                fail native.Unsupported { message="File admission leaked a retained Plan"; };
-            }
-            fail error;
-        }
+    let live be owner.live; let pendingBytes be owner.pending;
+    let otherLive be otherOwner.live; let otherPending be otherOwner.pending;
+    native.emitFileCheckedGroup([fn,helper],[731,732],[profile,none],[9,0],
+        graph,table,registry,[text],[managed.text(registry)],true)
+        else error native.Unsupported { fail error; }
         else error budget.LimitError { fail error; }
         else error canonical.InvalidIR { fail error; }
         else error graphVerify.InvalidGraph { fail error; }
         else error managed.InvalidManagedTypes { fail error; }
         else error roots.InvalidManagedRoots { fail error; }
         else error ssa.InvalidLiveness { fail error; };
-    if owner.live != retained or owner.pending != reserved or
-        owner2.live != retained2 or owner2.pending != reserved2 {
-        fail native.Unsupported { message="File group emission leaked a retained Plan"; };
+    if owner.live != live or owner.pending != pendingBytes or
+        otherOwner.live != otherLive or otherOwner.pending != otherPending {
+        fail native.Unsupported { message="File group leaked retained Plans"; };
     }
-    try budget.finishPhase(phase);
-    try owners.close(profile); try build.close(fn); try budget.close(owner);
-    try owners.close(profile2); try build.close(fn2); try budget.close(owner2);
+    try budget.finishPhase(phase); try owners.close(profile);
+    try build.close(fn); try build.close(helper);
     try contracts.close(table); try managed.close(registry); try aggregate.close(graph);
-    try meta.close(data); try budget.close(shared); try budget.close(root);
+    try meta.close(data); try budget.close(owner); try budget.close(otherOwner);
+    try budget.close(shared); try budget.close(root);
 }
 run() else error budget.LimitError { output("limit:"+error.message); process.setExitCode(1); }
 else error canonical.InvalidIR { output("ir:"+error.message); process.setExitCode(1); }

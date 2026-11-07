@@ -494,6 +494,32 @@ _start:
                     asm+caller,runtime=runtime)
                 self.assertEqual((run.returncode,run.stdout,run.stderr),(0,b'',b''))
 
+    def test_file_owning_closed_checked_group_preserves_owner_across_child(self):
+        source = (ROOT/'tests/fixtures/u2_function_file_group.eri').read_text()
+        generated = self.generator('file-closed-group',source)
+        self.assertEqual((generated.returncode,generated.stderr),(0,''),generated.stdout[-2600:])
+        asm = generated.stdout
+        self.assertIn('erist_u2_rooted_function_731:',asm)
+        self.assertIn('erist_u2_rooted_function_732:',asm)
+        self.assertIn('call erist_u2_rooted_function_732',asm)
+        self.assertIn('call erist_u2_file_731_poison_',asm)
+        path = self.directory/'file-group.txt'
+        path.write_text('native')
+        for fail_close in (False,True):
+            with self.subTest(close_failure=fail_close):
+                runtime = resource.close_failures(self.runtime) if fail_close else self.runtime
+                runtime = runtime.replace('.Lr_close:\n',
+                    '.Lr_close:\n    incq .Lfile_group_closes(%rip)\n',1)
+                caller = self.caller(path,fail_close).replace(
+                    'call erist_u2_rooted_function_718',
+                    'call erist_u2_rooted_function_731',1)
+                caller = caller.replace('    call .Lresource_finish',
+                    '    cmpq $1,.Lfile_group_closes(%rip)\n'
+                    '    jne .Lresource_test_fail\n    call .Lresource_finish',1)
+                run = self.run_probe('file-group-'+str(fail_close),
+                    asm+caller+'\n.bss\n.Lfile_group_closes: .quad 0\n',runtime=runtime)
+                self.assertEqual((run.returncode,run.stdout,run.stderr),(0,b'',b''))
+
     def test_unknown_binding_and_stale_owner_refuse_before_output(self):
         for name, source in (
             ('symbol', self.source().replace('u2.file.openRead.v1', 'u2.file.openFake.v1')),

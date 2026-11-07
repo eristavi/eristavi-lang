@@ -773,7 +773,9 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
                             }
                             v=v+1;
                         }
-                        importKind=0; importOperation=0;
+                        // Preserve the group label selected above. Zero
+                        // retains the exact self-recursive fallback.
+                        importKind=0;
                     }
                 } else {
                 if groupTargets.count == 0 {
@@ -1425,4 +1427,111 @@ public function emitFileCheckedPrimary(routine identity build.Function,
         else error ssa.InvalidLiveness { try ssa.close(plan); fail error; }
         else error Unsupported { try ssa.close(plan); fail error; };
     try ssa.close(plan);
+}
+
+// Closed, exact-FunctionId checked group containing one or more File owners.
+// All functions and File profiles are independently admitted before output.
+// The original no-File emitCheckedGroup remains unchanged.
+function compileFileGroupMember(plans,phases,routines,profiles,runtimeTypes,member Int,
+    graph identity aggregate.Registry,table identity contracts.Registry,
+    registry identity managed.Registry,carriers,descriptors,forceGC Bool,
+    targets,labels,emitOutput Bool)
+    fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,Unsupported {
+    let routine identity build.Function be routines[member];
+    let profile maybe identity owners.Profile be profiles[member];
+    compile(plans[member],routine,graph,table,phases[member],registry,
+        carriers,descriptors,forceGC,labels[member],routine.definedTarget,true,
+        targets,labels,emitOutput,profile,runtimeTypes[member],none)
+        else error budget.LimitError { try closeGroup(plans,phases); fail error; }
+        else error canonical.InvalidIR { try closeGroup(plans,phases); fail error; }
+        else error ssa.InvalidLiveness { try closeGroup(plans,phases); fail error; }
+        else error Unsupported { try closeGroup(plans,phases); fail error; };
+}
+public function emitFileCheckedGroup(routines,labels,profiles,runtimeTypes,
+    graph identity aggregate.Registry,table identity contracts.Registry,
+    registry identity managed.Registry,carriers,descriptors,forceGC Bool)
+    fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,
+        roots.InvalidManagedRoots,managed.InvalidManagedTypes,
+        graphVerify.InvalidGraph,Unsupported {
+    try require(routines.count >= 2 and routines.count <= 16 and
+        labels.count == routines.count and profiles.count == routines.count and
+        runtimeTypes.count == routines.count,
+        "invalid checked File Function group size and profile shape");
+    let targets be []; let valueCount be 0; let instructionCount be 0;
+    let member be 0; let fileMembers be 0;
+    while member < routines.count {
+        let routine identity build.Function be routines[member];
+        try require(routine.metadata.key == table.metadataKey and
+            routine.definedTarget >= 1 and
+            labels[member] >= 1 and labels[member] <= 2147483647,
+            "foreign or unbound File Function group member/label");
+        let earlier be 0;
+        while earlier < member {
+            try require(targets[earlier] != routine.definedTarget and
+                labels[earlier] != labels[member],
+                "duplicate File Function group target or label");
+            earlier=earlier+1;
+        }
+        try require(routine.values.length >= 0 and routine.values.length <= 1024 and
+            routine.instructions.length >= 0 and routine.instructions.length <= 5120,
+            "invalid File Function group member counts");
+        valueCount=valueCount+routine.values.length/4;
+        instructionCount=instructionCount+routine.instructions.length/10;
+        try require(valueCount <= 1024 and instructionCount <= 2048,
+            "File Function group exceeds bounded admission");
+        let profile maybe identity owners.Profile be profiles[member];
+        if profile != none {
+            try require(runtimeTypes[member] >= 6 and
+                runtimeTypes[member] <= 2147483647,
+                "File Function group missing resource runtime binding");
+            fileMembers=fileMembers+1;
+        } else {
+            try require(runtimeTypes[member] == 0,
+                "non-owning Function has a spurious File runtime binding");
+        }
+        targets.add(routine.definedTarget); member=member+1;
+    }
+    try require(fileMembers >= 1,"File Function group requires an owning member");
+    let plans be []; let phases be [];
+    member=0;
+    while member < routines.count {
+        let routine identity build.Function be routines[member];
+        let phase be budget.verificationPhase(routine.owner)
+            else error budget.LimitError { try closeGroup(plans,phases); fail error; };
+        phases.add(phase);
+        let types be roots.selectTypes(routine,graph,table,phase,registry,carriers,descriptors)
+            else error budget.LimitError { try closeGroup(plans,phases); fail error; }
+            else error canonical.InvalidIR { try closeGroup(plans,phases); fail error; }
+            else error roots.InvalidManagedRoots { try closeGroup(plans,phases); fail error; }
+            else error managed.InvalidManagedTypes { try closeGroup(plans,phases); fail error; }
+            else error graphVerify.InvalidGraph { try closeGroup(plans,phases); fail error; };
+        let profile maybe identity owners.Profile be profiles[member];
+        if profile != none {
+            let i be 0;
+            while i < types.count {
+                let carrier aggregate.TypeId be types[i];
+                try require(carrier.index != profile.handle.index,
+                    "File carrier overlaps tracked managed/failure group type");
+                i=i+1;
+            }
+            types.add(profile.handle);
+        }
+        let plan be ssa.create(routine,graph,table,phase,types)
+            else error budget.LimitError { try closeGroup(plans,phases); fail error; }
+            else error canonical.InvalidIR { try closeGroup(plans,phases); fail error; }
+            else error ssa.InvalidLiveness { try closeGroup(plans,phases); fail error; };
+        plans.add(plan);
+        try compileFileGroupMember(plans,phases,routines,profiles,runtimeTypes,
+            member,graph,table,registry,carriers,descriptors,forceGC,
+            targets,labels,false);
+        member=member+1;
+    }
+    member=0;
+    while member < routines.count {
+        try compileFileGroupMember(plans,phases,routines,profiles,runtimeTypes,
+            member,graph,table,registry,carriers,descriptors,forceGC,
+            targets,labels,true);
+        member=member+1;
+    }
+    try closeGroup(plans,phases);
 }
