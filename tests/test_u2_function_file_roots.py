@@ -13,6 +13,7 @@ import tempfile
 import unittest
 
 from compiler.erist.cli import build_native
+import test_freestanding_resource_values as resource
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -22,6 +23,8 @@ ROOT = Path(__file__).resolve().parents[1]
     "private x86-64 File roots require Linux x86-64",
 )
 class U2WholeFunctionFileRootTests(unittest.TestCase):
+    setUpClass=classmethod(resource.FreestandingResourceValueTests.setUpClass.__func__)
+    run_probe=resource.FreestandingResourceValueTests.run_probe
     def test_verified_lexical_owner_roots_cover_every_original_block_and_consumption(self):
         source = (ROOT / "tests/fixtures/u2_scoped_owners.eri").read_text(
             encoding="utf-8")
@@ -109,6 +112,145 @@ class U2WholeFunctionFileRootTests(unittest.TestCase):
                 check=True, timeout=60).stdout
             self.assertIn(base + "_publish_3", symbols)
             self.assertIn(base + "_poison_", symbols)
+            # Execute real owned File.open/close with actual machine-produced
+            # owner slots, live class-1 roots, forced collectors and post-scope
+            # reclamation. These are test-controlled canonical transitions,
+            # not automatic whole-Function File lowering.
+            paths = [self.directory / ("u2-owned-file-" + str(i) + ".txt")
+                     for i in range(2)]
+            for file in paths:
+                file.write_text("rooted", encoding="utf-8")
+            data = ""
+            for index, file in enumerate(paths):
+                encoded = str(file).encode("utf-8")
+                data += (".Lfile" + str(index) + ":\n.byte " +
+                         ",".join(str(byte) for byte in encoded) +
+                         "\n.Lfile" + str(index) + "_end:\n")
+            test_asm = r"""
+.text
+.globl _start
+_start:
+    subq $176,%rsp
+    movq $0,136(%rsp)
+    call evn_scope_enter
+    movq %rax,152(%rsp)
+    movq %rax,%rdi
+    leaq 112(%rsp),%rsi
+    call erist_u2_file_717_bind
+    # One registered class-5 root for the checked cleanup accumulator.
+    call evn_scope_enter
+    movq %rax,160(%rsp)
+    movq %rax,%rdi
+    leaq 136(%rsp),%rsi
+    leaq .Lu2_failure_classes(%rip),%rdx
+    movl $1,%ecx
+    call evn_bind_roots
+    call evn_empty_failure
+    movq %rax,136(%rsp)
+    # Block 1 acquires the outer File and transitions to owner block 2.
+    leaq .Lfile0(%rip),%rdi
+    movl $(.Lfile0_end-.Lfile0),%esi
+    call evn_text
+    movq %rax,%rsi
+    movl $9,%edi
+    xorl %edx,%edx
+    call erist_rt_file_open
+    movq %rax,0(%rsp)
+    movq %rsp,%rdi
+    leaq 112(%rsp),%rsi
+    call erist_u2_file_717_publish_2
+    xorl %edi,%edi
+    call erist_rt_slots_collect
+    call erist_rt_text_collect
+    call erist_rt_open_resources
+    cmpq $1,%rax
+    jne .Lresource_test_fail
+    # Block 2 acquires a nested File, moves the outer owner to block 3.
+    movq 0(%rsp),%rax
+    movq %rax,16(%rsp)
+    movq $0,0(%rsp)
+    leaq .Lfile1(%rip),%rdi
+    movl $(.Lfile1_end-.Lfile1),%esi
+    call evn_text
+    movq %rax,%rsi
+    movl $9,%edi
+    xorl %edx,%edx
+    call erist_rt_file_open
+    movq %rax,8(%rsp)
+    movq %rsp,%rdi
+    leaq 112(%rsp),%rsi
+    call erist_u2_file_717_publish_3
+    xorl %edi,%edi
+    call erist_rt_slots_collect
+    call erist_rt_text_collect
+    call erist_rt_open_resources
+    cmpq $2,%rax
+    jne .Lresource_test_fail
+    # The inner original checked File.close consumes its canonical handle
+    # and registered innermost lexical root before exiting block 3.
+    movq 8(%rsp),%rdi
+    movq 136(%rsp),%rsi
+    call evn_cleanup_accumulate
+    movq %rsp,%rdi
+    leaq 112(%rsp),%rsi
+    call erist_u2_file_717_poison___INNER__
+    movq 16(%rsp),%rax
+    movq %rax,24(%rsp)
+    movq $0,16(%rsp)
+    movq %rsp,%rdi
+    leaq 112(%rsp),%rsi
+    call erist_u2_file_717_publish_5
+    xorl %edi,%edi
+    call erist_rt_slots_collect
+    call erist_rt_text_collect
+    call erist_rt_open_resources
+    cmpq $1,%rax
+    jne .Lresource_test_fail
+    # The final checked File.close consumes the remaining outer owner.
+    movq 24(%rsp),%rdi
+    movq 136(%rsp),%rsi
+    call evn_cleanup_accumulate
+    movq %rsp,%rdi
+    leaq 112(%rsp),%rsi
+    call erist_u2_file_717_poison___OUTER__
+    movq %rsp,%rdi
+    leaq 112(%rsp),%rsi
+    call erist_u2_file_717_publish_7
+    movq 136(%rsp),%rax
+    cmpq $0,(%rax)
+    jne .Lresource_test_fail
+    xorl %edi,%edi
+    call erist_rt_slots_collect
+    call erist_rt_text_collect
+    call erist_rt_open_resources
+    testq %rax,%rax
+    jne .Lresource_test_fail
+    # Leave the failure-root scope followed by the File owner scope.
+    movq $0,136(%rsp)
+    call evn_void
+    movq %rax,%rsi
+    movq 160(%rsp),%rdi
+    call evn_scope_leave
+    call evn_void
+    movq %rax,%rsi
+    movq 152(%rsp),%rdi
+    call evn_scope_leave
+    addq $176,%rsp
+    call .Lresource_finish
+    xorl %edi,%edi
+    jmp erist_rt_exit
+.section .rodata
+.Lu2_failure_classes:
+.byte 5
+"""
+            test_asm = (test_asm.replace("__INNER__", closes[0])
+                        .replace("__OUTER__", closes[1]))
+            execution = self.run_probe(
+                "u2-full-function-file-owner-roots",
+                emitted + test_asm + data + resource.FINISH)
+            self.assertEqual(
+                (execution.returncode, execution.stdout, execution.stderr),
+                (0, b"", b""))
 
 
 if __name__ == "__main__":
