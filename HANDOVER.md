@@ -1,157 +1,97 @@
 # Eristavi compiler — current handover
 
-Updated 7 November 2026 (Asia/Nicosia). Closed checked-call group candidate under validation; U2 functionality and final qualification pending.
+Updated 7 November 2026 (Asia/Nicosia). Checked Function group batch focused/smoke green;
+U2 functionality and final qualification still open.
 Branch: `compiler/u2-cleanup-foundation-20261102`; [PR #111](https://github.com/eristavi/eristavi-lang/pull/111) remains DRAFT; #74 remains OPEN.
-Original checked-return checkpoint: `3100dc8e82f8e496d61fd38d0cdab5311416bd36`.
-Prior publication implementation: `e40a64b3c8b7774dc68d3220f6b208ee38854ca6`. Earlier exact diagnostic: `a51182e663e645777186e9f6551bdc7081f36916`.
-Latest implementation/test commit: `4b71966deb60da883b325936987b7f558ac7fe23` — focused and smoke green, not U2-complete.
+Implementation: `5dcc85f69ac458f83730957a9defd4b2fa3d0d7e`.
+Corrected exact test checkpoint: `43d56f2f526fd57db5d790413217de439858b7a5`.
 No final four-platform qualification or merge. Optimization #51 remains PAUSED.
 
-## Active development — 7 November 2026
+## Latest verified development checkpoint — 7 November 2026
 
-Authorized batch: checked calls between distinct defined Functions and mutual
-recursion, preserving exact managed/failure roots and independent evidence.
-Current implementation `5dcc85f69ac458f83730957a9defd4b2fa3d0d7e` (following
-initial candidate `c61afa9`) extends the existing emitter with bounded `emitCheckedGroup`; contract:
-`docs/architecture/UIR_U2_CHECKED_CALL_GROUPS.md`. Further local refinements and
-11 focused tests are under validation; not final accepted evidence. The direct
-generator parity caller now retires its external ingress failure root after the
-first generated root publication, matching the established mutual-call probe.
+**Checked calls between different defined Functions and mutual recursion are
+implemented and focused-tested within the existing bounded native profile.**
+`emitCheckedGroup` resolves original opcode-46 FunctionIds to exact bound bodies;
+different normal signatures and caller-rooted managed/failure results reuse the
+existing canonical CFG, SSA and owned runtime. This does not complete all U2.
 
-Preliminary mutual/handler/two-managed-result/negative checks passed; differing
-normal result layouts, ordered secondary failures, missing sibling handoffs,
-work/capacity-refusal reclamation and actual 592-byte/frame stack probe passed.
-Hosted candidate legacy checks: managed/checked **18/18 pass** and word-path
-prerequisite **1/1 pass**, run #42348095750; generator 107.514 s under unchanged
-120 s watchdog. Existing Text/List integration #42348095794 also SUCCESS.
-These hosted results cover `c61afa9`, not later implementation changes.
+[Focused run #42349932276](https://github.com/eristavi/eristavi-lang/actions/runs/42349932276)
+**29/29 PASS**, 651.252 s, on exact checkpoint `43d56f2`, plus word-path
+prerequisite **1/1 PASS**. The 11 new group methods cover mutual depths
+0/1/5/32/64 under forced GC, cross-member recovery, swapped normal result layouts,
+two managed results, List snapshot independence, complete ordered saved failure
+context, missing sibling roots, 14 target/type/count/dead-origin refusals, later-
+member budget-refusal cleanup and actual stack measurements. Independent frozen
+mutual source compares Stage-0/current C-native/new native outcomes.
 
-New group generator watchdog attempts timed out at 120 s; local baseline on
-unchanged `6fe0024` also times out here. New diagnostic phase trace nevertheless
-identified redundant full SSA Plan construction (~27 s/member per construction).
-Local refinement retains existing immutable Plans for a bounded group transaction,
-then freshly rederives/compares each with full `ssa.verifyPublications` before
-emitting that body. No verified flag, new IR or bypass. Unused preflight machine
-publication production was removed. Cleanup must release all retained Plans and
-phases on completion or a later-member failure. Native frame/root ABI unchanged.
-The refined retained-plan path passes both the new List snapshot/GC execution
-and later-member work/capacity-refusal reclamation checks (2/2). A complete
-11-method focused run and exact-source hosted smoke are now running/pending.
-Changed-input bootstrap C ASan/UBSan **4/4 PASS**, 84.670 s, `-O0`,
-`detect_leaks=0`, halt-on-error; this does not instrument emitted owned assembly.
-The local focused suite passed 10/11 methods; only its owned generator watchdog
-remained open (unchanged baseline also times out locally). Hosted #42349153243
-passed **28/29 methods**: legacy owned generator **76.004 s**, new group owned
-generator **62.882 s**, both below 120 s. The remaining failure was the C comparison
-fixture missing an existing concrete scalar-edge specialization (`checkEdge`).
-Restore the same unreachable `build.jump` specialization used by the established
-fixtures; a fast C-only build/emission now PASSES (17,007 emitted bytes). C fixture
-compilation now precedes the expensive owned generator. No production code or
-watchdog change. Full corrected exact-source hosted checks remain pending. The old single-body entry remains direct rather
-than routing through a new generic wrapper, preserving bootstrap specialization.
-Local baseline timeout is recorded as an environment limit, not a new regression;
-its exact hosted counterpart passed on `c61afa9`.
+Uninstrumented owned/C generators emit **byte-identical assembly**; static ELF,
+no loader/undefined symbols/non-executable stack and native normal/failure
+execution all pass. Existing self-recursive generator: **103.728 s**; new direct
+group generator: **101.624 s**, both within unchanged **120 s** watchdog. The direct
+fixture retains the established scalar edge specialization needed by bootstrap C;
+its C build runs first to fail fast. No test was removed or timeout raised.
 
-Preserve `4b71966` below as the previous verified implementation until new gates
-pass. PR #111 remains DRAFT; #74 OPEN. No final matrix, merge or #51 restart.
-The user requires this batch to stay within a five-hour session budget; reserve
-time for exact-source testing, publishing code/evidence and this handover.
+[Linux smoke #42349932257](https://github.com/eristavi/eristavi-lang/actions/runs/42349932257)
+**170 run / 167 passed / 0 failed / 3 intentional opt-in skips**, 850.922 s,
+on exact checkpoint `43d56f2`; scope/patch SUCCESS. Full four-platform matrix
+SKIPPED, not qualified. Both generators also passed within the unchanged watchdog
+in this smoke (legacy 78.363 s, group 74.805 s). No full completed-batch release
+qualification, production promotion or merge is claimed.
 
-## Previous verified development checkpoint — 6 November 2026
+Bootstrap C ASan/UBSan: **4/4 selected methods PASS**, 84.670 s, plus corrected
+C direct-generator probe PASS; `-O0`, halt-on-error, `detect_leaks=0`. This does
+not sanitize emitted assembly or qualify LSan. Actual mutual-fixture Function
+stack: **592 bytes/frame**, 38,480 bytes at depth 64; excludes runtime/collector
+helper stack and RSS. Native post-scope reclamation and existing charged-owner
+work/capacity refusal checks pass. Local owned generator watchdogs also fail on
+unchanged prior `6fe0024`; retained diagnostic failures are not green evidence.
+Hosted exact-source runs above are the recorded development gate.
 
-**The owned/C generator watchdog blocker is RESOLVED for the focused
-checked Function fixture.** Implementation/tests latest exact head
-`4b71966deb60da883b325936987b7f558ac7fe23`, tested on
-[managed Function run #42272620378](https://github.com/eristavi/eristavi-lang/actions/runs/42272620378):
-**18/18 PASS**, including original uninstrumented, statically linked,
-byte-identical owned-vs-C generated assembly and depth-32 forced-GC
-checked recursion. The owned source generator took **98.399 seconds**
-within the unchanged **120-second watchdog**, with original malformed
-root/refusal cases still tested. A separate prerequisite
-`test_u1_words_path` passed **1/1 on both bootstrap C and owned
-runtimes**, including exact missing-path depth and work-budget failure
-charges. All checked/managed class tests and the dedicated radix gate
-completed successfully; no test was deleted or timeout raised.
+The group is capped at **16 members / 1024 total SSA values / 2048 instructions**;
+existing per-body 8-input/2-result/64-root/64-block/256-value/512-instruction limits
+remain. Initial checked groups use the caller's one exact saved-context failure
+carrier. Other call combinations, new failure construction, nested producers and
+full File owner/cleanup integration remain open. Plans are privately retained
+only for this bounded transaction, remain charged to their owners and are freshly
+rederived/compared by full `ssa.verifyPublications` before each body's output.
+All retained Plans/phases close on completion and any later-member refusal.
+No cached verified flag, new IR layer, public ABI or production default change.
 
-[Linux smoke #42272620164](https://github.com/eristavi/eristavi-lang/actions/runs/42272620164)
-also **PASS: 159 run / 156 passed / 3 intentionally skipped** on the
-exact implementation, with patch/scope SUCCESS; the full four-platform
-matrix was **SKIPPED, not qualified**. Earlier
-[Text/List #42270143006](https://github.com/eristavi/eristavi-lang/actions/runs/42270143006)
-**12/12 PASS** on the previous production source before the word-reader
-change; Linux smoke covers current Text/List behavior. Original
-U2 checked Function `roots.create` proof and independent final
-`ssa.verifyPublications` proof remain; private checked emission
-no longer repeats the intermediate full plan reconstruction.
-Successful radix `words.get` reads now charge the same seven work units
-in one bounded call when complete/affordable, with original per-level
-fallback for invalid backing or limited budget. No public source/ABI,
-allocator, GC or frozen semantic change. **This is a passing focused
-candidate, NOT complete #74 acceptance or production qualification.**
+**Next step — do not repeat the completed call-group work:** integrate original
+whole-Function File acquisition/consumption, owner proof, reverse exactly-once
+cleanup, pending returns and every normal/checked/handler exit. Complete the
+remaining call combinations and managed/failure constructors, combined roots,
+independent/physical/fault evidence; reconcile main and perform final exact-source
+four-platform/completed-batch qualification only for the coherent finished U2.
+Keep #111 DRAFT and #74 OPEN until all eight DoD gates pass. No justified U2 %.
 
-**Current next step — implementation (do not rerun solved stages):**
-complete GENERAL whole-Function checked UIR integration beyond bounded
-self-recursion: arbitrary and mutual calls; original typed
-`File` acquisition, move/consume and exactly-once reverse cleanup on
-every normal/checked/handler exit; nested managed List/aggregate value
-copy/identity and new typed FailureContext construction; complete
-class-1/class-5 roots and root/owner/fault negatives. Then run broad
-independent Stage-0/current-native/new-native source-origin outcome
-comparisons; allocator/sanitizer/physical backing, traffic, RSS, GC-pause
-and fault-injection evidence under existing budgets. Reconcile main
-(conflicts previously seen in `HANDOVER.md` and checked-chain
-architecture; inspect current merge base), qualify the single final
-implementation on four platforms and completed-batch gates, then
-merge PR #111 / close #74 **only when its eight DoD conditions pass**.
-There is no justified % completion claim while these functional gates
-remain open. Separate performance #51 remains PAUSED.
-
-**Release state:** PR #111 DRAFT, unmerged and currently GitHub reports
-`mergeable=false`; issue #74 OPEN and eight top-level DoD checkboxes
-unchecked. Keep the production default and 32-byte ABI unchanged.
-The final full owned-compiler self-build is explicitly excluded without
-authorization. This documentation-only checkpoint follows the exact
-`4b71966` passing implementation; do not call a docs-only commit a
-new tested compiler.
-
-Targeted reproduction:
-
-```sh
-PYTHONPATH=tests:. python -u -m unittest -v test_u2_function_checked_native.U2FunctionCheckedNativeTests.test_owned_and_c_bootstrap_generators_emit_identical_checked_function
-```
-
-This builds an individual source generator with the owned resource runtime,
-requires byte-identical assembly to the C generator, then executes the generated
-checked Function at depth 32. Retain static ELF, no undefined symbols/loader and
-non-executable-stack checks. Keep the test and its gate; do not skip it or silently
-increase the timeout. Local `ptrace` was denied (EPERM). No measured speedup is
-established. This probe is not a full owned-compiler self-build.
-
-The solved checked/managed classes (18 methods) and latest Linux smoke
-are verified on `4b71966`; do not repeat them without changed relevant inputs.
-After completing the remaining generalized U2 semantics, validate new
-SSA/root/owner/registry negatives, changed-input ASan/UBSan and physical/fault
-evidence; then run the full four-platform and completed-batch qualification
-once for the coherent final revision. Existing sanitizer/physical evidence is
-only reusable within its documented older source scope.
+[Contract](docs/architecture/UIR_U2_CHECKED_CALL_GROUPS.md) ·
+[Raw evidence, input hashes and limits](docs/evidence/2026-11-07/u2-checked-groups/README.md) ·
+[Superseded development checkpoints](docs/history/2026-11-07/u2-checked-group-development.md).
+The user required this batch to stay within a five-hour session budget. Do not
+run experimental full owned-compiler self-builds; separate #51 remains paused.
 
 ## Implemented scope — reuse rather than repeat
 
 | Component | Current boundary |
 | --- | --- |
 | Canonical scalar CFG | Original Function reverified including dead blocks, simultaneous block arguments, i64/pred, branch/switch/backedges/return; bounded private x86-64 backend. |
-| Managed roots and calls | Exact per-ValueId entry/before/after liveness; class-1 Text/List/identity roots, loops, nonfallible self calls and up to two caller-rooted results. Checked `emitChecked` adds opcode-46 self-invoke normal/failure CFG, exact negative outcome ordinals/carried SSA and class-5 saved-failure roots. Child publishes into registered caller roots before retiring its scope. No arbitrary/mutual targets or full File-call integration. |
+| Managed roots and calls | Exact per-ValueId entry/before/after liveness; class-1 Text/List/identity, loops, nonfallible self calls and up to two caller-rooted results. Checked `emitCheckedGroup` adds exact different/mutually recursive defined targets, original normal/failure edges, negative outcome ordinals/carried SSA and class-5 saved contexts. Child publishes into registered caller roots before scope retirement. Other call combinations/full File integration remain open. |
 | Checked return contract | `u2_function_contract.eri` binds exact frozen FunctionId/signatures; optional opcode 47 `return.failure`. Fresh verifier checks binding/type/arity/attributes/origin, including dead blocks; legacy profiles refuse it. Scoped owners must be empty on both return kinds. Zero, one and two normal results supported; no fake Void SSA. |
 | Text / Unicode17 | Established 12 imports: scalar construction, immutable concat/copy/equality, views/counts/indexes, NFC and collection; mixed Text/List loops. Unicode17 remains frozen. |
 | List<i64> | Empty/copy/append/count/get/replace/collect with rooted snapshots/boxes and original source/LocId bounds faults, including negative/end bounds. Nested/non-i64 producers remain open. |
 | File cleanup / failures | Checked typed edges, owner prefixes, reverse exactly-once closes, primary/ordered-secondary failure roots; bounded two-stage native chain and recursive runtime probes. File paths remain separate adapters. Whole-Function checked recursion propagates existing saved contexts; general context construction and complete handler/resource integration remain open. |
 | Private physical schema | Function gained `definedTarget` (default zero): **18** owned graph cells, previously 17. Physical observer and independent pin updated; capacity/traffic budgets unchanged. |
-| Publication verification change (before newest producer revision) | `ssa.verifyPublications` freshly verifies the full plan once, then all ordered IDs and entry/before/after bits, including dead code; replaces repeated full per-instruction verification. Public `requirePublished` unchanged. `ssa.verify` closes its derived plan on comparison-work refusal. This change is not fully requalified and did not resolve the observed timeout. |
+| Publication proof | `ssa.verifyPublications` freshly verifies the full plan and all ordered IDs/entry/before/after bits, including dead code, before each body's output. Checked groups reuse private immutable Plans within one bounded transaction, never a verified flag. Derived plans close on comparison-work refusal; all group Plans/phases close on any failure. |
 
 Contracts: [checked Function returns](docs/architecture/UIR_U2_CHECKED_FUNCTION_RETURNS.md),
 [managed recursion](docs/architecture/UIR_U2_FUNCTION_MANAGED_RECURSION.md).
 
 ## Evidence and limits
+
+The current 7 November gate is recorded above and in the linked checked-group
+report. The scoped 6 November records below are historical inputs, not automatic
+qualification of later changes.
 
 [Raw logs and source hashes](docs/evidence/2026-11-06/u2-checked-function-stop-checkpoint.md)
 retain detailed measurements and earlier failed attempts. Never treat older passes
@@ -164,14 +104,16 @@ as validation of later implementation changes.
 | Owner physical/foundation/cleanup guards | **5/5 pass**, 52.557 s; actual backing/traffic/reclamation, 18-field schema and cleanup bypass refusal. Relevant builder/observer source unchanged since that run. |
 | Publication corruption/refusal matrix after batching/fix | **1/1 pass**, 10.573 s: duplicate/foreign IDs, missing/dead/nonbinary flags, dead-entry corruption, forged backing, stale revision, extra rows and budget-refusal reclamation. Existing public SSA liveness negative also passed. |
 | Owned/C comparison | **PASS on `4b71966`**: full focused **18/18**, 98.399 s generator (120 s limit), byte-identical C/owned assembly, static ELF checks and depth-32 checked recursion/GC, [#42272620378](https://github.com/eristavi/eristavi-lang/actions/runs/42272620378). |
-| Latest Linux smoke | **`4b71966` 159 run / 156 pass / 0 fail / 3 skips**, [#42272620164](https://github.com/eristavi/eristavi-lang/actions/runs/42272620164); full cross-platform matrix intentionally skipped. |
+| 6 November Linux smoke | **`4b71966` 159 run / 156 pass / 0 fail / 3 skips**, [#42272620164](https://github.com/eristavi/eristavi-lang/actions/runs/42272620164); full cross-platform matrix intentionally skipped. |
 | Final acceptance | Four-platform full CI and completed-batch qualification **not performed** for current implementation. No merge, production promotion or public 32-byte ABI change. |
 
 ## Remaining before #74 can close
 
-1. Reuse *qualified focused evidence* for current checked self-invoke; integrate arbitrary/mutually recursive
-   targets, File acquisition/consumption, owner proof, reverse cleanup, pending
-   returns and all handler exits in original whole-Function lowering.
+1. Reuse the tested checked-group implementation; extend remaining call
+   combinations outside this profile (including nonfallible helper targets and
+   mixed failure carriers as required), and integrate File acquisition/consumption,
+   owner proof, reverse cleanup, pending returns and all handler exits in original
+   whole-Function lowering.
 2. Generalize typed managed constructors, nested List elements and aggregate
    make/get/set/copy, preserving ordinary snapshots versus explicit shared identity;
    construct new typed FailureContexts. Boxed ingress alone is insufficient.
@@ -194,7 +136,7 @@ as validation of later implementation changes.
 | --- | --- |
 | U1a | Accepted within documented scalar/SSA/call/Float/provenance/physical scope; #77 closed, PR #105 merged. |
 | U1b | Bounded immutable aggregates/reference linked execution accepted; #73 closed, PR #106 merged. |
-| U2 | Bounded checked self-recursion and resource word-read optimization focused/smoke green; broader U2 semantics, deep proof and final qualification unaccepted; #74 open, #111 draft. |
+| U2 | Checked defined-call groups/mutual recursion focused and Linux smoke green. Remaining resource/managed semantics, deep proof and final qualification unaccepted; #74 open, #111 draft. |
 | U3 | Isolated Python shadow/planning foundation merged in #119; #75 open; production AST-to-owned-UIR integration unfinished. |
 | U4 | Initial parallel-move foundation in draft #120; #102 open; machine migration unfinished. |
 | Production | Existing frontend/default compiler and 32-byte ABI retained; latest recorded qualified optimization #110. |

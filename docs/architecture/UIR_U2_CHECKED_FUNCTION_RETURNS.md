@@ -28,6 +28,12 @@ fallible registry entry. The independent verifier rereads it even if revision
 and frozen backing are unchanged. Other transformation profiles reject bound
 fallible functions until they support the new contract explicitly.
 
+## Subsequent checked group extension
+
+The 7 November [closed checked Function group contract](UIR_U2_CHECKED_CALL_GROUPS.md)
+extends this opt-in profile to exact different targets and mutual recursion.
+The initial self-call entry and private frame/root ABI below remain unchanged.
+
 ## Initial native contract
 
 Extend the existing whole-Function emitter and SSA liveness, not the earlier
