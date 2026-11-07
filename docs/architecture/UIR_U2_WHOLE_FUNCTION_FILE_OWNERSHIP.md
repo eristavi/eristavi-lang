@@ -1,5 +1,30 @@
 # Whole-Function File ownership and native roots — U2 development gate
 
+## 7 November continuation: integrated nested owners and checked self-recursion
+
+**Current development state supersedes the one-owner limits below.** Original
+whole-Function emission now supports independently verified owner stacks of
+depth 1–8. Root vectors reserve exactly the verified maximum depth, emit matching
+class-1 entries, publish every surviving lexical owner at each original block
+entry and poison just the consumed inner handle/root after real close. The same
+emitter supports an exact checked self-call while the caller frame owns a File:
+owner proof prohibits passing a handle into the child; the caller retains its
+class-1 roots while the child acquires/closes its own resources. Dead incoming
+checked errors can be recovered and then cleaned up, while live unbound primary
+failure propagation stays refused.
+
+Native targeted 3/3 pass:
+[CI #42404765081](https://github.com/eristavi/eristavi-lang/actions/runs/42404765081),
+exact code/test tree `8e5c8bd8de09d46586934b28dad2f7ac6f1729c1`.
+Tests cover nested normal/failed paths, outer-prefix root refusal, forced GC,
+reverse exactly-once cleanup and owning self-recursion through depth 16 with
+injected close failures. They do not certify arbitrary File-owning checked
+groups, live-primary composition across arbitrary nested chains, managed generic
+constructors, broad physical/independent evidence or final four-platform CI.
+Existing single-owner explicitly bound primary composition still operates in
+its own bounded profile. No frozen ABI or default production behavior changed.
+
+
 Status: **partial, unqualified**; 7 November 2026. Implements an optional
 owner-verified root emitter on [draft PR #121](https://github.com/eristavi/eristavi-lang/pull/121)
 based on the active U2 draft PR #111. **Not the finished whole-Function File

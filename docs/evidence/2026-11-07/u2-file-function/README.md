@@ -157,3 +157,28 @@ Command: `PYTHONPATH=.:tests python -m unittest
 New primary owned/C generator parity, broad CI, nested general Function ownership
 and release qualification remain pending. Earlier parity does not qualify this
 new revision. No broad/self-build/qualification workflow manually initiated.
+
+## Native nested-owner and owning-recursion continuation
+
+**Exact code/test tree** `8e5c8bd8de09d46586934b28dad2f7ac6f1729c1`
+after the fixture-only typed transferred-failure correction, nonshadowing
+pre-0.1 local correction and aggregate-aware checked-recovery edge builder.
+
+[Focused GitHub CI #42404765081](https://github.com/eristavi/eristavi-lang/actions/runs/42404765081):
+**3 tests / 3 pass / 0 fail / 0 skip, 51.554 s** on Linux x86-64
+Clang with no changed watchdog/assertions. All three tests executed:
+- `test_nested_lexical_file_owners_and_recovering_handlers`: two nested
+  owners, successful and failing acquisitions/closes, saved outer root,
+  forced GC, missing-owner hard rejection
+- `test_generated_acquire_close_failure_handler_and_reclamation`: unchanged
+  single-owner success, checked failure/recovery, cleanup and GC regression
+- `test_checked_file_owning_self_recursion_retains_each_frame_and_closes`:
+  self-recursive File-owning frames depth 0/1/4/16, close failures and full
+  no-open-resource check
+
+Previous CI attempts [#42403907261](https://github.com/eristavi/eristavi-lang/actions/runs/42403907261)
+and [#42404551595](https://github.com/eristavi/eristavi-lang/actions/runs/42404551595)
+initially failed on corrected fixture construction; they do not establish
+additional source semantics. Only the successful exact-head targeted result
+above qualifies this development slice. Complete U2 remains unaccepted.
+

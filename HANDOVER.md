@@ -1,5 +1,47 @@
 # Eristavi compiler — current handover
 
+## Latest implementation checkpoint — 7 November 2026 (nested owners and File-owning recursion)
+
+**Verified exact implementation/test tree:** `8e5c8bd8de09d46586934b28dad2f7ac6f1729c1`.
+[Focused native CI #42404765081](https://github.com/eristavi/eristavi-lang/actions/runs/42404765081)
+**3/3 PASS, 0 failed, 0 skipped, 51.554 seconds**, Linux x86-64 Clang,
+against the unmodified prior single-owner integration tests.
+
+The original whole-Function x86-64 checked emitter now admits independently
+verified **nested lexical File owners (maximum supported depth eight)**, retains
+the precise outer-prefix roots after inner close, and accepts recovering checked
+handler branches where an incoming error is dead before another File operation.
+The canonical owner, liveness and original CFG proofs remain mandatory.
+Generated nested code is executed with forced GC, inner acquisition recovery,
+injected close failures, missing outer root rejection and exact 0/1/2 live
+resource counts on the tested paths.
+
+**File-owning checked self-recursion now has native execution evidence:** each
+recursive Function frame separately opens and closes its File; depths
+0/1/4/16, forced GC and injected close failures are covered. A fallible
+recursive call cannot use/pass a File handle as an ordinary argument or
+silently overwrite an unbound live FailureContext. The failed-child path
+tested here RECOVERS before closing this frame's own resource. Cross-member
+File-owning groups and arbitrary active-primary composition across multiple
+nested owners are NOT admitted or qualified.
+
+New test files: `tests/fixtures/u2_function_file_nested.eri`,
+`tests/fixtures/u2_function_file_recursive.eri`. Focused smoke workflow:
+`.github/workflows/u2-file-nested-focused.yml`.
+The existing one-owner primary composition remains a separate focused-tested
+slice; latest owned/C generator parity and full exact-head CI/four-platform
+qualification remain pending. Older development summaries below are historical
+and their former “next implementation step” statements are superseded by this
+current section. **Keep #121 and #111 draft, issue #74 OPEN, #51 paused.**
+
+**Known unrelated U2 CI gate:** [run #42400012947](https://github.com/eristavi/eristavi-lang/actions/runs/42400012947)
+finished with failure after 178 tests because three owned-generator executions
+exceeded the unchanged 120-second watchdog on hosted Linux Clang. No semantic
+assertion failure was reported in that run. This result is not green evidence;
+do not lengthen the watchdog or restart broad optimization as a substitute
+for completing U2. The new targeted functional CI does not qualify full U2.
+
+
 Updated 7 November 2026 (Asia/Nicosia). Active branch:
 `compiler/u2-whole-function-file-roots-20261107`, draft PR #121 targeting
 `compiler/u2-cleanup-foundation-20261102` (draft #111). Issue #74 remains OPEN.
