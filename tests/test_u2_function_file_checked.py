@@ -467,6 +467,83 @@ _start:
                 self.assertEqual((run.returncode,run.stdout,run.stderr),
                     (0,b'',b''))
 
+    def test_checked_file_owning_group_uses_exact_other_member(self):
+        source=(ROOT/'tests/fixtures/u2_function_file_group.eri').read_text()
+        generated=self.generator('file-checked-group',source)
+        self.assertEqual((generated.returncode,generated.stderr),(0,''),generated.stdout[-2400:])
+        asm=generated.stdout
+        for label in (720,721):
+            self.assertIn('erist_u2_rooted_function_'+str(label)+':',asm)
+            self.assertIn('erist_u2_file_'+str(label)+'_publish_2:',asm)
+        self.assertIn('call erist_u2_rooted_function_721',asm)
+        path=self.directory/'file-group.txt'
+        path.write_text('native')
+        for depth,fail_close in ((0,False),(1,False),(4,False),
+                                 (1,True),(4,True)):
+            with self.subTest(depth=depth,failed=fail_close):
+                runtime=resource.close_failures(self.runtime) if fail_close else self.runtime
+                runtime=runtime.replace('.Lr_close:\n',
+                    '.Lr_close:\n    incq .Lfile_recursion_closes(%rip)\n',1)
+                closes=1 if depth==0 else 2
+                caller=self.file_recursion_caller(path,depth,fail_close)
+                previous='cmpq 
+        for name, source in (
+            ('symbol', self.source().replace('u2.file.openRead.v1', 'u2.file.openFake.v1')),
+            ('failure-shape', self.source().replace('aggregate.aggregate(graph,mp,[text,text])', 'aggregate.aggregate(graph,mp,[i64,text])')),
+            ('effects', self.source().replace('"u2.file.openRead.v1",2,63,1', '"u2.file.openRead.v1",2,8,1')),
+            ('owner', self.source().replace('native.emitFileChecked',
+                'profile.entries.frozen=false; try words.set(profile.entries,phase,1,path.index); '
+                'profile.entries.frozen=true;\n    native.emitFileChecked')),
+            ('live-primary', self.source().replace('[text],[i64]', '[text,failure],[i64]',1)
+                .replace('ab.block(fn,graph,[text])', 'ab.block(fn,graph,[text,failure])',1)
+                .replace('let path be try build.parameter(fn,entry,0);',
+                         'let primary be try build.parameter(fn,entry,1); let path be try build.parameter(fn,entry,0);')
+                .replace('try ab.returnValues(fn,graph,done,[answer],loc);',
+                         'let result be try body.returnFailure(fn,graph,table,done,primary,loc);')),
+            ('stale', self.source().replace('native.emitFileChecked',
+                                           'profile.revision=profile.revision+1;\n    native.emitFileChecked'))):
+            with self.subTest(name=name):
+                result = self.generator('file-refusal-'+name, source)
+                self.assertEqual(result.returncode,1,result.stdout[-2000:])
+                self.assertNotIn('.globl',result.stdout)
+                self.assertIn('unsupported:',result.stdout)
+                self.assertNotIn('leaked',result.stdout)
+
+if __name__ == '__main__':
+    unittest.main()
++str(depth+1)+',.Lfile_recursion_closes(%rip)'
+                self.assertIn(previous,caller)
+                caller=caller.replace(previous,
+                    'cmpq 
+        for name, source in (
+            ('symbol', self.source().replace('u2.file.openRead.v1', 'u2.file.openFake.v1')),
+            ('failure-shape', self.source().replace('aggregate.aggregate(graph,mp,[text,text])', 'aggregate.aggregate(graph,mp,[i64,text])')),
+            ('effects', self.source().replace('"u2.file.openRead.v1",2,63,1', '"u2.file.openRead.v1",2,8,1')),
+            ('owner', self.source().replace('native.emitFileChecked',
+                'profile.entries.frozen=false; try words.set(profile.entries,phase,1,path.index); '
+                'profile.entries.frozen=true;\n    native.emitFileChecked')),
+            ('live-primary', self.source().replace('[text],[i64]', '[text,failure],[i64]',1)
+                .replace('ab.block(fn,graph,[text])', 'ab.block(fn,graph,[text,failure])',1)
+                .replace('let path be try build.parameter(fn,entry,0);',
+                         'let primary be try build.parameter(fn,entry,1); let path be try build.parameter(fn,entry,0);')
+                .replace('try ab.returnValues(fn,graph,done,[answer],loc);',
+                         'let result be try body.returnFailure(fn,graph,table,done,primary,loc);')),
+            ('stale', self.source().replace('native.emitFileChecked',
+                                           'profile.revision=profile.revision+1;\n    native.emitFileChecked'))):
+            with self.subTest(name=name):
+                result = self.generator('file-refusal-'+name, source)
+                self.assertEqual(result.returncode,1,result.stdout[-2000:])
+                self.assertNotIn('.globl',result.stdout)
+                self.assertIn('unsupported:',result.stdout)
+                self.assertNotIn('leaked',result.stdout)
+
+if __name__ == '__main__':
+    unittest.main()
++str(closes)+',.Lfile_recursion_closes(%rip)',1)
+                run=self.run_probe('u2-file-group-'+str(depth)+'-'+str(fail_close),
+                    asm+caller,runtime=runtime)
+                self.assertEqual((run.returncode,run.stdout,run.stderr),(0,b'',b''))
+
     def test_unknown_binding_and_stale_owner_refuse_before_output(self):
         for name, source in (
             ('symbol', self.source().replace('u2.file.openRead.v1', 'u2.file.openFake.v1')),
