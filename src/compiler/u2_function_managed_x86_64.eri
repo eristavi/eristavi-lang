@@ -1432,13 +1432,16 @@ public function emitFileCheckedPrimary(routine identity build.Function,
 // Mixed closed checked group of File-owning and resource-free bodies.
 // All functions and File profiles are independently admitted before output.
 // The original no-File emitCheckedGroup remains unchanged.
-function compileMixedFileGroupMember(plans,phases,routines,profiles,runtimeTypes,member Int,
+function compileMixedFileGroupMember(plans,phases,routines,profiles,profileIndexes,runtimeTypes,member Int,
     graph identity aggregate.Registry,table identity contracts.Registry,
     registry identity managed.Registry,carriers,descriptors,forceGC Bool,
     targets,labels,emitOutput Bool)
     fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,Unsupported {
     let routine identity build.Function be routines[member];
-    let profile maybe identity owners.Profile be profiles[member];
+    let profile maybe identity owners.Profile be none;
+    if profileIndexes[member] > 0 {
+        profile=profiles[profileIndexes[member]-1];
+    }
     compile(plans[member],routine,graph,table,phases[member],registry,
         carriers,descriptors,forceGC,labels[member],routine.definedTarget,true,
         targets,labels,emitOutput,profile,runtimeTypes[member],none)
@@ -1447,14 +1450,15 @@ function compileMixedFileGroupMember(plans,phases,routines,profiles,runtimeTypes
         else error ssa.InvalidLiveness { try closeGroup(plans,phases); fail error; }
         else error Unsupported { try closeGroup(plans,phases); fail error; };
 }
-public function emitMixedFileCheckedGroup(routines,labels,profiles,runtimeTypes,
+public function emitMixedFileCheckedGroup(routines,labels,profiles,profileIndexes,runtimeTypes,
     graph identity aggregate.Registry,table identity contracts.Registry,
     registry identity managed.Registry,carriers,descriptors,forceGC Bool)
     fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,
         roots.InvalidManagedRoots,managed.InvalidManagedTypes,
         graphVerify.InvalidGraph,Unsupported {
     try require(routines.count >= 2 and routines.count <= 16 and
-        labels.count == routines.count and profiles.count == routines.count and
+        labels.count == routines.count and profiles.count >= 1 and
+        profiles.count <= 16 and profileIndexes.count == routines.count and
         runtimeTypes.count == routines.count,
         "invalid checked File Function group size and profile shape");
     let targets be []; let valueCount be 0; let instructionCount be 0;
@@ -1479,11 +1483,15 @@ public function emitMixedFileCheckedGroup(routines,labels,profiles,runtimeTypes,
         instructionCount=instructionCount+routine.instructions.length/10;
         try require(valueCount <= 1024 and instructionCount <= 2048,
             "File Function group exceeds bounded admission");
-        let profile maybe identity owners.Profile be profiles[member];
-        if profile != none {
-            try require(runtimeTypes[member] >= 6 and
+        let profileIndex be profileIndexes[member];
+        try require(profileIndex >= 0 and profileIndex <= profiles.count,
+            "invalid checked group resource-profile index");
+        if profileIndex > 0 {
+            let expectedProfile identity owners.Profile be profiles[profileIndex-1];
+            try require(expectedProfile.functionKey == routine.key and
+                runtimeTypes[member] >= 6 and
                 runtimeTypes[member] <= 2147483647,
-                "File Function group missing resource runtime binding");
+                "File Function group missing exact owner/runtime binding");
             fileMembers=fileMembers+1;
         } else {
             try require(runtimeTypes[member] == 0,
@@ -1506,30 +1514,30 @@ public function emitMixedFileCheckedGroup(routines,labels,profiles,runtimeTypes,
             else error roots.InvalidManagedRoots { try closeGroup(plans,phases); fail error; }
             else error managed.InvalidManagedTypes { try closeGroup(plans,phases); fail error; }
             else error graphVerify.InvalidGraph { try closeGroup(plans,phases); fail error; };
-        let profile maybe identity owners.Profile be profiles[member];
-        if profile != none {
+        if profileIndexes[member] > 0 {
+            let admissionProfile identity owners.Profile be profiles[profileIndexes[member]-1];
             let i be 0;
             while i < types.count {
                 let carrier aggregate.TypeId be types[i];
-                try require(carrier.index != profile.handle.index,
+                try require(carrier.index != admissionProfile.handle.index,
                     "File carrier overlaps tracked managed/failure group type");
                 i=i+1;
             }
-            types.add(profile.handle);
+            types.add(admissionProfile.handle);
         }
         let plan be ssa.create(routine,graph,table,phase,types)
             else error budget.LimitError { try closeGroup(plans,phases); fail error; }
             else error canonical.InvalidIR { try closeGroup(plans,phases); fail error; }
             else error ssa.InvalidLiveness { try closeGroup(plans,phases); fail error; };
         plans.add(plan);
-        try compileMixedFileGroupMember(plans,phases,routines,profiles,runtimeTypes,
+        try compileMixedFileGroupMember(plans,phases,routines,profiles,profileIndexes,runtimeTypes,
             member,graph,table,registry,carriers,descriptors,forceGC,
             targets,labels,false);
         member=member+1;
     }
     member=0;
     while member < routines.count {
-        try compileMixedFileGroupMember(plans,phases,routines,profiles,runtimeTypes,
+        try compileMixedFileGroupMember(plans,phases,routines,profiles,profileIndexes,runtimeTypes,
             member,graph,table,registry,carriers,descriptors,forceGC,
             targets,labels,true);
         member=member+1;
