@@ -1489,6 +1489,9 @@ public function emitMixedFileCheckedGroup(routines,labels,profiles,profileIndexe
         if profileIndex > 0 {
             let expectedProfile identity owners.Profile be profiles[profileIndex-1];
             try require(expectedProfile.functionKey == routine.key and
+                expectedProfile.owner == routine.owner and
+                expectedProfile.state == 1 and
+                expectedProfile.revision == routine.revision and
                 runtimeTypes[member] >= 6 and
                 runtimeTypes[member] <= 2147483647,
                 "File Function group missing exact owner/runtime binding");
@@ -1499,7 +1502,22 @@ public function emitMixedFileCheckedGroup(routines,labels,profiles,profileIndexe
         }
         targets.add(routine.definedTarget); member=member+1;
     }
-    try require(fileMembers >= 1,"File Function group requires an owning member");
+    try require(fileMembers >= 1 and fileMembers == profiles.count,
+        "File Function group requires exactly its bound owner profiles");
+    // One-to-one profile matching: an orphaned, duplicated or foreign owner
+    // must never disappear from the closed group transaction.
+    let profileOrdinal be 1;
+    while profileOrdinal <= profiles.count {
+        let matches be 0;
+        member=0;
+        while member < profileIndexes.count {
+            if profileIndexes[member] == profileOrdinal { matches=matches+1; }
+            member=member+1;
+        }
+        try require(matches == 1,
+            "File Function group owner profile is missing or duplicated");
+        profileOrdinal=profileOrdinal+1;
+    }
     let plans be []; let phases be [];
     member=0;
     while member < routines.count {

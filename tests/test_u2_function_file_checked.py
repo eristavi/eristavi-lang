@@ -520,6 +520,30 @@ _start:
                     asm+caller+'\n.bss\n.Lfile_group_closes: .quad 0\n',runtime=runtime)
                 self.assertEqual((run.returncode,run.stdout,run.stderr),(0,b'',b''))
 
+    def test_mixed_file_group_refuses_foreign_or_stale_owner_bindings_before_output(self):
+        source=(ROOT/'tests/fixtures/u2_function_file_mixed_group.eri').read_text()
+        needle='native.emitMixedFileCheckedGroup([fn,helper],[731,732],[profile],[1,0],[9,0],'
+        self.assertEqual(source.count(needle),1)
+        cases=(
+            ('orphan-profile','native.emitMixedFileCheckedGroup([fn,helper],[731,732],[profile,profile],[1,0],[9,0],'),
+            ('missing-owner','native.emitMixedFileCheckedGroup([fn,helper],[731,732],[profile],[0,0],[0,0],'),
+            ('wrong-owner-index','native.emitMixedFileCheckedGroup([fn,helper],[731,732],[profile],[0,1],[0,9],'),
+            ('out-of-range-index','native.emitMixedFileCheckedGroup([fn,helper],[731,732],[profile],[2,0],[9,0],'),
+            ('spurious-runtime','native.emitMixedFileCheckedGroup([fn,helper],[731,732],[profile],[1,0],[9,9],'),
+            ('missing-runtime','native.emitMixedFileCheckedGroup([fn,helper],[731,732],[profile],[1,0],[0,0],'),
+            ('duplicate-label','native.emitMixedFileCheckedGroup([fn,helper],[731,731],[profile],[1,0],[9,0],'),
+            ('stale-profile','profile.revision=profile.revision+1;\n    '+needle),
+            ('foreign-profile','profile.functionKey=helper.key;\n    '+needle),
+        )
+        for name,replacement in cases:
+            with self.subTest(case=name):
+                result=self.generator('mixed-owner-refusal-'+name,
+                    source.replace(needle,replacement,1))
+                self.assertEqual(result.returncode,1,result.stdout[-1600:])
+                self.assertIn('unsupported:',result.stdout)
+                self.assertNotIn('.globl',result.stdout)
+                self.assertNotIn('leaked',result.stdout)
+
     def test_unknown_binding_and_stale_owner_refuse_before_output(self):
         for name, source in (
             ('symbol', self.source().replace('u2.file.openRead.v1', 'u2.file.openFake.v1')),
