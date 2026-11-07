@@ -486,7 +486,15 @@ _start:
                     '.Lr_close:\n    incq .Lfile_recursion_closes(%rip)\n',1)
                 closes=1 if depth==0 else 2
                 caller=self.file_recursion_caller(path,depth,fail_close)
-                previous='cmpq 
+                previous='cmpq '+chr(36)+str(depth+1)+',.Lfile_recursion_closes(%rip)'
+                self.assertIn(previous,caller)
+                caller=caller.replace(previous,
+                    'cmpq '+chr(36)+str(closes)+',.Lfile_recursion_closes(%rip)',1)
+                run=self.run_probe('u2-file-group-'+str(depth)+'-'+str(fail_close),
+                    asm+caller,runtime=runtime)
+                self.assertEqual((run.returncode,run.stdout,run.stderr),(0,b'',b''))
+
+    def test_unknown_binding_and_stale_owner_refuse_before_output(self):
         for name, source in (
             ('symbol', self.source().replace('u2.file.openRead.v1', 'u2.file.openFake.v1')),
             ('failure-shape', self.source().replace('aggregate.aggregate(graph,mp,[text,text])', 'aggregate.aggregate(graph,mp,[i64,text])')),
