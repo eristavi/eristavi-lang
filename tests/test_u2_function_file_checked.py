@@ -4,6 +4,9 @@ import platform
 import re
 import subprocess
 import time
+import os
+import shutil
+from test_u2_function_checked_native import capture_traced_owned_generator
 import test_freestanding_graph_values as graph
 from compiler.erist.cli import build_native, compile_entry
 from compiler.erist.runtime_ext import Interpreter
@@ -188,10 +191,28 @@ function probe(path Text) {
         # compiler self-build. Keep the established 120-second watchdog.
         folder = self.directory/'file-owned-generator'
         folder.mkdir()
-        (folder/'compiler').symlink_to(ROOT/'src/compiler',target_is_directory=True)
+        tracing = os.environ.get('ERISTAVI_U2_FILE_TRACE') == '1'
+        if tracing:
+            shutil.copytree(ROOT/'src/compiler',folder/'compiler')
+            emitter = folder/'compiler/u2_function_managed_x86_64.eri'
+            code = emitter.read_text()
+            for needle, stage in (
+                ('    let initial be try roots.create(', 'initial-plan'),
+                ('    let types be [];', 'initial-done'),
+                ('    let plan be try ssa.create(', 'file-plan'),
+                ('    compile(plan,routine,graph,table,phase,registry,carriers,descriptors,', 'compile'),
+                ('    let verifiedPublications be try ssa.verifyPublications(', 'publications'),
+                ('    if fileProfile != none {\n        fileRoots.emit', 'file-helpers'),
+                ('    output(".section .rodata");', 'output')):
+                code = code.replace(needle,'    output("# U2_NATIVE_TRACE:'+stage+'");\n'+needle)
+            emitter.write_text(code)
+        else:
+            (folder/'compiler').symlink_to(ROOT/'src/compiler',target_is_directory=True)
         source = folder/'generator.eri'
         source.write_text(self.source())
-        bootstrap = self.generator('file-parity-c',self.source())
+        bootstrap_binary = folder/'bootstrap'
+        self.assertEqual(build_native(source,bootstrap_binary,folder),0)
+        bootstrap = subprocess.run([str(bootstrap_binary)],capture_output=True,text=True,timeout=120)
         self.assertEqual((bootstrap.returncode,bootstrap.stderr),(0,''),bootstrap.stdout[-2000:])
         application = subprocess.run([str(self.frontend),'emit-asm',str(source),
             '--source-root',str(folder)],capture_output=True,text=True,timeout=120)
@@ -212,8 +233,11 @@ function probe(path Text) {
         self.assertNotIn('RWE',next(line for line in headers.splitlines() if 'GNU_STACK' in line))
         self.assertEqual(subprocess.check_output(['nm','-u',str(binary)],text=True).strip(),'')
         started = time.monotonic()
-        owned = subprocess.run([str(binary)],env={'PATH':'/unavailable'},
-                               capture_output=True,timeout=120)
+        if tracing:
+            owned = capture_traced_owned_generator([str(binary)],env={'PATH':'/unavailable'},timeout=120)
+        else:
+            owned = subprocess.run([str(binary)],env={'PATH':'/unavailable'},
+                                   capture_output=True,timeout=120)
         print('U2_FILE_OWNED_GENERATOR_SECONDS='+str(time.monotonic()-started),flush=True)
         self.assertEqual((owned.returncode,owned.stderr),(0,b''),owned.stdout[-2000:])
         self.assertEqual(owned.stdout,bootstrap.stdout.encode())

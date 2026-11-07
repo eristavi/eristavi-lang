@@ -1202,20 +1202,16 @@ public function emitFileChecked(routine identity build.Function,
     fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,
         roots.InvalidManagedRoots,managed.InvalidManagedTypes,
         graphVerify.InvalidGraph,Unsupported {
-    let initial be try roots.create(routine,graph,table,phase,registry,carriers,descriptors);
-    let types be [];
+    // Validate carrier descriptors once, then construct exactly one File-
+    // extended SSA Plan. Full publication verification remains mandatory.
+    let types be try roots.selectTypes(routine,graph,table,phase,registry,carriers,descriptors);
     let i be 0;
-    while i < initial.types.length {
-        let index be words.get(initial.types,phase,i)
-            else error budget.LimitError { try ssa.close(initial); fail error; };
-        if index == profile.handle.index {
-            try ssa.close(initial);
-            fail Unsupported { message="File carrier overlaps a managed or failure carrier"; };
-        }
-        types.add(aggregate.TypeId { owner=graph.key; index=index; });
+    while i < types.count {
+        let selected aggregate.TypeId be types[i];
+        try require(selected.index != profile.handle.index,
+            "File carrier overlaps a managed or failure carrier");
         i=i+1;
     }
-    try ssa.close(initial);
     types.add(profile.handle);
     let plan be try ssa.create(routine,graph,table,phase,types);
     compile(plan,routine,graph,table,phase,registry,carriers,descriptors,

@@ -1,0 +1,23 @@
+test_owned_and_c_generators_emit_identical_file_cfg (test_u2_function_file_checked.U2FunctionFileCheckedTests.test_owned_and_c_generators_emit_identical_file_cfg) ... U2_GENERATOR_PHASE_SECONDS=2.328 marker=# U2_NATIVE_TRACE:initial-plan
+U2_GENERATOR_PHASE_SECONDS=20.039 marker=# U2_NATIVE_TRACE:initial-done
+U2_GENERATOR_PHASE_SECONDS=20.042 marker=# U2_NATIVE_TRACE:file-plan
+U2_GENERATOR_PHASE_SECONDS=33.268 marker=# U2_NATIVE_TRACE:compile
+U2_GENERATOR_PHASE_SECONDS=54.024 marker=# U2_NATIVE_TRACE:publications
+U2_GENERATOR_PHASE_SECONDS=90.133 marker=# U2_NATIVE_TRACE:file-helpers
+ERROR
+
+======================================================================
+ERROR: test_owned_and_c_generators_emit_identical_file_cfg (test_u2_function_file_checked.U2FunctionFileCheckedTests.test_owned_and_c_generators_emit_identical_file_cfg)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/bc9859552d81/eristavi-lang/tests/test_u2_function_file_checked.py", line 237, in test_owned_and_c_generators_emit_identical_file_cfg
+    owned = capture_traced_owned_generator([str(binary)],env={'PATH':'/unavailable'},timeout=120)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/bc9859552d81/eristavi-lang/tests/test_u2_function_checked_native.py", line 44, in capture_traced_owned_generator
+    raise subprocess.TimeoutExpired(command,timeout,
+subprocess.TimeoutExpired: Command '['/tmp/tmp55rosz6p/file-owned-generator/owned']' timed out after 120 seconds
+
+----------------------------------------------------------------------
+Ran 1 test in 148.634s
+
+FAILED (errors=1)

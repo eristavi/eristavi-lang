@@ -24,11 +24,10 @@ function require(ok Bool,message Text) fails InvalidManagedRoots {
 // not silently treated as another root class or shared identity.
 // The resulting Plan independently verifies the ENTIRE Function, including
 // dead CFG and checked-call arguments, at the current source revision.
-public function create(routine identity build.Function,
+public function selectTypes(routine identity build.Function,
     graph identity aggregate.Registry,table identity contracts.Registry,
     phase identity budget.Phase,registry identity managed.Registry,
     carriers,descriptors)
-    returns identity ssa.Plan
     fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,
         managed.InvalidManagedTypes,graphVerify.InvalidGraph,
         InvalidManagedRoots {
@@ -135,5 +134,17 @@ public function create(routine identity build.Function,
     try budget.finishPhase(read);
     try require(acceptable,
         "ambiguous, unsupported or noncanonical managed root descriptors");
+    return selected;
+}
+
+public function create(routine identity build.Function,
+    graph identity aggregate.Registry,table identity contracts.Registry,
+    phase identity budget.Phase,registry identity managed.Registry,
+    carriers,descriptors)
+    returns identity ssa.Plan
+    fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,
+        managed.InvalidManagedTypes,graphVerify.InvalidGraph,
+        InvalidManagedRoots {
+    let selected be try selectTypes(routine,graph,table,phase,registry,carriers,descriptors);
     return try ssa.create(routine,graph,table,phase,selected);
 }

@@ -1,0 +1,11 @@
+test_generated_acquire_close_failure_handler_and_reclamation (test_u2_function_file_checked.U2FunctionFileCheckedTests.test_generated_acquire_close_failure_handler_and_reclamation) ... ok
+test_independent_source_reference_normal_and_acquisition_failure (test_u2_function_file_checked.U2FunctionFileCheckedTests.test_independent_source_reference_normal_and_acquisition_failure) ... ok
+test_missing_roots_and_allocator_refusal_are_terminal (test_u2_function_file_checked.U2FunctionFileCheckedTests.test_missing_roots_and_allocator_refusal_are_terminal) ... ok
+test_owned_and_c_generators_emit_identical_file_cfg (test_u2_function_file_checked.U2FunctionFileCheckedTests.test_owned_and_c_generators_emit_identical_file_cfg) ... U2_FILE_OWNED_GENERATOR_SECONDS=105.65146135200007
+ok
+test_unknown_binding_and_stale_owner_refuse_before_output (test_u2_function_file_checked.U2FunctionFileCheckedTests.test_unknown_binding_and_stale_owner_refuse_before_output) ... ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 164.210s
+
+OK

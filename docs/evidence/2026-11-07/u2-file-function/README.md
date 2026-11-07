@@ -100,3 +100,26 @@ No bottleneck attribution is established. The architecture now explicitly requir
 the existing checked-chain failed-entry binding to identify active primary
 propagation; liveness alone cannot authorize failure-context mutation.
 Hosted #42397453782 scope passed, Linux smoke was running at inspection.
+
+## Timeout resolution
+
+Temporary copied-source trace: initial Plan begins 2.328 s, finishes 20.039 s
+(**17.711 s**); second File Plan begins 20.042 s, compile starts 33.268 s;
+publication verification starts 54.024 s and finishes 90.133 s (**36.109 s**).
+The traced baseline still timed out at 120 s. Markers are opt-in GAS comments
+in a temporary source copy; no production profiling output was added.
+
+Fix: extract descriptor/type admission as `selectTypes`; legacy `create` wraps
+it with the same SSA construction. File entry uses that admission, checks its
+carrier is distinct, and constructs a single extended Plan. Mandatory fresh
+publication and original owner verification remain. A compile-time-false
+fixture block establishes the bootstrap's required legacy generic specialization;
+it executes no Plan construction. The generic bootstrap requirement is unchanged.
+
+Uninstrumented revised generator **105.651461352 s**, byte-identical owned/C
+assembly, static-link/no loader/no undefined/executable-stack audit and real
+File success/close-failure execution PASS. Full File class **5/5**, 164.210 s;
+managed identity + checked recursion **2/2**, 14.333 s. No failures/skips.
+Patch and Python compilation pass. See retained logs. Only targeted single
+before/after evidence: no five-pair statistics or general performance claim.
+No final qualification/merge; resume primary composition after this checkpoint.

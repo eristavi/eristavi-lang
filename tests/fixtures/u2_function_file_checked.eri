@@ -82,6 +82,12 @@ function run() fails budget.LimitError,canonical.InvalidIR,graphVerify.InvalidGr
     try build.returnValues(fn,deadTarget,[try build.parameter(fn,deadTarget,0)],loc);
     try ab.complete(fn,graph); try owners.complete(profile,fn,cp); try budget.finishPhase(cp);
     let phase be try budget.constructionPhase(owner);
+    // Bootstrap requires a concrete specialization for the legacy generic
+    // entry even when this fixture only executes File-selected construction.
+    if false {
+        let legacy be try roots.create(fn,graph,table,phase,registry,[text],[managed.text(registry)]);
+        try ssa.close(legacy);
+    }
     let retained be owner.live; let reserved be owner.pending;
     native.emitFileChecked(fn,graph,table,phase,registry,[text],
         [managed.text(registry)],true,718,profile,9)

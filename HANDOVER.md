@@ -6,26 +6,27 @@ Updated 7 November 2026 (Asia/Nicosia). Active branch:
 Tested implementation commit: `2f5065cb32755e8560da4340852c25dc3610224f`.
 This documentation successor changes no implementation or test input.
 Baseline head: `0263208d7168b9a2a2365f7f105749df6a980ea7`.
-**Latest continuation: owned/C File generator parity gate added; BLOCKED.**
-Implementation remains `2f5065cb32755e8560da4340852c25dc3610224f`.
-The new owned-generator regression timed out at the unchanged 120-second
-watchdog (1 test / 1 error, 149.521 seconds overall). C generation and static
-ELF/no-undefined-symbol checks passed; byte parity and owned-generated File
-execution were NOT reached. The failing regression is retained without skips
-or timeout changes. Earlier 8/8 local evidence below predates this new test.
-[Raw diagnostic](docs/evidence/2026-11-07/u2-file-function/owned-parity.log).
-Replacement hosted run #42397453782 passed scope/patch and was still running
-Linux smoke at inspection; four-platform matrix skipped.
+**Current checkpoint: owned File generator timeout RESOLVED locally.**
+The initial managed Plan was discarded before constructing the File-extended
+Plan. Diagnostic trace measured **17.711 s** in that redundant first Plan;
+mandatory publication verification took **36.109 s** and remains intact.
+Descriptor admission now returns selected types separately; File emission
+constructs one SSA Plan. Legacy create still performs the same admission and
+Plan creation. Full independent publication and lexical owner proofs remain.
 
-**Immediate recovery:** diagnose the bounded File generator's owned-runtime
-cost before admitting further cleanup combinations. The File entry currently
-constructs a managed Plan, copies its selected types, closes it, then creates a
-second File-extended Plan; measure this suspected duplicate verification cost
-before changing it. No cause or performance fix is established yet.
-For primary composition, reuse exact checked-chain failed-entry binding;
-ordinary SSA liveness does not establish an active propagation. See the
-updated architecture constraint. No new primary/secondary implementation
-was claimed in this continuation.
+Uninstrumented owned generator: **105.651 s**, unchanged 120-second watchdog;
+byte-identical owned/C assembly, static-link audits and generated File success/
+close-failure execution PASS. Full File class **5/5 PASS**, 164.210 s; shared
+managed/checked-recursive regressions **2/2 PASS**, 14.333 s.
+Baseline traced run timed out at 120 s. These are targeted measurements,
+not five paired timings, RSS/GC-pause or whole-compiler performance evidence.
+See `owned-baseline-trace.log`, `owned-fixed.log` and `plan-regressions.log`
+in the batch evidence folder. No timeout or assertion was weakened.
+
+Next resume explicit checked-chain primary binding and failure composition,
+then nested surviving prefixes; full File integration remains incomplete.
+Implementation base is `71436a23c0dd315d765ee8d5e4837b4d97d5d8c5`;
+this successor contains the measured fix. Prior evidence below is historical.
 **Final focused validation: 8/8 PASS, 0 failed, 0 skipped, 69.823 seconds.**
 The command, source hashes and raw log are recorded in
 [the batch evidence](docs/evidence/2026-11-07/u2-file-function/README.md).
