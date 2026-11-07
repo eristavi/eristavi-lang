@@ -1,10 +1,11 @@
 # Eristavi compiler — current handover
 
-Updated 7 November 2026 (Asia/Nicosia). Active, **unqualified File-root fix / hosted reruns pending** on separate branch
+Updated 7 November 2026 (Asia/Nicosia). Active, **focused-green File-root fix / full smoke pending** on separate branch
 `compiler/u2-whole-function-file-roots-20261107`, [draft PR #121](https://github.com/eristavi/eristavi-lang/pull/121) targeting the checked U2 branch. Parent [PR #111](https://github.com/eristavi/eristavi-lang/pull/111) remains DRAFT/unmerged and U2 #74 OPEN. The previous checked Function group batch remains fully focused/Linux-smoke green; complete File integration and final qualification remain OPEN.
 Parent checked-group implementation: `5dcc85f69ac458f83730957a9defd4b2fa3d0d7e`.
 Parent checked-group tested checkpoint: `43d56f2f526fd57db5d790413217de439858b7a5`.
-File foundation tested checkpoint: `0352563f9096ed58c50e7aa92dc67ba884670a9f` — CI FAILED.
+File fix tested checkpoint: `8104d8e8b1819765addab4fde3854fd37ccd81b2` — focused 3/3 PASS.
+Prior full-smoke checkpoint `0352563` failed; broader fixed-code rerun pending.
 No final four-platform qualification or merge. Optimization #51 remains PAUSED.
 
 ## File-root regression fix — 7 November 2026
@@ -18,12 +19,16 @@ reserves the full admitted 256-word SSA frame separately from roots/scope locals
 A negative native probe deliberately omits that handoff and must still fault;
 the correct nested-close/forced-GC/reclamation probe must succeed.
 
-Local focused File-root test PASS (positive and missing-handoff negative).
-Production emitter/runtime, source semantics and watchdogs are unchanged.
-A change-specific hosted workflow reruns this test and the two original 120-second
-generator parity gates. Hosted results are pending; do not call the new fix
-qualified yet. The prior full smoke failure below remains a historical result.
-Whole-Function File lowering is still not integrated; keep #121/#111 draft.
+Local focused File-root test PASS (positive and missing-handoff negative), 6.267 s.
+[Focused CI #42360810124](https://github.com/eristavi/eristavi-lang/actions/runs/42360810124)
+on exact fix checkpoint `8104d8e`: **3/3 PASS**. File probe 1/1, 13.206 s;
+original generator parity gates 2/2, 255.978 s. Owned generators took **98.233 /
+98.333 s**, both within unchanged **120-second** limits. Production emitter/runtime,
+source semantics and watchdogs are unchanged; no cause is claimed for prior
+runner timing variability. [Evidence/logs](docs/evidence/2026-11-07/u2-file-root-fix.md).
+Broader [smoke rerun #42360813812](https://github.com/eristavi/eristavi-lang/actions/runs/42360813812)
+is still running; do not mark it passed. No full qualification is claimed.
+Whole-Function File lowering remains unintegrated; keep #121/#111 draft.
 
 ## Active File ownership checkpoint — 7 November 2026 (partial, NOT accepted)
 
@@ -57,8 +62,9 @@ canonical checked, normal, handler and recursive exits; this is **NOT done**.
   `Eristavi runtime fault: invalid internal scalar value operation`
   (test line 251). Both the existing self-recursive and direct checked-group
   owned/C generator gates also hit their unchanged **120-second watchdogs**.
-  The runtime-fault cause and timeout causes remain undiagnosed; do not
-  attribute the timeouts to a semantic regression or waive/increase the limit.
+  The File fault was subsequently traced to the fixture handoff above. The
+  timeout causes were not established; isolated reruns now pass unchanged. Do not
+  infer a semantic regression or waive/increase the limits.
   Earlier green #111 evidence does NOT qualify this new File code.
   This failure record predates the focused test-fixture fix described above.
 - Architecture and intentional boundaries:
@@ -68,8 +74,8 @@ canonical checked, normal, handler and recursive exits; this is **NOT done**.
   no general checked/handler/multi-exit cleanup, primary/secondary handoff,
   recursive File frame, or native File checked success/failure path is completed.
   **Do not label PR #121 or U2 #74 accepted; do not merge #121/#111 yet.**
-- Next: confirm the focused File-root fix and independently rerun the two
-  generator watchdog gates. Then connect actual original
+- Next: reuse the passing focused File-root fix; check the broader smoke result,
+  then connect actual original
   acquisition, checked File.close and root
   publication to whole-Function emission, preserving original typed SSA edges,
   surviving owner prefixes, pending returns and existing class-5 FailureContext.
