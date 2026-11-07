@@ -8,6 +8,7 @@ on:
       - tests/fixtures/u2_function_file_nested.eri
       - tests/fixtures/u2_function_file_recursive.eri
       - tests/fixtures/u2_function_file_group.eri
+      - tests/fixtures/u2_function_file_mixed_group.eri
       - tests/test_u2_function_file_checked.py
       - .github/workflows/u2-file-nested-focused.yml
   workflow_dispatch:
