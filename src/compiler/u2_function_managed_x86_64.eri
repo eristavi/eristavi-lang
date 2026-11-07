@@ -578,28 +578,24 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
             else error budget.LimitError { fail error; }
             else error canonical.InvalidIR { fail error; }
             else error owners.InvalidOwnership { fail Unsupported { message=error.message; }; };
-        try require(proof.maximumDepth == 1,
-            "nested whole-Function File cleanup is not yet admitted");
-        fileHandle=profile.handle.index; fileAcquire=profile.acquire.index;
-        fileConsume=profile.consume.index; fileDepth=1;
-        try require(fileHandle != failureType,"File and failure carriers must differ");
-        // An active primary needs the later composition integration. Refuse
-        // any failure carrier in an owning block, even if ordinary use is dead.
-        let b be 0;
-        while b < routine.blocks.length/5 {
-            if primary == none and (try words.get(profile.blocks,phase,b*2+1)) != 0 {
-                let first be try words.get(routine.blocks,phase,b*5);
-                let count be try words.get(routine.blocks,phase,b*5+1);
-                let j be 0;
-                while j < count {
-                    try require((try words.get(routine.values,phase,(first+j-1)*4)) != failureType or
-                        (first+j == primaryValue and (try words.get(routine.blocks,phase,b*5+4)) == primaryCall),
-                        "active failure plus File cleanup is not yet admitted");
-                    j=j+1;
-                }
-            }
-            b=b+1;
+        try require(proof.maximumDepth >= 1 and proof.maximumDepth <= 8,
+            "whole-Function File owner depth exceeds verified native capacity");
+        // The explicit primary binding currently proves one lexical close.
+        // Nested primary/secondary propagation requires a separate complete
+        // chain proof and must not be inferred from ordinary liveness.
+        if primary != none {
+            try require(proof.maximumDepth == 1,
+                "nested primary cleanup requires full chain binding");
         }
+        fileHandle=profile.handle.index; fileAcquire=profile.acquire.index;
+        fileConsume=profile.consume.index; fileDepth=proof.maximumDepth;
+        try require(fileHandle != failureType,"File and failure carriers must differ");
+        // An owning checked-handler block may receive and immediately
+        // discard an error when it explicitly RECOVERS before the next File
+        // operation. Presence of a failure parameter does not imply active
+        // propagation. The full source SSA liveness check at EVERY File
+        // invoke below still refuses any unbound live failure carrier.
+        // Actual primary propagation must use emitFileCheckedPrimary.
     }
     let managedReturn be false;
     let managedReturnSecond be false;
@@ -949,7 +945,8 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
     }
     output("    .byte 1"); output("    .byte 1");
     if checked { output("    .byte 5"); }
-    if fileDepth != 0 { output("    .byte 1"); }
+    i=0;
+    while i < fileDepth { output("    .byte 1"); i=i+1; }
     i=0;
     while i < selected.count {
         output(".set "+base+"_root_"+format.integer(selected[i])+", "+

@@ -249,6 +249,128 @@ function probe(path Text) {
                 owned.stdout.decode()+self.caller(path,fail_close),runtime=runtime)
             self.assertEqual((run.returncode,run.stdout,run.stderr),(0,b'',b''))
 
+    def nested_caller(self, outer, inner, answer, failing, close_calls):
+        first = bytes(str(outer),'utf-8')
+        second = bytes(str(inner),'utf-8')
+        body = r'''
+.text
+.globl _start
+_start:
+    call evn_scope_enter
+    movq %rax,%r15
+    movq %rax,%rdi
+    leaq .Lnested_roots(%rip),%rsi
+    leaq .Lnested_classes(%rip),%rdx
+    movl $3,%ecx
+    call evn_bind_roots
+    leaq .Lnested_outer(%rip),%rdi
+    movl $OUTERLEN,%esi
+    call evn_text
+    movq %rax,.Lnested_roots(%rip)
+    leaq .Lnested_inner(%rip),%rdi
+    movl $INNERLEN,%esi
+    call evn_text
+    movq %rax,.Lnested_roots+8(%rip)
+    leaq .Lnested_roots(%rip),%rdi
+    xorl %esi,%esi
+    xorl %edx,%edx
+    leaq .Lnested_roots+16(%rip),%rcx
+    call erist_u2_rooted_function_719
+'''
+        if failing:
+            body += r'''
+    cmpq $1,%r10
+    jne .Lresource_test_fail
+    testq %rax,%rax
+    je .Lresource_test_fail
+    cmpq %rax,.Lnested_roots+16(%rip)
+    jne .Lresource_test_fail
+    cmpq $8,(%rax)
+    jne .Lresource_test_fail
+'''
+        else:
+            body += r'''
+    testq %r10,%r10
+    jne .Lresource_test_fail
+    cmpq $ANSWER,%rax
+    jne .Lresource_test_fail
+    cmpq $0,.Lnested_roots+16(%rip)
+    jne .Lresource_test_fail
+'''.replace('ANSWER',str(answer))
+        body += r'''
+    xorl %edi,%edi
+    call erist_rt_slots_collect
+    call erist_rt_text_collect
+    call erist_rt_open_resources
+    testq %rax,%rax
+    jne .Lresource_test_fail
+    cmpq $CLOSECOUNT,.Lnested_close_calls(%rip)
+    jne .Lresource_test_fail
+    movq $0,.Lnested_roots(%rip)
+    movq $0,.Lnested_roots+8(%rip)
+    movq $0,.Lnested_roots+16(%rip)
+    call evn_void
+    movq %rax,%rsi
+    movq %r15,%rdi
+    call evn_scope_leave
+    call .Lresource_finish
+    xorl %edi,%edi
+    jmp erist_rt_exit
+.bss
+.p2align 3
+.Lnested_roots: .zero 24
+.Lnested_close_calls: .quad 0
+.section .rodata
+.Lnested_classes: .byte 1,1,5
+.Lnested_outer:
+.byte ''' + ','.join(map(str,first)) + r'''
+.Lnested_inner:
+.byte ''' + ','.join(map(str,second)) + '\n'
+        return (body.replace('OUTERLEN',str(len(first)))
+                    .replace('INNERLEN',str(len(second)))
+                    .replace('CLOSECOUNT',str(close_calls)) + resource.FINISH)
+
+    def test_nested_lexical_file_owners_and_recovering_handlers(self):
+        source = (ROOT/'tests/fixtures/u2_function_file_nested.eri').read_text()
+        generated = self.generator('file-nested-owners',source)
+        self.assertEqual((generated.returncode,generated.stderr),(0,''),generated.stdout[-2400:])
+        asm = generated.stdout
+        self.assertIn('erist_u2_file_719_publish_3:',asm)
+        self.assertIn('erist_u2_file_719_publish_4:',asm)
+        self.assertGreaterEqual(asm.count('call erist_u2_file_719_poison_'),4)
+        self.assertIn('call erist_rt_file_open',asm)
+        present = self.directory/'nested-present.txt'
+        present.write_text('native')
+        absent = self.directory/'nested-absent.txt'
+        scenarios = (
+            ('normal',present,present,42,False,2,self.runtime),
+            ('outer-acquire-fails',absent,present,None,True,0,self.runtime),
+            ('inner-acquire-recovers',present,absent,7,False,1,self.runtime),
+            ('close-failures',present,present,None,True,2,resource.close_failures(self.runtime)),
+        )
+        for name, outer, inner, answer, failing, closes, runtime in scenarios:
+            with self.subTest(scenario=name):
+                self.assertIn('.Lr_close:\n',runtime)
+                instrumented = runtime.replace(
+                    '.Lr_close:\n','.Lr_close:\n    incq .Lnested_close_calls(%rip)\n',1)
+                probe = self.nested_caller(outer,inner,answer,failing,closes)
+                result = self.run_probe('file-nested-'+name,asm+probe,runtime=instrumented)
+                self.assertEqual((result.returncode,result.stdout,result.stderr),
+                                 (0,b'',b''),name)
+        # Deliberately destroy the exact surviving outer-owner SSA word
+        # before publication. The native root adapter must fail closed.
+        publish = asm.split('erist_u2_file_719_publish_3:',1)[1].split('.size',1)[0]
+        word = re.search(r'movq (\d+)\(%rdi\),%rax',publish)
+        self.assertIsNotNone(word)
+        fault = asm.replace('    call erist_u2_file_719_publish_3',
+            '    movq $0,'+word.group(1)+'(%rsp)\n'
+            '    call erist_u2_file_719_publish_3',1)
+        self.assertNotEqual(fault,asm)
+        negative = self.run_probe('file-nested-missing-prefix',
+            fault+self.nested_caller(present,present,42,False,2))
+        self.assertEqual(negative.returncode,1)
+        self.assertIn(b'invalid internal scalar value operation',negative.stderr)
+
     def test_unknown_binding_and_stale_owner_refuse_before_output(self):
         for name, source in (
             ('symbol', self.source().replace('u2.file.openRead.v1', 'u2.file.openFake.v1')),
