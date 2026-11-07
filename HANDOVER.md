@@ -1,11 +1,53 @@
 # Eristavi compiler — current handover
 
-Updated 7 November 2026 (Asia/Nicosia). Checked Function group batch focused/smoke green;
-U2 functionality and final qualification still open.
-Branch: `compiler/u2-cleanup-foundation-20261102`; [PR #111](https://github.com/eristavi/eristavi-lang/pull/111) remains DRAFT; #74 remains OPEN.
+Updated 7 November 2026 (Asia/Nicosia). Active, **unqualified** File-owner-root foundation on separate branch
+`compiler/u2-whole-function-file-roots-20261107`, [draft PR #121](https://github.com/eristavi/eristavi-lang/pull/121) targeting the checked U2 branch. Parent [PR #111](https://github.com/eristavi/eristavi-lang/pull/111) remains DRAFT/unmerged and U2 #74 OPEN. The previous checked Function group batch remains fully focused/Linux-smoke green; complete File integration and final qualification remain OPEN.
 Implementation: `5dcc85f69ac458f83730957a9defd4b2fa3d0d7e`.
 Corrected exact test checkpoint: `43d56f2f526fd57db5d790413217de439858b7a5`.
 No final four-platform qualification or merge. Optimization #51 remains PAUSED.
+
+## Active File ownership checkpoint — 7 November 2026 (partial, NOT accepted)
+
+**Do not repeat completed checked Function groups.** The next major block is
+whole-Function File acquisition/consumption and reverse cleanup across original
+canonical checked, normal, handler and recursive exits; this is **NOT done**.
+
+- On child branch `compiler/u2-whole-function-file-roots-20261107`, draft
+  [PR #121](https://github.com/eristavi/eristavi-lang/pull/121),
+  source `src/compiler/u2_function_file_roots_x86_64.eri` (first implementation
+  `f0b93b427cdd247be8840fe514ee10bd0f48ff15`): a bounded private emitter
+  independently reruns the full original canonical scoped-owner proof,
+  snapshots all original block root signatures and checked File consumption
+  operands, then emits native class-1 File-root registration, per-block lexical
+  owner publication (including dead blocks) and consumed-handle SSA/root-slot
+  clearing on checked File.close. No separate executable IR, source syntax,
+  moving GC, default-compiler edit or public ABI change.
+- Added `tests/test_u2_function_file_roots.py` and an entry in the focused
+  smoke selector. Test dynamically reuses the established 11-block original
+  ownership fixture, checks emitted class/entry/close symbols and assembled
+  object, and physically opens/closes two nested File handles while forcing
+  real owned-runtime GC and post-scope reclamation. The test drives these
+  transitions itself; the original whole-Function native CFG still does not.
+  Source+test checkpoint `282e87b14fddabcb912c296910323b7b3bd8007c`.
+- **Validation: pending** GitHub Actions PR CI; none of this new source or
+  test is yet demonstrated green or qualified. Track the latest PR #121 CI
+  run, distinguish scope, focused test, broad smoke and skipped full matrix.
+  Earlier #111 development success does NOT qualify new code.
+- Architecture and intentional boundaries:
+  [whole-Function File ownership contract](docs/architecture/UIR_U2_WHOLE_FUNCTION_FILE_OWNERSHIP.md).
+  The root/poison helpers are *not yet called by*
+  `u2_function_managed_x86_64.eri`. No File.open/close is emitted there;
+  no general checked/handler/multi-exit cleanup, primary/secondary handoff,
+  recursive File frame, or native File checked success/failure path is completed.
+  **Do not label PR #121 or U2 #74 accepted; do not merge #121/#111 yet.**
+- Next: connect actual original acquisition, checked File.close and root
+  publication to whole-Function emission, preserving original typed SSA edges,
+  surviving owner prefixes, pending returns and existing class-5 FailureContext.
+  Reuse verified real close adapters; prove arbitrary exit sets and recursive
+  frames with independent outcomes, bad-root/owner/allocator faults and physical
+  RSS/GC-pause evidence. Reconcile main and run final four-platform/completed
+  qualification only on coherent finished U2. No owned full self-build, paused
+  #51 work or unnecessary full CI.
 
 ## Latest verified development checkpoint — 7 November 2026
 
