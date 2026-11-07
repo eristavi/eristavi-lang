@@ -6,6 +6,7 @@ on:
       - src/compiler/u2_function_managed_x86_64.eri
       - src/compiler/u2_function_file_roots_x86_64.eri
       - tests/fixtures/u2_function_file_nested.eri
+      - tests/fixtures/u2_function_file_recursive.eri
       - tests/test_u2_function_file_checked.py
       - .github/workflows/u2-file-nested-focused.yml
   workflow_dispatch:
@@ -36,6 +37,7 @@ jobs:
           PYTHONPATH=tests:. python -u -m unittest -v \
             test_u2_function_file_checked.U2FunctionFileCheckedTests.test_nested_lexical_file_owners_and_recovering_handlers \
             test_u2_function_file_checked.U2FunctionFileCheckedTests.test_generated_acquire_close_failure_handler_and_reclamation \
+            test_u2_function_file_checked.U2FunctionFileCheckedTests.test_checked_file_owning_self_recursion_retains_each_frame_and_closes \
             2>&1 | tee "$RUNNER_TEMP/u2-nested-file.log"
       - uses: actions/upload-artifact@v6
         if: always()
