@@ -495,7 +495,7 @@ _start:
                 self.assertEqual((run.returncode,run.stdout,run.stderr),(0,b'',b''))
 
     def test_file_owning_closed_checked_group_preserves_owner_across_child(self):
-        source = (ROOT/'tests/fixtures/u2_function_file_group.eri').read_text()
+        source = (ROOT/'tests/fixtures/u2_function_file_mixed_group.eri').read_text()
         generated = self.generator('file-closed-group',source)
         self.assertEqual((generated.returncode,generated.stderr),(0,''),generated.stdout[-2600:])
         asm = generated.stdout
