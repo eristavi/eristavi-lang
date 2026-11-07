@@ -106,6 +106,69 @@ public function verify(routine identity build.Function,
         (try read(routine.values,phase,(sourceFirst+2-1)*4)) ==
             meta.i64().index,
         "failed successor must preserve original primary, File owner and i64");
+    let primaryProof be try verifyPrimary(routine,graph,profile,contracts,phase,map,
+        failed,failedCall,failedPlan,failedOwners,outerExit);
+    let resolvedPrimary be primaryProof.recoveredPrimary;
+    let newFailure be primaryProof.newFailure;
+    let rootIndex be primaryProof.rootIndex;
+    try require(rootIndex >= 0 and normalProof.sourceValue ==
+        firstProof.normalValue and normalProof.normalValue > 0,
+        "checked path missing verified normal or already-failing root");
+    return Report {
+        firstClose=firstCall.index;
+        normalClose=normalCall.index;
+        failingClose=failedCall.index;
+        incomingPrimary=sourceFirst;
+        survivingOwner=failedOwner.value;
+        normalPending=normalProof.sourceValue;
+        failedPending=sourceFirst+2;
+        recoveredPrimary=resolvedPrimary;
+        newFailure=newFailure;
+        originalPrimary=newFailure+1;
+        rootIndex=rootIndex;
+    };
+}
+
+// Explicit source-bound propagation binding for one already-failing close.
+// Reports are facts for immediate emission, never reusable proof capabilities.
+public type PrimaryReport {
+    instruction Int; revision Int; incomingPrimary Int; ownerValue Int;
+    recoveredPrimary Int; newFailure Int; originalPrimary Int; rootIndex Int;
+}
+public function verifyPrimary(routine identity build.Function,
+    graph identity aggregate.Registry,profile identity owners.Profile,
+    contracts identity fallible.Registry,phase identity budget.Phase,
+    map identity roots.Map,failed continuation.Pair,failedCall build.InstId,
+    failedPlan identity cleanup.Plan,failedOwners,outerExit meta.LocId)
+    returns PrimaryReport
+    fails budget.LimitError,canonical.InvalidIR,owners.InvalidOwnership,
+        roots.InvalidRoots,continuation.InvalidBinding,
+        planVerify.InvalidPlan,InvalidChain {
+    let ownerProof be try owners.verify(profile,routine,graph,contracts);
+    let rootProof be try roots.verify(map,routine,graph,phase);
+    let binding be try continuation.verify(routine,graph,phase,failed);
+    let planProof be try planVerify.verify(routine.metadata,phase,
+        failedPlan,failedOwners,0,outerExit,true);
+    try require(failed.version == 2 and failedOwners.count == 1 and
+        failedPlan.depth == 1 and failedPlan.entry == 2 and
+        failed.location == outerExit and failedCall.owner == routine.key and
+        failedCall.index >= 1 and failedCall.index <= routine.instructions.length/10,
+        "invalid explicit primary cleanup binding");
+    let failedOwner cleanup.Scope be failedOwners[0];
+    let sourceRow be (failed.source.index-1)*5;
+    let sourceFirst be try read(routine.blocks,phase,sourceRow);
+    try require((try read(routine.blocks,phase,sourceRow+1)) == 3 and
+        (try read(routine.blocks,phase,sourceRow+4)) == failedCall.index and
+        sourceFirst >= 1 and sourceFirst+2 <= routine.values.length/4 and
+        failedOwner.value == sourceFirst+1 and
+        failedOwner.contract == profile.consume.index and
+        failedOwner.close == outerExit and
+        failedOwner.scope >= 1 and failedOwner.scope <= profile.scopes.length/2 and
+        (try read(profile.scopes,phase,(failedOwner.scope-1)*2+1)) == outerExit.index and
+        (try read(routine.values,phase,(sourceFirst-1)*4)) > 6 and
+        (try read(routine.values,phase,(sourceFirst)*4)) == profile.handle.index and
+        (try read(routine.values,phase,(sourceFirst+1)*4)) == meta.i64().index,
+        "primary binding requires exact primary, owner and pending source parameters");
     let ownerRow be (failed.source.index-1)*2;
     let ownerFirst be try read(profile.blocks,phase,ownerRow);
     try require((try read(profile.blocks,phase,ownerRow+1)) == 1 and
@@ -178,20 +241,9 @@ public function verify(routine identity build.Function,
         }
         i=i+1;
     }
-    try require(rootIndex >= 0 and normalProof.sourceValue ==
-        firstProof.normalValue and normalProof.normalValue > 0,
-        "checked path missing verified normal or already-failing root");
-    return Report {
-        firstClose=firstCall.index;
-        normalClose=normalCall.index;
-        failingClose=failedCall.index;
-        incomingPrimary=sourceFirst;
-        survivingOwner=failedOwner.value;
-        normalPending=normalProof.sourceValue;
-        failedPending=sourceFirst+2;
-        recoveredPrimary=resolvedPrimary;
-        newFailure=newFailure;
-        originalPrimary=newFailure+1;
-        rootIndex=rootIndex;
-    };
+    try require(rootIndex >= 0,"primary cleanup missing new-failure root");
+    return PrimaryReport { instruction=failedCall.index; revision=routine.revision;
+        incomingPrimary=sourceFirst; ownerValue=failedOwner.value;
+        recoveredPrimary=resolvedPrimary; newFailure=newFailure;
+        originalPrimary=newFailure+1; rootIndex=rootIndex; };
 }

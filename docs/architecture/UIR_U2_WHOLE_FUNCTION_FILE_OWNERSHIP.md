@@ -117,3 +117,11 @@ primary ValueId transport on both outcomes), then invoke the existing cleanup
 adapter for that bound route. Do not remove the current live-primary refusal
 and infer active propagation merely from a matching failure type. Native
 accumulator mutation cannot silently redefine original immutable SSA results.
+
+`u2_checked_chain_verify.verifyPrimary` now exposes that existing failed-route
+proof independently of the closed first/normal two-stage path. It freshly checks
+canonical ownership, continuation, failed-entry cleanup Plan and root map, then
+exact `[primary, File, pending i64]` source and both successor transports.
+The chain verifier delegates its failed-route suffix proof to this entry.
+Reports carry revision and instruction facts for immediate use, not cached
+verification authority. General Function emission does not yet consume it.

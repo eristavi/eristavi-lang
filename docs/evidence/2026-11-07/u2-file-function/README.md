@@ -123,3 +123,16 @@ managed identity + checked recursion **2/2**, 14.333 s. No failures/skips.
 Patch and Python compilation pass. See retained logs. Only targeted single
 before/after evidence: no five-pair statistics or general performance claim.
 No final qualification/merge; resume primary composition after this checkpoint.
+
+## Primary binding extraction
+
+Standalone `verifyPrimary` now owns the existing chain's failed-route checks;
+the chain delegates rather than maintaining a competing verifier. Additional
+admission checks bind exact source parameter shape, selected lexical cleanup
+origin, instruction owner/range and failed-mode Plan. Direct fixture compares
+its report to full chain facts and rejects a normal-entry Plan. Existing
+primary-transfer corruption/restore and native prefix/dispatch tests remain.
+Command: `PYTHONPATH=.:tests python -m unittest test_u2_checked_ssa_prefix -v`.
+**2/2 PASS, 9.153 s**, no skips/failures; see `primary-binding.log`.
+This completes reusable binding admission only. General Function composition,
+nested acquisition and File-owning recursive integration remain open.

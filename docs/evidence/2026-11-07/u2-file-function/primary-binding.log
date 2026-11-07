@@ -1,0 +1,7 @@
+test_canonical_outer_file_owner_moves_on_both_checked_edges (test_u2_checked_ssa_prefix.U2CheckedSSAPrefixTests.test_canonical_outer_file_owner_moves_on_both_checked_edges) ... ok
+test_verified_two_stage_native_dispatch_consumes_both_files (test_u2_checked_ssa_prefix.U2CheckedSSAPrefixTests.test_verified_two_stage_native_dispatch_consumes_both_files) ... ok
+
+----------------------------------------------------------------------
+Ran 2 tests in 9.153s
+
+OK

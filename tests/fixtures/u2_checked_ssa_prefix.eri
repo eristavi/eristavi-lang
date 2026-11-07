@@ -260,6 +260,25 @@ function run() fails budget.LimitError,canonical.InvalidIR,
         checkedPair,innerClose,plan,original,innerLoc,
         normalPair,exitClose,outerNormalPlan,outerNormalOwners,loc,
         failedPair,innerFailureClose,outerFailedPlan,outerFailedOwners);
+    let primaryDenied be false;
+    chain.verifyPrimary(fn,graph,profile,registry,checkedPhase,map,
+        failedPair,innerFailureClose,outerNormalPlan,outerFailedOwners,loc)
+        else error planVerify.InvalidPlan { primaryDenied=true; }
+        else error chain.InvalidChain { primaryDenied=true; }
+        else error canonical.InvalidIR { fail error; }
+        else error owners.InvalidOwnership { fail error; }
+        else error budget.LimitError { fail error; }
+        else error roots.InvalidRoots { fail error; }
+        else error continuation.InvalidBinding { fail error; };
+    try check(primaryDenied,"normal cleanup Plan admitted as active primary");
+    let primaryBinding be try chain.verifyPrimary(fn,graph,profile,registry,checkedPhase,map,
+        failedPair,innerFailureClose,outerFailedPlan,outerFailedOwners,loc);
+    try check(primaryBinding.incomingPrimary == innerError.index and
+        primaryBinding.originalPrimary == doubleOriginalPrimary.index and
+        primaryBinding.newFailure == doubleNewFailure.index and
+        primaryBinding.revision == fn.revision and
+        primaryBinding.instruction == innerFailureClose.index,
+        "standalone primary binding differs from full chain");
     try check(route.firstClose == innerClose.index and
         route.normalClose == exitClose.index and
         route.failingClose == innerFailureClose.index and
