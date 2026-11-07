@@ -714,29 +714,52 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
             if not checked { admissible=false; }
             else {
                 if fileDepth != 0 {
-                    try require(instructions[row+7] == fileAcquire or
-                        instructions[row+7] == fileConsume,
-                        "File profile does not yet admit defined checked calls");
-                    let resolved be nativeImports.inspectFile(routine.metadata,graph,phase,
-                        instructions[row+7],fileAcquire,fileConsume,textCarrier,fileHandle,failureType)
-                        else error budget.LimitError { fail error; }
-                        else error nativeImports.Unsupported { fail Unsupported { message=error.message; }; };
-                    // A live primary cannot be silently replaced by a new
-                    // File outcome in this deliberately bounded first slice.
-                    let v be 0;
-                    while v < selected.count {
-                        let value be selected[v];
-                        if values[(value-1)*4] == failureType {
-                            let live be try ssa.liveBefore(plan,routine,phase,
-                                build.InstId { owner=routine.key; index=i+1; },
-                                build.ValueId { owner=routine.key; index=value; });
-                            try require(not live or (primary != none and
-                                (resolved.operation == 1 or (i+1 == primaryCall and value == primaryValue))),
-                                "unbound live primary across File operation");
+                    let invoked be instructions[row+7];
+                    if invoked == fileAcquire or invoked == fileConsume {
+                        let resolved be nativeImports.inspectFile(routine.metadata,graph,phase,
+                            invoked,fileAcquire,fileConsume,textCarrier,fileHandle,failureType)
+                            else error budget.LimitError { fail error; }
+                            else error nativeImports.Unsupported { fail Unsupported { message=error.message; }; };
+                        // A live failure is never silently overwritten by
+                        // a checked File outcome or a recursive checked call.
+                        let v be 0;
+                        while v < selected.count {
+                            let value be selected[v];
+                            if values[(value-1)*4] == failureType {
+                                let live be try ssa.liveBefore(plan,routine,phase,
+                                    build.InstId { owner=routine.key; index=i+1; },
+                                    build.ValueId { owner=routine.key; index=value; });
+                                try require(not live or (primary != none and
+                                    (resolved.operation == 1 or (i+1 == primaryCall and value == primaryValue))),
+                                    "unbound live primary across File operation");
+                            }
+                            v=v+1;
                         }
-                        v=v+1;
+                        importKind=4; importOperation=resolved.operation;
+                    } else {
+                        // A checked call to this very Function is safe while
+                        // File owners remain on this frame's canonical stack:
+                        // owners.verify excludes passing/copying those handles,
+                        // and class-1 roots remain bound across the child call.
+                        // Re-entry acquires its OWN File and closes it before
+                        // returning; no File handle is transferred to child.
+                        try require(invoked == selfTarget and
+                            primary == none and groupTargets.count == 0,
+                            "File-owning checked call requires a bound self target");
+                        let v be 0;
+                        while v < selected.count {
+                            let value be selected[v];
+                            if values[(value-1)*4] == failureType {
+                                let live be try ssa.liveBefore(plan,routine,phase,
+                                    build.InstId { owner=routine.key; index=i+1; },
+                                    build.ValueId { owner=routine.key; index=value; });
+                                try require(not live,
+                                    "File-owning recursion cannot overwrite a live primary");
+                            }
+                            v=v+1;
+                        }
+                        importKind=0; importOperation=0;
                     }
-                    importKind=4; importOperation=resolved.operation;
                 } else {
                 if groupTargets.count == 0 {
                     if instructions[row+7] != selfTarget { admissible=false; }

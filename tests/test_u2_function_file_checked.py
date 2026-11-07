@@ -371,6 +371,102 @@ _start:
         self.assertEqual(negative.returncode,1)
         self.assertIn(b'invalid internal scalar value operation',negative.stderr)
 
+    def file_recursion_caller(self, path, depth, fail_close=False):
+        encoded = bytes(str(path),'utf-8')
+        body = r'''
+.text
+.globl _start
+_start:
+    call evn_scope_enter
+    movq %rax,%r15
+    movq %rax,%rdi
+    leaq .Lfile_recursion_roots(%rip),%rsi
+    leaq .Lfile_recursion_classes(%rip),%rdx
+    movl $2,%ecx
+    call evn_bind_roots
+    leaq .Lfile_recursion_path(%rip),%rdi
+    movl $PATHLEN,%esi
+    call evn_text
+    movq %rax,.Lfile_recursion_roots(%rip)
+    movq %rax,.Lfile_recursion_inputs(%rip)
+    movq $DEPTH,.Lfile_recursion_inputs+8(%rip)
+    leaq .Lfile_recursion_inputs(%rip),%rdi
+    xorl %esi,%esi
+    xorl %edx,%edx
+    leaq .Lfile_recursion_roots+8(%rip),%rcx
+    call erist_u2_rooted_function_720
+'''
+        if fail_close:
+            body += r'''
+    cmpq $1,%r10
+    jne .Lresource_test_fail
+    testq %rax,%rax
+    je .Lresource_test_fail
+    cmpq %rax,.Lfile_recursion_roots+8(%rip)
+    jne .Lresource_test_fail
+'''
+        else:
+            body += r'''
+    testq %r10,%r10
+    jne .Lresource_test_fail
+    cmpq $42,%rax
+    jne .Lresource_test_fail
+    cmpq $0,.Lfile_recursion_roots+8(%rip)
+    jne .Lresource_test_fail
+'''
+        body += r'''
+    xorl %edi,%edi
+    call erist_rt_slots_collect
+    call erist_rt_text_collect
+    call erist_rt_open_resources
+    testq %rax,%rax
+    jne .Lresource_test_fail
+    cmpq $COUNT,.Lfile_recursion_closes(%rip)
+    jne .Lresource_test_fail
+    movq $0,.Lfile_recursion_roots(%rip)
+    movq $0,.Lfile_recursion_roots+8(%rip)
+    call evn_void
+    movq %rax,%rsi
+    movq %r15,%rdi
+    call evn_scope_leave
+    call .Lresource_finish
+    xorl %edi,%edi
+    jmp erist_rt_exit
+.bss
+.p2align 3
+.Lfile_recursion_inputs: .zero 16
+.Lfile_recursion_roots: .zero 16
+.Lfile_recursion_closes: .quad 0
+.section .rodata
+.Lfile_recursion_classes: .byte 1,5
+.Lfile_recursion_path:
+.byte ''' + ','.join(map(str,encoded))+'\n'
+        return (body.replace('PATHLEN',str(len(encoded)))
+            .replace('DEPTH',str(depth))
+            .replace('COUNT',str(depth+1))+resource.FINISH)
+
+    def test_checked_file_owning_self_recursion_retains_each_frame_and_closes(self):
+        source = (ROOT/'tests/fixtures/u2_function_file_recursive.eri').read_text()
+        generated = self.generator('file-recursive-owning',source)
+        self.assertEqual((generated.returncode,generated.stderr),(0,''),generated.stdout[-2400:])
+        asm = generated.stdout
+        self.assertIn('call erist_u2_rooted_function_720',asm)
+        self.assertIn('call erist_u2_file_720_poison_',asm)
+        path = self.directory/'file-recursive.txt'
+        path.write_text('native')
+        for depth, fail_close in ((0,False),(1,False),(4,False),(16,False),
+                                   (0,True),(4,True)):
+            with self.subTest(depth=depth,fail_close=fail_close):
+                runtime = (resource.close_failures(self.runtime)
+                    if fail_close else self.runtime)
+                runtime = runtime.replace('.Lr_close:\n',
+                    '.Lr_close:\n    incq .Lfile_recursion_closes(%rip)\n',1)
+                self.assertNotEqual(runtime,self.runtime if not fail_close else resource.close_failures(self.runtime))
+                run = self.run_probe('u2-file-recursive-'+str(depth)+'-'+str(fail_close),
+                    asm+self.file_recursion_caller(path,depth,fail_close),runtime=runtime)
+                self.assertEqual((run.returncode,run.stdout,run.stderr),
+                    (0,b'',b''))
+
     def test_unknown_binding_and_stale_owner_refuse_before_output(self):
         for name, source in (
             ('symbol', self.source().replace('u2.file.openRead.v1', 'u2.file.openFake.v1')),
