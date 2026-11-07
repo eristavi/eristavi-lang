@@ -1,13 +1,32 @@
 # Eristavi compiler — current handover
 
-Updated 6 November 2026 (Asia/Nicosia). Focused checked/managed source-green; U2 functionality and final qualification pending.
+Updated 7 November 2026 (Asia/Nicosia). Closed checked-call group candidate under validation; U2 functionality and final qualification pending.
 Branch: `compiler/u2-cleanup-foundation-20261102`; [PR #111](https://github.com/eristavi/eristavi-lang/pull/111) remains DRAFT; #74 remains OPEN.
 Original checked-return checkpoint: `3100dc8e82f8e496d61fd38d0cdab5311416bd36`.
 Prior publication implementation: `e40a64b3c8b7774dc68d3220f6b208ee38854ca6`. Earlier exact diagnostic: `a51182e663e645777186e9f6551bdc7081f36916`.
 Latest implementation/test commit: `4b71966deb60da883b325936987b7f558ac7fe23` — focused and smoke green, not U2-complete.
 No final four-platform qualification or merge. Optimization #51 remains PAUSED.
 
-## Latest verified development checkpoint — 6 November 2026
+## Active development — 7 November 2026
+
+Authorized batch: checked calls between distinct defined Functions and mutual
+recursion, preserving exact managed/failure roots and independent evidence.
+This development batch extends the existing emitter with bounded `emitCheckedGroup`;
+contract: `docs/architecture/UIR_U2_CHECKED_CALL_GROUPS.md`. New mutual/direct fixtures
+and ten focused tests are under validation, not final accepted evidence.
+Preliminary mutual/handler/two-managed-result/negative checks passed; differing
+normal result layouts and the 592-byte/frame stack probe also passed. One new
+owned/C group generator attempt timed out at the unchanged 120-second watchdog
+while other compiler tests ran; repeat in isolation before judging performance.
+Two new test harness construction/handler mistakes were corrected; do not
+represent their earlier failed runs as green. Existing regression and hosted
+Linux smoke are still pending. Preserve
+`4b71966` below as the previous verified implementation until new tests pass.
+PR #111 remains DRAFT; #74 OPEN. No final matrix, merge or #51 restart.
+The user requires this batch to stay within a five-hour session budget; reserve
+time for exact-source testing, publishing code/evidence and this handover.
+
+## Previous verified development checkpoint — 6 November 2026
 
 **The owned/C generator watchdog blocker is RESOLVED for the focused
 checked Function fixture.** Implementation/tests latest exact head

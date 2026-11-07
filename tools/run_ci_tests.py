@@ -40,6 +40,7 @@ SMOKE_TESTS=(
     'test_u2_function_scalar_native.U2FunctionScalarNativeTests',
     'test_u2_function_managed_native.U2FunctionManagedNativeTests',
     'test_u2_function_checked_native.U2FunctionCheckedNativeTests',
+    'test_u2_function_checked_group.U2FunctionCheckedGroupTests',
     'test_u2_function_import_integration.U2FunctionImportIntegrationTests',
     'test_u2_identity_gc_cleanup.U2IdentityGCCleanupTests',
     'test_u2_identity_file_cleanup.U2IdentityFileCleanupTests',

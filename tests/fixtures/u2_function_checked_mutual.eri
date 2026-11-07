@@ -1,0 +1,172 @@
+// Closed original canonical Function group with genuine mutual checked calls.
+// Existing saved FailureContext ingress; independent class-1/class-5 roots.
+import std.process;
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+import compiler.u1_meta as meta;
+import compiler.u1_builder as build;
+import compiler.u1_aggregate as aggregate;
+import compiler.u1_aggregate_signature as sig;
+import compiler.u1_aggregate_build as ab;
+import compiler.u1_verify as canonical;
+import compiler.u1_aggregate_verify as graphVerify;
+import compiler.u2_invoke_contract as contracts;
+import compiler.u2_managed_types as managed;
+import compiler.u2_managed_root_gate as roots;
+import compiler.u2_function_managed_x86_64 as native;
+import compiler.u2_ssa_liveness as ssa;
+import compiler.u2_text_native as textNative;
+import compiler.u2_function_contract as body;
+import compiler.u2_continuation_bind as continuation;
+import compiler.u2_invoke_transfer as invoke;
+
+error ProbeError { message Text; }
+function check(ok Bool,message Text) fails ProbeError {
+    if not ok { fail ProbeError { message=message; }; }
+}
+function run()
+    fails budget.LimitError,canonical.InvalidIR,graphVerify.InvalidGraph,
+        managed.InvalidManagedTypes,
+        roots.InvalidManagedRoots,ssa.InvalidLiveness,native.Unsupported,
+        body.InvalidBody,continuation.InvalidBinding,ProbeError {
+    let root be try budget.developmentRequest();
+    let shared be try budget.metadataOwner(root);
+    let mp be try budget.constructionPhase(shared);
+    let data be try meta.create(shared,mp);
+    let graph be try aggregate.create(shared,mp);
+    let i64 be try aggregate.primitive(graph,meta.i64());
+    let pred be try aggregate.primitive(graph,meta.pred());
+    let carrier be try aggregate.aggregate(graph,mp,[i64,i64]);
+    let textCarrier be try aggregate.aggregate(graph,mp,[]);
+    let failureCarrier be try aggregate.aggregate(graph,mp,[i64,textCarrier]);
+    let scalarSpecialization be try meta.signature(data,mp,[meta.i64()],[meta.i64()]);
+    let signature be try sig.signature(data,graph,mp,[carrier,textCarrier,failureCarrier,i64,pred],[carrier,i64]);
+    let failureSig be try sig.signature(data,graph,mp,[],[failureCarrier]);
+    let normalCarry be try sig.signature(data,graph,mp,[],[carrier,i64,textCarrier]);
+    let failedCarry be try sig.signature(data,graph,mp,[],[failureCarrier,textCarrier]);
+    let selfTarget be try meta.declaration(data,mp,signature,"u2.recursive.managed",1,63,0);
+    let otherTarget be try meta.declaration(data,mp,signature,"u2.mutual.other",1,63,0);
+    let createSig be try sig.signature(data,graph,mp,[i64],[textCarrier]);
+    let createText be try meta.declaration(data,mp,createSig,textNative.name(1),2,63,1);
+    let countSig be try sig.signature(data,graph,mp,[textCarrier],[i64]);
+    let countText be try meta.declaration(data,mp,countSig,textNative.name(5),2,63,1);
+    let src be try meta.source(data,mp,"u2-managed-function",
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",192);
+    let loc be try meta.location(data,mp,src,0,7,1,1,1);
+    try aggregate.freeze(graph);
+    let registry be try managed.create(graph,mp);
+    let identityType be try managed.identityOfBase(registry,mp,carrier);
+    try managed.freeze(registry);
+    try meta.freeze(data);
+    let table be try contracts.create(data,graph,mp);
+    let selfContract be contracts.Contract { version=1; target=selfTarget; failure=failureSig; };
+    try contracts.register(table,data,graph,mp,selfContract);
+    let otherContract be contracts.Contract { version=1; target=otherTarget; failure=failureSig; };
+    try contracts.register(table,data,graph,mp,otherContract);
+    try contracts.freeze(table);
+    try budget.finishPhase(mp);
+
+    let targets be [selfTarget,otherTarget];
+    let routines be []; let owners be [];
+    let member be 0;
+    while member < 2 {
+        let calleeContract be otherContract;
+        if member == 1 { calleeContract=selfContract; }
+    let owner be try budget.functionOwner(root,false);
+    let cp be try budget.constructionPhase(owner);
+    let fn be try build.create(data,signature,owner,cp);
+    try body.bind(fn,graph,table,targets[member]);
+    let entry be try ab.block(fn,graph,[carrier,textCarrier,failureCarrier,i64,pred]);
+    let managedInput be try build.parameter(fn,entry,0);
+    let textInput be try build.parameter(fn,entry,1);
+    let failureInput be try build.parameter(fn,entry,2);
+    let input be try build.parameter(fn,entry,3);
+    let shouldFail be try build.parameter(fn,entry,4);
+    let zero be try build.integer(fn,entry,0,loc);
+    let more be try build.compareInteger(fn,entry,input,zero,5,loc);
+    let recurse be try ab.block(fn,graph,[]);
+    let base be try ab.block(fn,graph,[]);
+    let normal be try ab.block(fn,graph,[carrier,i64,textCarrier]);
+    let failed be try ab.block(fn,graph,[failureCarrier,textCarrier]);
+    let successfulBase be try ab.block(fn,graph,[]);
+    let failingBase be try ab.block(fn,graph,[]);
+    let returnedIdentity be try build.parameter(fn,normal,0);
+    let returnedCount be try build.parameter(fn,normal,1);
+    let normalText be try build.parameter(fn,normal,2);
+    let failedResult be try build.parameter(fn,failed,0);
+    let failedText be try build.parameter(fn,failed,1);
+    try ab.branch(fn,graph,entry,more,recurse,[],base,[],loc);
+    let one be try build.integer(fn,recurse,1,loc);
+    let next be try build.wrapSubtract(fn,recurse,input,one,loc);
+    let textCall be try ab.call(fn,graph,recurse,createText,[input],loc);
+    let childText be try build.result(fn,textCall,0);
+    let pair be try continuation.bindCarrying(fn,graph,cp,recurse,normal,failed,
+        normalCarry,failedCarry,loc);
+    let checkedCall be try invoke.emit(fn,graph,calleeContract,pair,
+        [managedInput,childText,failureInput,next,shouldFail],[textInput]);
+    let countCall be try ab.call(fn,graph,normal,countText,[normalText],loc);
+    let ownCount be try build.result(fn,countCall,0);
+    let total be try build.wrapAdd(fn,normal,returnedCount,ownCount,loc);
+    try ab.returnValues(fn,graph,normal,[returnedIdentity,total],loc);
+    // Read the distinct parent Text after a child's checked failure and GC.
+    let failedCountCall be try ab.call(fn,graph,failed,countText,[failedText],loc);
+    let failedCount be try build.result(fn,failedCountCall,0);
+    let propagated be try body.returnFailure(fn,graph,table,failed,failedResult,loc);
+    try ab.branch(fn,graph,base,shouldFail,failingBase,[],successfulBase,[],loc);
+    let baseCall be try ab.call(fn,graph,successfulBase,countText,[textInput],loc);
+    let baseCount be try build.result(fn,baseCall,0);
+    try ab.returnValues(fn,graph,successfulBase,[managedInput,baseCount],loc);
+    let raised be try body.returnFailure(fn,graph,table,failingBase,failureInput,loc);
+
+    // Dead, independently verified block also establishes the existing U1a
+    // concrete edge specialization required by the bootstrap compiler.
+    let dead be try build.block(fn,[]);
+    let deadDestination be try build.block(fn,[meta.i64()]);
+    let deadValue be try build.integer(fn,dead,0,loc);
+    try build.jump(fn,dead,deadDestination,[deadValue],loc);
+    try ab.returnValues(fn,graph,deadDestination,[managedInput,deadValue],loc);
+    let deadChecked be try ab.block(fn,graph,[failureCarrier]);
+    let deadFailure be try build.parameter(fn,deadChecked,0);
+    let deadRaised be try body.returnFailure(fn,graph,table,deadChecked,deadFailure,loc);
+    try ab.complete(fn,graph);
+    try budget.finishPhase(cp);
+
+        routines.add(fn); owners.add(owner);
+        member=member+1;
+    }
+    try native.emitCheckedGroup(routines,[92,93],graph,table,registry,
+        [carrier,textCarrier],[identityType,managed.text(registry)],true);
+    member=0;
+    while member < routines.count {
+        try build.close(routines[member]); try budget.close(owners[member]);
+        member=member+1;
+    }
+    try contracts.close(table); try managed.close(registry);
+    try aggregate.close(graph); try meta.close(data);
+    try budget.close(shared); try budget.close(root);
+}
+function main() {
+    run()
+    else error budget.LimitError {
+        output("limit:"+error.message); process.setExitCode(1);
+    } else error canonical.InvalidIR {
+        output("invalid:"+error.message); process.setExitCode(1);
+    } else error graphVerify.InvalidGraph {
+        output("graph:"+error.message); process.setExitCode(1);
+    } else error managed.InvalidManagedTypes {
+        output("managed:"+error.message); process.setExitCode(1);
+    } else error roots.InvalidManagedRoots {
+        output("roots:"+error.message); process.setExitCode(1);
+    } else error ssa.InvalidLiveness {
+        output("liveness:"+error.message); process.setExitCode(1);
+    } else error native.Unsupported {
+        output("unsupported:"+error.message); process.setExitCode(1);
+    } else error body.InvalidBody {
+        output("body:"+error.message); process.setExitCode(1);
+    } else error continuation.InvalidBinding {
+        output("continuation:"+error.message); process.setExitCode(1);
+    } else error ProbeError {
+        output("probe:"+error.message); process.setExitCode(1);
+    };
+}
+main();
