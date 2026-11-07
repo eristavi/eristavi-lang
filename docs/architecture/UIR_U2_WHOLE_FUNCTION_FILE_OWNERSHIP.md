@@ -55,23 +55,52 @@ bounded arrays, followed by O(blocks * maxDepth + closes) pure assembler
 emission. Preflight precedes the first output byte; the emitted helpers do
 not authorize machine execution merely because metadata verified.
 
-## Missing integration and acceptance
+## First whole-Function integration — 7 November 2026
 
-A later coherent code batch must connect these verified root facts to the
-existing whole-Function emitter, with original File acquisition and error
-transport; real File.close through the already verified reverse cleanup
-adapters; caller-owned class-5 `FailureContext` publication and ordered
-secondary attachment; pending normal results, checked handlers and recursive
-frames; and **all** exits. Include live/foreign/stale/dead/duplicated owner
-negatives, forced GC across acquisition/cleanup, deterministic failure
-injection, full physical and independent outcome evidence before marking
-this work as integrated. The current emitter still refuses arbitrary File
-opcodes; no default compiler code path changed.
+`u2_function_managed_x86_64.emitFileChecked` now admits one lexical File
+owner, using the original canonical Function and fresh scoped-owner proof.
+It extends the existing SSA selection with the distinct File carrier, reuses
+full publication verification, and calls this foundation's per-block publish
+and close-poison helpers from the actual Function CFG. A separate lexical
+class-1 word is appended to the existing registered root vector; its lifetime
+is independent of ordinary use-liveness. Existing class-5 outcome roots remain.
+The additional lexical word costs eight bytes before stack alignment.
 
-The focused test checks original Function ownership metadata, generated
-root/helper signatures, consumption labels and object-file assembly. It is
-not an actual end-to-end File.open/close application or CI qualification.
-The test must pass before this partial foundation is considered verified.
+Exact version-one imported symbols `u2.file.openRead.v1` and
+`u2.file.close.v1` require imported kind 2, effects 63 and version 1.
+Acquisition takes the exact Text carrier and returns the owner carrier; close
+takes that carrier and has no successful result. The failure carrier must be
+exactly two Text fields (FileError message and path), with the existing checked
+root verifier proving the same failure type at every original invoke.
+The private entry also receives the linked runtime File descriptor index;
+the existing runtime checks its resource kind. This is not a public ABI.
 
-Final four-platform CI and completed-batch qualification remain reserved
-for the completed U2 implementation. Keep #111/#121 draft and #74 open.
+Acquisition reuses `erist_rt_file_open` with read-only flags and the existing
+`evn_frame`/`setjmp`/`evn_pop` runtime boundary. Its result is immediately stored
+in a registered temporary before any further runtime call. A caught checked
+failure is saved and class-5 rooted after handler retirement, then transported
+through the original failed edge. Terminal defects never become checked edges.
+Close reuses `evn_empty_failure` and `evn_cleanup_accumulate`, then poisons the
+original SSA handle and lexical root on both outcomes. Original simultaneous
+edge moves publish destination roots before GC. Pending scalar values travel
+through canonical carried arguments; a failing close selects the failed edge
+and therefore cancels the otherwise successful return.
+
+This first slice refuses nested depth, defined checked calls in the File
+profile, failure parameters in owning blocks, and live primary contexts across
+File operations. It does NOT yet implement nested surviving prefixes,
+primary/secondary composition, recursive owned frames, all source exit shapes,
+or additional File services. Earlier standalone nested cleanup evidence does
+not qualify these unintegrated combinations. Existing checked group APIs and
+production defaults are unchanged. The initial managed plan and File-selected
+plan are closed on success and refusal; focused tests check retained accounting.
+
+## Remaining acceptance
+
+First connect an original active FailureContext to verified suffix cleanup,
+retaining the primary and attaching secondary close failures in order. Then
+admit nested owner prefixes and checked recursive/group calls with private
+frames. Add combined foreign/stale roots, deeper allocator/physical/sanitizer
+and independent-origin evidence. No new executable IR or resource runtime is
+needed. Full four-platform and completed-batch qualification remain deferred;
+keep #111/#121 draft and #74 open.

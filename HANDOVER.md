@@ -1,89 +1,51 @@
 # Eristavi compiler — current handover
 
-Updated 7 November 2026 (Asia/Nicosia). Active, **focused-green File-root fix / full smoke pending** on separate branch
-`compiler/u2-whole-function-file-roots-20261107`, [draft PR #121](https://github.com/eristavi/eristavi-lang/pull/121) targeting the checked U2 branch. Parent [PR #111](https://github.com/eristavi/eristavi-lang/pull/111) remains DRAFT/unmerged and U2 #74 OPEN. The previous checked Function group batch remains fully focused/Linux-smoke green; complete File integration and final qualification remain OPEN.
-Parent checked-group implementation: `5dcc85f69ac458f83730957a9defd4b2fa3d0d7e`.
-Parent checked-group tested checkpoint: `43d56f2f526fd57db5d790413217de439858b7a5`.
-File fix tested checkpoint: `8104d8e8b1819765addab4fde3854fd37ccd81b2` — focused 3/3 PASS.
-Prior full-smoke checkpoint `0352563` failed; broader fixed-code rerun pending.
-No final four-platform qualification or merge. Optimization #51 remains PAUSED.
+Updated 7 November 2026 (Asia/Nicosia). Active branch:
+`compiler/u2-whole-function-file-roots-20261107`, draft PR #121 targeting
+`compiler/u2-cleanup-foundation-20261102` (draft #111). Issue #74 remains OPEN.
+Baseline head: `0263208d7168b9a2a2365f7f105749df6a980ea7`.
+**Current batch: bounded single-owner whole-Function File integration.**
+**Final focused validation: 8/8 PASS, 0 failed, 0 skipped, 69.823 seconds.**
+The command, source hashes and raw log are recorded in
+[the batch evidence](docs/evidence/2026-11-07/u2-file-function/README.md).
+No merge, production promotion, final four-platform qualification, #51 work,
+or experimental owned full-compiler self-build is authorized by this checkpoint.
 
-## File-root regression fix — 7 November 2026
+## Current File implementation and recovery
 
-The failing native probe used a hardcoded SSA offset 24 for the surviving outer
-File after the inner close, whereas the original canonical ValueId requires
-byte offset 32. The generated root helper correctly refused the missing source.
-The test now exports actual ValueId offsets and close instruction IDs from its
-original canonical fixture, uses those symbols for every handoff/close, and
-reserves the full admitted 256-word SSA frame separately from roots/scope locals.
-A negative native probe deliberately omits that handoff and must still fault;
-the correct nested-close/forced-GC/reclamation probe must succeed.
+The general whole-Function emitter now has an opt-in `emitFileChecked` entry.
+Actual original opcode-46 File.openRead/close calls select original typed edges;
+acquisition is immediately rooted, checked close consumes the original SSA and
+lexical root on both outcomes, and pending scalar success is cancelled on close
+failure. Handler recovery, class-1/class-5 forced-GC roots and final reclamation
+are exercised by compiler-generated execution. Existing independent owners,
+SSA publication, native resource adapters and the 32-byte public ABI are reused.
 
-Local focused File-root test PASS (positive and missing-handoff negative), 6.267 s.
-[Focused CI #42360810124](https://github.com/eristavi/eristavi-lang/actions/runs/42360810124)
-on exact fix checkpoint `8104d8e`: **3/3 PASS**. File probe 1/1, 13.206 s;
-original generator parity gates 2/2, 255.978 s. Owned generators took **98.233 /
-98.333 s**, both within unchanged **120-second** limits. Production emitter/runtime,
-source semantics and watchdogs are unchanged; no cause is claimed for prior
-runner timing variability. [Evidence/logs](docs/evidence/2026-11-07/u2-file-root-fix.md).
-Broader [smoke rerun #42360813812](https://github.com/eristavi/eristavi-lang/actions/runs/42360813812)
-is still running; do not mark it passed. No full qualification is claimed.
-Whole-Function File lowering remains unintegrated; keep #121/#111 draft.
+**Bounded, not full integration:** one lexical owner only. Nested owners,
+surviving prefixes, active-primary/ordered-secondary composition and File-owning
+recursive/group calls remain refused. General all-exit acceptance, deeper
+foreign/stale root and physical/sanitizer evidence, main reconciliation and final
+four-platform/completed-batch qualification remain open. Do not repeat completed
+checked-group work or the single-owner open/close slice.
 
-## Active File ownership checkpoint — 7 November 2026 (partial, NOT accepted)
+**Exact next implementation step:** extend File close emission to consume the
+original active FailureContext through the existing verified suffix-cleanup
+infrastructure, proving primary preservation and ordered secondary failures;
+then admit nested owners/surviving prefixes. Retain current refusal gates until
+each combination has native positive/negative evidence.
 
-**Do not repeat completed checked Function groups.** The next major block is
-whole-Function File acquisition/consumption and reverse cleanup across original
-canonical checked, normal, handler and recursive exits; this is **NOT done**.
+Previous smoke [#42360813812](https://github.com/eristavi/eristavi-lang/actions/runs/42360813812)
+on `8104d8e8b1819765addab4fde3854fd37ccd81b2` is now confirmed SUCCESS:
+**171 run / 168 passed / 0 failed / 3 intentional skips**, 1611.120 seconds.
+Scope/patch passed; the four-platform matrix was skipped. No newer branch run
+was present at initial inspection. This verifies the prior foundation, not the
+new integration. Earlier failed attempts and exact focused fix evidence remain
+in [the historical checkpoint](docs/history/2026-11-07/file-roots-before-function-integration.md).
 
-- On child branch `compiler/u2-whole-function-file-roots-20261107`, draft
-  [PR #121](https://github.com/eristavi/eristavi-lang/pull/121),
-  source `src/compiler/u2_function_file_roots_x86_64.eri` (first implementation
-  `f0b93b427cdd247be8840fe514ee10bd0f48ff15`): a bounded private emitter
-  independently reruns the full original canonical scoped-owner proof,
-  snapshots all original block root signatures and checked File consumption
-  operands, then emits native class-1 File-root registration, per-block lexical
-  owner publication (including dead blocks) and consumed-handle SSA/root-slot
-  clearing on checked File.close. No separate executable IR, source syntax,
-  moving GC, default-compiler edit or public ABI change.
-- Added `tests/test_u2_function_file_roots.py` and an entry in the focused
-  smoke selector. Test dynamically reuses the established 11-block original
-  ownership fixture, checks emitted class/entry/close symbols and assembled
-  object, and physically opens/closes two nested File handles while forcing
-  real owned-runtime GC and post-scope reclamation. The test drives these
-  transitions itself; the original whole-Function native CFG still does not.
-  Source+test checkpoint `282e87b14fddabcb912c296910323b7b3bd8007c`.
-- **Prior full-smoke validation: FAILED**, [CI #42352695186](https://github.com/eristavi/eristavi-lang/actions/runs/42352695186)
-  on exact File checkpoint `0352563`, completed 7 November 2026.
-  **171 run / 165 passed / 1 failure / 2 errors / 3 intentional skips**,
-  1562.932 s. Scope/patch and Python compilation passed; full matrix skipped.
-  The new `test_verified_lexical_owner_roots_cover_every_original_block_and_consumption`
-  fails during native execution with exit 1 and
-  `Eristavi runtime fault: invalid internal scalar value operation`
-  (test line 251). Both the existing self-recursive and direct checked-group
-  owned/C generator gates also hit their unchanged **120-second watchdogs**.
-  The File fault was subsequently traced to the fixture handoff above. The
-  timeout causes were not established; isolated reruns now pass unchanged. Do not
-  infer a semantic regression or waive/increase the limits.
-  Earlier green #111 evidence does NOT qualify this new File code.
-  This failure record predates the focused test-fixture fix described above.
-- Architecture and intentional boundaries:
-  [whole-Function File ownership contract](docs/architecture/UIR_U2_WHOLE_FUNCTION_FILE_OWNERSHIP.md).
-  The root/poison helpers are *not yet called by*
-  `u2_function_managed_x86_64.eri`. No File.open/close is emitted there;
-  no general checked/handler/multi-exit cleanup, primary/secondary handoff,
-  recursive File frame, or native File checked success/failure path is completed.
-  **Do not label PR #121 or U2 #74 accepted; do not merge #121/#111 yet.**
-- Next: reuse the passing focused File-root fix; check the broader smoke result,
-  then connect actual original
-  acquisition, checked File.close and root
-  publication to whole-Function emission, preserving original typed SSA edges,
-  surviving owner prefixes, pending returns and existing class-5 FailureContext.
-  Reuse verified real close adapters; prove arbitrary exit sets and recursive
-  frames with independent outcomes, bad-root/owner/allocator faults and physical
-  RSS/GC-pause evidence. Reconcile main and run final four-platform/completed
-  qualification only on coherent finished U2. No owned full self-build, paused
-  #51 work or unnecessary full CI.
+The current batch's broader Linux smoke, owned/C generator parity and final
+qualification are deliberately not initiated locally to protect the usage
+budget. Any automatically triggered hosted smoke must be reported separately
+and must not be assumed successful. All standing instructions below continue.
 
 ## Latest verified development checkpoint — 7 November 2026
 
@@ -158,7 +120,7 @@ run experimental full owned-compiler self-builds; separate #51 remains paused.
 | Checked return contract | `u2_function_contract.eri` binds exact frozen FunctionId/signatures; optional opcode 47 `return.failure`. Fresh verifier checks binding/type/arity/attributes/origin, including dead blocks; legacy profiles refuse it. Scoped owners must be empty on both return kinds. Zero, one and two normal results supported; no fake Void SSA. |
 | Text / Unicode17 | Established 12 imports: scalar construction, immutable concat/copy/equality, views/counts/indexes, NFC and collection; mixed Text/List loops. Unicode17 remains frozen. |
 | List<i64> | Empty/copy/append/count/get/replace/collect with rooted snapshots/boxes and original source/LocId bounds faults, including negative/end bounds. Nested/non-i64 producers remain open. |
-| File cleanup / failures | Checked typed edges, owner prefixes, reverse exactly-once closes, primary/ordered-secondary failure roots; bounded two-stage native chain and recursive runtime probes. File paths remain separate adapters. Whole-Function checked recursion propagates existing saved contexts; general context construction and complete handler/resource integration remain open. |
+| File cleanup / failures | Checked typed edges, owner prefixes, reverse exactly-once closes, primary/ordered-secondary failure roots; bounded two-stage native chain and recursive runtime probes. Single-owner File.openRead/close now runs in whole-Function CFG through emitFileChecked; nested composition and owned recursive/group integration remain open. Whole-Function checked recursion propagates existing saved contexts. |
 | Private physical schema | Function gained `definedTarget` (default zero): **18** owned graph cells, previously 17. Physical observer and independent pin updated; capacity/traffic budgets unchanged. |
 | Publication proof | `ssa.verifyPublications` freshly verifies the full plan and all ordered IDs/entry/before/after bits, including dead code, before each body's output. Checked groups reuse private immutable Plans within one bounded transaction, never a verified flag. Derived plans close on comparison-work refusal; all group Plans/phases close on any failure. |
 

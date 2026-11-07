@@ -108,3 +108,41 @@ public function inspect(data identity meta.Metadata,
     // Their bounds guards run before snapshots or boxed-value allocation.
     return Target { kind=kind; operation=operation; };
 }
+
+// Explicit private runtime bindings; an arbitrary fallible declaration is
+// never reinterpreted as File.open merely because its signature matches.
+public function inspectFile(data identity meta.Metadata,
+    graph identity aggregate.Registry,phase identity budget.Phase,
+    target Int,acquire Int,consume Int,textCarrier Int,fileCarrier Int,failureCarrier Int)
+    returns Target fails budget.LimitError,Unsupported {
+    try require(target >= 1 and target <= data.declarations.length/6 and
+        (target == acquire or target == consume),"unknown File target");
+    let failure be aggregate.TypeId { owner=graph.key; index=failureCarrier; };
+    try require((try aggregate.fieldCount(graph,phase,failure)) == 2,
+        "FileError carrier must contain message and path Text");
+    try require((try aggregate.field(graph,phase,failure,0)).index == textCarrier and
+        (try aggregate.field(graph,phase,failure,1)).index == textCarrier,
+        "FileError carrier fields must be exact Text carriers");
+    let operation be 1; let symbol be "u2.file.openRead.v1";
+    let parameter be textCarrier;
+    if target == consume { operation=2; symbol="u2.file.close.v1"; parameter=fileCarrier; }
+    let row be (target-1)*6;
+    try require(textCarrier >= 7 and fileCarrier >= 7 and textCarrier != fileCarrier and
+        (try words.get(data.declarations,phase,row+3)) == 2 and
+        (try words.get(data.declarations,phase,row+4)) == 63 and
+        (try words.get(data.declarations,phase,row+5)) == 1 and
+        (try same(data,phase,row,symbol)),"invalid File import symbol/version/effects");
+    let id be meta.FunctionId { owner=data.key; index=target; };
+    let signature be try meta.functionSignature(data,phase,id);
+    try require((try meta.parameterCount(data,phase,signature)) == 1 and
+        (try signatures.parameterType(data,graph,phase,signature,0)).index == parameter,
+        "invalid File import argument");
+    let results be 0; if operation == 1 { results=1; }
+    try require((try meta.resultCount(data,phase,signature)) == results,
+        "invalid File import result count");
+    if operation == 1 {
+        try require((try signatures.resultType(data,graph,phase,signature,0)).index == fileCarrier,
+            "invalid File acquisition result");
+    }
+    return Target { kind=4; operation=operation; };
+}
