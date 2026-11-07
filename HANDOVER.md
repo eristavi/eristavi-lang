@@ -1,9 +1,10 @@
 # Eristavi compiler — current handover
 
-Updated 7 November 2026 (Asia/Nicosia). Active, **unqualified** File-owner-root foundation on separate branch
+Updated 7 November 2026 (Asia/Nicosia). Active, **unqualified / CI FAILED** File-owner-root foundation on separate branch
 `compiler/u2-whole-function-file-roots-20261107`, [draft PR #121](https://github.com/eristavi/eristavi-lang/pull/121) targeting the checked U2 branch. Parent [PR #111](https://github.com/eristavi/eristavi-lang/pull/111) remains DRAFT/unmerged and U2 #74 OPEN. The previous checked Function group batch remains fully focused/Linux-smoke green; complete File integration and final qualification remain OPEN.
-Implementation: `5dcc85f69ac458f83730957a9defd4b2fa3d0d7e`.
-Corrected exact test checkpoint: `43d56f2f526fd57db5d790413217de439858b7a5`.
+Parent checked-group implementation: `5dcc85f69ac458f83730957a9defd4b2fa3d0d7e`.
+Parent checked-group tested checkpoint: `43d56f2f526fd57db5d790413217de439858b7a5`.
+File foundation tested checkpoint: `0352563f9096ed58c50e7aa92dc67ba884670a9f` — CI FAILED.
 No final four-platform qualification or merge. Optimization #51 remains PAUSED.
 
 ## Active File ownership checkpoint — 7 November 2026 (partial, NOT accepted)
@@ -29,10 +30,19 @@ canonical checked, normal, handler and recursive exits; this is **NOT done**.
   real owned-runtime GC and post-scope reclamation. The test drives these
   transitions itself; the original whole-Function native CFG still does not.
   Source+test checkpoint `282e87b14fddabcb912c296910323b7b3bd8007c`.
-- **Validation: pending** GitHub Actions PR CI; none of this new source or
-  test is yet demonstrated green or qualified. Track the latest PR #121 CI
-  run, distinguish scope, focused test, broad smoke and skipped full matrix.
-  Earlier #111 development success does NOT qualify new code.
+- **Validation: FAILED**, [CI #42352695186](https://github.com/eristavi/eristavi-lang/actions/runs/42352695186)
+  on exact File checkpoint `0352563`, completed 7 November 2026.
+  **171 run / 165 passed / 1 failure / 2 errors / 3 intentional skips**,
+  1562.932 s. Scope/patch and Python compilation passed; full matrix skipped.
+  The new `test_verified_lexical_owner_roots_cover_every_original_block_and_consumption`
+  fails during native execution with exit 1 and
+  `Eristavi runtime fault: invalid internal scalar value operation`
+  (test line 251). Both the existing self-recursive and direct checked-group
+  owned/C generator gates also hit their unchanged **120-second watchdogs**.
+  The runtime-fault cause and timeout causes remain undiagnosed; do not
+  attribute the timeouts to a semantic regression or waive/increase the limit.
+  Earlier green #111 evidence does NOT qualify this new File code.
+  This is a status-only correction; no implementation fix or test rerun.
 - Architecture and intentional boundaries:
   [whole-Function File ownership contract](docs/architecture/UIR_U2_WHOLE_FUNCTION_FILE_OWNERSHIP.md).
   The root/poison helpers are *not yet called by*
@@ -40,7 +50,9 @@ canonical checked, normal, handler and recursive exits; this is **NOT done**.
   no general checked/handler/multi-exit cleanup, primary/secondary handoff,
   recursive File frame, or native File checked success/failure path is completed.
   **Do not label PR #121 or U2 #74 accepted; do not merge #121/#111 yet.**
-- Next: connect actual original acquisition, checked File.close and root
+- Next: first diagnose/fix the File-root native runtime fault and independently
+  investigate the two generator watchdog errors. Then connect actual original
+  acquisition, checked File.close and root
   publication to whole-Function emission, preserving original typed SSA edges,
   surviving owner prefixes, pending returns and existing class-5 FailureContext.
   Reuse verified real close adapters; prove arbitrary exit sets and recursive
