@@ -181,4 +181,3 @@ and [#42404551595](https://github.com/eristavi/eristavi-lang/actions/runs/424045
 initially failed on corrected fixture construction; they do not establish
 additional source semantics. Only the successful exact-head targeted result
 above qualifies this development slice. Complete U2 remains unaccepted.
-
