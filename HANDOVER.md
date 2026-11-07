@@ -1,5 +1,40 @@
 # Eristavi compiler — current handover
 
+## New verified nested primary across File-owner prefixes — 7 November 2026
+
+**Exact implemented/tested code** [`1f1b44b`](https://github.com/eristavi/eristavi-lang/commit/1f1b44b3f74d11d5e95e0d85f0c0ac9277ef9e8b).
+[Focused CI #42412553696](https://github.com/eristavi/eristavi-lang/actions/runs/42412553696)
+**4/4 PASS, zero errors/skips, 51.138 seconds** on hosted Linux x86-64 Clang.
+The previous three-method functional run [#42412420675](https://github.com/eristavi/eristavi-lang/actions/runs/42412420675)
+also passed at `c20efa9`, before two negative binding cases were added.
+
+The original whole-Function emitter can now preserve the exact *inner*
+File.close FailureContext as primary across the checked *outer* File.close
+after the inner owner was consumed and only its surviving outer prefix
+remains. On failed outer close, the new cleanup failure is appended as a
+secondary in native execution; success leaves the original primary
+unchanged. Roots survive forced GC and the 0/1/2 live File cleanup paths
+are checked. The existing independent `verifyPrimary` still demands a
+fully bound original checked source, one exact surviving owner,
+failure-mode cleanup Plan, canonical successors, typed class-5 root and
+source origin. We no longer incorrectly reject this safe case merely
+because the enclosing Function earlier had depth two. This is NOT a
+new generalized verifier, alternate IR, public ABI, or runtime error
+semantics. Stale continuation and wrong-mode Plan are refused before
+assembly; previous one-owner primary and ordinary nested File tests
+remain green. See [new evidence](docs/evidence/2026-11-07/u2-nested-primary/README.md).
+
+**Still unaccepted for U2 #74:** arbitrary sequences of active-primary
+closes with two or more owners still live, complete managed List/Text/
+aggregate/failure constructors, hostile/foreign/retired root and
+allocator/sanitizer/RSS evidence, broader Stage-0/C/native origin parity,
+latest owned/C generator output parity, main reconciliation and
+exact-head four-platform/full completed-batch qualification.
+The functional change is an isolated tested feature, not U2 completion.
+Keep #121/#111 draft, #74 open and #51 optimization paused. Do not reuse
+a prior-head CI result as latest-source qualification.
+
+
 ## Latest verified File-owning closed/mixed-group checkpoint — 7 November 2026
 
 **Exact tested source-and-test head:** `58008fd395c740daa4d038191e0e029cad32559a`.

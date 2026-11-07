@@ -172,3 +172,31 @@ File-owning defined calls and arbitrary nested prefixes remain excluded.
 Only the bound primary may be live across that close. Acquisition may carry
 rooted failure ingress without mutating it. Ordinary handlers with retained
 errors must not opt into failed-entry composition without the explicit binding.
+
+## Tested nested-primary composition after a consumed inner owner
+
+A Function may have an independently verified lexical maximum depth above
+one and still have exactly one owner active at the particular bound
+already-failing outer File.close. The caller must provide an explicit
+`PrimaryBinding`; the existing `verifyPrimary` checks the precise
+one-owner original source, class-5 failure carrier, failed-mode cleanup
+Plan, immutable canonical SSA transport, source location, and original
+normal/failed successors. The maximum depth of an earlier block is
+not a proof that the bound close has multiple active resources.
+
+The emitted nested profile retains the exact outer File root across the
+failed inner close. It consumes and poisons both owners at their
+original checked closes and invokes the unchanged
+`erist_rt_failure_append` for a failed *bound* outer cleanup. The
+original FailureContext is returned on either outer close outcome;
+the newly failed cleanup is appended as a secondary after prior
+context. Unbound live primary carriers at other File.close sites
+remain refused, as do foreign or malformed owner/Plan contracts.
+
+[Focused native CI #42412553696](https://github.com/eristavi/eristavi-lang/actions/runs/42412553696)
+passed four methods, including an inner-close-failure/outer-close-failure
+scenario under forced GC and bad-binding refusals. It verifies this
+bounded composition only. It does not admit multiple simultaneous
+active owners with a propagating primary, a chain of multiple bound
+already-failing closes, or the remaining U2 managed construction,
+physical and four-platform requirements.
