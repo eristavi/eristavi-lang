@@ -84,4 +84,3 @@ canonical checked, normal, handler and recursive exits; this is **NOT done**.
   RSS/GC-pause evidence. Reconcile main and run final four-platform/completed
   qualification only on coherent finished U2. No owned full self-build, paused
   #51 work or unnecessary full CI.
-

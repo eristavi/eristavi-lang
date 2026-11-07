@@ -303,3 +303,13 @@ restarting paused benchmarks, rejected pilots or the capped compiler workload.
 Keep this file current-only: replace superseded status rather than appending
 contradictory recovery checkpoints. Move dated history to `docs/history/`,
 retain raw evidence and link it. Preserve all standing instructions above.
+
+## Publication patch-check correction
+
+Automatic [CI #42397322506](https://github.com/eristavi/eristavi-lang/actions/runs/42397322506)
+on documentation head `5329f323952e0ed62cff8af2d5f3482eb104a800` failed the
+scope/patch job on an extra blank line at EOF in the newly archived historical
+handover. Smoke and matrix were skipped, not failed compiler tests. The archive
+newline is corrected in this documentation-only successor; source/test hashes
+and the 8/8 local result are unchanged. The full staged patch is checked against
+the parent PR branch, including added files. Hosted rerun remains unqualified.
