@@ -11,10 +11,12 @@ No final four-platform qualification or merge. Optimization #51 remains PAUSED.
 
 Authorized batch: checked calls between distinct defined Functions and mutual
 recursion, preserving exact managed/failure roots and independent evidence.
-Published development candidate `c61afa97b34c923306a4688f6da036b04155c2ac` extends
-the existing emitter with bounded `emitCheckedGroup`; contract:
+Current implementation `5dcc85f69ac458f83730957a9defd4b2fa3d0d7e` (following
+initial candidate `c61afa9`) extends the existing emitter with bounded `emitCheckedGroup`; contract:
 `docs/architecture/UIR_U2_CHECKED_CALL_GROUPS.md`. Further local refinements and
-11 focused tests are under validation; not final accepted evidence.
+11 focused tests are under validation; not final accepted evidence. The direct
+generator parity caller now retires its external ingress failure root after the
+first generated root publication, matching the established mutual-call probe.
 
 Preliminary mutual/handler/two-managed-result/negative checks passed; differing
 normal result layouts, ordered secondary failures, missing sibling handoffs,
@@ -34,8 +36,11 @@ publication production was removed. Cleanup must release all retained Plans and
 phases on completion or a later-member failure. Native frame/root ABI unchanged.
 The refined retained-plan path passes both the new List snapshot/GC execution
 and later-member work/capacity-refusal reclamation checks (2/2). A complete
-11-method focused run, changed-input ASan/UBSan checks and exact-source hosted
-smoke are now running/pending. The old single-body entry remains direct rather
+11-method focused run and exact-source hosted smoke are now running/pending.
+Changed-input bootstrap C ASan/UBSan **4/4 PASS**, 84.670 s, `-O0`,
+`detect_leaks=0`, halt-on-error; this does not instrument emitted owned assembly.
+The final focused run has passed its first eight methods, including 14 refusal
+variants and the native stack probe; generator parity is still pending. The old single-body entry remains direct rather
 than routing through a new generic wrapper, preserving bootstrap specialization.
 Local baseline timeout is recorded as an environment limit, not a new regression;
 its exact hosted counterpart passed on `c61afa9`.

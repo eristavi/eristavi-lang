@@ -342,11 +342,15 @@ class U2FunctionCheckedGroupTests(unittest.TestCase):
         self.assertIn(b"call erist_u2_rooted_function_93",owned.stdout)
         runtime=self.runtime.replace("erist_rt_slots_collect:\n",
             "erist_rt_slots_collect:\n    incq .Lrecursive_gc_calls(%rip)\n",1)
+        # Retire the test's ingress failure root only after the generated
+        # frame has published its own class-5 roots, as in the mutual probe.
+        native=owned.stdout.decode().replace("    call erist_rt_slots_collect",
+            "    movq $0,.Lrecursive_roots+16(%rip)\n    call erist_rt_slots_collect")
         for failed in (False,True):
             caller=self.checked_caller(0,failed).replace(
                 "cmpq $2,.Lrecursive_gc_calls","cmpq $4,.Lrecursive_gc_calls",1)
             result=self.run_probe("direct-owned-group-"+str(failed),
-                owned.stdout.decode()+caller+graph.FINISH+unicodeTests.unicode_descriptors(),
+                native+caller+graph.FINISH+unicodeTests.unicode_descriptors(),
                 runtime=runtime,types=False)
             self.assertEqual((result.returncode,result.stdout,result.stderr),
                              (0,"primary-β\n".encode() if failed else b"",b""))
