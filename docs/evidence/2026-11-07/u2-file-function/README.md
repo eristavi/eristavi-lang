@@ -5,6 +5,8 @@ qualification. Branch `compiler/u2-whole-function-file-roots-20261107`, draft
 PR #121; parent #111 draft, issue #74 open. Source baseline was
 `0263208d7168b9a2a2365f7f105749df6a980ea7`.
 
+Exact tested implementation commit: `2f5065cb32755e8560da4340852c25dc3610224f`.
+
 ## Implemented
 
 `emitFileChecked` extends the existing original-Function native emitter with

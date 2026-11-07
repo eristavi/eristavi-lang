@@ -3,6 +3,8 @@
 Updated 7 November 2026 (Asia/Nicosia). Active branch:
 `compiler/u2-whole-function-file-roots-20261107`, draft PR #121 targeting
 `compiler/u2-cleanup-foundation-20261102` (draft #111). Issue #74 remains OPEN.
+Tested implementation commit: `2f5065cb32755e8560da4340852c25dc3610224f`.
+This documentation successor changes no implementation or test input.
 Baseline head: `0263208d7168b9a2a2365f7f105749df6a980ea7`.
 **Current batch: bounded single-owner whole-Function File integration.**
 **Final focused validation: 8/8 PASS, 0 failed, 0 skipped, 69.823 seconds.**
