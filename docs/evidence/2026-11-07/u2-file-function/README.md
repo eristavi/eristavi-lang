@@ -136,3 +136,24 @@ Command: `PYTHONPATH=.:tests python -m unittest test_u2_checked_ssa_prefix -v`.
 **2/2 PASS, 9.153 s**, no skips/failures; see `primary-binding.log`.
 This completes reusable binding admission only. General Function composition,
 nested acquisition and File-owning recursive integration remain open.
+
+## Whole-Function primary composition — implemented
+
+`primary-final.log`: **6/6 PASS**, 43.420 s, no failures/skips. New tests drive
+actual generated acquire/bridge/close/return.failure CFG with an existing saved
+primary. Four combinations cover clean/failing close and absent/existing
+secondary. Assert original pointer identity, ordered linked context, forced GC
+and full post-scope reclamation. Stale pair and normal-mode Plan refuse before
+output. Fixture checks retained Plan accounting on success/Unsupported refusal.
+Existing two-stage prefix/dispatch, ordinary File handler and checked-recursion
+regressions pass. `primary-native.log` retains initial bootstrap specialization
+failures corrected by the concrete nonexecuted Scope-list anchor.
+
+Command: `PYTHONPATH=.:tests python -m unittest
+ test_u2_function_file_primary.U2FunctionFilePrimaryTests
+ test_u2_checked_ssa_prefix
+ test_u2_function_file_checked.U2FunctionFileCheckedTests.test_generated_acquire_close_failure_handler_and_reclamation
+ test_u2_function_checked_native.U2FunctionCheckedNativeTests.test_checked_recursive_normal_failure_edges_roots_and_reclamation -v`.
+New primary owned/C generator parity, broad CI, nested general Function ownership
+and release qualification remain pending. Earlier parity does not qualify this
+new revision. No broad/self-build/qualification workflow manually initiated.

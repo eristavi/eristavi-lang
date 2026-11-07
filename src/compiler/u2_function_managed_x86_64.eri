@@ -20,8 +20,17 @@ import compiler.u2_list_i64 as listNative;
 import compiler.u2_function_contract as body;
 import compiler.u2_root_map as checkedRoots;
 import compiler.format as format;
+import compiler.u2_primary_cleanup_bind as chain;
+import compiler.u2_continuation_bind as continuation;
+import compiler.u2_cleanup_plan as cleanup;
+import compiler.u2_cleanup_verify as cleanupVerify;
 import compiler.u2_scoped_owners as owners;
 import compiler.u2_function_file_roots_x86_64 as fileRoots;
+
+public type PrimaryBinding {
+    pair continuation.Pair; instruction build.InstId;
+    plan identity cleanup.Plan; owner cleanup.Scope; exit meta.LocId;
+}
 
 public error Unsupported { message Text; }
 function require(ok Bool,message Text) fails Unsupported {
@@ -200,7 +209,7 @@ function emitInstruction(base Text,id Int,frameBytes Int,
     tempOffset Int,rootCount Int,rootOffset Int,scopeOffset Int,
     returnOffset Int,transferManaged Bool,transferManagedSecond Bool,
     callerRootOffset Int,callerFailureOffset Int,checked Bool,
-    fileOffset Int,fileRuntimeType Int,label Int) {
+    fileOffset Int,fileRuntimeType Int,label Int,primaryCall Int,primaryValue Int) {
     let row be (id-1)*10;
     let op be instructions[row];
     let first be instructions[row+2];
@@ -330,6 +339,13 @@ function emitInstruction(base Text,id Int,frameBytes Int,
             line("jmp "+name(base,"edge",instructions[row+8]));
             output(name(base,"file_close_failed",id)+":");
             line("movq %rax,"+format.integer(returnOffset)+"(%rsp)");
+            if id == primaryCall {
+                // New close outcome stays separate; append its complete
+                // context to the explicitly bound, still-rooted primary.
+                line("movq %rax,%rsi");
+                line("movq "+slot(primaryValue)+",%rdi");
+                line("call erist_rt_failure_append");
+            }
             line("jmp "+name(base,"edge",instructions[row+8]+1));
         }
     }
@@ -475,7 +491,7 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
     graph identity aggregate.Registry,table identity contracts.Registry,
     phase identity budget.Phase,registry identity managed.Registry,
     carriers,descriptors,forceGC Bool,label Int,selfTarget Int,checked Bool,
-    groupTargets,groupLabels,emitOutput Bool,fileProfile maybe identity owners.Profile,fileRuntimeType Int)
+    groupTargets,groupLabels,emitOutput Bool,fileProfile maybe identity owners.Profile,fileRuntimeType Int,primary maybe PrimaryBinding)
     fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,Unsupported {
     // roots.create verified the frozen original Function, including dead CFG,
     // while constructing this private liveness Plan (retained within a closed
@@ -532,6 +548,26 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
             ((checked and failure > 0) or (not checked and failure == 0)),
             "recursive target has an incompatible defined outcome signature");
     }
+    let primaryCall be 0; let primaryValue be 0;
+    if primary != none {
+        if fileProfile == none { fail Unsupported { message="primary cleanup requires File ownership"; }; }
+        let map be checkedRoots.create(routine,graph,phase)
+            else error budget.LimitError { fail error; }
+            else error checkedRoots.InvalidRoots { fail Unsupported { message=error.message; }; };
+        let binding be chain.verifyPrimary(routine,graph,fileProfile,table,phase,map,
+            primary.pair,primary.instruction,primary.plan,[primary.owner],primary.exit)
+            else error budget.LimitError { try checkedRoots.close(map); fail error; }
+            else error canonical.InvalidIR { try checkedRoots.close(map); fail error; }
+            else error owners.InvalidOwnership { try checkedRoots.close(map); fail Unsupported { message=error.message; }; }
+            else error checkedRoots.InvalidRoots { try checkedRoots.close(map); fail Unsupported { message=error.message; }; }
+            else error continuation.InvalidBinding { try checkedRoots.close(map); fail Unsupported { message=error.message; }; }
+            else error cleanupVerify.InvalidPlan { try checkedRoots.close(map); fail Unsupported { message=error.message; }; }
+            else error chain.InvalidChain { try checkedRoots.close(map); fail Unsupported { message=error.message; }; };
+        try checkedRoots.close(map);
+        primaryCall=binding.instruction; primaryValue=binding.incomingPrimary;
+        try require((try words.get(routine.values,phase,(primaryValue-1)*4)) == failureType,
+            "primary cleanup requires the exact class-5 Function failure carrier");
+    }
     let fileHandle be 0; let fileAcquire be 0; let fileConsume be 0;
     let fileDepth be 0;
     if fileProfile != none {
@@ -551,12 +587,13 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
         // any failure carrier in an owning block, even if ordinary use is dead.
         let b be 0;
         while b < routine.blocks.length/5 {
-            if (try words.get(profile.blocks,phase,b*2+1)) != 0 {
+            if primary == none and (try words.get(profile.blocks,phase,b*2+1)) != 0 {
                 let first be try words.get(routine.blocks,phase,b*5);
                 let count be try words.get(routine.blocks,phase,b*5+1);
                 let j be 0;
                 while j < count {
-                    try require((try words.get(routine.values,phase,(first+j-1)*4)) != failureType,
+                    try require((try words.get(routine.values,phase,(first+j-1)*4)) != failureType or
+                        (first+j == primaryValue and (try words.get(routine.blocks,phase,b*5+4)) == primaryCall),
                         "active failure plus File cleanup is not yet admitted");
                     j=j+1;
                 }
@@ -697,7 +734,9 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
                             let live be try ssa.liveBefore(plan,routine,phase,
                                 build.InstId { owner=routine.key; index=i+1; },
                                 build.ValueId { owner=routine.key; index=value; });
-                            try require(not live,"live primary across File operation is not yet admitted");
+                            try require(not live or (primary != none and
+                                (resolved.operation == 1 or (i+1 == primaryCall and value == primaryValue))),
+                                "unbound live primary across File operation");
                         }
                         v=v+1;
                     }
@@ -1003,7 +1042,7 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
                 instructions,operands,switches,cases,importKinds,importOperations,
                 tempOffset,selected.count+temporaryRoots,rootOffset,scopeOffset,returnOffset,
                 managedReturn,managedReturnSecond,callerRootOffset,
-                callerFailureOffset,checked,fileOffset,fileRuntimeType,label);
+                callerFailureOffset,checked,fileOffset,fileRuntimeType,label,primaryCall,primaryValue);
             publish(selected,afterBits,(current-1)*selected.count,rootOffset);
             // Publish the canonical result before retiring intermediary roots.
             if instructions[(current-1)*10] == 34 {
@@ -1018,7 +1057,7 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
             instructions,operands,switches,cases,importKinds,importOperations,
             tempOffset,selected.count+temporaryRoots,rootOffset,scopeOffset,returnOffset,
             managedReturn,managedReturnSecond,callerRootOffset,
-            callerFailureOffset,checked,fileOffset,fileRuntimeType,label);
+            callerFailureOffset,checked,fileOffset,fileRuntimeType,label,primaryCall,primaryValue);
         block=block+1;
     }
     i=1;
@@ -1050,7 +1089,7 @@ public function emit(routine identity build.Function,
     let plan be try roots.create(routine,graph,table,phase,registry,
         carriers,descriptors);
     compile(plan,routine,graph,table,phase,registry,carriers,descriptors,
-        forceGC,label,0,false,[],[],true,none,0)
+        forceGC,label,0,false,[],[],true,none,0,none)
         else error budget.LimitError { try ssa.close(plan); fail error; }
         else error canonical.InvalidIR { try ssa.close(plan); fail error; }
         else error ssa.InvalidLiveness { try ssa.close(plan); fail error; }
@@ -1073,7 +1112,7 @@ public function emitRecursive(routine identity build.Function,
     let plan be try roots.create(routine,graph,table,phase,registry,
         carriers,descriptors);
     compile(plan,routine,graph,table,phase,registry,carriers,descriptors,
-        forceGC,label,target.index,false,[],[],true,none,0)
+        forceGC,label,target.index,false,[],[],true,none,0,none)
         else error budget.LimitError { try ssa.close(plan); fail error; }
         else error canonical.InvalidIR { try ssa.close(plan); fail error; }
         else error ssa.InvalidLiveness { try ssa.close(plan); fail error; }
@@ -1091,7 +1130,7 @@ public function emitChecked(routine identity build.Function,
     let plan be try roots.create(routine,graph,table,phase,registry,
         carriers,descriptors);
     compile(plan,routine,graph,table,phase,registry,carriers,descriptors,
-        forceGC,label,routine.definedTarget,true,[],[],true,none,0)
+        forceGC,label,routine.definedTarget,true,[],[],true,none,0,none)
         else error budget.LimitError { try ssa.close(plan); fail error; }
         else error canonical.InvalidIR { try ssa.close(plan); fail error; }
         else error ssa.InvalidLiveness { try ssa.close(plan); fail error; }
@@ -1120,7 +1159,7 @@ function compileGroupMember(plans,phases,routines,member Int,
     let routine identity build.Function be routines[member];
     compile(plans[member],routine,graph,table,phases[member],registry,
         carriers,descriptors,forceGC,labels[member],routine.definedTarget,true,
-        targets,labels,emitOutput,none,0)
+        targets,labels,emitOutput,none,0,none)
         else error budget.LimitError { try closeGroup(plans,phases); fail error; }
         else error canonical.InvalidIR { try closeGroup(plans,phases); fail error; }
         else error ssa.InvalidLiveness { try closeGroup(plans,phases); fail error; }
@@ -1215,7 +1254,36 @@ public function emitFileChecked(routine identity build.Function,
     types.add(profile.handle);
     let plan be try ssa.create(routine,graph,table,phase,types);
     compile(plan,routine,graph,table,phase,registry,carriers,descriptors,
-        forceGC,label,routine.definedTarget,true,[],[],true,profile,fileRuntimeType)
+        forceGC,label,routine.definedTarget,true,[],[],true,profile,fileRuntimeType,none)
+        else error budget.LimitError { try ssa.close(plan); fail error; }
+        else error canonical.InvalidIR { try ssa.close(plan); fail error; }
+        else error ssa.InvalidLiveness { try ssa.close(plan); fail error; }
+        else error Unsupported { try ssa.close(plan); fail error; };
+    try ssa.close(plan);
+}
+
+public function emitFileCheckedPrimary(routine identity build.Function,
+    graph identity aggregate.Registry,table identity contracts.Registry,
+    phase identity budget.Phase,registry identity managed.Registry,
+    carriers,descriptors,forceGC Bool,label Int,
+    profile identity owners.Profile,fileRuntimeType Int,primary PrimaryBinding)
+    fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,
+        roots.InvalidManagedRoots,managed.InvalidManagedTypes,
+        graphVerify.InvalidGraph,Unsupported {
+    // Validate carrier descriptors once, then construct exactly one File-
+    // extended SSA Plan. Full publication verification remains mandatory.
+    let types be try roots.selectTypes(routine,graph,table,phase,registry,carriers,descriptors);
+    let i be 0;
+    while i < types.count {
+        let selected aggregate.TypeId be types[i];
+        try require(selected.index != profile.handle.index,
+            "File carrier overlaps a managed or failure carrier");
+        i=i+1;
+    }
+    types.add(profile.handle);
+    let plan be try ssa.create(routine,graph,table,phase,types);
+    compile(plan,routine,graph,table,phase,registry,carriers,descriptors,
+        forceGC,label,routine.definedTarget,true,[],[],true,profile,fileRuntimeType,primary)
         else error budget.LimitError { try ssa.close(plan); fail error; }
         else error canonical.InvalidIR { try ssa.close(plan); fail error; }
         else error ssa.InvalidLiveness { try ssa.close(plan); fail error; }

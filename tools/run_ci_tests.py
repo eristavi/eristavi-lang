@@ -25,6 +25,7 @@ SMOKE_TESTS=(
     'test_u2_scoped_owners.U2ScopedOwnerTests',
     'test_u2_function_file_roots.U2WholeFunctionFileRootTests',
     'test_u2_function_file_checked.U2FunctionFileCheckedTests',
+    'test_u2_function_file_primary.U2FunctionFilePrimaryTests',
     'test_u2_typed_failure_context.U2TypedFailureContextTests',
     'test_u2_failure_order.U2FailureOrderTests',
     'test_u2_failure_trace.U2FailureTraceTests',

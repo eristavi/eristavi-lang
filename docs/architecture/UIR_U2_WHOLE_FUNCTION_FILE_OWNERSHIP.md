@@ -125,3 +125,25 @@ exact `[primary, File, pending i64]` source and both successor transports.
 The chain verifier delegates its failed-route suffix proof to this entry.
 Reports carry revision and instruction facts for immediate use, not cached
 verification authority. General Function emission does not yet consume it.
+
+## Whole-Function primary composition
+
+`emitFileCheckedPrimary` adds one explicit PrimaryBinding (continuation,
+instruction, original failed-entry Plan, lexical Scope and exit LocId).
+Fresh verification precedes any assembly; a report is never cached authority.
+The exact Function failure carrier must back the primary's class-5 root.
+The independent proof is in `u2_primary_cleanup_bind`, shared with the chain.
+
+File.close still accumulates its own outcome into a new rooted empty context.
+On actual close failure, the new context is appended to the original primary
+using the existing runtime operation, with both contexts rooted. The original
+close outcome selects the original typed CFG edge; the incoming primary is
+carried on both edges. A successful close cannot turn propagation into success.
+Previously attached secondaries remain ahead of the newly appended close error.
+No additional resource adapter, executable IR, public ABI or runtime semantics.
+
+Admission remains one lexical owner and one explicitly bound failing close;
+File-owning defined calls and arbitrary nested prefixes remain excluded.
+Only the bound primary may be live across that close. Acquisition may carry
+rooted failure ingress without mutating it. Ordinary handlers with retained
+errors must not opt into failed-entry composition without the explicit binding.

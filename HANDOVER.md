@@ -6,22 +6,32 @@ Updated 7 November 2026 (Asia/Nicosia). Active branch:
 Tested implementation commit: `2f5065cb32755e8560da4340852c25dc3610224f`.
 This documentation successor changes no implementation or test input.
 Baseline head: `0263208d7168b9a2a2365f7f105749df6a980ea7`.
-**Latest implementation: explicit primary cleanup binding extracted.**
-`u2_checked_chain_verify.verifyPrimary` independently verifies one original
-already-failing File.close with exact primary/owner/pending block parameters,
-failed-entry cleanup Plan, primary transport on both outcomes, separate new
-failure and its class-5 root. Existing full chain verification delegates to it;
-no SSA-liveness inference or alternate executable IR is introduced.
-Native prefix/dispatch tests **2/2 PASS**, 9.153 s, including normal-mode Plan
-refusal, restored binding and existing malformed-primary/native failure-order,
-forced-GC and consumption scenarios. Raw `primary-binding.log` is committed.
+**Latest implementation: whole-Function primary/secondary File composition.**
+`emitFileCheckedPrimary` now consumes the freshly verified explicit binding.
+A failed close retains its separate original typed outcome and appends the
+complete new failure to the rooted original primary with the existing runtime
+`erist_rt_failure_append`. A successful close preserves the primary unchanged.
+Both paths consume the File SSA/root and carry the original primary through
+canonical edges. Existing secondary context remains before the new close
+failure. The source primary must use the Function's exact class-5 carrier.
+Binding verification lives in `u2_primary_cleanup_bind`; the existing chain
+verifier delegates to the same proof. A nonexecuted concrete bootstrap helper
+seeds Scope-list generic construction for resource-free importing callers.
 
-**Remaining:** this is a reusable verified admission boundary, not completed
-general whole-Function primary composition. Next connect its exact report to
-`u2_function_managed_x86_64` File emission, preserving the distinct new close
-outcome and carried original primary; then admit nested surviving prefixes.
-Do not remove current general-emitter refusal until native integration passes.
-Source base: `6926f825d8873ec55bd4ef88ea4173ee1249ade2` (timeout fix).
+**Final focused tests: 6/6 PASS, 0 failed/skipped, 43.420 s.** Four generated
+primary scenarios cover clean/failing close with/without an existing secondary,
+forced GC, retained primary identity, ordered append and final reclamation.
+Stale binding and normal-mode Plan refuse before output. Existing nested helper,
+File handler and depth-64 checked-recursion regressions pass. Early bootstrap
+specialization failures are retained in `primary-native.log`; corrected exact
+run is `primary-final.log`. No timeouts or assertions were weakened.
+
+This finishes the bounded single-owner primary-composition implementation,
+not full U2. Next: nested ownership/surviving prefixes in general Function
+emission, then File-owning recursive/group frames. New-primary owned-generator
+parity, broad smoke, deep physical/sanitizer and final qualification remain
+pending; prior 105.651 s parity applies to the earlier single-owner revision.
+Base: `5312f5042c9aa8276d33287f29a72ba8afb8ea44`. Keep drafts and #74 open.
 
 **Current checkpoint: owned File generator timeout RESOLVED locally.**
 The initial managed Plan was discarded before constructing the File-extended
