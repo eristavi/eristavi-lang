@@ -39,8 +39,15 @@ and later-member work/capacity-refusal reclamation checks (2/2). A complete
 11-method focused run and exact-source hosted smoke are now running/pending.
 Changed-input bootstrap C ASan/UBSan **4/4 PASS**, 84.670 s, `-O0`,
 `detect_leaks=0`, halt-on-error; this does not instrument emitted owned assembly.
-The final focused run has passed its first eight methods, including 14 refusal
-variants and the native stack probe; generator parity is still pending. The old single-body entry remains direct rather
+The local focused suite passed 10/11 methods; only its owned generator watchdog
+remained open (unchanged baseline also times out locally). Hosted #42349153243
+passed **28/29 methods**: legacy owned generator **76.004 s**, new group owned
+generator **62.882 s**, both below 120 s. The remaining failure was the C comparison
+fixture missing an existing concrete scalar-edge specialization (`checkEdge`).
+Restore the same unreachable `build.jump` specialization used by the established
+fixtures; a fast C-only build/emission now PASSES (17,007 emitted bytes). C fixture
+compilation now precedes the expensive owned generator. No production code or
+watchdog change. Full corrected exact-source hosted checks remain pending. The old single-body entry remains direct rather
 than routing through a new generic wrapper, preserving bootstrap specialization.
 Local baseline timeout is recorded as an environment limit, not a new regression;
 its exact hosted counterpart passed on `c61afa9`.

@@ -101,6 +101,13 @@ function run()
         try ab.returnValues(fn,graph,successful,[managedInput,count],loc);
         let raised be try body.returnFailure(fn,graph,table,failedBase,failureInput,loc);
     }
+    // Preserve the existing concrete scalar edge specialization required by
+    // the bootstrap C compiler, even though these blocks never execute.
+    let dead be try build.block(fn,[]);
+    let deadDestination be try build.block(fn,[meta.i64()]);
+    let deadValue be try build.integer(fn,dead,0,loc);
+    try build.jump(fn,dead,deadDestination,[deadValue],loc);
+    try ab.returnValues(fn,graph,deadDestination,[managedInput,deadValue],loc);
     try ab.complete(fn,graph);
     try budget.finishPhase(cp);
 

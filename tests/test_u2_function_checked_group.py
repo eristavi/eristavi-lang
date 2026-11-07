@@ -298,6 +298,12 @@ class U2FunctionCheckedGroupTests(unittest.TestCase):
             (folder/"compiler").symlink_to(ROOT/"src/compiler",target_is_directory=True)
         source=folder/"generator.eri"
         source.write_text((ROOT/"tests/fixtures/u2_function_checked_group_direct.eri").read_text())
+        # Fail fast on bootstrap fixture/specialization mistakes before the
+        # expensive independent owned generator. Both paths still execute.
+        c_generator=folder/"c-generator"
+        self.assertEqual(build_native(source,c_generator,folder),0)
+        bootstrap=subprocess.run([str(c_generator)],capture_output=True,text=True,timeout=150)
+        self.assertEqual((bootstrap.returncode,bootstrap.stderr),(0,""),bootstrap.stdout[-2500:])
         emitted=subprocess.run([str(self.frontend),"emit-asm",str(source),
                                 "--source-root",str(folder)],
                                capture_output=True,text=True,timeout=120)
@@ -334,10 +340,6 @@ class U2FunctionCheckedGroupTests(unittest.TestCase):
         print("U2_DIRECT_GROUP_OWNED_GENERATOR_SECONDS="+
               format(time.monotonic()-begun,".3f"),flush=True)
         self.assertEqual((owned.returncode,owned.stderr),(0,b""),owned.stdout[-2500:])
-        c_generator=folder/"c-generator"
-        self.assertEqual(build_native(source,c_generator,folder),0)
-        bootstrap=subprocess.run([str(c_generator)],capture_output=True,text=True,timeout=150)
-        self.assertEqual((bootstrap.returncode,bootstrap.stderr),(0,""),bootstrap.stdout[-2500:])
         self.assertEqual(owned.stdout,bootstrap.stdout.encode())
         self.assertIn(b"call erist_u2_rooted_function_93",owned.stdout)
         runtime=self.runtime.replace("erist_rt_slots_collect:\n",
