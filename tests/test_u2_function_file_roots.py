@@ -32,7 +32,8 @@ class U2WholeFunctionFileRootTests(unittest.TestCase):
         self.assertEqual(source.count(imports), 1)
         source = source.replace(
             imports,
-            imports + "\nimport compiler.u2_function_file_roots_x86_64 as fileRoots;",
+            imports + "\nimport compiler.u2_function_file_roots_x86_64 as fileRoots;"
+            "\nimport compiler.format as format;",
             1)
         marker = (
             "let mutate be try budget.constructionPhase(owner); "
@@ -41,7 +42,13 @@ class U2WholeFunctionFileRootTests(unittest.TestCase):
         self.assertEqual(source.count(marker), 1)
         source = source.replace(
             marker,
-            marker + "\n    try fileRoots.emit(fn,graph,profile,table,mutate,717);",
+            marker + "\n    try fileRoots.emit(fn,graph,profile,table,mutate,717);"
+            + "\n    output(\".set erist_file_test_outer, \"+format.integer((outerValue.index-1)*8));"
+            + "\n    output(\".set erist_file_test_inner, \"+format.integer((innerValue.index-1)*8));"
+            + "\n    output(\".set erist_file_test_retained, \"+format.integer((retainedOuter.index-1)*8));"
+            + "\n    output(\".set erist_file_test_after, \"+format.integer((afterValue.index-1)*8));"
+            + "\n    output(\".set erist_file_test_inner_close, \"+format.integer(innerClose.index));"
+            + "\n    output(\".set erist_file_test_outer_close, \"+format.integer(outerClose.index));",
             1)
         failures = "continuation.InvalidBinding,owners.InvalidOwnership,ProbeError {"
         self.assertEqual(source.count(failures), 1)
@@ -130,23 +137,28 @@ class U2WholeFunctionFileRootTests(unittest.TestCase):
 .text
 .globl _start
 _start:
-    subq $176,%rsp
-    movq $0,136(%rsp)
+    subq $2144,%rsp
+    # Full admitted SSA storage, disjoint from File roots and scope locals.
+    movq %rsp,%rdi
+    xorl %eax,%eax
+    movl $256,%ecx
+    rep stosq
+    movq $0,2112(%rsp)
     call evn_scope_enter
-    movq %rax,152(%rsp)
+    movq %rax,2120(%rsp)
     movq %rax,%rdi
-    leaq 112(%rsp),%rsi
+    leaq 2048(%rsp),%rsi
     call erist_u2_file_717_bind
     # One registered class-5 root for the checked cleanup accumulator.
     call evn_scope_enter
-    movq %rax,160(%rsp)
+    movq %rax,2128(%rsp)
     movq %rax,%rdi
-    leaq 136(%rsp),%rsi
+    leaq 2112(%rsp),%rsi
     leaq .Lu2_failure_classes(%rip),%rdx
     movl $1,%ecx
     call evn_bind_roots
     call evn_empty_failure
-    movq %rax,136(%rsp)
+    movq %rax,2112(%rsp)
     # Block 1 acquires the outer File and transitions to owner block 2.
     leaq .Lfile0(%rip),%rdi
     movl $(.Lfile0_end-.Lfile0),%esi
@@ -155,9 +167,9 @@ _start:
     movl $9,%edi
     xorl %edx,%edx
     call erist_rt_file_open
-    movq %rax,0(%rsp)
+    movq %rax,erist_file_test_outer(%rsp)
     movq %rsp,%rdi
-    leaq 112(%rsp),%rsi
+    leaq 2048(%rsp),%rsi
     call erist_u2_file_717_publish_2
     xorl %edi,%edi
     call erist_rt_slots_collect
@@ -166,9 +178,9 @@ _start:
     cmpq $1,%rax
     jne .Lresource_test_fail
     # Block 2 acquires a nested File, moves the outer owner to block 3.
-    movq 0(%rsp),%rax
-    movq %rax,16(%rsp)
-    movq $0,0(%rsp)
+    movq erist_file_test_outer(%rsp),%rax
+    movq %rax,erist_file_test_retained(%rsp)
+    movq $0,erist_file_test_outer(%rsp)
     leaq .Lfile1(%rip),%rdi
     movl $(.Lfile1_end-.Lfile1),%esi
     call evn_text
@@ -176,9 +188,9 @@ _start:
     movl $9,%edi
     xorl %edx,%edx
     call erist_rt_file_open
-    movq %rax,8(%rsp)
+    movq %rax,erist_file_test_inner(%rsp)
     movq %rsp,%rdi
-    leaq 112(%rsp),%rsi
+    leaq 2048(%rsp),%rsi
     call erist_u2_file_717_publish_3
     xorl %edi,%edi
     call erist_rt_slots_collect
@@ -188,17 +200,17 @@ _start:
     jne .Lresource_test_fail
     # The inner original checked File.close consumes its canonical handle
     # and registered innermost lexical root before exiting block 3.
-    movq 8(%rsp),%rdi
-    movq 136(%rsp),%rsi
+    movq erist_file_test_inner(%rsp),%rdi
+    movq 2112(%rsp),%rsi
     call evn_cleanup_accumulate
     movq %rsp,%rdi
-    leaq 112(%rsp),%rsi
+    leaq 2048(%rsp),%rsi
     call erist_u2_file_717_poison___INNER__
-    movq 16(%rsp),%rax
-    movq %rax,24(%rsp)
-    movq $0,16(%rsp)
+    movq erist_file_test_retained(%rsp),%rax
+    movq %rax,erist_file_test_after(%rsp)
+    movq $0,erist_file_test_retained(%rsp)
     movq %rsp,%rdi
-    leaq 112(%rsp),%rsi
+    leaq 2048(%rsp),%rsi
     call erist_u2_file_717_publish_5
     xorl %edi,%edi
     call erist_rt_slots_collect
@@ -207,16 +219,16 @@ _start:
     cmpq $1,%rax
     jne .Lresource_test_fail
     # The final checked File.close consumes the remaining outer owner.
-    movq 24(%rsp),%rdi
-    movq 136(%rsp),%rsi
+    movq erist_file_test_after(%rsp),%rdi
+    movq 2112(%rsp),%rsi
     call evn_cleanup_accumulate
     movq %rsp,%rdi
-    leaq 112(%rsp),%rsi
+    leaq 2048(%rsp),%rsi
     call erist_u2_file_717_poison___OUTER__
     movq %rsp,%rdi
-    leaq 112(%rsp),%rsi
+    leaq 2048(%rsp),%rsi
     call erist_u2_file_717_publish_7
-    movq 136(%rsp),%rax
+    movq 2112(%rsp),%rax
     cmpq $0,(%rax)
     jne .Lresource_test_fail
     xorl %edi,%edi
@@ -226,16 +238,16 @@ _start:
     testq %rax,%rax
     jne .Lresource_test_fail
     # Leave the failure-root scope followed by the File owner scope.
-    movq $0,136(%rsp)
+    movq $0,2112(%rsp)
     call evn_void
     movq %rax,%rsi
-    movq 160(%rsp),%rdi
+    movq 2128(%rsp),%rdi
     call evn_scope_leave
     call evn_void
     movq %rax,%rsi
-    movq 152(%rsp),%rdi
+    movq 2120(%rsp),%rdi
     call evn_scope_leave
-    addq $176,%rsp
+    addq $2144,%rsp
     call .Lresource_finish
     xorl %edi,%edi
     jmp erist_rt_exit
@@ -243,8 +255,27 @@ _start:
 .Lu2_failure_classes:
 .byte 5
 """
-            test_asm = (test_asm.replace("__INNER__", closes[0])
-                        .replace("__OUTER__", closes[1]))
+            def constant(name):
+                found = re.search(r"^\.set erist_file_test_" + name + r", (\d+)$",
+                                  emitted, re.M)
+                self.assertIsNotNone(found, name)
+                return found.group(1)
+            inner_close = constant("inner_close")
+            outer_close = constant("outer_close")
+            self.assertIn(inner_close, closes)
+            self.assertIn(outer_close, closes)
+            test_asm = (test_asm.replace("__INNER__", inner_close)
+                        .replace("__OUTER__", outer_close))
+            # Regression: omitting the surviving-owner handoff must still
+            # fail closed; do not make a missing canonical SSA word look valid.
+            handoff = "    movq %rax,erist_file_test_after(%rsp)"
+            self.assertEqual(test_asm.count(handoff), 1)
+            missing = test_asm.replace(handoff, "    # omitted owner handoff", 1)
+            rejected = self.run_probe(
+                "u2-file-owner-missing-handoff",
+                emitted + missing + data + resource.FINISH)
+            self.assertEqual(rejected.returncode, 1)
+            self.assertIn(b"invalid internal scalar value operation", rejected.stderr)
             execution = self.run_probe(
                 "u2-full-function-file-owner-roots",
                 emitted + test_asm + data + resource.FINISH)

@@ -1,11 +1,29 @@
 # Eristavi compiler — current handover
 
-Updated 7 November 2026 (Asia/Nicosia). Active, **unqualified / CI FAILED** File-owner-root foundation on separate branch
+Updated 7 November 2026 (Asia/Nicosia). Active, **unqualified File-root fix / hosted reruns pending** on separate branch
 `compiler/u2-whole-function-file-roots-20261107`, [draft PR #121](https://github.com/eristavi/eristavi-lang/pull/121) targeting the checked U2 branch. Parent [PR #111](https://github.com/eristavi/eristavi-lang/pull/111) remains DRAFT/unmerged and U2 #74 OPEN. The previous checked Function group batch remains fully focused/Linux-smoke green; complete File integration and final qualification remain OPEN.
 Parent checked-group implementation: `5dcc85f69ac458f83730957a9defd4b2fa3d0d7e`.
 Parent checked-group tested checkpoint: `43d56f2f526fd57db5d790413217de439858b7a5`.
 File foundation tested checkpoint: `0352563f9096ed58c50e7aa92dc67ba884670a9f` — CI FAILED.
 No final four-platform qualification or merge. Optimization #51 remains PAUSED.
+
+## File-root regression fix — 7 November 2026
+
+The failing native probe used a hardcoded SSA offset 24 for the surviving outer
+File after the inner close, whereas the original canonical ValueId requires
+byte offset 32. The generated root helper correctly refused the missing source.
+The test now exports actual ValueId offsets and close instruction IDs from its
+original canonical fixture, uses those symbols for every handoff/close, and
+reserves the full admitted 256-word SSA frame separately from roots/scope locals.
+A negative native probe deliberately omits that handoff and must still fault;
+the correct nested-close/forced-GC/reclamation probe must succeed.
+
+Local focused File-root test PASS (positive and missing-handoff negative).
+Production emitter/runtime, source semantics and watchdogs are unchanged.
+A change-specific hosted workflow reruns this test and the two original 120-second
+generator parity gates. Hosted results are pending; do not call the new fix
+qualified yet. The prior full smoke failure below remains a historical result.
+Whole-Function File lowering is still not integrated; keep #121/#111 draft.
 
 ## Active File ownership checkpoint — 7 November 2026 (partial, NOT accepted)
 
@@ -30,7 +48,7 @@ canonical checked, normal, handler and recursive exits; this is **NOT done**.
   real owned-runtime GC and post-scope reclamation. The test drives these
   transitions itself; the original whole-Function native CFG still does not.
   Source+test checkpoint `282e87b14fddabcb912c296910323b7b3bd8007c`.
-- **Validation: FAILED**, [CI #42352695186](https://github.com/eristavi/eristavi-lang/actions/runs/42352695186)
+- **Prior full-smoke validation: FAILED**, [CI #42352695186](https://github.com/eristavi/eristavi-lang/actions/runs/42352695186)
   on exact File checkpoint `0352563`, completed 7 November 2026.
   **171 run / 165 passed / 1 failure / 2 errors / 3 intentional skips**,
   1562.932 s. Scope/patch and Python compilation passed; full matrix skipped.
@@ -42,7 +60,7 @@ canonical checked, normal, handler and recursive exits; this is **NOT done**.
   The runtime-fault cause and timeout causes remain undiagnosed; do not
   attribute the timeouts to a semantic regression or waive/increase the limit.
   Earlier green #111 evidence does NOT qualify this new File code.
-  This is a status-only correction; no implementation fix or test rerun.
+  This failure record predates the focused test-fixture fix described above.
 - Architecture and intentional boundaries:
   [whole-Function File ownership contract](docs/architecture/UIR_U2_WHOLE_FUNCTION_FILE_OWNERSHIP.md).
   The root/poison helpers are *not yet called by*
@@ -50,8 +68,8 @@ canonical checked, normal, handler and recursive exits; this is **NOT done**.
   no general checked/handler/multi-exit cleanup, primary/secondary handoff,
   recursive File frame, or native File checked success/failure path is completed.
   **Do not label PR #121 or U2 #74 accepted; do not merge #121/#111 yet.**
-- Next: first diagnose/fix the File-root native runtime fault and independently
-  investigate the two generator watchdog errors. Then connect actual original
+- Next: confirm the focused File-root fix and independently rerun the two
+  generator watchdog gates. Then connect actual original
   acquisition, checked File.close and root
   publication to whole-Function emission, preserving original typed SSA edges,
   surviving owner prefixes, pending returns and existing class-5 FailureContext.
