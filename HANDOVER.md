@@ -1,5 +1,47 @@
 # Eristavi compiler — current handover
 
+## Latest verified File-owning closed/mixed-group checkpoint — 7 November 2026
+
+**Exact tested source-and-test head:** `58008fd395c740daa4d038191e0e029cad32559a`.
+[GitHub Actions focused native CI #42405486672](https://github.com/eristavi/eristavi-lang/actions/runs/42405486672)
+**5/5 tests PASS, zero failures/skips, 59.822 s**, Linux x86-64 Clang
+at the above head. The established single-owner File CFG, nested
+surviving-prefix/checked recovery and File-owning self-recursive execution
+remain green. New tests cover checked calls to an independently bound
+**different File-owning Function body** and a **resource-free helper** while
+the caller keeps its own original canonical lexical File owner. Both use
+per-Function roots/checked failure signatures, real native opens/closes,
+forced GC and post-frame reclamation.
+
+There are two separate bounded, optional entry points:
+`emitFileCheckedGroup` for closed all-owning groups and
+`emitMixedFileCheckedGroup` for mixed owning/nonowning checked groups.
+Each group's member Plans are pre-admitted, then freshly reverified at output;
+no arbitrary File object is transferred to another body. Mixed groups use
+**explicit 1-based exact owner-profile indices (zero for no File)** rather
+than an unsupported bootstrap List of optional identity records.
+The native tests passed with **C-bootstrap incompatible-pointer qualifier
+warnings** from the function-array emission path; these are not test failures
+but need review before final compiler qualification.
+
+An earlier [hosted U2 smoke #42400012947](https://github.com/eristavi/eristavi-lang/actions/runs/42400012947)
+failed three owned-generator 120-s watchdogs; it remains a separate U2
+qualification blocker. Latest focused success does **not** qualify owned/C
+generator output equivalence for this group, broad Linux smoke, four-platform
+CI, comprehensive primary-failure composition across nested prefixes, all
+managed constructors, physical/fault evidence or the complete eight-gate U2
+definition of done. Do **not** mark issue #74 done, merge #121/#111, promote
+production or resume general optimization #51 on this evidence.
+
+**Next functional/acceptance work:** safely compose explicit primary failure
+contexts through nested File cleanup, extend remaining managed List/aggregate
+construction/copy and typed FailureContext producers, test combined class-1/
+class-5 roots and hostile/foreign/stale owner conditions, then gather fresh
+independent Stage-0/C/new-native evidence, physical/sanitizer evidence and
+exact final-tree four-platform/completed-batch qualification. Keep the older
+checkpoint narratives below as historical, not today's remaining-work list.
+
+
 ## Latest implementation checkpoint — 7 November 2026 (nested owners and File-owning recursion)
 
 **Verified exact implementation/test tree:** `8e5c8bd8de09d46586934b28dad2f7ac6f1729c1`.
