@@ -124,7 +124,7 @@ function run() fails budget.LimitError,canonical.InvalidIR,graphVerify.InvalidGr
     }
     let live be owner.live; let pendingBytes be owner.pending;
     let otherLive be otherOwner.live; let otherPending be otherOwner.pending;
-    native.emitFileCheckedGroup([fn,helper],[731,732],[profile,none],[9,0],
+    native.emitMixedFileCheckedGroup([fn,helper],[731,732],[profile,none],[9,0],
         graph,table,registry,[text],[managed.text(registry)],true)
         else error native.Unsupported { fail error; }
         else error budget.LimitError { fail error; }
