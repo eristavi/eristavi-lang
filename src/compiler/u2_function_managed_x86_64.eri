@@ -1429,10 +1429,10 @@ public function emitFileCheckedPrimary(routine identity build.Function,
     try ssa.close(plan);
 }
 
-// Closed, exact-FunctionId checked group containing one or more File owners.
+// Mixed closed checked group of File-owning and resource-free bodies.
 // All functions and File profiles are independently admitted before output.
 // The original no-File emitCheckedGroup remains unchanged.
-function compileFileGroupMember(plans,phases,routines,profiles,runtimeTypes,member Int,
+function compileMixedFileGroupMember(plans,phases,routines,profiles,runtimeTypes,member Int,
     graph identity aggregate.Registry,table identity contracts.Registry,
     registry identity managed.Registry,carriers,descriptors,forceGC Bool,
     targets,labels,emitOutput Bool)
@@ -1447,7 +1447,7 @@ function compileFileGroupMember(plans,phases,routines,profiles,runtimeTypes,memb
         else error ssa.InvalidLiveness { try closeGroup(plans,phases); fail error; }
         else error Unsupported { try closeGroup(plans,phases); fail error; };
 }
-public function emitFileCheckedGroup(routines,labels,profiles,runtimeTypes,
+public function emitMixedFileCheckedGroup(routines,labels,profiles,runtimeTypes,
     graph identity aggregate.Registry,table identity contracts.Registry,
     registry identity managed.Registry,carriers,descriptors,forceGC Bool)
     fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,
@@ -1521,14 +1521,14 @@ public function emitFileCheckedGroup(routines,labels,profiles,runtimeTypes,
             else error canonical.InvalidIR { try closeGroup(plans,phases); fail error; }
             else error ssa.InvalidLiveness { try closeGroup(plans,phases); fail error; };
         plans.add(plan);
-        try compileFileGroupMember(plans,phases,routines,profiles,runtimeTypes,
+        try compileMixedFileGroupMember(plans,phases,routines,profiles,runtimeTypes,
             member,graph,table,registry,carriers,descriptors,forceGC,
             targets,labels,false);
         member=member+1;
     }
     member=0;
     while member < routines.count {
-        try compileFileGroupMember(plans,phases,routines,profiles,runtimeTypes,
+        try compileMixedFileGroupMember(plans,phases,routines,profiles,runtimeTypes,
             member,graph,table,registry,carriers,descriptors,forceGC,
             targets,labels,true);
         member=member+1;
