@@ -6,7 +6,26 @@ Updated 7 November 2026 (Asia/Nicosia). Active branch:
 Tested implementation commit: `2f5065cb32755e8560da4340852c25dc3610224f`.
 This documentation successor changes no implementation or test input.
 Baseline head: `0263208d7168b9a2a2365f7f105749df6a980ea7`.
-**Current batch: bounded single-owner whole-Function File integration.**
+**Latest continuation: owned/C File generator parity gate added; BLOCKED.**
+Implementation remains `2f5065cb32755e8560da4340852c25dc3610224f`.
+The new owned-generator regression timed out at the unchanged 120-second
+watchdog (1 test / 1 error, 149.521 seconds overall). C generation and static
+ELF/no-undefined-symbol checks passed; byte parity and owned-generated File
+execution were NOT reached. The failing regression is retained without skips
+or timeout changes. Earlier 8/8 local evidence below predates this new test.
+[Raw diagnostic](docs/evidence/2026-11-07/u2-file-function/owned-parity.log).
+Replacement hosted run #42397453782 passed scope/patch and was still running
+Linux smoke at inspection; four-platform matrix skipped.
+
+**Immediate recovery:** diagnose the bounded File generator's owned-runtime
+cost before admitting further cleanup combinations. The File entry currently
+constructs a managed Plan, copies its selected types, closes it, then creates a
+second File-extended Plan; measure this suspected duplicate verification cost
+before changing it. No cause or performance fix is established yet.
+For primary composition, reuse exact checked-chain failed-entry binding;
+ordinary SSA liveness does not establish an active propagation. See the
+updated architecture constraint. No new primary/secondary implementation
+was claimed in this continuation.
 **Final focused validation: 8/8 PASS, 0 failed, 0 skipped, 69.823 seconds.**
 The command, source hashes and raw log are recorded in
 [the batch evidence](docs/evidence/2026-11-07/u2-file-function/README.md).

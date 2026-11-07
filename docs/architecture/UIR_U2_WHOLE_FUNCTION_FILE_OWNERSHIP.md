@@ -104,3 +104,16 @@ frames. Add combined foreign/stale roots, deeper allocator/physical/sanitizer
 and independent-origin evidence. No new executable IR or resource runtime is
 needed. Full four-platform and completed-batch qualification remain deferred;
 keep #111/#121 draft and #74 open.
+
+## Primary-composition integration constraint
+
+The existing `UIR_U2_CHECKED_CHAIN_AND_RECURSIVE_FAILURE.md` contract keeps
+an original carried primary distinct from the new close-failure outcome.
+Consequently `ssa.liveBefore` alone must never authorize treating a live
+FailureContext as the active propagation: a handler may retain an error as
+ordinary data. The next integration must reuse the original checked-chain
+binding and independently verified failed-entry cleanup Plan (including exact
+primary ValueId transport on both outcomes), then invoke the existing cleanup
+adapter for that bound route. Do not remove the current live-primary refusal
+and infer active propagation merely from a matching failure type. Native
+accumulator mutation cannot silently redefine original immutable SSA results.

@@ -3,6 +3,8 @@ from pathlib import Path
 import platform
 import re
 import subprocess
+import time
+import test_freestanding_graph_values as graph
 from compiler.erist.cli import build_native, compile_entry
 from compiler.erist.runtime_ext import Interpreter
 import unittest
@@ -180,6 +182,48 @@ function probe(path Text) {
                     emitted+caller+'\n.bss\n.Lrefuse_alloc: .quad 0\n',runtime=runtime)
                 self.assertEqual((run.returncode,run.stdout,run.stderr),
                     (1,b'',b'Eristavi runtime fault: out of memory\n'))
+
+    def test_owned_and_c_generators_emit_identical_file_cfg(self):
+        # Execute only this small generator fixture on owned runtime, not a
+        # compiler self-build. Keep the established 120-second watchdog.
+        folder = self.directory/'file-owned-generator'
+        folder.mkdir()
+        (folder/'compiler').symlink_to(ROOT/'src/compiler',target_is_directory=True)
+        source = folder/'generator.eri'
+        source.write_text(self.source())
+        bootstrap = self.generator('file-parity-c',self.source())
+        self.assertEqual((bootstrap.returncode,bootstrap.stderr),(0,''),bootstrap.stdout[-2000:])
+        application = subprocess.run([str(self.frontend),'emit-asm',str(source),
+            '--source-root',str(folder)],capture_output=True,text=True,timeout=120)
+        self.assertEqual((application.returncode,application.stderr),(0,''),application.stdout[-2000:])
+        assembly = folder/'owned.s'
+        assembly.write_text(self.runtime+'\n'+application.stdout+
+            '\n.text\n.globl _start\n_start:\n    xorl %ebp,%ebp\n'
+            '    call erist_entry\n    jmp .Lgraph_finish\n'+graph.FINISH+
+            '\n.section .note.GNU-stack,"",@progbits\n')
+        obj = folder/'owned.o'
+        binary = folder/'owned'
+        subprocess.run(['as','--64',str(assembly),'-o',str(obj)],check=True,capture_output=True,timeout=20)
+        subprocess.run(['ld','-nostdlib','-static','-e','_start',str(obj),'-o',str(binary)],
+                       check=True,capture_output=True,timeout=20)
+        headers = subprocess.check_output(['readelf','-lW',str(binary)],text=True)
+        self.assertNotIn('INTERP',headers)
+        self.assertNotIn('DYNAMIC',headers)
+        self.assertNotIn('RWE',next(line for line in headers.splitlines() if 'GNU_STACK' in line))
+        self.assertEqual(subprocess.check_output(['nm','-u',str(binary)],text=True).strip(),'')
+        started = time.monotonic()
+        owned = subprocess.run([str(binary)],env={'PATH':'/unavailable'},
+                               capture_output=True,timeout=120)
+        print('U2_FILE_OWNED_GENERATOR_SECONDS='+str(time.monotonic()-started),flush=True)
+        self.assertEqual((owned.returncode,owned.stderr),(0,b''),owned.stdout[-2000:])
+        self.assertEqual(owned.stdout,bootstrap.stdout.encode())
+        path = self.directory/'owned-generated.txt'
+        path.write_text('native')
+        for fail_close in (False,True):
+            runtime = resource.close_failures(self.runtime) if fail_close else self.runtime
+            run = self.run_probe('file-owned-generated-'+str(fail_close),
+                owned.stdout.decode()+self.caller(path,fail_close),runtime=runtime)
+            self.assertEqual((run.returncode,run.stdout,run.stderr),(0,b'',b''))
 
     def test_unknown_binding_and_stale_owner_refuse_before_output(self):
         for name, source in (

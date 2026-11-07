@@ -84,3 +84,19 @@ handover. Smoke and matrix were skipped, not failed compiler tests. The archive
 newline is corrected in this documentation-only successor; source/test hashes
 and the 8/8 local result are unchanged. The full staged patch is checked against
 the parent PR branch, including added files. Hosted rerun remains unqualified.
+
+## Continuation: owned-generator parity blocked
+
+New `test_owned_and_c_generators_emit_identical_file_cfg` executes the bounded
+source generator on the existing owned runtime under the established 120-second
+watchdog. C generation and static ELF/no loader/no undefined symbols/nonexecuting
+stack checks passed. Owned generator timed out: **1 test, 1 error, 149.521 s**.
+See `owned-parity.log`; parity and generated application probes were not reached.
+The regression is retained; timeout/assertions unchanged. Earlier 8/8 remains
+valid only for the preceding test set. Python compile and full patch check pass.
+
+Next inspect duplicate managed/File Plan creation cost before further extension.
+No bottleneck attribution is established. The architecture now explicitly requires
+the existing checked-chain failed-entry binding to identify active primary
+propagation; liveness alone cannot authorize failure-context mutation.
+Hosted #42397453782 scope passed, Linux smoke was running at inspection.
