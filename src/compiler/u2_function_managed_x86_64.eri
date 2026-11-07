@@ -580,13 +580,13 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
             else error owners.InvalidOwnership { fail Unsupported { message=error.message; }; };
         try require(proof.maximumDepth >= 1 and proof.maximumDepth <= 8,
             "whole-Function File owner depth exceeds verified native capacity");
-        // The explicit primary binding currently proves one lexical close.
-        // Nested primary/secondary propagation requires a separate complete
-        // chain proof and must not be inferred from ordinary liveness.
-        if primary != none {
-            try require(proof.maximumDepth == 1,
-                "nested primary cleanup requires full chain binding");
-        }
+        // An explicit PrimaryBinding may occur AFTER one or more inner
+        // lexical resources have been consumed, with only the outer owner
+        // still live at its bound source. verifyPrimary independently checks
+        // that exact one-owner source, failed cleanup Plan, preserved primary,
+        // target transports, source LocId and canonical class-5 root. Never
+        // infer primary propagation from the enclosing Function's max depth.
+        // Unbound live failure carriers at any other File.close still refuse.
         fileHandle=profile.handle.index; fileAcquire=profile.acquire.index;
         fileConsume=profile.consume.index; fileDepth=proof.maximumDepth;
         try require(fileHandle != failureType,"File and failure carriers must differ");

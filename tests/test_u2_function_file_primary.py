@@ -13,6 +13,7 @@ class U2FunctionFilePrimaryTests(unittest.TestCase):
     generator=fileTests.U2FunctionFileCheckedTests.generator
     run_probe=fileTests.U2FunctionFileCheckedTests.run_probe
     caller=fileTests.U2FunctionFileCheckedTests.caller
+    nested_caller=fileTests.U2FunctionFileCheckedTests.nested_caller
     def test_generated_primary_preservation_and_secondary_append(self):
         source=(ROOT/'tests/fixtures/u2_function_file_primary.eri').read_text()
         generated=self.generator('primary-function',source)
@@ -64,6 +65,47 @@ class U2FunctionFilePrimaryTests(unittest.TestCase):
             runtime=resource.close_failures(self.runtime) if failed else self.runtime
             run=self.run_probe('primary-'+str(failed)+'-'+str(prior),generated.stdout+caller,runtime=runtime)
             self.assertEqual((run.returncode,run.stdout,run.stderr),(0,b'',b''))
+
+    def test_nested_close_failure_becomes_primary_through_outer_cleanup(self):
+        source=(ROOT/'tests/fixtures/u2_function_file_nested_primary.eri').read_text()
+        generated=self.generator('nested-primary',source)
+        self.assertEqual((generated.returncode,generated.stderr),(0,''),generated.stdout[-2500:])
+        asm=generated.stdout
+        self.assertIn('call erist_rt_failure_append',asm)
+        self.assertIn('erist_u2_file_723_publish_3:',asm)
+        present=self.directory/'nested-primary-present.txt'
+        present.write_text('native')
+        missing=self.directory/'nested-primary-absent.txt'
+        scenarios=(
+            ('clean',present,present,42,False,2,False),
+            ('inner-open-recovery',present,missing,7,False,1,False),
+            ('outer-open-failure',missing,present,None,True,0,False),
+            ('inner-and-outer-close-failure',present,present,None,True,2,True),
+        )
+        for name,outer,inner,answer,failing,closes,inject in scenarios:
+            with self.subTest(scenario=name):
+                runtime=resource.close_failures(self.runtime) if inject else self.runtime
+                runtime=runtime.replace('.Lr_close:\n',
+                    '.Lr_close:\n    incq .Lnested_close_calls(%rip)\n',1)
+                caller=self.nested_caller(outer,inner,answer,failing,closes)
+                caller=caller.replace('erist_u2_rooted_function_719',
+                    'erist_u2_rooted_function_723')
+                if inject:
+                    # New failed outer close must append after the original
+                    # inner-close primary, not replace it with a later error.
+                    needle='    cmpq $8,(%rax)\n    jne .Lresource_test_fail\n'
+                    self.assertEqual(caller.count(needle),1)
+                    caller=caller.replace(needle,needle+
+                        '    movq 80(%rax),%rax\n'
+                        '    testq %rax,%rax\n'
+                        '    je .Lresource_test_fail\n'
+                        '    cmpq $8,(%rax)\n'
+                        '    jne .Lresource_test_fail\n'
+                        '    cmpq $0,88(%rax)\n'
+                        '    jne .Lresource_test_fail\n',1)
+                result=self.run_probe('nested-primary-'+name,asm+caller,runtime=runtime)
+                self.assertEqual((result.returncode,result.stdout,result.stderr),
+                                 (0,b'',b''),name)
 
     def test_bad_primary_binding_refuses_before_output(self):
         source=(ROOT/'tests/fixtures/u2_function_file_primary.eri').read_text()
