@@ -737,15 +737,30 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
                         }
                         importKind=4; importOperation=resolved.operation;
                     } else {
-                        // A checked call to this very Function is safe while
-                        // File owners remain on this frame's canonical stack:
-                        // owners.verify excludes passing/copying those handles,
-                        // and class-1 roots remain bound across the child call.
-                        // Re-entry acquires its OWN File and closes it before
-                        // returning; no File handle is transferred to child.
-                        try require(invoked == selfTarget and
-                            primary == none and groupTargets.count == 0,
-                            "File-owning checked call requires a bound self target");
+                        // Defined calls never transfer a lexical File owner:
+                        // the independent owner proof checks every operand,
+                        // while our class-1 File roots survive the callee call.
+                        // A closed group resolves exact original FunctionIds to
+                        // previously pre-admitted body labels; self recursion
+                        // remains the single-member case.
+                        try require(primary == none,
+                            "File-owning call cannot overwrite a propagating primary");
+                        if groupTargets.count == 0 {
+                            try require(invoked == selfTarget,
+                                "File-owning checked call requires a bound self target");
+                        } else {
+                            let member be 0; let found be false;
+                            while member < groupTargets.count {
+                                try budget.work(phase,1);
+                                if invoked == groupTargets[member] {
+                                    importOperation=groupLabels[member];
+                                    found=true;
+                                }
+                                member=member+1;
+                            }
+                            try require(found and importOperation != 0,
+                                "File-owning checked target is outside admitted group");
+                        }
                         let v be 0;
                         while v < selected.count {
                             let value be selected[v];
@@ -1251,8 +1266,108 @@ public function emitCheckedGroup(routines,labels,
     try closeGroup(plans,phases);
 }
 
-// Bounded first integration: one lexical File owner, no active primary or
-// defined checked calls. Unsupported combinations refuse before output.
+// Closed, exact File-owning group: all bodies/profiles/plans are pre-admitted
+// before ANY assembly. Each body keeps its own class-1 lexical File roots and
+// class-5 failure context; the caller never hands an open File to the callee.
+// The original saved-primary composition remains a separate explicit entry.
+function compileFileGroupMember(plans,phases,routines,profiles,member Int,
+    graph identity aggregate.Registry,table identity contracts.Registry,
+    registry identity managed.Registry,carriers,descriptors,forceGC Bool,
+    targets,labels,fileRuntimeType Int,emitOutput Bool)
+    fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,Unsupported {
+    let routine identity build.Function be routines[member];
+    let profile identity owners.Profile be profiles[member];
+    compile(plans[member],routine,graph,table,phases[member],registry,
+        carriers,descriptors,forceGC,labels[member],routine.definedTarget,true,
+        targets,labels,emitOutput,profile,fileRuntimeType,none)
+        else error budget.LimitError { try closeGroup(plans,phases); fail error; }
+        else error canonical.InvalidIR { try closeGroup(plans,phases); fail error; }
+        else error ssa.InvalidLiveness { try closeGroup(plans,phases); fail error; }
+        else error Unsupported { try closeGroup(plans,phases); fail error; };
+}
+public function emitFileCheckedGroup(routines,labels,profiles,
+    graph identity aggregate.Registry,table identity contracts.Registry,
+    registry identity managed.Registry,carriers,descriptors,forceGC Bool,
+    fileRuntimeType Int)
+    fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,
+        roots.InvalidManagedRoots,managed.InvalidManagedTypes,
+        graphVerify.InvalidGraph,Unsupported {
+    try require(routines.count >= 1 and routines.count <= 16 and
+        labels.count == routines.count and profiles.count == routines.count and
+        fileRuntimeType >= 6 and fileRuntimeType <= 2147483647,
+        "invalid bounded File-owning checked group");
+    let targets be []; let valueCount be 0; let instructionCount be 0;
+    let member be 0;
+    while member < routines.count {
+        let routine identity build.Function be routines[member];
+        let profile identity owners.Profile be profiles[member];
+        try require(routine.metadata.key == table.metadataKey and
+            routine.definedTarget >= 1 and profile.functionKey == routine.key and
+            labels[member] >= 1 and labels[member] <= 2147483647 and
+            routine.values.length >= 0 and routine.values.length <= 1024 and
+            routine.instructions.length >= 0 and routine.instructions.length <= 5120,
+            "invalid File group member, exact owner or bounded counts");
+        let earlier be 0;
+        while earlier < member {
+            try require(targets[earlier] != routine.definedTarget and
+                labels[earlier] != labels[member],
+                "duplicate File group FunctionId or output label");
+            earlier=earlier+1;
+        }
+        targets.add(routine.definedTarget);
+        valueCount=valueCount+routine.values.length/4;
+        instructionCount=instructionCount+routine.instructions.length/10;
+        try require(valueCount <= 1024 and instructionCount <= 2048,
+            "File-owning checked group exceeds aggregate budget");
+        member=member+1;
+    }
+    let plans be []; let phases be [];
+    member=0;
+    while member < routines.count {
+        let routine identity build.Function be routines[member];
+        let profile identity owners.Profile be profiles[member];
+        let phase be budget.verificationPhase(routine.owner)
+            else error budget.LimitError { try closeGroup(plans,phases); fail error; };
+        phases.add(phase);
+        let types be roots.selectTypes(routine,graph,table,phase,registry,carriers,descriptors)
+            else error budget.LimitError { try closeGroup(plans,phases); fail error; }
+            else error canonical.InvalidIR { try closeGroup(plans,phases); fail error; }
+            else error roots.InvalidManagedRoots { try closeGroup(plans,phases); fail error; }
+            else error managed.InvalidManagedTypes { try closeGroup(plans,phases); fail error; }
+            else error graphVerify.InvalidGraph { try closeGroup(plans,phases); fail error; };
+        let i be 0;
+        while i < types.count {
+            let selected aggregate.TypeId be types[i];
+            if selected.index == profile.handle.index {
+                try closeGroup(plans,phases);
+                fail Unsupported { message="File group carrier overlaps managed or failure root"; };
+            }
+            i=i+1;
+        }
+        types.add(profile.handle);
+        let plan be ssa.create(routine,graph,table,phase,types)
+            else error budget.LimitError { try closeGroup(plans,phases); fail error; }
+            else error canonical.InvalidIR { try closeGroup(plans,phases); fail error; }
+            else error ssa.InvalidLiveness { try closeGroup(plans,phases); fail error; };
+        plans.add(plan);
+        try compileFileGroupMember(plans,phases,routines,profiles,member,graph,
+            table,registry,carriers,descriptors,forceGC,targets,labels,
+            fileRuntimeType,false);
+        member=member+1;
+    }
+    member=0;
+    while member < routines.count {
+        try compileFileGroupMember(plans,phases,routines,profiles,member,graph,
+            table,registry,carriers,descriptors,forceGC,targets,labels,
+            fileRuntimeType,true);
+        member=member+1;
+    }
+    try closeGroup(plans,phases);
+}
+
+// Native File-owning entry points share the exact canonical checked signatures.
+// emitFileCheckedGroup closes different target bodies; single-body entries
+// remain for independently verified non-group and primary-composition cases.
 public function emitFileChecked(routine identity build.Function,
     graph identity aggregate.Registry,table identity contracts.Registry,
     phase identity budget.Phase,registry identity managed.Registry,
