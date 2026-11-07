@@ -77,10 +77,10 @@ class U2WholeFunctionFileRootTests(unittest.TestCase):
             self.assertEqual(len(re.findall(
                 "^    \\.byte 1$", emitted, re.M)), 2)
             blocks = re.findall(
-                r"^" + base + r"_publish_(\\d+):$", emitted, re.M)
+                r"^" + base + r"_publish_(\d+):$", emitted, re.M)
             self.assertEqual(blocks, [str(i) for i in range(1, 12)])
             closes = re.findall(
-                r"^" + base + r"_poison_(\\d+):$", emitted, re.M)
+                r"^" + base + r"_poison_(\d+):$", emitted, re.M)
             self.assertEqual(len(closes), 3)
             self.assertEqual(len(set(closes)), 3)
             # Acquisition does not begin with a live owner and the nested
