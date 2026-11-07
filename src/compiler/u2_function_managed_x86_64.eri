@@ -1502,6 +1502,7 @@ public function emitMixedFileCheckedGroup(routines,labels,profiles,runtimeTypes,
         let types be roots.selectTypes(routine,graph,table,phase,registry,carriers,descriptors)
             else error budget.LimitError { try closeGroup(plans,phases); fail error; }
             else error canonical.InvalidIR { try closeGroup(plans,phases); fail error; }
+            else error ssa.InvalidLiveness { try closeGroup(plans,phases); fail error; }
             else error roots.InvalidManagedRoots { try closeGroup(plans,phases); fail error; }
             else error managed.InvalidManagedTypes { try closeGroup(plans,phases); fail error; }
             else error graphVerify.InvalidGraph { try closeGroup(plans,phases); fail error; };
