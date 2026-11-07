@@ -41,6 +41,7 @@ function run() fails budget.LimitError,canonical.InvalidIR,graphVerify.InvalidGr
     let bothFilesSig be try sig.signature(data,graph,mp,[],[file,file]);
     let ownerOnlySig be try sig.signature(data,graph,mp,[],[file]);
     let failedWithOwnerSig be try sig.signature(data,graph,mp,[],[failure,file]);
+    let failedWithTextSig be try sig.signature(data,graph,mp,[],[failure,text]);
     let target be try meta.declaration(data,mp,signature,"u2.file.function",1,63,0);
     let acquisition be try meta.declaration(data,mp,opened,"u2.file.openRead.v1",2,63,1);
     let consumption be try meta.declaration(data,mp,closed,"u2.file.close.v1",2,63,1);
@@ -68,7 +69,7 @@ function run() fails budget.LimitError,canonical.InvalidIR,graphVerify.InvalidGr
     let innerCloseFailed be try ab.block(fn,graph,[failure,file]);
     let done be try build.block(fn,[meta.i64()]);
     let closeFailed be try ab.block(fn,graph,[failure,i64]);
-    let openFailed be try ab.block(fn,graph,[failure]);
+    let openFailed be try ab.block(fn,graph,[failure,text]);
     let outerPath be try build.parameter(fn,entry,0);
     let innerPath be try build.parameter(fn,entry,1);
     let outerHandle be try build.parameter(fn,outer,0);
@@ -93,7 +94,7 @@ function run() fails budget.LimitError,canonical.InvalidIR,graphVerify.InvalidGr
     try owners.block(profile,fn,cp,closeFailed,[]);
     try owners.block(profile,fn,cp,openFailed,[]);
     let pair be try continuation.bindCarrying(fn,graph,cp,entry,outer,openFailed,
-        outerOpenedSig,failureSig,loc);
+        outerOpenedSig,failedWithTextSig,loc);
     let openOuter be try transfer.emit(fn,graph,acquire,pair,[outerPath],[innerPath]);
     pair=try continuation.bindCarrying(fn,graph,cp,outer,nested,innerOpenFailed,
         bothFilesSig,failedWithOwnerSig,loc);
