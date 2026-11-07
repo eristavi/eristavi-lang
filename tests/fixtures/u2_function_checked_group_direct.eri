@@ -42,14 +42,10 @@ function run()
     let scalarSpecialization be try meta.signature(data,mp,[meta.i64()],[meta.i64()]);
     let signature be try sig.signature(data,graph,mp,[carrier,textCarrier,failureCarrier,i64,pred],[carrier,i64]);
     let failureSig be try sig.signature(data,graph,mp,[],[failureCarrier]);
-    let normalCarry be try sig.signature(data,graph,mp,[],[carrier,i64,textCarrier]);
-    let failedCarry be try sig.signature(data,graph,mp,[],[failureCarrier,textCarrier]);
     let directNormal be try sig.signature(data,graph,mp,[],[carrier,i64]);
     let directFailed be try sig.signature(data,graph,mp,[],[failureCarrier]);
     let selfTarget be try meta.declaration(data,mp,signature,"u2.recursive.managed",1,63,0);
     let otherTarget be try meta.declaration(data,mp,signature,"u2.mutual.other",1,63,0);
-    let createSig be try sig.signature(data,graph,mp,[i64],[textCarrier]);
-    let createText be try meta.declaration(data,mp,createSig,textNative.name(1),2,63,1);
     let countSig be try sig.signature(data,graph,mp,[textCarrier],[i64]);
     let countText be try meta.declaration(data,mp,countSig,textNative.name(5),2,63,1);
     let src be try meta.source(data,mp,"u2-managed-function",

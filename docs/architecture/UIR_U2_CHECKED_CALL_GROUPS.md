@@ -29,7 +29,13 @@ Ordinary value copies still use admitted existing imports; identity is shared.
 
 Reuse `roots.create`, full `ssa.verifyPublications`, canonical checked-return
 verification and the existing emitter. A bounded preflight compiles/verifies each
-member without output; an emission pass freshly verifies each member again.
+member's canonical body, checked root metadata, call closure and native admission
+without output. It does not build an unused machine-publication matrix. The
+emission pass freshly builds and independently verifies the complete per-SSA
+publication product before each body's first assembly output. No proof is waived
+for emitted code. Retain each private immutable preflight SSA Plan within this
+bounded transaction; `ssa.verifyPublications` freshly rederives and compares it
+at emission. No preflight verification stamp authorizes code generation.
 No alternate executable graph, global call registry or persistent verified flag
 is created. Resource failure during emission makes the generator fail; partial
 stdout from a failed generator is never an accepted artifact.
@@ -37,8 +43,13 @@ stdout from a failed generator is never an accepted artifact.
 At most 16 members, 1024 total SSA values and 2048 total instructions; existing
 per-body/frame/root caps remain. Resolution is O(member count) per checked call,
 charged to the current phase; admission duplicate checks are O(members squared).
-Only integer target/label lists span bodies. Plans and temporary verification
-phases close after each member, including failure paths. Runtime stack/root
+Integer target/label lists and at most 16 existing immutable SSA Plans/phases
+span bodies, avoiding a redundant complete plan reconstruction per member.
+Each Plan remains charged to its original function owner and common request;
+existing per-owner peak/traffic and work limits remain mandatory. All retained
+Plans and phases close on completion and on any preparation/emission failure,
+including a failure while preparing a later member. No new physical schema,
+cache, IR layer or public lifetime API is introduced. Runtime stack/root
 layout is unchanged from the checked Function contract, with no new per-call
 heap structure. No whole-compiler speed or total recursion-memory claim follows.
 

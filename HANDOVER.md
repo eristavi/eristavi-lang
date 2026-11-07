@@ -11,18 +11,37 @@ No final four-platform qualification or merge. Optimization #51 remains PAUSED.
 
 Authorized batch: checked calls between distinct defined Functions and mutual
 recursion, preserving exact managed/failure roots and independent evidence.
-This development batch extends the existing emitter with bounded `emitCheckedGroup`;
-contract: `docs/architecture/UIR_U2_CHECKED_CALL_GROUPS.md`. New mutual/direct fixtures
-and ten focused tests are under validation, not final accepted evidence.
+Published development candidate `c61afa97b34c923306a4688f6da036b04155c2ac` extends
+the existing emitter with bounded `emitCheckedGroup`; contract:
+`docs/architecture/UIR_U2_CHECKED_CALL_GROUPS.md`. Further local refinements and
+11 focused tests are under validation; not final accepted evidence.
+
 Preliminary mutual/handler/two-managed-result/negative checks passed; differing
-normal result layouts and the 592-byte/frame stack probe also passed. One new
-owned/C group generator attempt timed out at the unchanged 120-second watchdog
-while other compiler tests ran; repeat in isolation before judging performance.
-Two new test harness construction/handler mistakes were corrected; do not
-represent their earlier failed runs as green. Existing regression and hosted
-Linux smoke are still pending. Preserve
-`4b71966` below as the previous verified implementation until new tests pass.
-PR #111 remains DRAFT; #74 OPEN. No final matrix, merge or #51 restart.
+normal result layouts, ordered secondary failures, missing sibling handoffs,
+work/capacity-refusal reclamation and actual 592-byte/frame stack probe passed.
+Hosted candidate legacy checks: managed/checked **18/18 pass** and word-path
+prerequisite **1/1 pass**, run #42348095750; generator 107.514 s under unchanged
+120 s watchdog. Existing Text/List integration #42348095794 also SUCCESS.
+These hosted results cover `c61afa9`, not later implementation changes.
+
+New group generator watchdog attempts timed out at 120 s; local baseline on
+unchanged `6fe0024` also times out here. New diagnostic phase trace nevertheless
+identified redundant full SSA Plan construction (~27 s/member per construction).
+Local refinement retains existing immutable Plans for a bounded group transaction,
+then freshly rederives/compares each with full `ssa.verifyPublications` before
+emitting that body. No verified flag, new IR or bypass. Unused preflight machine
+publication production was removed. Cleanup must release all retained Plans and
+phases on completion or a later-member failure. Native frame/root ABI unchanged.
+The refined retained-plan path passes both the new List snapshot/GC execution
+and later-member work/capacity-refusal reclamation checks (2/2). A complete
+11-method focused run, changed-input ASan/UBSan checks and exact-source hosted
+smoke are now running/pending. The old single-body entry remains direct rather
+than routing through a new generic wrapper, preserving bootstrap specialization.
+Local baseline timeout is recorded as an environment limit, not a new regression;
+its exact hosted counterpart passed on `c61afa9`.
+
+Preserve `4b71966` below as the previous verified implementation until new gates
+pass. PR #111 remains DRAFT; #74 OPEN. No final matrix, merge or #51 restart.
 The user requires this batch to stay within a five-hour session budget; reserve
 time for exact-source testing, publishing code/evidence and this handover.
 

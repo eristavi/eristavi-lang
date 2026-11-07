@@ -4,6 +4,8 @@ import platform
 import time
 import re
 import json
+import os
+import shutil
 import subprocess
 import unittest
 
@@ -73,6 +75,67 @@ class U2FunctionCheckedGroupTests(unittest.TestCase):
         source=source.replace("[managedInput,deadValue],loc);", "[managedInput,textInput],loc);",1)
         self.run_checked("checked-mutual-two-managed",source,
             [(0,False,False),(1,False,False),(32,False,False),(32,True,False)],dual=True)
+
+    def test_list_value_crosses_mutual_frames_and_preserves_snapshot(self):
+        source=self.source().replace("aggregate.aggregate(graph,mp,[i64,i64]);",
+                                     "aggregate.aggregate(graph,mp,[i64]);",1)
+        source=source.replace("managed.identityOfBase(registry,mp,carrier)",
+                              "managed.listOfBase(registry,mp,i64)",1)
+        generated=self.generator("mutual-list",source)
+        self.assertEqual((generated.returncode,generated.stderr),(0,""),generated.stdout[-2500:])
+        asm=generated.stdout.replace("    call erist_rt_slots_collect",
+            "    movq $0,.Lrecursive_roots+16(%rip)\n    call erist_rt_slots_collect")
+        runtime=self.runtime.replace("erist_rt_slots_collect:\n",
+            "erist_rt_slots_collect:\n    incq .Lrecursive_gc_calls(%rip)\n",1)
+        caller=self.checked_caller(32,False)
+        begin=caller.index("    # Create a three-node identity cycle")
+        end=caller.index("    leaq .Lrecursive_text(%rip)",begin)
+        setup="""    movl $7,%edi
+    movl $1,%esi
+    call evn_object
+    movq %rax,.Lrecursive_roots(%rip)
+    movq %rax,.Lrecursive_inputs(%rip)
+    movl $7,%edi
+    call evn_int
+    movq %rax,%rdx
+    movq .Lrecursive_roots(%rip),%rdi
+    xorl %esi,%esi
+    call evn_init
+"""
+        caller=caller[:begin]+setup+caller[end:]
+        caller=caller.replace("movl $4,%ecx\n    call evn_bind_roots",
+                              "movl $5,%ecx\n    call evn_bind_roots",1)
+        caller=caller.replace(".Lrecursive_roots:\n.zero 32", ".Lrecursive_roots:\n.zero 40",1)
+        caller=caller.replace(".byte 1,1,5,5", ".byte 1,1,5,5,1",1)
+        caller=caller.replace("    cmpq $3,%rax", "    cmpq $1,%rax",1)
+        snapshot="""    # Returned ordinary List can be copied and mutated independently.
+    movq .Lrecursive_roots(%rip),%rdi
+    call evn_copy
+    movq %rax,.Lrecursive_roots+32(%rip)
+    movq %rax,%rdi
+    xorl %esi,%esi
+    call evn_index_ref
+    movq $1,(%rax)
+    movq $99,8(%rax)
+    movq .Lrecursive_roots(%rip),%rdi
+    xorl %esi,%esi
+    call evn_index
+    cmpq $7,8(%rax)
+    jne .Lgraph_test_fail
+    movq .Lrecursive_roots+32(%rip),%rdi
+    xorl %esi,%esi
+    call evn_index
+    cmpq $99,8(%rax)
+    jne .Lgraph_test_fail
+    movq $0,.Lrecursive_roots+32(%rip)
+"""
+        marker="    movq $0,.Lrecursive_roots(%rip)"
+        self.assertIn(marker,caller)
+        caller=caller.replace(marker,snapshot+marker,1)
+        result=self.run_probe("mutual-list-value-copy",
+            asm+caller+graph.FINISH+unicodeTests.unicode_descriptors(),
+            runtime=runtime,types=False)
+        self.assertEqual((result.returncode,result.stdout,result.stderr),(0,b"",b""))
 
     def test_mutual_frames_preserve_primary_and_ordered_secondary_context(self):
         checkedTests.U2FunctionCheckedNativeTests.test_checked_recursion_retains_complete_ordered_secondary_context(self)
@@ -214,7 +277,25 @@ class U2FunctionCheckedGroupTests(unittest.TestCase):
     def test_owned_and_c_generators_agree_on_direct_group(self):
         folder=self.directory/"direct-owned-group"
         folder.mkdir()
-        (folder/"compiler").symlink_to(ROOT/"src/compiler",target_is_directory=True)
+        tracing=os.environ.get("ERISTAVI_U2_GROUP_TRACE","") == "1"
+        if tracing:
+            shutil.copytree(ROOT/"src/compiler",folder/"compiler")
+            path=folder/"compiler/u2_function_managed_x86_64.eri"
+            code=path.read_text()
+            for needle,stage in (
+                ("    let tracked be plan.values.length/4;","plan-admitted"),
+                ("    let managedReturn be false;","signature-admitted"),
+                ("    // Snapshot the frozen canonical Function tables before emitting any code.","snapshot"),
+                ("    // Build the publication product in two bounded sweeps per canonical block,","publication-build"),
+                ("    let verifiedPublications be try ssa.verifyPublications(","publication-verify"),
+                ('    output(".section .rodata");',"assembly-begin"),
+                ("        let phase be budget.verificationPhase(routine.owner)","group-member"),
+            ):
+                self.assertEqual(code.count(needle),1)
+                code=code.replace(needle,'    output("# U2_NATIVE_TRACE:'+stage+'");\n'+needle,1)
+            path.write_text(code)
+        else:
+            (folder/"compiler").symlink_to(ROOT/"src/compiler",target_is_directory=True)
         source=folder/"generator.eri"
         source.write_text((ROOT/"tests/fixtures/u2_function_checked_group_direct.eri").read_text())
         emitted=subprocess.run([str(self.frontend),"emit-asm",str(source),
@@ -244,12 +325,18 @@ class U2FunctionCheckedGroupTests(unittest.TestCase):
         self.assertNotIn("RWE",next(x for x in headers.splitlines() if "GNU_STACK" in x))
         self.assertEqual(subprocess.check_output(["nm","-u",str(binary)],text=True).strip(),"")
         begun=time.monotonic()
-        owned=subprocess.run([str(binary)],env={"PATH":"/unavailable"},
-                             capture_output=True,timeout=120)
+        if tracing:
+            owned=checkedTests.capture_traced_owned_generator(
+                [str(binary)],env={"PATH":"/unavailable"},timeout=120)
+        else:
+            owned=subprocess.run([str(binary)],env={"PATH":"/unavailable"},
+                                 capture_output=True,timeout=120)
         print("U2_DIRECT_GROUP_OWNED_GENERATOR_SECONDS="+
               format(time.monotonic()-begun,".3f"),flush=True)
         self.assertEqual((owned.returncode,owned.stderr),(0,b""),owned.stdout[-2500:])
-        bootstrap=self.generator("direct-c-group",source.read_text())
+        c_generator=folder/"c-generator"
+        self.assertEqual(build_native(source,c_generator,folder),0)
+        bootstrap=subprocess.run([str(c_generator)],capture_output=True,text=True,timeout=150)
         self.assertEqual((bootstrap.returncode,bootstrap.stderr),(0,""),bootstrap.stdout[-2500:])
         self.assertEqual(owned.stdout,bootstrap.stdout.encode())
         self.assertIn(b"call erist_u2_rooted_function_93",owned.stdout)
@@ -282,6 +369,8 @@ class U2FunctionCheckedGroupTests(unittest.TestCase):
             "missing-managed-type": ("[carrier,textCarrier],[identityType,managed.text(registry)],true);",
                                      "[carrier],[identityType],true);"),
             "foreign-binding": ("try ab.complete(fn,graph);", "try ab.complete(fn,graph);\n    if member == 1 { fn.definedTarget=createText.index; }"),
+            "negative-values": ("try ab.complete(fn,graph);", "try ab.complete(fn,graph);\n    if member == 1 { fn.values.length=-4; }"),
+            "huge-instructions": ("try ab.complete(fn,graph);", "try ab.complete(fn,graph);\n    if member == 1 { fn.instructions.length=9223372036854775807; }"),
             "wrong-signature": ("try ab.complete(fn,graph);", "try ab.complete(fn,graph);\n    if member == 1 { fn.signature=createSig; }"),
             "dead-no-origin": ("try ab.complete(fn,graph);", """try ab.complete(fn,graph);
     if member == 1 {
