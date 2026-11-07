@@ -23,6 +23,7 @@ SMOKE_TESTS=(
     'test_u2_fallible_registry.U2FallibleRegistryTests',
     'test_u2_invoke_transfers.U2InvokeTransferTests',
     'test_u2_scoped_owners.U2ScopedOwnerTests',
+    'test_u2_function_file_roots.U2WholeFunctionFileRootTests',
     'test_u2_typed_failure_context.U2TypedFailureContextTests',
     'test_u2_failure_order.U2FailureOrderTests',
     'test_u2_failure_trace.U2FailureTraceTests',
