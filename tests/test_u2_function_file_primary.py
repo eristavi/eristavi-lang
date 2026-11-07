@@ -107,6 +107,22 @@ class U2FunctionFilePrimaryTests(unittest.TestCase):
                 self.assertEqual((result.returncode,result.stdout,result.stderr),
                                  (0,b'',b''),name)
 
+    def test_nested_primary_binding_corruption_refuses_before_output(self):
+        source=(ROOT/'tests/fixtures/u2_function_file_nested_primary.eri').read_text()
+        marker='    let binding be native.PrimaryBinding'
+        self.assertEqual(source.count(marker),1)
+        for name,mutation in (
+            ('wrong-failed-cleanup-plan','cleanupPlan.entry=1;'),
+            ('stale-continuation','pair.revision=pair.revision+1;'),
+        ):
+            with self.subTest(corruption=name):
+                generated=self.generator('nested-primary-refuse-'+name,
+                    source.replace(marker,mutation+'\n'+marker,1))
+                self.assertEqual(generated.returncode,1,generated.stdout[-2500:])
+                self.assertIn('unsupported:',generated.stdout)
+                self.assertNotIn('.globl',generated.stdout)
+                self.assertNotIn('leaked',generated.stdout)
+
     def test_bad_primary_binding_refuses_before_output(self):
         source=(ROOT/'tests/fixtures/u2_function_file_primary.eri').read_text()
         for name, mutation in (

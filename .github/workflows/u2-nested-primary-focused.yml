@@ -32,6 +32,7 @@ jobs:
           set -o pipefail
           PYTHONPATH=tests:. python -u -m unittest -v \
             test_u2_function_file_primary.U2FunctionFilePrimaryTests.test_nested_close_failure_becomes_primary_through_outer_cleanup \
+            test_u2_function_file_primary.U2FunctionFilePrimaryTests.test_nested_primary_binding_corruption_refuses_before_output \
             test_u2_function_file_primary.U2FunctionFilePrimaryTests.test_generated_primary_preservation_and_secondary_append \
             test_u2_function_file_checked.U2FunctionFileCheckedTests.test_nested_lexical_file_owners_and_recovering_handlers \
             2>&1 | tee "$RUNNER_TEMP/nested-primary.log"
