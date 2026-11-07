@@ -110,7 +110,7 @@ function run() fails budget.LimitError,canonical.InvalidIR,graphVerify.InvalidGr
     // Establish bootstrap scalar edge specialization, independent dead block.
     let dead be try build.block(fn,[]); let deadTarget be try build.block(fn,[meta.i64()]);
     try owners.block(profile,fn,cp,dead,[]); try owners.block(profile,fn,cp,deadTarget,[]);
-    let zero be try build.integer(fn,dead,0,loc); try build.jump(fn,dead,deadTarget,[zero],loc);
+    let deadZero be try build.integer(fn,dead,0,loc); try build.jump(fn,dead,deadTarget,[deadZero],loc);
     try build.returnValues(fn,deadTarget,[try build.parameter(fn,deadTarget,0)],loc);
     try ab.complete(fn,graph); try owners.complete(profile,fn,cp); try budget.finishPhase(cp);
     let phase be try budget.constructionPhase(owner);
