@@ -61,3 +61,11 @@ That run does not qualify this new code. Final four-platform/completed-batch
 qualification deliberately deferred. #74 OPEN, #121/#111 DRAFT; no merge,
 production promotion or #51 work. Remaining functionality and exact recovery
 step are in HANDOVER.md and the producer contract.
+
+## Hosted patch-check correction
+
+https://github.com/eristavi/eristavi-lang/actions/runs/42468562936 failed scope
+job 128693690432 on a trailing space in initial.log's first test-status line;
+smoke and matrix did not execute. Normalize that log line's trailing whitespace
+without removing the failed evidence or changing implementation/tests/assertions.
+The corrected head requires its own hosted result; none claimed here.

@@ -59,6 +59,14 @@ owned/C/hosted timeout repeatability, branch reconciliation and exact final
 four-platform/full qualification remain OPEN. #74 OPEN; #121/#111 DRAFT; no merge
 or production promotion.
 
+Hosted attempt on documentation head aa619a36f743925c5365ce81a43a137106855a24
+failed only patch classification: a trailing space in preserved initial.log's
+first test-status line. Scope job 128693690432 failed; smoke/matrix skipped.
+https://github.com/eristavi/eristavi-lang/actions/runs/42468562936
+This evidence-only correction normalizes that line, retaining failed output
+and all assertions. Implementation/test inputs remain pinned above. Corrected
+head hosted run pending; no hosted success claimed for this new implementation.
+
 Predecessor exact-head smoke CI SUCCESS:
 https://github.com/eristavi/eristavi-lang/actions/runs/42463546118
 No new-head hosted or owned-generator parity result claimed. Broad unchanged
