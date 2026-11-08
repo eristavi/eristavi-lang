@@ -1,5 +1,9 @@
 # Returned primary failures through File-owning calls
 
+Latest verified implementation/test commit: `34faa47b07b52de061e1a94546748369cbdc693f`.
+This documentation successor leaves source/test inputs unchanged.
+
+
 8 November 2026. Base `46758d671d6f3d763067a737971fb5417b648612`.
 Draft #121; #111 draft; U2 #74 OPEN. No release qualification claimed.
 

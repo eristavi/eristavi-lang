@@ -1,5 +1,9 @@
 # Eristavi compiler — current handover
 
+Latest verified implementation/test commit: `34faa47b07b52de061e1a94546748369cbdc693f`.
+This documentation successor leaves source/test inputs unchanged.
+
+
 ## Active checkpoint — 8 November 2026: returned child failures through owned callers
 
 Branch `compiler/u2-whole-function-file-roots-20261107`; batch base
