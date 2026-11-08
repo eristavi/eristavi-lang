@@ -39,11 +39,22 @@ public function textListName(op Int) returns Text {
     if op == 6 { return "u2.list.text.get"; }
     return "u2.list.text.collect";
 }
+public function nestedListName(textElements Bool,op Int) returns Text {
+    let prefix be "u2.list.list_i64.";
+    if textElements { prefix="u2.list.list_text."; }
+    if op == 1 { return prefix+"empty"; }
+    if op == 2 { return prefix+"copy"; }
+    if op == 3 { return prefix+"append"; }
+    if op == 4 { return prefix+"replace"; }
+    if op == 5 { return prefix+"count"; }
+    if op == 6 { return prefix+"get"; }
+    return prefix+"collect";
+}
 // An exact source FunctionId is used: target ordinals are not assumed to
 // equal local op indices or each other when Text and List coexist.
 public function inspect(data identity meta.Metadata,
     graph identity aggregate.Registry,phase identity budget.Phase,
-    target Int,textCarrier Int,listCarrier Int,textListCarrier Int)
+    target Int,textCarrier Int,listCarrier Int,textListCarrier Int,nestedI64Carrier Int,nestedTextCarrier Int)
     returns Target fails budget.LimitError,Unsupported {
     try require(data.frozen and not data.closed and graph.state == 1 and
         target >= 1 and target <= data.declarations.length/6 and
@@ -67,6 +78,12 @@ public function inspect(data identity meta.Metadata,
         if textListCarrier >= 7 and try same(data,phase,row,textListName(i)) {
             kind=5; operation=i;
         }
+        if nestedI64Carrier >= 7 and try same(data,phase,row,nestedListName(false,i)) {
+            kind=6; operation=i;
+        }
+        if nestedTextCarrier >= 7 and try same(data,phase,row,nestedListName(true,i)) {
+            kind=7; operation=i;
+        }
         i=i+1;
     }
     try require(kind != 0 and (try words.get(data.declarations,phase,row+3)) == 2 and
@@ -89,6 +106,9 @@ public function inspect(data identity meta.Metadata,
     try require((try meta.parameterCount(data,phase,signature)) == arguments and
         (try meta.resultCount(data,phase,signature)) == resultCount,
         "native managed call has wrong canonical signature arity");
+    let boxedList be textListCarrier; let boxedElement be textCarrier;
+    if kind == 6 { boxedList=nestedI64Carrier; boxedElement=listCarrier; }
+    if kind == 7 { boxedList=nestedTextCarrier; boxedElement=textListCarrier; }
     i=0;
     while i < arguments {
         let expected be textCarrier;
@@ -97,10 +117,10 @@ public function inspect(data identity meta.Metadata,
                 (operation >= 9 and operation <= 11 and i == 1) { expected=2; }
         } else {
             expected=listCarrier;
-            if kind == 5 { expected=textListCarrier; }
+            if kind >= 5 { expected=boxedList; }
             if i >= 1 { expected=2; }
-            if kind == 5 and ((operation == 3 and i == 1) or
-                (operation == 4 and i == 2)) { expected=textCarrier; }
+            if kind >= 5 and ((operation == 3 and i == 1) or
+                (operation == 4 and i == 2)) { expected=boxedElement; }
         }
         try require((try signatures.parameterType(data,graph,phase,signature,i)).index ==
             expected,"native managed call has wrong canonical argument type");
@@ -114,9 +134,9 @@ public function inspect(data identity meta.Metadata,
                 operation == 9 { expected=2; }
         } else {
             expected=listCarrier;
-            if kind == 5 { expected=textListCarrier; }
+            if kind >= 5 { expected=boxedList; }
             if operation == 5 or operation == 6 { expected=2; }
-            if kind == 5 and operation == 6 { expected=textCarrier; }
+            if kind >= 5 and operation == 6 { expected=boxedElement; }
         }
         try require((try signatures.resultType(data,graph,phase,signature,0)).index ==
             expected,"native managed call has wrong canonical result type");

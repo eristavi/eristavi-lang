@@ -1,0 +1,13 @@
+let snapshot be ["β"];
+let current be snapshot;
+while current.count < 3 { current.add("β"); }
+let changed be current;
+changed[0] = "λ";
+let outer be [current,current];
+let copied be outer;
+copied[0] = changed;
+let detached be copied[0];
+detached.add("λ");
+if outer[0][0] == "β" and copied[0][0] == "λ" {
+    output(snapshot.count + current.count + outer.count + copied[0].count + detached.count);
+} else { output(-1); }

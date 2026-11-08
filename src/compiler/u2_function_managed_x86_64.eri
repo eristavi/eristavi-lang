@@ -157,7 +157,7 @@ function emitNativeImport(result Int,first Int,operands,
             line("call erist_rt_text_collect");
         } else { line("movq %rax,"+slot(result)); }
     }
-    if kind == 2 or kind == 5 {
+    if kind == 2 or kind == 5 or kind == 6 or kind == 7 {
         if operation == 4 or operation == 6 {
             // The existing standalone List adapter validates the index
             // against the live object length before any mutation or copy.
@@ -666,7 +666,7 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
     let managedReturn be false;
     let managedReturnSecond be false;
     let selected be [];
-    let textCarrier be 0; let listCarrier be 0; let textListCarrier be 0;
+    let textCarrier be 0; let listCarrier be 0; let textListCarrier be 0; let nestedI64Carrier be 0; let nestedTextCarrier be 0;
     let typeRead be try budget.verificationPhase(registry.owner);
     let marker be 0;
     while marker < carriers.count {
@@ -679,6 +679,22 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
         }
         if desc.kind == 2 and desc.elementDomain == 1 and desc.element == 1 {
             textListCarrier=carrier.index;
+        }
+        if desc.kind == 2 and desc.elementDomain == 1 and desc.element != 1 {
+            let innerIndex be 0;
+            while innerIndex < descriptors.count {
+                let innerDescriptor managed.TypeId be descriptors[innerIndex];
+                if innerDescriptor.index == desc.element {
+                    let inner be try managed.descriptor(registry,typeRead,innerDescriptor);
+                    if inner.kind == 2 and inner.elementDomain == 0 and inner.element == 2 {
+                        nestedI64Carrier=carrier.index;
+                    }
+                    if inner.kind == 2 and inner.elementDomain == 1 and inner.element == 1 {
+                        nestedTextCarrier=carrier.index;
+                    }
+                }
+                innerIndex=innerIndex+1;
+            }
         }
         marker=marker+1;
     }
@@ -866,7 +882,7 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
                 importKind=3;
             } else {
                 let resolved be nativeImports.inspect(routine.metadata,graph,phase,
-                    instructions[row+7],textCarrier,listCarrier,textListCarrier)
+                    instructions[row+7],textCarrier,listCarrier,textListCarrier,nestedI64Carrier,nestedTextCarrier)
                     else error budget.LimitError { fail error; }
                     else error nativeImports.Unsupported {
                         fail Unsupported { message=error.message; };
@@ -1179,7 +1195,7 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
     i=1;
     while i <= instructions.count/10 {
         let row be (i-1)*10;
-        if (importKinds[i-1] == 2 or importKinds[i-1] == 5) and
+        if (importKinds[i-1] == 2 or importKinds[i-1] >= 5) and
             (importOperations[i-1] == 4 or importOperations[i-1] == 6) {
             try listNative.fault(routine,phase,i,instructions[row+6],base);
         }

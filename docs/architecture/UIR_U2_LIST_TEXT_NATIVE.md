@@ -10,7 +10,8 @@ element domain 1, element descriptor 1, copy policy 1). Its distinct canonical
 opaque carrier has exactly one marker field naming the selected canonical Text
 carrier, which must itself be mapped to the canonical managed Text descriptor.
 The marker is metadata only; ordinary aggregate producers remain refused.
-Other managed nested element types remain unsupported by this admission.
+Nested List admission is extended by UIR_U2_NESTED_LIST_NATIVE.md; other
+managed element kinds remain unsupported by these producer imports.
 
 Version-one exact imports `u2.list.text.empty/copy/append/replace/count/get/collect`
 require imported kind 2, effects 63 and version 1, with independently checked
@@ -39,5 +40,5 @@ values, loops and snapshot independence, forced GC and final graph/Text/failure
 reclamation. Independent Stage-0/current-native source outcomes agree. An
 out-of-range Text get retains original source terminal diagnostics; descriptor,
 import effects and argument-type negatives refuse before assembly output.
-Nested Lists, user managed aggregates, new typed failure construction and the
+Deeper nested Lists, user managed aggregates, new typed failure construction and the
 remaining combined/fault/physical/four-platform U2 acceptance gates remain.
