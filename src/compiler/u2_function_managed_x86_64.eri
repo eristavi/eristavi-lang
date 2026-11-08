@@ -1628,22 +1628,22 @@ public function emitValuesCheckedGroup(routines,labels,
 function compileFileGroupMember(plans,phases,routines,profiles,member Int,
     graph identity aggregate.Registry,table identity contracts.Registry,
     registry identity managed.Registry,carriers,descriptors,forceGC Bool,
-    targets,labels,fileRuntimeType Int,emitOutput Bool)
+    targets,labels,fileRuntimeType Int,emitOutput Bool,valueRuntimeTypes)
     fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,Unsupported {
     let routine identity build.Function be routines[member];
     let profile identity owners.Profile be profiles[member];
     compile(plans[member],routine,graph,table,phases[member],registry,
         carriers,descriptors,forceGC,labels[member],routine.definedTarget,true,
-        targets,labels,emitOutput,profile,fileRuntimeType,none,emptyValueLayouts())
+        targets,labels,emitOutput,profile,fileRuntimeType,none,valueRuntimeTypes)
         else error budget.LimitError { try closeGroup(plans,phases); fail error; }
         else error canonical.InvalidIR { try closeGroup(plans,phases); fail error; }
         else error ssa.InvalidLiveness { try closeGroup(plans,phases); fail error; }
         else error Unsupported { try closeGroup(plans,phases); fail error; };
 }
-public function emitFileCheckedGroup(routines,labels,profiles,
+function emitFileCheckedGroupCore(routines,labels,profiles,
     graph identity aggregate.Registry,table identity contracts.Registry,
     registry identity managed.Registry,carriers,descriptors,forceGC Bool,
-    fileRuntimeType Int)
+    fileRuntimeType Int,valueRuntimeTypes)
     fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,
         roots.InvalidManagedRoots,managed.InvalidManagedTypes,
         graphVerify.InvalidGraph,Unsupported {
@@ -1708,14 +1708,14 @@ public function emitFileCheckedGroup(routines,labels,profiles,
         plans.add(plan);
         try compileFileGroupMember(plans,phases,routines,profiles,member,graph,
             table,registry,carriers,descriptors,forceGC,targets,labels,
-            fileRuntimeType,false);
+            fileRuntimeType,false,valueRuntimeTypes);
         member=member+1;
     }
     member=0;
     while member < routines.count {
         try compileFileGroupMember(plans,phases,routines,profiles,member,graph,
             table,registry,carriers,descriptors,forceGC,targets,labels,
-            fileRuntimeType,true);
+            fileRuntimeType,true,valueRuntimeTypes);
         member=member+1;
     }
     try closeGroup(plans,phases);
@@ -1724,11 +1724,11 @@ public function emitFileCheckedGroup(routines,labels,profiles,
 // Native File-owning entry points share the exact canonical checked signatures.
 // emitFileCheckedGroup closes different target bodies; single-body entries
 // remain for independently verified non-group and primary-composition cases.
-public function emitFileChecked(routine identity build.Function,
+function emitFileCheckedCore(routine identity build.Function,
     graph identity aggregate.Registry,table identity contracts.Registry,
     phase identity budget.Phase,registry identity managed.Registry,
     carriers,descriptors,forceGC Bool,label Int,
-    profile identity owners.Profile,fileRuntimeType Int)
+    profile identity owners.Profile,fileRuntimeType Int,valueRuntimeTypes)
     fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,
         roots.InvalidManagedRoots,managed.InvalidManagedTypes,
         graphVerify.InvalidGraph,Unsupported {
@@ -1745,7 +1745,7 @@ public function emitFileChecked(routine identity build.Function,
     types.add(profile.handle);
     let plan be try ssa.create(routine,graph,table,phase,types);
     compile(plan,routine,graph,table,phase,registry,carriers,descriptors,
-        forceGC,label,routine.definedTarget,true,[],[],true,profile,fileRuntimeType,none,emptyValueLayouts())
+        forceGC,label,routine.definedTarget,true,[],[],true,profile,fileRuntimeType,none,valueRuntimeTypes)
         else error budget.LimitError { try ssa.close(plan); fail error; }
         else error canonical.InvalidIR { try ssa.close(plan); fail error; }
         else error ssa.InvalidLiveness { try ssa.close(plan); fail error; }
@@ -1753,6 +1753,42 @@ public function emitFileChecked(routine identity build.Function,
     try ssa.close(plan);
 }
 
+public function emitFileChecked(routine identity build.Function,
+    graph identity aggregate.Registry,table identity contracts.Registry,
+    phase identity budget.Phase,registry identity managed.Registry,
+    carriers,descriptors,forceGC Bool,label Int,
+    profile identity owners.Profile,fileRuntimeType Int)
+    fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,
+        roots.InvalidManagedRoots,managed.InvalidManagedTypes,graphVerify.InvalidGraph,Unsupported {
+    try emitFileCheckedCore(routine,graph,table,phase,registry,carriers,descriptors,
+        forceGC,label,profile,fileRuntimeType,emptyValueLayouts());
+}
+public function emitFileValuesChecked(routine identity build.Function,
+    graph identity aggregate.Registry,table identity contracts.Registry,
+    phase identity budget.Phase,registry identity managed.Registry,
+    carriers,descriptors,forceGC Bool,label Int,
+    profile identity owners.Profile,fileRuntimeType Int,valueRuntimeTypes)
+    fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,
+        roots.InvalidManagedRoots,managed.InvalidManagedTypes,graphVerify.InvalidGraph,Unsupported {
+    try emitFileCheckedCore(routine,graph,table,phase,registry,carriers,descriptors,
+        forceGC,label,profile,fileRuntimeType,valueRuntimeTypes);
+}
+public function emitFileCheckedGroup(routines,labels,profiles,
+    graph identity aggregate.Registry,table identity contracts.Registry,
+    registry identity managed.Registry,carriers,descriptors,forceGC Bool,fileRuntimeType Int)
+    fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,
+        roots.InvalidManagedRoots,managed.InvalidManagedTypes,graphVerify.InvalidGraph,Unsupported {
+    try emitFileCheckedGroupCore(routines,labels,profiles,graph,table,registry,
+        carriers,descriptors,forceGC,fileRuntimeType,emptyValueLayouts());
+}
+public function emitFileValuesCheckedGroup(routines,labels,profiles,
+    graph identity aggregate.Registry,table identity contracts.Registry,
+    registry identity managed.Registry,carriers,descriptors,forceGC Bool,fileRuntimeType Int,valueRuntimeTypes)
+    fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,
+        roots.InvalidManagedRoots,managed.InvalidManagedTypes,graphVerify.InvalidGraph,Unsupported {
+    try emitFileCheckedGroupCore(routines,labels,profiles,graph,table,registry,
+        carriers,descriptors,forceGC,fileRuntimeType,valueRuntimeTypes);
+}
 public function emitFileCheckedPrimary(routine identity build.Function,
     graph identity aggregate.Registry,table identity contracts.Registry,
     phase identity budget.Phase,registry identity managed.Registry,
@@ -2004,4 +2040,15 @@ function bootstrapValueGroupShape(routine identity build.Function,
         graphVerify.InvalidGraph,Unsupported {
     try emitCheckedGroupCore([routine,routine],[1,2],graph,table,registry,
         [carrier],[descriptor],false,[15]);
+}
+
+// Nonexecuted bootstrap shape seed; no runtime or verification authority.
+function bootstrapFileValueShape(routine identity build.Function,
+    profile identity owners.Profile,graph identity aggregate.Registry,
+    table identity contracts.Registry,phase identity budget.Phase,
+    registry identity managed.Registry,carrier aggregate.TypeId,descriptor managed.TypeId)
+    fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,
+        roots.InvalidManagedRoots,managed.InvalidManagedTypes,graphVerify.InvalidGraph,Unsupported {
+    try emitFileCheckedCore(routine,graph,table,phase,registry,[carrier],[descriptor],false,1,profile,9,[15]);
+    try emitFileCheckedGroupCore([routine],[1],[profile],graph,table,registry,[carrier],[descriptor],false,9,[15]);
 }
