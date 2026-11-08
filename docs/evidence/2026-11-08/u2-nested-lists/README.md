@@ -2,7 +2,8 @@
 
 Branch: compiler/u2-whole-function-file-roots-20261107.
 Base: 68c92c1e187978b806455c24ecf95746db3d94d9.
-Exact verified source/test commit is pinned by the documentation successor.
+Verified source/test commit: 5a6ea63b7447c2aeeb2bac5afbe31f4ad9802ba6.
+This documentation successor leaves source/test inputs unchanged.
 
 Implemented List<List<i64>> and List<List<Text>> empty/copy/append/replace/
 count/get/collect through canonical native Function lowering. Marker/descriptor
@@ -19,6 +20,8 @@ python -m unittest -v test_u2_function_nested_list
 python -m unittest -v test_u2_function_list_text test_u2_function_import_integration.U2FunctionImportIntegrationTests.test_existing_list_snapshot_append_count_gc_in_whole_function test_u2_function_import_integration.U2FunctionImportIntegrationTests.test_mixed_text_list_calls_share_exact_whole_function_root_map test_u2_function_managed_native.U2FunctionManagedNativeTests.test_reject_mismatched_identity_descriptor_before_emission
 ```
 
+final.log: **4/4 PASS**, 35.408 s, zero failures/skips.
+regressions.log: **7/7 PASS**, 38.559 s, zero failures/skips.
 final.log records the four nested-List methods on final source. regressions.log
 records seven immediate dependency methods. The regression run overlapped the final
 descriptor-read optimization and is dependency evidence, not a pinned full

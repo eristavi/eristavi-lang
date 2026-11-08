@@ -1,5 +1,53 @@
 # Eristavi compiler — current handover
 
+Latest verified source/test commit: `5a6ea63b7447c2aeeb2bac5afbe31f4ad9802ba6`.
+This documentation successor changes no compiler/test inputs.
+
+## Active checkpoint — 8 November 2026: nested List native constructors
+
+Branch `compiler/u2-whole-function-file-roots-20261107`; batch base
+`68c92c1e187978b806455c24ecf95746db3d94d9`. Added native whole-Function
+List<List<i64>> and List<List<Text>> empty/copy/append/replace/count/get/collect.
+Exact nested carrier/descriptor relationships and import signatures/effects/
+version are checked. Boxed inner Lists reuse existing List runtime helpers,
+canonical SSA and root publication. No new runtime adapters, executable IR,
+ABI or ownership semantics. Descriptor reads now occur only for the matching
+carrier/descriptor relationship; no measured performance gain is claimed.
+
+**4/4 final nested methods PASS**, 35.408 s; zero failures/skips. Generated
+native loops/snapshots/outer copy/replace/retrieved-inner append, counts and
+Unicode contents survive forced GC and final reclamation. Stage-0 and current
+native source references agree on 13. Nested get/replace retain source-located
+terminal faults. Wrong descriptor/marker/missing inner/effects/argument type
+refuse before assembly. **7/7 immediate regressions PASS**, 38.559 s; zero
+failures/skips. That run overlapped the final descriptor-read optimization;
+final nested tests independently passed after that edit. No unresolved focused
+failures. Logs, exact inputs and limits:
+[nested evidence](docs/evidence/2026-11-08/u2-nested-lists/README.md),
+[contract](docs/architecture/UIR_U2_NESTED_LIST_NATIVE.md).
+
+**Precise recovery point / first next task:** bridge existing managed value
+aggregate constructors/copies into canonical whole-Function native lowering,
+starting with one generated positive fixture and independent value-copy
+reference, plus wrong-descriptor refusal. Audit existing descriptor/runtime
+coverage first; do not reimplement it or repeat completed File/call/List work.
+
+Remaining: deeper/general managed construction, typed FailureContext producers,
+remaining combined checked/recursive/File paths (including an already-live
+primary across defined calls), comprehensive hostile-root/allocator/independent/
+sanitizer/physical proof, current owned/C generator parity and hosted timeout
+gates, main reconciliation and final four-platform/completed-batch qualification.
+Nested List evidence here does not qualify those combined paths or budgets.
+#74 OPEN, #121/#111 DRAFT; no merge or production promotion.
+
+Predecessor hosted CI was in progress when checked:
+https://github.com/eristavi/eristavi-lang/actions/runs/42431255401
+No new-head hosted/owned parity success claimed. Broad/full/self-build CI and
+final four-platform qualification deliberately deferred to preserve usage;
+#51 remains paused. User reported about 45% allowance at batch start; exact
+remaining quota is not inspectable. Work stops at this verified checkpoint.
+Older next-step lists below are historical and superseded by this checkpoint.
+
 Latest verified source/test commit: `2d01be312587f6e1d114d9bcb8955604ea7f30f8`.
 This documentation successor changes no compiler/test inputs.
 
