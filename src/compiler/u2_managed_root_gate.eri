@@ -96,7 +96,21 @@ public function selectTypes(routine identity build.Function,
                             }
                         }
                     }
-                    if shape.elementDomain != 0 or not listCarrier or
+                    let textList be false;
+                    if shape.elementDomain == 1 and shape.element == 1 and
+                        (try aggregate.fieldCount(graph,read,carrier)) == 1 {
+                        let element be try aggregate.field(graph,read,carrier,0);
+                        let k be 0;
+                        while k < carriers.count {
+                            let textCarrier aggregate.TypeId be carriers[k];
+                            let textDescriptor managed.TypeId be descriptors[k];
+                            if textCarrier == element and textDescriptor == managed.text(registry) {
+                                textList=true;
+                            }
+                            k=k+1;
+                        }
+                    }
+                    if not ((shape.elementDomain == 0 and listCarrier) or textList) or
                         shape.copyPolicy != 1 { acceptable=false; }
                 } else {
                     if shape.kind != 3 or shape.elementDomain != 0 or

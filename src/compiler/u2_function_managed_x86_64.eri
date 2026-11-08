@@ -157,7 +157,7 @@ function emitNativeImport(result Int,first Int,operands,
             line("call erist_rt_text_collect");
         } else { line("movq %rax,"+slot(result)); }
     }
-    if kind == 2 {
+    if kind == 2 or kind == 5 {
         if operation == 4 or operation == 6 {
             // The existing standalone List adapter validates the index
             // against the live object length before any mutation or copy.
@@ -185,7 +185,8 @@ function emitNativeImport(result Int,first Int,operands,
             line("call evn_copy");
             line("movq %rax,"+format.integer(tempOffset)+"(%rsp)");
             line("movq "+slot(operands[first+1])+",%rdi");
-            line("call evn_int");
+            if kind == 2 { line("call evn_int"); }
+            else { line("movq %rdi,%rax"); }
             line("movq %rax,"+format.integer(tempOffset+8)+"(%rsp)");
             line("movq "+format.integer(tempOffset)+"(%rsp),%rdi");
             line("movq "+format.integer(tempOffset+8)+"(%rsp),%rsi");
@@ -199,7 +200,8 @@ function emitNativeImport(result Int,first Int,operands,
             line("call evn_copy");
             line("movq %rax,"+format.integer(tempOffset)+"(%rsp)");
             line("movq "+slot(operands[first+2])+",%rdi");
-            line("call evn_int");
+            if kind == 2 { line("call evn_int"); }
+            else { line("movq %rdi,%rax"); }
             line("movq %rax,"+format.integer(tempOffset+8)+"(%rsp)");
             line("movq "+format.integer(tempOffset)+"(%rsp),%rdi");
             line("movq "+slot(operands[first+1])+",%rsi");
@@ -218,7 +220,7 @@ function emitNativeImport(result Int,first Int,operands,
             line("movq "+slot(operands[first])+",%rdi");
             line("movq "+slot(operands[first+1])+",%rsi");
             line("call evn_index");
-            line("movq 8(%rax),%rax");
+            if kind == 2 { line("movq 8(%rax),%rax"); }
         }
         if operation == 7 { line("call erist_rt_text_collect"); }
         else { line("movq %rax,"+slot(result)); }
@@ -664,7 +666,7 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
     let managedReturn be false;
     let managedReturnSecond be false;
     let selected be [];
-    let textCarrier be 0; let listCarrier be 0;
+    let textCarrier be 0; let listCarrier be 0; let textListCarrier be 0;
     let typeRead be try budget.verificationPhase(registry.owner);
     let marker be 0;
     while marker < carriers.count {
@@ -674,6 +676,9 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
         if desc.kind == 1 { textCarrier=carrier.index; }
         if desc.kind == 2 and desc.elementDomain == 0 and desc.element == 2 {
             listCarrier=carrier.index;
+        }
+        if desc.kind == 2 and desc.elementDomain == 1 and desc.element == 1 {
+            textListCarrier=carrier.index;
         }
         marker=marker+1;
     }
@@ -861,7 +866,7 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
                 importKind=3;
             } else {
                 let resolved be nativeImports.inspect(routine.metadata,graph,phase,
-                    instructions[row+7],textCarrier,listCarrier)
+                    instructions[row+7],textCarrier,listCarrier,textListCarrier)
                     else error budget.LimitError { fail error; }
                     else error nativeImports.Unsupported {
                         fail Unsupported { message=error.message; };
@@ -1174,7 +1179,7 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
     i=1;
     while i <= instructions.count/10 {
         let row be (i-1)*10;
-        if importKinds[i-1] == 2 and
+        if (importKinds[i-1] == 2 or importKinds[i-1] == 5) and
             (importOperations[i-1] == 4 or importOperations[i-1] == 6) {
             try listNative.fault(routine,phase,i,instructions[row+6],base);
         }

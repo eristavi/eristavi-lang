@@ -1,5 +1,32 @@
 # Eristavi compiler — current handover
 
+## Active checkpoint — 8 November 2026: List<Text> constructors and value copies
+
+Branch `compiler/u2-whole-function-file-roots-20261107`; base
+`443ac14c60780b2be2e0dadfc0936f9fc8fbf78a`. Added exact native whole-Function
+List<Text> empty/copy/append/replace/count/get/collect admission, reusing the
+existing graph runtime, canonical Function/SSA roots and source-located bounds
+faults. The distinct marker carrier must map to `listOfManaged(text)` and the
+canonical Text carrier. Text slots are directly rooted, not boxed as i64 or
+unboxed to lengths. No new runtime adapter, public ABI or frame layout.
+
+**6/6 focused tests PASS**, 31.631 s, zero failures/skips. Includes generated
+Text-list loop/snapshot/copy/replace/content checks, forced GC and reclamation;
+independent Stage-0/current-native source results; terminal source-located
+bounds failure; wrong descriptor/effects/type refusal; existing List<i64> and
+mixed Text/List roots regressions. Raw logs and hashes:
+[Text-list evidence](docs/evidence/2026-11-08/u2-list-text/README.md).
+[Contract](docs/architecture/UIR_U2_LIST_TEXT_NATIVE.md).
+
+**Next:** nested Lists and managed aggregate constructors/copies, typed
+FailureContext producers, remaining call combinations and broader hostile-root/
+allocator/independent/sanitizer/physical evidence, current owned/C parity and
+hosted timeout gates, main reconciliation and final four-platform/full release
+qualification. #74 stays OPEN, #121/#111 DRAFT. Earlier green generator timings
+do not qualify this new head. No broad/full/self-build CI or #51 work manually
+initiated. Older next-step statements below are superseded by this checkpoint.
+
+
 Latest verified implementation/test commit: `34faa47b07b52de061e1a94546748369cbdc693f`.
 This documentation successor leaves source/test inputs unchanged.
 

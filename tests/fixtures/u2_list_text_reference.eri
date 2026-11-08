@@ -1,0 +1,8 @@
+let snapshot be ["β"];
+let current be snapshot;
+while current.count < 3 { current.add("β"); }
+let copied be current;
+copied[0] = "λ";
+if current[0] == "β" and copied[0] == "λ" {
+    output(snapshot.count + current.count);
+} else { output(-1); }
