@@ -1,0 +1,13 @@
+type Record { number Int; label Text; }
+type Envelope { record Record; }
+let original be Record { number=1; label="β"; };
+let enclosing be Envelope { record=original; };
+let updated be original;
+updated.number=3;
+updated.label="λ";
+let modified be enclosing;
+modified.record=updated;
+let items be ["β","β","β"];
+if enclosing.record.label == "β" and modified.record.label == "λ" {
+    output(enclosing.record.number + modified.record.number + items.count);
+} else { output(-1); }

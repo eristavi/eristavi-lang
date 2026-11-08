@@ -85,9 +85,12 @@ public function descriptor(reg identity Registry,phase identity budget.Phase,
 function append(reg identity Registry,phase identity budget.Phase,
     kind Int,domain Int,element Int) returns TypeId fails budget.LimitError {
     try mutable(reg,phase);
-    if (kind != 2 and kind != 3) or
+    if (kind != 2 and kind != 3 and kind != 4) or
         (domain != 0 and domain != 1) or element < 1 {
         try budget.reject("unsupported U2 managed type constructor");
+    }
+    if kind == 4 and (domain != 0 or element < 7) {
+        try budget.reject("value aggregate requires a structural aggregate");
     }
     if domain == 0 {
         if element > 6+reg.graph.records.length/4 {
@@ -133,6 +136,12 @@ public function listOfManaged(reg identity Registry,phase identity budget.Phase,
     element TypeId) returns TypeId fails budget.LimitError {
     if element.owner != reg.key { try budget.reject("foreign managed List element"); }
     return try append(reg,phase,2,1,element.index);
+}
+// Ordinary aggregate representation; fields remain in the canonical graph.
+public function valueOfBase(reg identity Registry,phase identity budget.Phase,
+    element aggregate.TypeId) returns TypeId fails budget.LimitError {
+    if element.owner != reg.graphKey { try budget.reject("foreign value aggregate"); }
+    return try append(reg,phase,4,0,element.index);
 }
 public function identityOfBase(reg identity Registry,phase identity budget.Phase,
     element aggregate.TypeId) returns TypeId fails budget.LimitError {
@@ -185,10 +194,12 @@ function inspect(reg identity Registry,phase identity budget.Phase)
                 "invalid canonical Text descriptor");
         } else {
             try require((kind == 2 and policy == 1) or
-                (kind == 3 and policy == 2),row,
+                (kind == 3 and policy == 2) or (kind == 4 and policy == 1),row,
                 "invalid copy/identity semantics");
             try require(domain == 0 or domain == 1,row,
                 "invalid managed type domain");
+            try require(kind != 4 or (domain == 0 and element >= 7),row,
+                "invalid value aggregate relationship");
             if domain == 0 {
                 try require(element >= 1 and
                     element <= 6+reg.graph.records.length/4,row,
@@ -214,7 +225,7 @@ function inspect(reg identity Registry,phase identity budget.Phase)
                 previous=previous+1;
             }
             if kind == 2 { lists=lists+1; }
-            else { identities=identities+1; }
+            if kind == 3 { identities=identities+1; }
         }
         row=row+1;
     }

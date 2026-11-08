@@ -20,8 +20,8 @@ function require(ok Bool,message Text) fails InvalidManagedRoots {
 
 // Closed bounded selection: canonical opaque empty aggregate for Text;
 // version-one List/identity descriptor of exact structural carrier for
-// List/identity. Nested managed element descriptors remain unsupported,
-// not silently treated as another root class or shared identity.
+// List/identity. Value aggregates retain their exact canonical field types;
+// selected managed children must have an admitted representation.
 // The resulting Plan independently verifies the ENTIRE Function, including
 // dead CFG and checked-call arguments, at the current source revision.
 public function selectTypes(routine identity build.Function,
@@ -117,9 +117,33 @@ public function selectTypes(routine identity build.Function,
                     if not ((shape.elementDomain == 0 and listCarrier) or managedList) or
                         shape.copyPolicy != 1 { acceptable=false; }
                 } else {
-                    if shape.kind != 3 or shape.elementDomain != 0 or
-                        shape.element != carrier.index or
-                        shape.copyPolicy != 2 { acceptable=false; }
+                    if shape.kind == 4 {
+                        if shape.elementDomain != 0 or shape.element != carrier.index or
+                            shape.copyPolicy != 1 { acceptable=false; }
+                        let fields be try aggregate.fieldCount(graph,read,carrier);
+                        if fields > 32 { acceptable=false; }
+                        let f be 0;
+                        while f < fields {
+                            let field be try aggregate.field(graph,read,carrier,f);
+                            let known be field.index == 1 or field.index == 2;
+                            let k be 0;
+                            while k < carriers.count {
+                                let candidate aggregate.TypeId be carriers[k];
+                                if candidate == field {
+                                    let child managed.TypeId be descriptors[k];
+                                    let desc be try managed.descriptor(registry,read,child);
+                                    if desc.kind == 1 or desc.kind == 2 or desc.kind == 4 { known=true; }
+                                }
+                                k=k+1;
+                            }
+                            if not known { acceptable=false; }
+                            f=f+1;
+                        }
+                    } else {
+                        if shape.kind != 3 or shape.elementDomain != 0 or
+                            shape.element != carrier.index or
+                            shape.copyPolicy != 2 { acceptable=false; }
+                    }
                 }
             }
         }
