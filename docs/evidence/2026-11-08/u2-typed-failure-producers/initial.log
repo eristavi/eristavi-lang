@@ -1,0 +1,164 @@
+test_constructs_typed_primary_without_failure_ingress (test_u2_function_failure_producer.U2FunctionFailureProducerTests.test_constructs_typed_primary_without_failure_ingress) ... 
+  test_constructs_typed_primary_without_failure_ingress (test_u2_function_failure_producer.U2FunctionFailureProducerTests.test_constructs_typed_primary_without_failure_ingress) (depth=0, fail_base=False) ... FAIL
+  test_constructs_typed_primary_without_failure_ingress (test_u2_function_failure_producer.U2FunctionFailureProducerTests.test_constructs_typed_primary_without_failure_ingress) (depth=0, fail_base=True) ... FAIL
+  test_constructs_typed_primary_without_failure_ingress (test_u2_function_failure_producer.U2FunctionFailureProducerTests.test_constructs_typed_primary_without_failure_ingress) (depth=1, fail_base=False) ... FAIL
+  test_constructs_typed_primary_without_failure_ingress (test_u2_function_failure_producer.U2FunctionFailureProducerTests.test_constructs_typed_primary_without_failure_ingress) (depth=1, fail_base=True) ... FAIL
+  test_constructs_typed_primary_without_failure_ingress (test_u2_function_failure_producer.U2FunctionFailureProducerTests.test_constructs_typed_primary_without_failure_ingress) (depth=5, fail_base=False) ... FAIL
+  test_constructs_typed_primary_without_failure_ingress (test_u2_function_failure_producer.U2FunctionFailureProducerTests.test_constructs_typed_primary_without_failure_ingress) (depth=5, fail_base=True) ... FAIL
+  test_constructs_typed_primary_without_failure_ingress (test_u2_function_failure_producer.U2FunctionFailureProducerTests.test_constructs_typed_primary_without_failure_ingress) (depth=16, fail_base=False) ... FAIL
+  test_constructs_typed_primary_without_failure_ingress (test_u2_function_failure_producer.U2FunctionFailureProducerTests.test_constructs_typed_primary_without_failure_ingress) (depth=16, fail_base=True) ... FAIL
+
+======================================================================
+FAIL: test_constructs_typed_primary_without_failure_ingress (test_u2_function_failure_producer.U2FunctionFailureProducerTests.test_constructs_typed_primary_without_failure_ingress) (depth=0, fail_base=False)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/bc9859552d81/eristavi-lang/tests/test_u2_function_failure_producer.py", line 58, in test_constructs_typed_primary_without_failure_ingress
+    self.assertEqual((run.returncode,run.stdout,run.stderr),(0,expected,b''))
+AssertionError: Tuples differ: (1, b'7\n', b'Eristavi runtime fault: inva[34 chars]n\n') != (0, b'7\n', b'')
+
+First differing element 0:
+1
+0
+
++ (0, b'7\n', b'')
+- (1,
+-  b'7\n',
+-  b'Eristavi runtime fault: invalid internal scalar value operation\n')
+
+======================================================================
+FAIL: test_constructs_typed_primary_without_failure_ingress (test_u2_function_failure_producer.U2FunctionFailureProducerTests.test_constructs_typed_primary_without_failure_ingress) (depth=0, fail_base=True)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/bc9859552d81/eristavi-lang/tests/test_u2_function_failure_producer.py", line 58, in test_constructs_typed_primary_without_failure_ingress
+    self.assertEqual((run.returncode,run.stdout,run.stderr),(0,expected,b''))
+AssertionError: Tuples differ: (1, b'42\n\xce\xb2\n', b'Eristavi runtime [45 chars]n\n') != (0, b'42\n\xce\xb2\n', b'')
+
+First differing element 0:
+1
+0
+
+- (1,
+-  b'42\n\xce\xb2\n',
++ (0, b'42\n\xce\xb2\n', b'')
+? +++                   +++++
+
+-  b'Eristavi runtime fault: invalid internal scalar value operation\n')
+
+======================================================================
+FAIL: test_constructs_typed_primary_without_failure_ingress (test_u2_function_failure_producer.U2FunctionFailureProducerTests.test_constructs_typed_primary_without_failure_ingress) (depth=1, fail_base=False)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/bc9859552d81/eristavi-lang/tests/test_u2_function_failure_producer.py", line 58, in test_constructs_typed_primary_without_failure_ingress
+    self.assertEqual((run.returncode,run.stdout,run.stderr),(0,expected,b''))
+AssertionError: Tuples differ: (1, b'43\n\xce\xb2\n', b'Eristavi runtime [45 chars]n\n') != (0, b'43\n\xce\xb2\n', b'')
+
+First differing element 0:
+1
+0
+
+- (1,
+-  b'43\n\xce\xb2\n',
++ (0, b'43\n\xce\xb2\n', b'')
+? +++                   +++++
+
+-  b'Eristavi runtime fault: invalid internal scalar value operation\n')
+
+======================================================================
+FAIL: test_constructs_typed_primary_without_failure_ingress (test_u2_function_failure_producer.U2FunctionFailureProducerTests.test_constructs_typed_primary_without_failure_ingress) (depth=1, fail_base=True)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/bc9859552d81/eristavi-lang/tests/test_u2_function_failure_producer.py", line 58, in test_constructs_typed_primary_without_failure_ingress
+    self.assertEqual((run.returncode,run.stdout,run.stderr),(0,expected,b''))
+AssertionError: Tuples differ: (1, b'42\n\xce\xb2\n', b'Eristavi runtime [45 chars]n\n') != (0, b'42\n\xce\xb2\n', b'')
+
+First differing element 0:
+1
+0
+
+- (1,
+-  b'42\n\xce\xb2\n',
++ (0, b'42\n\xce\xb2\n', b'')
+? +++                   +++++
+
+-  b'Eristavi runtime fault: invalid internal scalar value operation\n')
+
+======================================================================
+FAIL: test_constructs_typed_primary_without_failure_ingress (test_u2_function_failure_producer.U2FunctionFailureProducerTests.test_constructs_typed_primary_without_failure_ingress) (depth=5, fail_base=False)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/bc9859552d81/eristavi-lang/tests/test_u2_function_failure_producer.py", line 58, in test_constructs_typed_primary_without_failure_ingress
+    self.assertEqual((run.returncode,run.stdout,run.stderr),(0,expected,b''))
+AssertionError: Tuples differ: (1, b'43\n\xce\xb2\n', b'Eristavi runtime [45 chars]n\n') != (0, b'43\n\xce\xb2\n', b'')
+
+First differing element 0:
+1
+0
+
+- (1,
+-  b'43\n\xce\xb2\n',
++ (0, b'43\n\xce\xb2\n', b'')
+? +++                   +++++
+
+-  b'Eristavi runtime fault: invalid internal scalar value operation\n')
+
+======================================================================
+FAIL: test_constructs_typed_primary_without_failure_ingress (test_u2_function_failure_producer.U2FunctionFailureProducerTests.test_constructs_typed_primary_without_failure_ingress) (depth=5, fail_base=True)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/bc9859552d81/eristavi-lang/tests/test_u2_function_failure_producer.py", line 58, in test_constructs_typed_primary_without_failure_ingress
+    self.assertEqual((run.returncode,run.stdout,run.stderr),(0,expected,b''))
+AssertionError: Tuples differ: (1, b'42\n\xce\xb2\n', b'Eristavi runtime [45 chars]n\n') != (0, b'42\n\xce\xb2\n', b'')
+
+First differing element 0:
+1
+0
+
+- (1,
+-  b'42\n\xce\xb2\n',
++ (0, b'42\n\xce\xb2\n', b'')
+? +++                   +++++
+
+-  b'Eristavi runtime fault: invalid internal scalar value operation\n')
+
+======================================================================
+FAIL: test_constructs_typed_primary_without_failure_ingress (test_u2_function_failure_producer.U2FunctionFailureProducerTests.test_constructs_typed_primary_without_failure_ingress) (depth=16, fail_base=False)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/bc9859552d81/eristavi-lang/tests/test_u2_function_failure_producer.py", line 58, in test_constructs_typed_primary_without_failure_ingress
+    self.assertEqual((run.returncode,run.stdout,run.stderr),(0,expected,b''))
+AssertionError: Tuples differ: (1, b'43\n\xce\xb2\n', b'Eristavi runtime [45 chars]n\n') != (0, b'43\n\xce\xb2\n', b'')
+
+First differing element 0:
+1
+0
+
+- (1,
+-  b'43\n\xce\xb2\n',
++ (0, b'43\n\xce\xb2\n', b'')
+? +++                   +++++
+
+-  b'Eristavi runtime fault: invalid internal scalar value operation\n')
+
+======================================================================
+FAIL: test_constructs_typed_primary_without_failure_ingress (test_u2_function_failure_producer.U2FunctionFailureProducerTests.test_constructs_typed_primary_without_failure_ingress) (depth=16, fail_base=True)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/bc9859552d81/eristavi-lang/tests/test_u2_function_failure_producer.py", line 58, in test_constructs_typed_primary_without_failure_ingress
+    self.assertEqual((run.returncode,run.stdout,run.stderr),(0,expected,b''))
+AssertionError: Tuples differ: (1, b'42\n\xce\xb2\n', b'Eristavi runtime [45 chars]n\n') != (0, b'42\n\xce\xb2\n', b'')
+
+First differing element 0:
+1
+0
+
+- (1,
+-  b'42\n\xce\xb2\n',
++ (0, b'42\n\xce\xb2\n', b'')
+? +++                   +++++
+
+-  b'Eristavi runtime fault: invalid internal scalar value operation\n')
+
+----------------------------------------------------------------------
+Ran 1 test in 8.024s
+
+FAILED (failures=8)

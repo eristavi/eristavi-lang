@@ -178,6 +178,59 @@ public function inspect(data identity meta.Metadata,
     return Target { kind=kind; operation=operation; };
 }
 
+// Construct a saved typed context from an exact selected ordinary aggregate.
+// The field ordinal names the statically known Text message, not a runtime
+// selector or source-language type argument. Existing capture helpers own
+// failure allocation/snapshot semantics.
+public function failureName(payload Int,messageField Int) returns Text {
+    return "u2.failure.capture."+format.integer(payload)+"."+
+        format.integer(messageField)+".v1";
+}
+public function inspectFailure(data identity meta.Metadata,
+    graph identity aggregate.Registry,phase identity budget.Phase,
+    target Int,textCarrier Int,failureCarrier Int,payloadCarriers)
+    returns Target fails budget.LimitError,Unsupported {
+    let unknown be Target { kind=0; operation=0; };
+    if failureCarrier == 0 or payloadCarriers.count == 0 { return unknown; }
+    try require(data.frozen and not data.closed and graph.state == 1 and
+        graph.owner == data.owner and phase.state == 0 and phase.owner.kind == 2 and
+        phase.owner.parent == data.owner.parent and
+        target >= 1 and target <= data.declarations.length/6 and
+        failureCarrier >= 7 and payloadCarriers.count <= 8,
+        "invalid typed failure import target");
+    let id be meta.FunctionId { owner=data.key; index=target; };
+    let signature be try meta.functionSignature(data,phase,id);
+    if (try meta.parameterCount(data,phase,signature)) != 1 or
+        (try meta.resultCount(data,phase,signature)) != 1 { return unknown; }
+    let payload be try signatures.parameterType(data,graph,phase,signature,0);
+    if (try signatures.resultType(data,graph,phase,signature,0)).index != failureCarrier {
+        return unknown;
+    }
+    let selected be false; let i be 0;
+    while i < payloadCarriers.count {
+        if payloadCarriers[i] == payload.index { selected=true; }
+        i=i+1;
+    }
+    if not selected { return unknown; }
+    let fields be try aggregate.fieldCount(graph,phase,payload);
+    try require(fields <= 32,"typed failure payload exceeds field profile");
+    let row be (target-1)*6; i=0;
+    while i < fields {
+        if try same(data,phase,row,failureName(payload.index,i)) {
+            try require(textCarrier >= 7 and
+                (try aggregate.field(graph,phase,payload,i)).index == textCarrier,
+                "typed failure message must be the exact selected Text field");
+            try require((try words.get(data.declarations,phase,row+3)) == 2 and
+                (try words.get(data.declarations,phase,row+4)) == 63 and
+                (try words.get(data.declarations,phase,row+5)) == 1,
+                "typed failure capture has incompatible kind/version/effects");
+            return Target { kind=9; operation=i; };
+        }
+        i=i+1;
+    }
+    return unknown;
+}
+
 // Explicit private runtime bindings; an arbitrary fallible declaration is
 // never reinterpreted as File.open merely because its signature matches.
 public function inspectFile(data identity meta.Metadata,

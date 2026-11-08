@@ -378,8 +378,32 @@ function emitInstruction(base Text,id Int,frameBytes Int,
                 line("movq %rdx,"+slot(result+1));
             }
         } else {
-            emitNativeImport(result,first,operands,
-                importKinds[id-1],importOperations[id-1],tempOffset,base,id);
+            if importKinds[id-1] == 9 {
+                // The original payload remains in liveBefore roots. The
+                // established catch/snapshot adapter preserves its full type
+                // and Text message; no new runtime failure representation.
+                line("call evn_frame");
+                line("movq %rax,%rbx");
+                line("movq %rax,%rdi");
+                line("call setjmp");
+                line("testq %rax,%rax");
+                line("jne "+name(base,"captured",id));
+                line("movq "+slot(operands[first])+",%rdi");
+                line("movl $"+format.integer(importOperations[id-1])+",%esi");
+                line("call evn_fail");
+                line("ud2");
+                output(name(base,"captured",id)+":");
+                line("movq %rbx,%rdi");
+                line("call evn_pop");
+                line("call evn_saved");
+                // Publish class 5 immediately, before clearing global state.
+                line("movq %rax,"+format.integer(tempOffset+16)+"(%rsp)");
+                line("movq %rax,"+slot(result));
+                line("call erist_rt_failure_clear");
+            } else {
+                emitNativeImport(result,first,operands,
+                    importKinds[id-1],importOperations[id-1],tempOffset,base,id);
+            }
         }
     }
     if op == 46 and importKinds[id-1] == 4 {
@@ -723,7 +747,7 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
     let managedReturnSecond be false;
     let selected be [];
     let textCarrier be 0; let listCarrier be 0; let textListCarrier be 0; let nestedI64Carrier be 0; let nestedTextCarrier be 0;
-    let boxedLists be []; let boxedElements be [];
+    let boxedLists be []; let boxedElements be []; let failurePayloads be [];
     let typeRead be try budget.verificationPhase(registry.owner);
     let marker be 0;
     while marker < carriers.count {
@@ -731,6 +755,7 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
         let descriptor managed.TypeId be descriptors[marker];
         let desc be try managed.descriptor(registry,typeRead,descriptor);
         if desc.kind == 1 { textCarrier=carrier.index; }
+        if desc.kind == 4 { failurePayloads.add(carrier.index); }
         if desc.kind == 2 and desc.elementDomain == 0 and desc.element == 2 {
             listCarrier=carrier.index;
         }
@@ -957,13 +982,22 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
             if selfTarget != 0 and instructions[row+7] == selfTarget {
                 importKind=3;
             } else {
-                let resolved be nativeImports.inspect(routine.metadata,graph,phase,
-                    instructions[row+7],textCarrier,listCarrier,textListCarrier,nestedI64Carrier,nestedTextCarrier,boxedLists,boxedElements)
-                    else error budget.LimitError { fail error; }
-                    else error nativeImports.Unsupported {
-                        fail Unsupported { message=error.message; };
-                    };
-                importKind=resolved.kind; importOperation=resolved.operation;
+                // Existing profiles without typed aggregate payloads retain
+                // their original import path, without an extra Target value.
+                if checked and failurePayloads.count > 0 {
+                    let failure be nativeImports.inspectFailure(routine.metadata,graph,phase,
+                        instructions[row+7],textCarrier,failureType,failurePayloads)
+                        else error budget.LimitError { fail error; }
+                        else error nativeImports.Unsupported { fail Unsupported { message=error.message; }; };
+                    importKind=failure.kind; importOperation=failure.operation;
+                }
+                if importKind == 0 {
+                    let resolved be nativeImports.inspect(routine.metadata,graph,phase,
+                        instructions[row+7],textCarrier,listCarrier,textListCarrier,nestedI64Carrier,nestedTextCarrier,boxedLists,boxedElements)
+                        else error budget.LimitError { fail error; }
+                        else error nativeImports.Unsupported { fail Unsupported { message=error.message; }; };
+                    importKind=resolved.kind; importOperation=resolved.operation;
+                }
             }
         }
         if op >= 43 and op <= 45 {
@@ -1340,6 +1374,9 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
                 (instructions[(current-1)*10] >= 43 and instructions[(current-1)*10] <= 45) {
                 line("movq $0,"+format.integer(tempOffset)+"(%rsp)");
                 line("movq $0,"+format.integer(tempOffset+8)+"(%rsp)");
+                if instructions[(current-1)*10] == 34 and importKinds[current-1] == 9 {
+                    line("movq $0,"+format.integer(tempOffset+16)+"(%rsp)");
+                }
             }
             current=instructions[(current-1)*10+9];
         }
@@ -1366,7 +1403,7 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
     while i <= instructions.count/10 {
         let row be (i-1)*10;
         if instructions[row] == 34 and
-            (importKinds[i-1] == 2 or importKinds[i-1] >= 5) and
+            (importKinds[i-1] == 2 or (importKinds[i-1] >= 5 and importKinds[i-1] <= 8)) and
             (importOperations[i-1] == 4 or importOperations[i-1] == 6) {
             try listNative.fault(routine,phase,i,instructions[row+6],base);
         }

@@ -30,6 +30,7 @@ SMOKE_TESTS=(
     'test_u2_function_nested_list.U2FunctionNestedListTests',
     'test_u2_function_value_aggregate.U2FunctionValueAggregateTests',
     'test_u2_function_aggregate_list.U2FunctionAggregateListTests',
+    'test_u2_function_failure_producer.U2FunctionFailureProducerTests',
     'test_u2_typed_failure_context.U2TypedFailureContextTests',
     'test_u2_failure_order.U2FailureOrderTests',
     'test_u2_failure_trace.U2FailureTraceTests',

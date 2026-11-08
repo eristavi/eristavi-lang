@@ -1,0 +1,115 @@
+// Genuine compiler-generated payload/context construction; no failure ingress.
+import std.process;
+import compiler.u1_budget as budget;
+import compiler.u1_meta as meta;
+import compiler.u1_builder as build;
+import compiler.u1_aggregate as aggregate;
+import compiler.u1_aggregate_build as ab;
+import compiler.u1_aggregate_signature as sig;
+import compiler.u1_verify as canonical;
+import compiler.u1_aggregate_verify as graphVerify;
+import compiler.u2_invoke_contract as contracts;
+import compiler.u2_managed_types as managed;
+import compiler.u2_managed_root_gate as roots;
+import compiler.u2_ssa_liveness as ssa;
+import compiler.u2_function_contract as body;
+import compiler.u2_continuation_bind as continuation;
+import compiler.u2_invoke_transfer as invoke;
+import compiler.u2_function_managed_x86_64 as native;
+import compiler.u2_function_native_imports as imports;
+import compiler.u2_text_native as textNative;
+function run() fails budget.LimitError,canonical.InvalidIR,graphVerify.InvalidGraph,
+    managed.InvalidManagedTypes,roots.InvalidManagedRoots,ssa.InvalidLiveness,
+    body.InvalidBody,continuation.InvalidBinding,native.Unsupported {
+    let root be try budget.developmentRequest(); let shared be try budget.metadataOwner(root);
+    let p be try budget.constructionPhase(shared); let data be try meta.create(shared,p);
+    let seed be try meta.signature(data,p,[meta.i64()],[meta.i64()]);
+    let graph be try aggregate.create(shared,p);
+    let i64 be try aggregate.primitive(graph,meta.i64());
+    let pred be try aggregate.primitive(graph,meta.pred());
+    let text be try aggregate.aggregate(graph,p,[]);
+    let payload be try aggregate.aggregate(graph,p,[i64,text]);
+    let failure be try aggregate.aggregate(graph,p,[text,text]);
+    let signature be try sig.signature(data,graph,p,[i64,pred],[i64]);
+    let failSig be try sig.signature(data,graph,p,[],[failure]);
+    let normalCarry be try sig.signature(data,graph,p,[],[i64,failure]);
+    let failedCarry be try sig.signature(data,graph,p,[],[failure,failure]);
+    let target be try meta.declaration(data,p,signature,"u2.failure.producer.recursive",1,63,0);
+    let createSig be try sig.signature(data,graph,p,[i64],[text]);
+    let createText be try meta.declaration(data,p,createSig,textNative.name(1),2,63,1);
+    let collectSig be try sig.signature(data,graph,p,[],[]);
+    let collect be try meta.declaration(data,p,collectSig,textNative.name(8),2,63,1);
+    let captureSig be try sig.signature(data,graph,p,[payload],[failure]);
+    let capture be try meta.declaration(data,p,captureSig,imports.failureName(payload.index,1),2,63,1);
+    let src be try meta.source(data,p,"typed-failure-producer",
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",64);
+    let loc be try meta.location(data,p,src,0,1,0,1,1);
+    try aggregate.freeze(graph);
+    let registry be try managed.create(graph,p);
+    let payloadType be try managed.valueOfBase(registry,p,payload);
+    try managed.freeze(registry); try meta.freeze(data);
+    let table be try contracts.create(data,graph,p);
+    let contract be contracts.Contract { version=1; target=target; failure=failSig; };
+    try contracts.register(table,data,graph,p,contract); try contracts.freeze(table);
+    try budget.finishPhase(p);
+    let owner be try budget.functionOwner(root,false); let cp be try budget.constructionPhase(owner);
+    let fn be try build.create(data,signature,owner,cp); try body.bind(fn,graph,table,target);
+    let entry be try ab.block(fn,graph,[i64,pred]);
+    let recurse be try ab.block(fn,graph,[]); let base be try ab.block(fn,graph,[]);
+    let normal be try ab.block(fn,graph,[i64,failure]);
+    let failed be try ab.block(fn,graph,[failure,failure]);
+    let success be try ab.block(fn,graph,[]); let raising be try ab.block(fn,graph,[failure]);
+    let depth be try build.parameter(fn,entry,0); let failBase be try build.parameter(fn,entry,1);
+    let zero be try build.integer(fn,entry,0,loc); let fortyTwo be try build.integer(fn,entry,42,loc);
+    let code be try build.wrapAdd(fn,entry,fortyTwo,depth,loc);
+    let scalar be try build.integer(fn,entry,946,loc);
+    let call be try ab.call(fn,graph,entry,createText,[scalar],loc);
+    let message be try build.result(fn,call,0);
+    let original be try ab.make(fn,graph,entry,payload,[code,message],loc);
+    call=try ab.call(fn,graph,entry,capture,[original],loc); let primary be try build.result(fn,call,0);
+    let otherCode be try build.integer(fn,entry,99,loc);
+    let otherScalar be try build.integer(fn,entry,955,loc);
+    call=try ab.call(fn,graph,entry,createText,[otherScalar],loc);
+    let otherMessage be try build.result(fn,call,0);
+    let changedCode be try ab.set(fn,graph,entry,original,0,otherCode,loc);
+    let changed be try ab.set(fn,graph,entry,changedCode,1,otherMessage,loc);
+    call=try ab.call(fn,graph,entry,capture,[changed],loc); let discarded be try build.result(fn,call,0);
+    call=try ab.call(fn,graph,entry,collect,[],loc);
+    let more be try build.compareInteger(fn,entry,depth,zero,5,loc);
+    try ab.branch(fn,graph,entry,more,recurse,[],base,[],loc);
+    let one be try build.integer(fn,recurse,1,loc);
+    let next be try build.wrapSubtract(fn,recurse,depth,one,loc);
+    let pair be try continuation.bindCarrying(fn,graph,cp,recurse,normal,failed,
+        normalCarry,failedCarry,loc);
+    let invoked be try invoke.emit(fn,graph,contract,pair,[next,failBase],[primary]);
+    let retained be try build.parameter(fn,normal,1);
+    let parentRaised be try body.returnFailure(fn,graph,table,normal,retained,loc);
+    let child be try build.parameter(fn,failed,0);
+    let propagated be try body.returnFailure(fn,graph,table,failed,child,loc);
+    try ab.branch(fn,graph,base,failBase,raising,[primary],success,[],loc);
+    let baseFailure be try build.parameter(fn,raising,0);
+    let raised be try body.returnFailure(fn,graph,table,raising,baseFailure,loc);
+    let seven be try build.integer(fn,success,7,loc);
+    try ab.returnValues(fn,graph,success,[seven],loc);
+    // Preserve the accepted bootstrap's concrete scalar-edge specialization.
+    let dead be try build.block(fn,[]); let deadEnd be try build.block(fn,[meta.i64()]);
+    let deadValue be try build.integer(fn,dead,0,loc);
+    try build.jump(fn,dead,deadEnd,[deadValue],loc);
+    try build.returnValues(fn,deadEnd,[deadValue],loc);
+    try ab.complete(fn,graph); try budget.finishPhase(cp);
+    let phase be try budget.constructionPhase(owner);
+    try native.emitValuesChecked(fn,graph,table,phase,registry,
+        [text,payload],[managed.text(registry),payloadType],[4,15],true,97);
+    try budget.finishPhase(phase); try contracts.close(table); try managed.close(registry);
+    try build.close(fn); try aggregate.close(graph); try meta.close(data);
+    try budget.close(owner); try budget.close(shared); try budget.close(root);
+}
+run() else error budget.LimitError { output("limit:"+error.message); process.setExitCode(1); }
+else error canonical.InvalidIR { output("invalid:"+error.message); process.setExitCode(1); }
+else error graphVerify.InvalidGraph { output("graph:"+error.message); process.setExitCode(1); }
+else error managed.InvalidManagedTypes { output("managed:"+error.message); process.setExitCode(1); }
+else error roots.InvalidManagedRoots { output("roots:"+error.message); process.setExitCode(1); }
+else error ssa.InvalidLiveness { output("ssa:"+error.message); process.setExitCode(1); }
+else error body.InvalidBody { output("body:"+error.message); process.setExitCode(1); }
+else error continuation.InvalidBinding { output("continuation:"+error.message); process.setExitCode(1); }
+else error native.Unsupported { output("native:"+error.message); process.setExitCode(1); };
