@@ -5,7 +5,7 @@ case or missing acceptance result before expanding any row. No percentage claim.
 
 | Gate | Current boundary | Next required evidence/work |
 | --- | --- | --- |
-| File aggregate/producer composition | Single and homogeneous-group value entries enabled; one-member group tested; primary/mixed entries still empty bindings | Thread bindings through original primary/chain/mixed cores; actual owning caller and producing sibling with cleanup ordering |
+| File aggregate/producer composition | Single, homogeneous-group and primary/chain value entries enabled; one-member homogeneous group tested; mixed entries still empty bindings | Thread bindings through original mixed core; actual owning caller and producing sibling with cleanup ordering |
 | Live primary across owning defined call | Explicit refusal remains | Preserve exact primary and ordered secondaries with independent owner/SSA proof; do not delete guard alone |
 | Managed field/composition coverage | Existing bounded predicate/Int/Text/List/value aggregate profiles; direct identity fields and other families not admitted | Audit missing frozen field families and kind-4 operation/deep-fixability checks; targeted native/reference/refusal cases |
 | Carrier overlap | Failure context and payload/owner carriers must be distinct | Resolve specific refused profiles without ambiguous root-class casts |

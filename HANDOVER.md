@@ -1,5 +1,49 @@
 # Eristavi compiler — current handover
 
+Latest verified source/test commit: `375c983fd6da7170463d2d726912bb27f59cbe22`.
+This documentation/evidence successor changes no implementation/test inputs.
+
+## Active checkpoint — 8 November 2026: File primary aggregate bindings
+
+Branch `compiler/u2-whole-function-file-roots-20261107`; base
+`a9e3d9009e6bc890403aed09bae73c61dcdb46db`. New
+emitFileValuesCheckedPrimary / emitFileValuesCheckedPrimaryChain pass existing
+aggregate runtime bindings through a shared original primary/chain core.
+Legacy APIs keep empty bindings; the duplicated single-primary admission body
+is removed. Each entry still prepares one Plan; no measured speedup claimed.
+Original owner/SSA/primary/layout proofs and live-primary refusal remain.
+No syntax, ABI, runtime adapter, timeout or ownership semantics changes.
+
+**5/5 final focused PASS**, 40.952 s; zero failures/skips. Actual native
+single-primary and two-owner chain retain aggregate values across clean/failed
+closes; exact one/two close counts, reverse order, original primary identity,
+ordered prior/new secondary failures, GC and final reclamation pass. Bad layout,
+duplicate binding and wrong owner prefix refuse without output or Plan leaks.
+Legacy single/chain and live-primary refusal regression tests pass. Initial
+2/2 focused PASS in 26.109 s preceded added exact-close assertions. No unresolved
+focused failures. Existing C qualifier warnings remain unsuppressed.
+[Exact command, logs and hashes](docs/evidence/2026-11-08/u2-file-primary-values/README.md).
+
+**Next:** thread aggregate bindings through emitMixedFilePrimaryGroupCore and
+its member compiler, preserving all-member preflight and assignment proofs.
+Then execute an owning caller plus sibling producing a fresh typed context,
+checking primary/secondary ordering and reclamation. Do not redo primary/chain
+bindings, File operations, aggregate construction or dispatch. The already-live
+primary guard stays until independently justified preservation is implemented.
+
+Other remaining gates are in the fixed
+[checklist](docs/architecture/UIR_U2_REMAINING_CHECKLIST.md): managed field and
+identity composition, carrier overlap, broader fault/physical/sanitizer/reference/
+trace evidence, current owned/C/hosted repeatability, branch reconciliation and
+exact-final four-platform/full qualification. No new full source oracle claimed.
+#74 remains OPEN; #121/#111 DRAFT. No merge/promotion or #51 restart.
+Broad unchanged suites, owned full-compiler self-build and final qualification
+were deliberately deferred to conserve the user-reported 17% remaining allowance.
+Exact quota cannot be inspected. Predecessor hosted CI was still in progress:
+https://github.com/eristavi/eristavi-lang/actions/runs/42472248786
+No new-head hosted success claimed. Stop at this verified pushed recovery point.
+Earlier current/next statements below are historical and superseded here.
+
 Latest verified source/test commit: `19ad90ab80b048789ed0273fb6db0d36f342cfae`.
 This documentation/evidence successor changes no implementation/test inputs.
 

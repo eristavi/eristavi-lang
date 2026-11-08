@@ -17,8 +17,22 @@ entry constructs a fresh typed context from the record after close, returns it
 via class 5 and verifies one close plus full reclamation. This does not exercise
 new aggregate bindings across a sibling or while a primary is live at close.
 
-Remaining boundaries: primary-bound single/chain entries and mixed owning/
-non-owning group entries still pass empty bindings; already-live-primary refusal
+Primary-bound entries now share emitFilePrimaryCore: emitFileValuesCheckedPrimary
+and emitFileValuesCheckedPrimaryChain supply the same aggregate binding vector;
+legacy single/chain APIs keep empty bindings. This removes the previously
+separate single-primary Plan preparation implementation; each emission still
+prepares exactly one Plan. No timing improvement is claimed. The concrete
+bootstrap shape anchor remains nonexecuted and grants no verification authority.
+
+Native tests retain a record created after acquisition through primary cleanup
+and nested inner/outer cleanup. Its integer field is tested on both successful
+and failed final-close paths: a wrong value returns normally, which the external
+caller rejects. Existing primary-identity, prior-secondary, new-secondary,
+reverse-close-order, GC and final reclamation checks are reused, with explicit
+one/two-close counts. Invalid layouts, duplicate binding and wrong surviving
+prefix refuse before assembly and do not leak a Plan.
+
+Remaining boundaries: mixed owning/non-owning group entries still pass empty bindings; already-live-primary refusal
 at owning defined calls remains. No blanket claim that File/producer integration
 is complete. Original File operations and saved/typed context adapters were reused.
 Known C identity-list qualifier warnings remain, with no suppression. Full final
