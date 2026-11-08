@@ -2,7 +2,8 @@
 
 Branch: compiler/u2-whole-function-file-roots-20261107.
 Base: a72a24e5f2d4a6dd734a3aed2dcf1ed396ed2cda.
-Exact source/test commit is pinned by the documentation successor.
+Verified source/test commit: 12835510a6260f241c6bac7279571f4b8c1d824d.
+This documentation successor leaves implementation/test inputs unchanged.
 
 Implemented exact canonical native capture of selected ordinary aggregate error
 payloads, immediate existing class-5 temporary publication and original SSA

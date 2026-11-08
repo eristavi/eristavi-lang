@@ -1,5 +1,73 @@
 # Eristavi compiler — current handover
 
+Latest verified source/test commit: `12835510a6260f241c6bac7279571f4b8c1d824d`.
+This documentation successor leaves implementation/test inputs unchanged.
+
+## Active checkpoint — 8 November 2026: native typed failure producers
+
+Branch `compiler/u2-whole-function-file-roots-20261107`; batch base
+`a72a24e5f2d4a6dd734a3aed2dcf1ed396ed2cda`. Added the missing compiler bridge
+from an exact selected ordinary aggregate payload and static Text message field
+to the defined Function's saved FailureContext. Exact reserved import
+kind/effects/version/signature/carrier/field/source checks remain independent.
+The existing frame/catch/fail/pop/saved runtime helpers own capture; no duplicate
+resource adapter, source syntax, ABI/frame/root layout or ownership semantics.
+The returned context is immediately stored in the existing third class-5
+word and original SSA slot before global failure clear; live-after publication
+precedes temporary retirement. List bounds emission excludes this import kind.
+Old profiles without payload bindings retain their original import path.
+
+**10/10 focused methods PASS**, 89.189 s, zero failures/skips; **1/1 additional
+nested-payload method PASS**, 7.655 s, implementation unchanged. Six initial new
+producer methods plus four immediate dependencies, then one new List/Text
+payload case. Actual generated payload/context construction has no incoming
+FailureContext. Primary snapshots survive another capture and GC; discarded
+contexts are reclaimed. Checked depths 0/1/5/16/64 cover normal completion,
+fresh leaf failures and retained parent failure after successful child return.
+Codes 42/43, unchanged beta versus discarded lambda, typed matching, exact
+returned live context count and final graph/Text/failure/handler/allocator
+reclamation pass. Independent interpreter/current C-native outcomes agree.
+Message ordinals 0/1/4, terminal context-allocation refusal and malformed
+source/import/representation/unchecked-entry refusal pass. A nested List/Text
+payload survives through the class-5 context alone. Existing recursive aggregate,
+checked returns, mutual failure ordering and typed reference checks pass.
+No unresolved focused failures. Initial test-driver scope-leave ABI misuse was
+fixed with the existing (scope, void-value) ABI, preserving all reclamation
+assertions; its failed raw log is retained.
+[Evidence](docs/evidence/2026-11-08/u2-typed-failure-producers/README.md),
+[producer contract/limits](docs/architecture/UIR_U2_TYPED_FAILURE_PRODUCER_NATIVE.md).
+
+**Exact next implementation step:** thread the existing aggregate runtime binding
+vector through closed checked-group preflight/emission, retaining both original
+independent group/body/SSA proofs. Add one sibling callee that constructs and
+returns a fresh typed context, plus caller normal/failure and wrong-binding
+refusal execution. Reuse emitValuesChecked and existing group/producer machinery;
+do not redo recursion, saved-context adapters, File acquisition or List work.
+Then extend the same binding integration to File-owning combinations with exact
+primary cleanup bindings; do not remove the already-live-primary refusal without
+an independently justified preservation proof.
+
+Remaining functionality: aggregate/producer bindings across mutual/closed groups
+and File-owned paths; additional field families and identity-containing aggregates;
+kind-4 operation/deep-fixability composition; carrier-overlap cases; already-live
+primary across File-owning defined calls. The new producer uses existing saved
+runtime context layout (no new native trace/location fields); existing broader
+typed trace/location evidence remains part of the acceptance audit. Source
+nominal fails-family routing belongs to frontend integration and is not introduced.
+General allocator/hostile-root/sanitizer/physical/independent proof, current
+owned/C/hosted timeout repeatability, branch reconciliation and exact final
+four-platform/full qualification remain OPEN. #74 OPEN; #121/#111 DRAFT; no merge
+or production promotion.
+
+Predecessor exact-head smoke CI SUCCESS:
+https://github.com/eristavi/eristavi-lang/actions/runs/42463546118
+No new-head hosted or owned-generator parity result claimed. Broad unchanged
+suites, full owned compiler self-build, generator repeatability and final
+qualification deliberately not manually repeated to preserve usage. #51 paused.
+User reported 55% remaining; actual quota is not inspectable. Stop at this
+verified pushed checkpoint. Older current/next statements below are historical
+and superseded by this checkpoint.
+
 Latest verified source/test commit: `352b68b16b46c018b34ff0c31e6e7c7512a36e3f`.
 This documentation/evidence successor leaves compiler/test inputs unchanged.
 
