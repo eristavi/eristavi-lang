@@ -102,6 +102,76 @@ class U2FunctionFilePrimaryTests(unittest.TestCase):
             self.assertNotIn('.globl',result.stdout)
             self.assertIn('unsupported:',result.stdout)
 
+    def exercise_recursive_primary(self,fixture,depths):
+        source=(ROOT/'tests/fixtures'/fixture).read_text()
+        generated=self.generator(fixture,source)
+        self.assertEqual((generated.returncode,generated.stderr),(0,''),generated.stdout[-2400:])
+        path=self.directory/'recursive-primary.txt';path.write_text('native')
+        for depth in depths:
+            count=depth+1 if 'recursive' in fixture else 2
+            for mode in ('clean','first','all'):
+                failed=mode != 'clean'
+                runtime=self.runtime
+                if failed:
+                    needle='    movl $3,%eax\n    syscall\n    testq %rax,%rax\n    jns .Lr_close_empty'
+                    inject='    movq $-5,%rax\n'
+                    if mode == 'first':
+                        inject='    cmpq $1,.Lfile_recursion_closes(%rip)\n    jne .Lkeep_close_result\n'+inject+'.Lkeep_close_result:\n'
+                    self.assertEqual(runtime.count(needle),1)
+                    runtime=runtime.replace(needle,'    movl $3,%eax\n    syscall\n'+inject+'    testq %rax,%rax\n    jns .Lr_close_empty',1)
+                runtime=runtime.replace('.Lr_close:\n','.Lr_close:\n    incq .Lfile_recursion_closes(%rip)\n'
+                    '    cmpq $1,.Lfile_recursion_closes(%rip)\n    jne .Lprimary_already_captured\n'
+                    '    movq .Lcleanup_primary(%rip),%rcx\n    movq %rcx,.Lfirst_frame_primary(%rip)\n'
+                    '.Lprimary_already_captured:\n',1)
+                caller=fileTests.U2FunctionFileCheckedTests.file_recursion_caller(self,path,depth,failed)
+                caller=caller.replace('    cmpq $'+str(depth+1)+',.Lfile_recursion_closes(%rip)',
+                    '    cmpq $'+str(count)+',.Lfile_recursion_closes(%rip)')
+                if not failed:
+                    caller+='\n.bss\n.Lfirst_frame_primary: .quad 0\n'
+                if failed:
+                    checks='    cmpq .Lfirst_frame_primary(%rip),%rax\n    jne .Lresource_test_fail\n    movq 80(%rax),%rax\n'
+                    secondaries=count-1 if mode == 'all' else 0
+                    for _ in range(secondaries):
+                        checks+='    testq %rax,%rax\n    je .Lresource_test_fail\n    movq 88(%rax),%rax\n'
+                    checks+='    testq %rax,%rax\n    jne .Lresource_test_fail\n'
+                    caller+='\n.bss\n.Lfirst_frame_primary: .quad 0\n'
+                    caller=caller.replace('    cmpq %rax,.Lfile_recursion_roots+8(%rip)\n    jne .Lresource_test_fail',
+                        '    cmpq %rax,.Lfile_recursion_roots+8(%rip)\n    jne .Lresource_test_fail\n'+checks)
+                run=self.run_probe(fixture+str(depth)+mode,generated.stdout+caller,runtime=runtime)
+                self.assertEqual((run.returncode,run.stdout,run.stderr),(0,b'',b''))
+
+    def test_recursive_child_failure_stays_primary_through_each_file_frame(self):
+        self.exercise_recursive_primary('u2_function_file_recursive_primary.eri',(0,1,4,16))
+
+    def test_other_file_member_failure_stays_primary_through_caller_cleanup(self):
+        self.exercise_recursive_primary('u2_function_file_group_primary.eri',(1,))
+
+    def test_primary_group_assignments_refuse_foreign_missing_and_duplicate(self):
+        source=(ROOT/'tests/fixtures/u2_function_file_group_primary.eri').read_text()
+        marker='[native.PrimaryAssignment { member=1; binding=binding; }])'
+        for name, replacement in (
+            ('outside','[native.PrimaryAssignment { member=0; binding=binding; }])'),
+            ('foreign','[native.PrimaryAssignment { member=2; binding=binding; }])'),
+            ('missing','[])'),
+            ('duplicate','[native.PrimaryAssignment { member=1; binding=binding; },native.PrimaryAssignment { member=1; binding=binding; }])')):
+            result=self.generator('group-primary-refusal-'+name,source.replace(marker,replacement))
+            self.assertEqual(result.returncode,1,result.stdout[-2200:])
+            self.assertIn('unsupported:',result.stdout)
+            self.assertNotIn('.globl',result.stdout)
+            self.assertNotIn('leaked',result.stdout)
+
+    def test_live_primary_at_defined_call_still_refuses_before_output(self):
+        source=(ROOT/'tests/fixtures/u2_function_file_recursive_primary.eri').read_text()
+        source=source.replace('[text,i64],[i64]', '[text,i64,failure],[i64]',1)
+        source=source.replace('ab.block(fn,graph,[text,i64])','ab.block(fn,graph,[text,i64,failure])',1)
+        source=source.replace('    let depth be', '    let unboundPrimary be try build.parameter(fn,entry,2);\n    let depth be',1)
+        source=source.replace('[path,next],[recurseHandle]', '[path,next,unboundPrimary],[recurseHandle]')
+        result=self.generator('unbound-call-primary',source)
+        self.assertEqual(result.returncode,1,result.stdout[-2200:])
+        self.assertIn('cannot overwrite a live primary',result.stdout)
+        self.assertNotIn('.globl',result.stdout)
+        self.assertNotIn('leaked',result.stdout)
+
     def test_nested_close_failure_becomes_primary_through_outer_cleanup(self):
         source=(ROOT/'tests/fixtures/u2_function_file_nested_primary.eri').read_text()
         generated=self.generator('nested-primary',source)

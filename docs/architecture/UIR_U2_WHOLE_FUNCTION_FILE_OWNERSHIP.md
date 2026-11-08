@@ -230,3 +230,31 @@ missing sites and wrong surviving-prefix Plans refuse before output. Maximum
 caps are admission limits, not evidence for every depth/CFG combination.
 Primary-bound recursive/group-call combinations, general managed constructors
 and final U2 qualification remain separate acceptance requirements.
+
+## Returned failures across owning call frames — 8 November 2026
+
+A Function with bound primary-cleanup blocks may make defined checked calls
+when no primary carrier is live at that call. Canonical liveBefore remains the
+guard at every such instruction. The child publishes its failure into the
+registered caller class-5 handoff; original edge moves publish the caller's
+failed-block roots before retiring the handoff or collecting. The failed child
+result can enter a verified parent primary cleanup, which consumes this
+frame's owner and retains/appends to the original saved failure. This permits
+propagation, rather than requiring recovery, at recursive/group boundaries.
+An existing active primary across the call remains unsupported and refused.
+
+`emitMixedFilePrimaryGroup` takes bounded PrimaryAssignments (1-based member
+index and PrimaryBinding). It uses the existing mixed-group transaction, with
+at most 128 privately linked assignment nodes and at most eight selected
+bindings per member; source ownership/root/Plan proofs are rechecked before
+output. Every assignment requires the exact owning Function and profiles.
+Default mixed-group callers pass none and construct no assignment metadata.
+Selection scans bounded metadata during preflight/emission; native per-close
+lookup stays O(1). No runtime adapter, frame ABI, cached proof or competing IR.
+
+The C bootstrap requires a concrete, nonexecuted group shape anchor to compile
+resource-free clients importing this module. Its source lists are built via
+add to avoid introducing identity-pointer qualifier warnings in ordinary
+clients; actual group fixture literals retain their previously recorded
+warnings for future bootstrap review. This is a compatibility constraint, not
+an extra runtime invocation or a production frontend change.

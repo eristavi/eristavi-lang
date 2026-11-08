@@ -1,5 +1,49 @@
 # Eristavi compiler — current handover
 
+## Active checkpoint — 8 November 2026: returned child failures through owned callers
+
+Branch `compiler/u2-whole-function-file-roots-20261107`; batch base
+`46758d671d6f3d763067a737971fb5417b648612`. Issue #74 remains OPEN; #121/#111
+DRAFT. General managed constructors, independent/physical/fault proof and final
+qualification remain incomplete.
+
+Implemented child-failure propagation through File-owning recursive callers:
+the child's original saved failure now reaches a proof-bound parent cleanup
+instead of being required to recover first. Clean parent close keeps that same
+primary; failed parent close appends its new cleanup context. Per-call
+liveBefore still refuses an already-live unrelated primary across a defined
+call. Removing the coarse Function-wide refusal does not remove this guard.
+
+New `emitMixedFilePrimaryGroup` binds explicit PrimaryAssignments to exact
+1-based owning members, pre-admits the closed group and freshly verifies each
+member's primary cleanup before emission. Missing/out-of-group/foreign and
+duplicate assignments refuse before output. Caps: 16 members, 128 assignments,
+eight primary sites per owning member. Ordinary group entry passes no binding
+metadata and allocates no assignment nodes; new metadata is private, bounded
+and not a verifier cache or executable IR. Existing SSA/root/owner proofs and
+public ABI remain. Bootstrap generic specialization needs a nonexecuted concrete
+shape anchor; known identity-list qualifier warnings remain in actual group
+fixture logs. No runtime/compiler-wide performance speedup is claimed.
+
+Validation: **6/6 focused methods PASS**, 39.671 s; additional live-primary
+call refusal **1/1 PASS**, 7.064 s. Generated recursive depths 0/1/4/16 and a
+distinct File-owning member cover clean, first-close-failure and all-close-
+failure paths. Tests assert first failure pointer identity, expected secondary
+count, exact close count, forced GC and complete reclamation. Invalid group
+assignments check both owner accounts; existing primary-prefix and legacy
+recursive/mixed-group paths remain passing. See
+[raw evidence](docs/evidence/2026-11-08/u2-primary-calls/README.md).
+
+**Next:** implement remaining non-i64/nested managed List/aggregate constructors
+and typed FailureContext producers. Separately needed: explicit semantics/proof
+for calls made while a primary is already active, broader mutual/mixed failure
+combinations, current owned/C generator parity and timeout gates, hostile root/
+allocator/physical/sanitizer and independent origin evidence; reconcile main,
+then final four-platform/full completed-batch qualification. No merge/promotion,
+full owned self-build, broad CI or #51 restart was manually selected this batch.
+All older next-step statements below are historical relative to this checkpoint.
+
+
 Verified implementation/test checkpoint: `c25498fc715b6d954747644f36447dc414e08d44`.
 This documentation successor leaves compiler/test inputs unchanged.
 

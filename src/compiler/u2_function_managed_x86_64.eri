@@ -41,6 +41,32 @@ function primarySet(bindings) returns maybe identity PrimarySet fails Unsupporte
     }
     return head;
 }
+public type PrimaryAssignment { member Int; binding PrimaryBinding; }
+type AssignmentSet { assignment PrimaryAssignment; next maybe identity AssignmentSet; }
+function assignmentSet(assignments) returns maybe identity AssignmentSet fails Unsupported {
+    try require(assignments.count <= 128,"too many group primary assignments");
+    let head maybe identity AssignmentSet be none; let i be assignments.count-1;
+    while i >= 0 {
+        let assignment PrimaryAssignment be assignments[i];
+        head=identity AssignmentSet { assignment=assignment; next=head; }; i=i-1;
+    }
+    return head;
+}
+function primaryGroupSet(assignments maybe identity AssignmentSet,member Int)
+    returns maybe identity PrimarySet fails Unsupported {
+    let head maybe identity PrimarySet be none; let count be 0;
+    let cursor be assignments;
+    while cursor != none {
+        let assignment be cursor.assignment;
+        if assignment.member == member {
+            try require(count < 8,"too many primary bindings for group member");
+            head=identity PrimarySet { binding=assignment.binding; next=head; };
+            count=count+1;
+        }
+        cursor=cursor.next;
+    }
+    return head;
+}
 public error Unsupported { message Text; }
 function require(ok Bool,message Text) fails Unsupported {
     if not ok { fail Unsupported { message=message; }; }
@@ -781,8 +807,6 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
                         // A closed group resolves exact original FunctionIds to
                         // previously pre-admitted body labels; self recursion
                         // remains the single-member case.
-                        try require(primaryCount == 0,
-                            "File-owning call cannot overwrite a propagating primary");
                         if groupTargets.count == 0 {
                             try require(invoked == selfTarget,
                                 "File-owning checked call requires a bound self target");
@@ -1477,7 +1501,7 @@ public function emitFileCheckedPrimary(routine identity build.Function,
 function compileMixedFileGroupMember(plans,phases,routines,profiles,profileIndexes,runtimeTypes,member Int,
     graph identity aggregate.Registry,table identity contracts.Registry,
     registry identity managed.Registry,carriers,descriptors,forceGC Bool,
-    targets,labels,emitOutput Bool)
+    targets,labels,emitOutput Bool,assignments maybe identity AssignmentSet)
     fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,Unsupported {
     let routine identity build.Function be routines[member];
     let profile maybe identity owners.Profile be none;
@@ -1486,15 +1510,15 @@ function compileMixedFileGroupMember(plans,phases,routines,profiles,profileIndex
     }
     compile(plans[member],routine,graph,table,phases[member],registry,
         carriers,descriptors,forceGC,labels[member],routine.definedTarget,true,
-        targets,labels,emitOutput,profile,runtimeTypes[member],none)
+        targets,labels,emitOutput,profile,runtimeTypes[member],try primaryGroupSet(assignments,member+1))
         else error budget.LimitError { try closeGroup(plans,phases); fail error; }
         else error canonical.InvalidIR { try closeGroup(plans,phases); fail error; }
         else error ssa.InvalidLiveness { try closeGroup(plans,phases); fail error; }
         else error Unsupported { try closeGroup(plans,phases); fail error; };
 }
-public function emitMixedFileCheckedGroup(routines,labels,profiles,profileIndexes,runtimeTypes,
+function emitMixedFilePrimaryGroupCore(routines,labels,profiles,profileIndexes,runtimeTypes,
     graph identity aggregate.Registry,table identity contracts.Registry,
-    registry identity managed.Registry,carriers,descriptors,forceGC Bool)
+    registry identity managed.Registry,carriers,descriptors,forceGC Bool,assignments maybe identity AssignmentSet)
     fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,
         roots.InvalidManagedRoots,managed.InvalidManagedTypes,
         graphVerify.InvalidGraph,Unsupported {
@@ -1503,6 +1527,18 @@ public function emitMixedFileCheckedGroup(routines,labels,profiles,profileIndexe
         profiles.count <= 16 and profileIndexes.count == routines.count and
         runtimeTypes.count == routines.count,
         "invalid checked File Function group size and profile shape");
+    let assignmentIndex be 0; let assignmentCursor be assignments;
+    while assignmentCursor != none {
+        try require(assignmentIndex < 128,"cyclic or oversized group bindings");
+        let assignment be assignmentCursor.assignment;
+        try require(assignment.member >= 1 and assignment.member <= routines.count,
+            "primary binding member index is outside group");
+        let assigned identity build.Function be routines[assignment.member-1];
+        try require(profileIndexes[assignment.member-1] > 0 and
+            assignment.binding.instruction.owner == assigned.key,
+            "primary binding requires exact owning group member");
+        assignmentIndex=assignmentIndex+1; assignmentCursor=assignmentCursor.next;
+    }
     let targets be []; let valueCount be 0; let instructionCount be 0;
     let member be 0; let fileMembers be 0;
     while member < routines.count {
@@ -1592,14 +1628,14 @@ public function emitMixedFileCheckedGroup(routines,labels,profiles,profileIndexe
         plans.add(plan);
         try compileMixedFileGroupMember(plans,phases,routines,profiles,profileIndexes,runtimeTypes,
             member,graph,table,registry,carriers,descriptors,forceGC,
-            targets,labels,false);
+            targets,labels,false,assignments);
         member=member+1;
     }
     member=0;
     while member < routines.count {
         try compileMixedFileGroupMember(plans,phases,routines,profiles,profileIndexes,runtimeTypes,
             member,graph,table,registry,carriers,descriptors,forceGC,
-            targets,labels,true);
+            targets,labels,true,assignments);
         member=member+1;
     }
     try closeGroup(plans,phases);
@@ -1632,4 +1668,41 @@ public function emitFileCheckedPrimaryChain(routine identity build.Function,
         else error ssa.InvalidLiveness { try ssa.close(plan); fail error; }
         else error Unsupported { try ssa.close(plan); fail error; };
     try ssa.close(plan);
+}
+
+public function emitMixedFileCheckedGroup(routines,labels,profiles,profileIndexes,runtimeTypes,
+    graph identity aggregate.Registry,table identity contracts.Registry,
+    registry identity managed.Registry,carriers,descriptors,forceGC Bool)
+    fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,
+        roots.InvalidManagedRoots,managed.InvalidManagedTypes,
+        graphVerify.InvalidGraph,Unsupported {
+    try emitMixedFilePrimaryGroupCore(routines,labels,profiles,profileIndexes,runtimeTypes,
+        graph,table,registry,carriers,descriptors,forceGC,none);
+}
+
+public function emitMixedFilePrimaryGroup(routines,labels,profiles,profileIndexes,runtimeTypes,
+    graph identity aggregate.Registry,table identity contracts.Registry,
+    registry identity managed.Registry,carriers,descriptors,forceGC Bool,assignments)
+    fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,
+        roots.InvalidManagedRoots,managed.InvalidManagedTypes,
+        graphVerify.InvalidGraph,Unsupported {
+    try emitMixedFilePrimaryGroupCore(routines,labels,profiles,profileIndexes,runtimeTypes,
+        graph,table,registry,carriers,descriptors,forceGC,try assignmentSet(assignments));
+}
+
+// Concrete bootstrap-only shape anchor; never executed by emission. The
+// current C bootstrap requires this group specialization even in clients
+// that only call single-Function entries from the imported module.
+function bootstrapPrimaryGroupShape(routine identity build.Function,
+    profile identity owners.Profile,graph identity aggregate.Registry,
+    table identity contracts.Registry,registry identity managed.Registry,
+    carrier aggregate.TypeId,descriptor managed.TypeId,binding PrimaryBinding)
+    fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,
+        roots.InvalidManagedRoots,managed.InvalidManagedTypes,
+        graphVerify.InvalidGraph,Unsupported {
+    let routines be []; routines.add(routine); routines.add(routine);
+    let profiles be []; profiles.add(profile);
+    try emitMixedFilePrimaryGroup(routines,[1,2],profiles,[1,0],[9,0],
+        graph,table,registry,[carrier],[descriptor],false,
+        [PrimaryAssignment { member=1; binding=binding; }]);
 }
