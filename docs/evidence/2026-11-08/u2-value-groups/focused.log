@@ -1,0 +1,71 @@
+test_all_members_preflight_before_output (test_u2_function_value_group.U2FunctionValueGroupTests.test_all_members_preflight_before_output) ... semantic error at 114:30: module 'ab' does not expose public function 'callB'
+
+  test_all_members_preflight_before_output (test_u2_function_value_group.U2FunctionValueGroupTests.test_all_members_preflight_before_output) (case='layout') ... FAIL
+semantic error at 114:30: module 'ab' does not expose public function 'callB'
+  test_all_members_preflight_before_output (test_u2_function_value_group.U2FunctionValueGroupTests.test_all_members_preflight_before_output) (case='duplicate') ... FAIL
+semantic error at 114:30: module 'ab' does not expose public function 'callB'
+  test_all_members_preflight_before_output (test_u2_function_value_group.U2FunctionValueGroupTests.test_all_members_preflight_before_output) (case='missing-member') ... FAIL
+semantic error at 114:30: module 'ab' does not expose public function 'callB'
+  test_all_members_preflight_before_output (test_u2_function_value_group.U2FunctionValueGroupTests.test_all_members_preflight_before_output) (case='bad-sibling') ... FAIL
+test_mutual_group_constructs_and_preserves_typed_contexts (test_u2_function_value_group.U2FunctionValueGroupTests.test_mutual_group_constructs_and_preserves_typed_contexts) ... semantic error at 114:30: module 'ab' does not expose public function 'callB'
+FAIL
+
+======================================================================
+FAIL: test_all_members_preflight_before_output (test_u2_function_value_group.U2FunctionValueGroupTests.test_all_members_preflight_before_output) (case='layout')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/bc9859552d81/eristavi-lang/tests/test_u2_function_value_group.py", line 24, in test_all_members_preflight_before_output
+    result=self.generator('bad-value-group-'+name,changed)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/bc9859552d81/eristavi-lang/tests/test_u2_function_import_integration.py", line 35, in generator
+    self.assertEqual(build_native(source_file,executable,folder),0)
+AssertionError: 1 != 0
+
+======================================================================
+FAIL: test_all_members_preflight_before_output (test_u2_function_value_group.U2FunctionValueGroupTests.test_all_members_preflight_before_output) (case='duplicate')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/bc9859552d81/eristavi-lang/tests/test_u2_function_value_group.py", line 24, in test_all_members_preflight_before_output
+    result=self.generator('bad-value-group-'+name,changed)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/bc9859552d81/eristavi-lang/tests/test_u2_function_import_integration.py", line 35, in generator
+    self.assertEqual(build_native(source_file,executable,folder),0)
+AssertionError: 1 != 0
+
+======================================================================
+FAIL: test_all_members_preflight_before_output (test_u2_function_value_group.U2FunctionValueGroupTests.test_all_members_preflight_before_output) (case='missing-member')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/bc9859552d81/eristavi-lang/tests/test_u2_function_value_group.py", line 24, in test_all_members_preflight_before_output
+    result=self.generator('bad-value-group-'+name,changed)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/bc9859552d81/eristavi-lang/tests/test_u2_function_import_integration.py", line 35, in generator
+    self.assertEqual(build_native(source_file,executable,folder),0)
+AssertionError: 1 != 0
+
+======================================================================
+FAIL: test_all_members_preflight_before_output (test_u2_function_value_group.U2FunctionValueGroupTests.test_all_members_preflight_before_output) (case='bad-sibling')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/bc9859552d81/eristavi-lang/tests/test_u2_function_value_group.py", line 24, in test_all_members_preflight_before_output
+    result=self.generator('bad-value-group-'+name,changed)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/bc9859552d81/eristavi-lang/tests/test_u2_function_import_integration.py", line 35, in generator
+    self.assertEqual(build_native(source_file,executable,folder),0)
+AssertionError: 1 != 0
+
+======================================================================
+FAIL: test_mutual_group_constructs_and_preserves_typed_contexts (test_u2_function_value_group.U2FunctionValueGroupTests.test_mutual_group_constructs_and_preserves_typed_contexts)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/bc9859552d81/eristavi-lang/tests/test_u2_function_failure_producer.py", line 51, in test_constructs_typed_primary_without_failure_ingress
+    result=self.generator('typed-failure-producer',self.source())
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/bc9859552d81/eristavi-lang/tests/test_u2_function_import_integration.py", line 35, in generator
+    self.assertEqual(build_native(source_file,executable,folder),0)
+AssertionError: 1 != 0
+
+----------------------------------------------------------------------
+Ran 2 tests in 10.253s
+
+FAILED (failures=5)

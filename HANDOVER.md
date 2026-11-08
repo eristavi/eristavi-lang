@@ -1,5 +1,59 @@
 # Eristavi compiler — current handover
 
+Latest verified source/test commit: `2af590bfaefc3efbac08a4cac0041c63ac10cb94`.
+This documentation/evidence successor leaves source/test inputs unchanged.
+
+## Active checkpoint — 8 November 2026: closed checked value groups
+
+Branch `compiler/u2-whole-function-file-roots-20261107`; base
+`11702f30cdf440234cce448a74a91ffe856fa906`. Added emitValuesCheckedGroup by
+threading the existing carrier-aligned aggregate runtime bindings through one
+shared original group preflight/emission core. Ordinary emitCheckedGroup keeps
+empty bindings. Original closure/label/target/count caps, fresh independent
+body/SSA/root verification, all-member preflight before output and publication
+proofs remain; no new runtime adapter, source syntax, ABI or ownership rules.
+
+**5/5 focused methods PASS**, 51.725 s, zero failures/skips (two new methods,
+three compatibility methods). Actual sibling dispatch is observable via distinct
+42/52 leaf and 43/53 retained-parent error codes at depths 0/1/5/16/64, both
+outcomes, GC, typed matching and final reclamation. Interpreter/current C mutual
+source results agree. Invalid later-member source origin, layout, duplicate
+label, missing member and wrong binding refuse before all assembly. Existing
+work/capacity refusal releases plans; two-result handoff and single producer
+compatibility pass. Initial fixture callB typo and a single-client bootstrap
+specialization failure were corrected. A nonexecuted concrete shape anchor
+follows the existing bootstrap pattern, grants no verification authority and
+allocates no runtime plans. Known C identity-list qualifier warnings remain;
+no suppression, assertion or timeout changes. Logs retain initial failures with
+trailing whitespace normalized for patch checks.
+[Evidence](docs/evidence/2026-11-08/u2-value-groups/README.md),
+[contract](docs/architecture/UIR_U2_VALUE_GROUP_NATIVE.md).
+
+**Exact next step:** extend the same aggregate binding vector to File-owning
+single/group entry preflight/emission. Start with an owning caller and sibling
+that creates a fresh typed context, then verify normal/failure cleanup ordering
+and complete reclamation. Retain original owner/SSA/primary-binding proofs;
+do not remove the already-live-primary guard without a justified preservation
+proof. Do not redo completed File acquisition, group dispatch, constructor or
+List/aggregate implementations.
+
+Remaining: File-owned aggregate/producer combinations; carrier overlap cases;
+other field families and identity-containing aggregates; kind-4 operation and
+deep-fixability composition; existing live-primary restriction. Broad hostile
+root/allocator/sanitizer/physical/independent and typed trace/location evidence,
+current owned/C/hosted timing repeatability, reconciliation and exact-final
+four-platform/full qualification remain open. #74 OPEN, #121/#111 DRAFT; no
+merge or production promotion. #51 paused; no full compiler owned self-build
+or broad unchanged suites manually initiated.
+
+Predecessor CI still in progress when checked:
+https://github.com/eristavi/eristavi-lang/actions/runs/42468744031
+No new-head hosted success claimed. Final matrix/qualification and current
+owned generator repeatability deliberately deferred to preserve usage. User
+reported 44% remaining; actual quota cannot be inspected. Stop at this verified
+pushed checkpoint. Earlier current/next statements below are historical and
+superseded here.
+
 Latest verified source/test commit: `12835510a6260f241c6bac7279571f4b8c1d824d`.
 This documentation successor leaves implementation/test inputs unchanged.
 

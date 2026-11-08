@@ -2,7 +2,8 @@
 
 Branch compiler/u2-whole-function-file-roots-20261107.
 Base 11702f30cdf440234cce448a74a91ffe856fa906.
-Source/test revision is pinned by the documentation successor.
+Verified source/test commit: 2af590bfaefc3efbac08a4cac0041c63ac10cb94.
+This documentation/evidence successor leaves source/test inputs unchanged.
 
 The shared aggregate binding vector now reaches original closed-group preflight
 and emission. Existing ordinary group API retains empty bindings; no group,
