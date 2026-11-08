@@ -1,5 +1,9 @@
 # Eristavi compiler — current handover
 
+Verified implementation/test checkpoint: `c25498fc715b6d954747644f36447dc414e08d44`.
+This documentation successor leaves compiler/test inputs unchanged.
+
+
 ## Active batch — 8 November 2026: multi-owner primary cleanup prefixes
 
 Branch `compiler/u2-whole-function-file-roots-20261107`; base

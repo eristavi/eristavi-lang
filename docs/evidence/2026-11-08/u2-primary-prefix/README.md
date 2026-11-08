@@ -1,5 +1,9 @@
 # U2 multi-owner active-primary prefixes — 8 November 2026
 
+Verified implementation/test checkpoint: `c25498fc715b6d954747644f36447dc414e08d44`.
+This documentation successor leaves compiler/test inputs unchanged.
+
+
 Base branch head: `97630a1227dec9846f258716d35e023cd8cb6b7a`.
 Issue #74 remains OPEN; drafts #121/#111 unmerged. This is development evidence.
 
