@@ -1,0 +1,24 @@
+type Record { number Int; label Text; }
+type Envelope { record Record; }
+let snapshot be ["β"];
+let current be snapshot;
+while current.count < 3 { current.add("β"); }
+let original be Record { number=1; label="β"; };
+let updated be original;
+updated.number=3;
+updated.label="λ";
+let originalRecords be [original];
+let changedRecords be originalRecords;
+while changedRecords.count < 2 { changedRecords.add(updated); }
+changedRecords[0]=updated;
+let detached be changedRecords[0];
+detached.number=946;
+let nestedOriginal be [originalRecords];
+let nestedChanged be nestedOriginal;
+nestedChanged[0]=changedRecords;
+let enclosing be Envelope { record=updated; };
+let storedLists be [current];
+let envelopes be [enclosing];
+if originalRecords[0].label == "β" and changedRecords[0].label == "λ" and detached.number == 946 {
+    output(originalRecords[0].number + changedRecords[0].number + storedLists[0].count + originalRecords.count + changedRecords.count + nestedOriginal[0].count + nestedChanged[0].count);
+} else { output(-1); }

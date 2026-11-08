@@ -1,0 +1,13 @@
+test_generated_acquire_close_failure_handler_and_reclamation (test_u2_function_file_checked.U2FunctionFileCheckedTests.test_generated_acquire_close_failure_handler_and_reclamation) ... ok
+test_independent_source_reference_normal_and_acquisition_failure (test_u2_function_file_checked.U2FunctionFileCheckedTests.test_independent_source_reference_normal_and_acquisition_failure) ... ok
+test_missing_roots_and_allocator_refusal_are_terminal (test_u2_function_file_checked.U2FunctionFileCheckedTests.test_missing_roots_and_allocator_refusal_are_terminal) ... ok
+test_unknown_binding_and_stale_owner_refuse_before_output (test_u2_function_file_checked.U2FunctionFileCheckedTests.test_unknown_binding_and_stale_owner_refuse_before_output) ... ok
+test_verified_lexical_owner_roots_cover_every_original_block_and_consumption (test_u2_function_file_roots.U2WholeFunctionFileRootTests.test_verified_lexical_owner_roots_cover_every_original_block_and_consumption) ... ok
+test_whole_function_identity_phi_and_gc_with_rooted_return (test_u2_function_managed_native.U2FunctionManagedNativeTests.test_whole_function_identity_phi_and_gc_with_rooted_return) ... ok
+test_checked_recursive_normal_failure_edges_roots_and_reclamation (test_u2_function_checked_native.U2FunctionCheckedNativeTests.test_checked_recursive_normal_failure_edges_roots_and_reclamation) ... ok
+test_different_member_recovers_failure_into_normal_parent_result (test_u2_function_checked_group.U2FunctionCheckedGroupTests.test_different_member_recovers_failure_into_normal_parent_result) ... ok
+
+----------------------------------------------------------------------
+Ran 8 tests in 69.823s
+
+OK

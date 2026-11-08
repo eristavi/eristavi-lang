@@ -1,0 +1,52 @@
+name: U2 nested File CFG focused verification
+on:
+  push:
+    branches: [compiler/u2-whole-function-file-roots-20261107]
+    paths:
+      - src/compiler/u2_function_managed_x86_64.eri
+      - src/compiler/u2_function_file_roots_x86_64.eri
+      - tests/fixtures/u2_function_file_nested.eri
+      - tests/fixtures/u2_function_file_recursive.eri
+      - tests/fixtures/u2_function_file_group.eri
+      - tests/fixtures/u2_function_file_mixed_group.eri
+      - tests/test_u2_function_file_checked.py
+      - .github/workflows/u2-file-nested-focused.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: u2-nested-file-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  native:
+    name: Nested File owners and original regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      CC: clang
+      CFLAGS: -O2
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: python -m pip install -e .
+      - run: python -m compileall -q compiler tests/test_u2_function_file_checked.py
+      - name: Run nested and single-owner native execution
+        shell: bash
+        run: |
+          set -o pipefail
+          PYTHONPATH=tests:. python -u -m unittest -v \
+            test_u2_function_file_checked.U2FunctionFileCheckedTests.test_nested_lexical_file_owners_and_recovering_handlers \
+            test_u2_function_file_checked.U2FunctionFileCheckedTests.test_generated_acquire_close_failure_handler_and_reclamation \
+            test_u2_function_file_checked.U2FunctionFileCheckedTests.test_checked_file_owning_self_recursion_retains_each_frame_and_closes \
+            test_u2_function_file_checked.U2FunctionFileCheckedTests.test_file_owning_closed_checked_group_preserves_owner_across_child \
+            test_u2_function_file_checked.U2FunctionFileCheckedTests.test_checked_file_owning_group_uses_exact_other_member \
+            test_u2_function_file_checked.U2FunctionFileCheckedTests.test_mixed_file_group_refuses_foreign_or_stale_owner_bindings_before_output \
+            2>&1 | tee "$RUNNER_TEMP/u2-nested-file.log"
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: u2-nested-file-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/u2-nested-file.log
+          retention-days: 14

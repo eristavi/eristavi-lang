@@ -1,0 +1,7 @@
+test_text_elements_snapshot_copy_replace_and_forced_gc (test_u2_function_list_text.U2FunctionListTextTests.test_text_elements_snapshot_copy_replace_and_forced_gc) ... ok
+test_wrong_element_descriptor_and_import_type_refuse (test_u2_function_list_text.U2FunctionListTextTests.test_wrong_element_descriptor_and_import_type_refuse) ... ok
+
+----------------------------------------------------------------------
+Ran 2 tests in 13.759s
+
+OK

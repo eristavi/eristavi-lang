@@ -20,7 +20,53 @@ import compiler.u2_list_i64 as listNative;
 import compiler.u2_function_contract as body;
 import compiler.u2_root_map as checkedRoots;
 import compiler.format as format;
+import compiler.u2_primary_cleanup_bind as chain;
+import compiler.u2_continuation_bind as continuation;
+import compiler.u2_cleanup_plan as cleanup;
+import compiler.u2_cleanup_verify as cleanupVerify;
+import compiler.u2_scoped_owners as owners;
+import compiler.u2_function_file_roots_x86_64 as fileRoots;
 
+public type PrimaryBinding {
+    pair continuation.Pair; instruction build.InstId;
+    plan identity cleanup.Plan; owner cleanup.Scope; exit meta.LocId;
+}
+
+type PrimarySet { binding PrimaryBinding; next maybe identity PrimarySet; }
+function primarySet(bindings) returns maybe identity PrimarySet fails Unsupported {
+    try require(bindings.count <= 8,"too many primary bindings");
+    let head maybe identity PrimarySet be none; let i be bindings.count-1;
+    while i >= 0 {
+        head=identity PrimarySet { binding=bindings[i]; next=head; }; i=i-1;
+    }
+    return head;
+}
+public type PrimaryAssignment { member Int; binding PrimaryBinding; }
+type AssignmentSet { assignment PrimaryAssignment; next maybe identity AssignmentSet; }
+function assignmentSet(assignments) returns maybe identity AssignmentSet fails Unsupported {
+    try require(assignments.count <= 128,"too many group primary assignments");
+    let head maybe identity AssignmentSet be none; let i be assignments.count-1;
+    while i >= 0 {
+        let assignment PrimaryAssignment be assignments[i];
+        head=identity AssignmentSet { assignment=assignment; next=head; }; i=i-1;
+    }
+    return head;
+}
+function primaryGroupSet(assignments maybe identity AssignmentSet,member Int)
+    returns maybe identity PrimarySet fails Unsupported {
+    let head maybe identity PrimarySet be none; let count be 0;
+    let cursor be assignments;
+    while cursor != none {
+        let assignment be cursor.assignment;
+        if assignment.member == member {
+            try require(count < 8,"too many primary bindings for group member");
+            head=identity PrimarySet { binding=assignment.binding; next=head; };
+            count=count+1;
+        }
+        cursor=cursor.next;
+    }
+    return head;
+}
 public error Unsupported { message Text; }
 function require(ok Bool,message Text) fails Unsupported {
     if not ok { fail Unsupported { message=message; }; }
@@ -111,7 +157,7 @@ function emitNativeImport(result Int,first Int,operands,
             line("call erist_rt_text_collect");
         } else { line("movq %rax,"+slot(result)); }
     }
-    if kind == 2 {
+    if kind == 2 or kind == 5 or kind == 6 or kind == 7 or kind == 8 {
         if operation == 4 or operation == 6 {
             // The existing standalone List adapter validates the index
             // against the live object length before any mutation or copy.
@@ -139,7 +185,8 @@ function emitNativeImport(result Int,first Int,operands,
             line("call evn_copy");
             line("movq %rax,"+format.integer(tempOffset)+"(%rsp)");
             line("movq "+slot(operands[first+1])+",%rdi");
-            line("call evn_int");
+            if kind == 2 { line("call evn_int"); }
+            else { line("movq %rdi,%rax"); }
             line("movq %rax,"+format.integer(tempOffset+8)+"(%rsp)");
             line("movq "+format.integer(tempOffset)+"(%rsp),%rdi");
             line("movq "+format.integer(tempOffset+8)+"(%rsp),%rsi");
@@ -153,7 +200,8 @@ function emitNativeImport(result Int,first Int,operands,
             line("call evn_copy");
             line("movq %rax,"+format.integer(tempOffset)+"(%rsp)");
             line("movq "+slot(operands[first+2])+",%rdi");
-            line("call evn_int");
+            if kind == 2 { line("call evn_int"); }
+            else { line("movq %rdi,%rax"); }
             line("movq %rax,"+format.integer(tempOffset+8)+"(%rsp)");
             line("movq "+format.integer(tempOffset)+"(%rsp),%rdi");
             line("movq "+slot(operands[first+1])+",%rsi");
@@ -172,7 +220,7 @@ function emitNativeImport(result Int,first Int,operands,
             line("movq "+slot(operands[first])+",%rdi");
             line("movq "+slot(operands[first+1])+",%rsi");
             line("call evn_index");
-            line("movq 8(%rax),%rax");
+            if kind == 2 { line("movq 8(%rax),%rax"); }
         }
         if operation == 7 { line("call erist_rt_text_collect"); }
         else { line("movq %rax,"+slot(result)); }
@@ -194,10 +242,11 @@ function emitDefinedCall(destination Text,first Int,count Int,operands,
     line("call "+destination);
 }
 function emitInstruction(base Text,id Int,frameBytes Int,
-    instructions,operands,switches,cases,importKinds,importOperations,
+    instructions,operands,switches,cases,importKinds,importOperations,aggregateOperands,
     tempOffset Int,rootCount Int,rootOffset Int,scopeOffset Int,
     returnOffset Int,transferManaged Bool,transferManagedSecond Bool,
-    callerRootOffset Int,callerFailureOffset Int,checked Bool) {
+    callerRootOffset Int,callerFailureOffset Int,checked Bool,
+    fileOffset Int,fileRuntimeType Int,label Int,primaryValue Int) {
     let row be (id-1)*10;
     let op be instructions[row];
     let first be instructions[row+2];
@@ -268,6 +317,56 @@ function emitInstruction(base Text,id Int,frameBytes Int,
         }
         line("jmp "+name(base,"edge",switches[header+2]));
     }
+    if op >= 43 and op <= 45 {
+        if op == 43 {
+            line("movl $"+format.integer(importKinds[id-1])+",%edi");
+            line("movl $"+format.integer(count)+",%esi");
+            line("call evn_object");
+            line("movq %rax,"+format.integer(tempOffset)+"(%rsp)");
+            let j be 0;
+            while j < count {
+                // Field types were independently checked in canonical UIR.
+                // The precomputed raw scalar flags avoid interpreting opaque
+                // carrier marker fields as executable aggregate layouts.
+                line("movq "+slot(operands[first+j])+",%rdi");
+                let fieldType be aggregateOperands[first+j];
+                if fieldType == 1 { line("call evn_bool"); }
+                if fieldType == 2 { line("call evn_int"); }
+                if fieldType > 6 { line("movq %rdi,%rax"); }
+                line("movq %rax,"+format.integer(tempOffset+8)+"(%rsp)");
+                line("movq %rax,%rdx");
+                line("movq "+format.integer(tempOffset)+"(%rsp),%rdi");
+                line("movl $"+format.integer(j)+",%esi");
+                line("call evn_init");
+                j=j+1;
+            }
+            line("movq "+format.integer(tempOffset)+"(%rsp),%rax");
+        }
+        if op == 44 {
+            line("movq "+slot(operands[first])+",%rdi");
+            line("movl $"+format.integer(payload)+",%esi");
+            line("call evn_member");
+            if importOperations[id-1] <= 2 { line("movq 8(%rax),%rax"); }
+        }
+        if op == 45 {
+            line("movq "+slot(operands[first])+",%rdi");
+            line("call evn_copy");
+            line("movq %rax,"+format.integer(tempOffset)+"(%rsp)");
+            line("movq "+slot(operands[first+1])+",%rdi");
+            if importOperations[id-1] == 1 { line("call evn_bool"); }
+            if importOperations[id-1] == 2 { line("call evn_int"); }
+            if importOperations[id-1] > 6 { line("movq %rdi,%rax"); }
+            line("movq %rax,"+format.integer(tempOffset+8)+"(%rsp)");
+            line("movq "+format.integer(tempOffset)+"(%rsp),%rdi");
+            line("movl $"+format.integer(payload)+",%esi");
+            line("call evn_member_ref");
+            line("movq %rax,%rdi");
+            line("movq "+format.integer(tempOffset+8)+"(%rsp),%rsi");
+            line("call evn_store");
+            line("movq "+format.integer(tempOffset)+"(%rsp),%rax");
+        }
+        line("movq %rax,"+slot(result));
+    }
     if op == 34 {
         if importKinds[id-1] == 3 {
             // Arguments remain live in the caller's registered vector until
@@ -279,11 +378,89 @@ function emitInstruction(base Text,id Int,frameBytes Int,
                 line("movq %rdx,"+slot(result+1));
             }
         } else {
-            emitNativeImport(result,first,operands,
-                importKinds[id-1],importOperations[id-1],tempOffset,base,id);
+            if importKinds[id-1] == 9 {
+                // The original payload remains in liveBefore roots. The
+                // established catch/snapshot adapter preserves its full type
+                // and Text message; no new runtime failure representation.
+                line("call evn_frame");
+                line("movq %rax,%rbx");
+                line("movq %rax,%rdi");
+                line("call setjmp");
+                line("testq %rax,%rax");
+                line("jne "+name(base,"captured",id));
+                line("movq "+slot(operands[first])+",%rdi");
+                line("movl $"+format.integer(importOperations[id-1])+",%esi");
+                line("call evn_fail");
+                line("ud2");
+                output(name(base,"captured",id)+":");
+                line("movq %rbx,%rdi");
+                line("call evn_pop");
+                line("call evn_saved");
+                // Publish class 5 immediately, before clearing global state.
+                line("movq %rax,"+format.integer(tempOffset+16)+"(%rsp)");
+                line("movq %rax,"+slot(result));
+                line("call erist_rt_failure_clear");
+            } else {
+                emitNativeImport(result,first,operands,
+                    importKinds[id-1],importOperations[id-1],tempOffset,base,id);
+            }
         }
     }
-    if op == 46 {
+    if op == 46 and importKinds[id-1] == 4 {
+        // Existing owned runtime adapters supply the checked outcome. The
+        // canonical edge, not a host exception, selects subsequent CFG work.
+        if importOperations[id-1] == 1 {
+            line("call evn_frame");
+            line("movq %rax,%rbx");
+            line("movq %rax,%rdi");
+            line("call setjmp");
+            line("testq %rax,%rax");
+            line("jne "+name(base,"file_failed",id));
+            line("movl $"+format.integer(fileRuntimeType)+",%edi");
+            line("movq "+slot(operands[first])+",%rsi");
+            line("xorl %edx,%edx");
+            line("call erist_rt_file_open");
+            // Publish before pop or any collecting call; edge transfer then
+            // installs the exact canonical owner and lexical root.
+            line("movq %rax,"+format.integer(tempOffset)+"(%rsp)");
+            line("movq %rax,"+format.integer(returnOffset)+"(%rsp)");
+            line("movq %rbx,%rdi");
+            line("call evn_pop");
+            line("jmp "+name(base,"edge",instructions[row+8]));
+            output(name(base,"file_failed",id)+":");
+            line("movq %rbx,%rdi");
+            line("call evn_pop");
+            line("call evn_saved");
+            line("movq %rax,"+format.integer(tempOffset+16)+"(%rsp)");
+            line("movq %rax,"+format.integer(returnOffset)+"(%rsp)");
+            line("call erist_rt_failure_clear");
+            line("jmp "+name(base,"edge",instructions[row+8]+1));
+        } else {
+            line("call evn_empty_failure");
+            line("movq %rax,"+format.integer(tempOffset+16)+"(%rsp)");
+            line("movq %rax,%rsi");
+            line("movq "+slot(operands[first])+",%rdi");
+            line("call evn_cleanup_accumulate");
+            line("movq %rsp,%rdi");
+            line("leaq "+format.integer(fileOffset)+"(%rsp),%rsi");
+            line("call erist_u2_file_"+format.integer(label)+"_poison_"+format.integer(id));
+            line("movq "+format.integer(tempOffset+16)+"(%rsp),%rax");
+            line("cmpq $0,(%rax)");
+            line("jne "+name(base,"file_close_failed",id));
+            line("jmp "+name(base,"edge",instructions[row+8]));
+            output(name(base,"file_close_failed",id)+":");
+            line("movq %rax,"+format.integer(returnOffset)+"(%rsp)");
+            if primaryValue != 0 {
+                // New close outcome stays separate; append its complete
+                // context to the explicitly bound, still-rooted primary.
+                line("movq %rax,%rsi");
+                line("movq "+slot(primaryValue)+",%rdi");
+                line("call erist_rt_failure_append");
+            }
+            line("jmp "+name(base,"edge",instructions[row+8]+1));
+        }
+    }
+    if op == 46 and importKinds[id-1] != 4 {
         let destination be base;
         if importOperations[id-1] != 0 {
             destination="erist_u2_rooted_function_"+format.integer(importOperations[id-1]);
@@ -392,8 +569,9 @@ function nativeSafepoint(forceGC Bool) {
 // with managed (Text/List/identity) values admitted as already boxed inputs
 // and block parameters, admitted runtime imports and explicit self calls.
 // The typed caller retains its own incoming root until this frame's class-1
-// vector is safely registered. Aggregate producers remain unsupported;
-// opcode 46 requires the explicit bound checked profile.
+// vector is safely registered. Opaque carrier construction remains refused;
+// opcode 46 requires the explicit bound checked profile. Value aggregate
+// producers require emitValues and exact linked layout checks.
 // A test flag can force physical GC
 // on EVERY block entry to prove exact root lifetime during CFG transitions.
 function checkedRootTypes(map identity checkedRoots.Map,
@@ -421,11 +599,16 @@ function verifyCheckedRoots(routine identity build.Function,
     try checkedRoots.close(map);
     try require(compatible,"checked roots require the exact declared native context type");
 }
+function emptyValueLayouts() {
+    let result be [];
+    if false { result.add(0); }
+    return result;
+}
 function compile(plan identity ssa.Plan,routine identity build.Function,
     graph identity aggregate.Registry,table identity contracts.Registry,
     phase identity budget.Phase,registry identity managed.Registry,
     carriers,descriptors,forceGC Bool,label Int,selfTarget Int,checked Bool,
-    groupTargets,groupLabels,emitOutput Bool)
+    groupTargets,groupLabels,emitOutput Bool,fileProfile maybe identity owners.Profile,fileRuntimeType Int,primarySetInput maybe identity PrimarySet,valueRuntimeTypes)
     fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,Unsupported {
     // roots.create verified the frozen original Function, including dead CFG,
     // while constructing this private liveness Plan (retained within a closed
@@ -482,10 +665,89 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
             ((checked and failure > 0) or (not checked and failure == 0)),
             "recursive target has an incompatible defined outcome signature");
     }
+    try require(routine.instructions.length/10 <= 512,
+        "primary binding table exceeds native limits");
+    let primaryValues be []; let primaryIndex be 0;
+    while primarySetInput != none and primaryIndex < routine.instructions.length/10 {
+        primaryValues.add(0); primaryIndex=primaryIndex+1;
+    }
+    let primaryCursor be primarySetInput;
+    let primaryCount be 0;
+    while primaryCursor != none {
+        try require(primaryCount < 8,"cyclic or oversized primary bindings");
+        let primary PrimaryBinding be primaryCursor.binding;
+        if fileProfile == none { fail Unsupported { message="primary cleanup requires File ownership"; }; }
+        let source be primary.pair.source.index;
+        try require(source >= 1 and source <= routine.blocks.length/5,
+            "invalid primary source block");
+        let first be try words.get(fileProfile.blocks,phase,(source-1)*2);
+        let depth be try words.get(fileProfile.blocks,phase,(source-1)*2+1);
+        try require(depth >= 1 and depth <= 8 and first >= 0 and
+            first+depth <= fileProfile.entries.length/2,"invalid primary owner prefix");
+        let active be []; let j be 0;
+        while j < depth {
+            let scope be try words.get(fileProfile.entries,phase,(first+j)*2);
+            let value be try words.get(fileProfile.entries,phase,(first+j)*2+1);
+            try require(scope >= 1 and scope <= fileProfile.scopes.length/2,
+                "invalid primary lexical scope");
+            let loc be try words.get(fileProfile.scopes,phase,(scope-1)*2+1);
+            active.add(cleanup.Scope { scope=scope; contract=fileProfile.consume.index;
+                value=value; close=meta.LocId { owner=routine.metadata.key; index=loc; }; });
+            j=j+1;
+        }
+        try require(active[depth-1] == primary.owner,"primary binding changes innermost obligation");
+        let map be checkedRoots.create(routine,graph,phase)
+            else error budget.LimitError { fail error; }
+            else error checkedRoots.InvalidRoots { fail Unsupported { message=error.message; }; };
+        let binding be chain.verifyPrimary(routine,graph,fileProfile,table,phase,map,
+            primary.pair,primary.instruction,primary.plan,active,primary.exit)
+            else error budget.LimitError { try checkedRoots.close(map); fail error; }
+            else error canonical.InvalidIR { try checkedRoots.close(map); fail error; }
+            else error owners.InvalidOwnership { try checkedRoots.close(map); fail Unsupported { message=error.message; }; }
+            else error checkedRoots.InvalidRoots { try checkedRoots.close(map); fail Unsupported { message=error.message; }; }
+            else error continuation.InvalidBinding { try checkedRoots.close(map); fail Unsupported { message=error.message; }; }
+            else error cleanupVerify.InvalidPlan { try checkedRoots.close(map); fail Unsupported { message=error.message; }; }
+            else error chain.InvalidChain { try checkedRoots.close(map); fail Unsupported { message=error.message; }; };
+        try checkedRoots.close(map);
+        try require((try words.get(routine.values,phase,(binding.incomingPrimary-1)*4)) == failureType and
+            primaryValues[binding.instruction-1] == 0,"duplicate or mistyped primary binding");
+        primaryValues[binding.instruction-1]=binding.incomingPrimary;
+        primaryCount=primaryCount+1; primaryCursor=primaryCursor.next;
+    }
+    let fileHandle be 0; let fileAcquire be 0; let fileConsume be 0;
+    let fileDepth be 0;
+    if fileProfile != none {
+        try require(checked and fileRuntimeType >= 6 and
+            fileRuntimeType <= 2147483647,"invalid native File binding");
+        let profile identity owners.Profile be fileProfile;
+        let proof be owners.verify(profile,routine,graph,table)
+            else error budget.LimitError { fail error; }
+            else error canonical.InvalidIR { fail error; }
+            else error owners.InvalidOwnership { fail Unsupported { message=error.message; }; };
+        try require(proof.maximumDepth >= 1 and proof.maximumDepth <= 8,
+            "whole-Function File owner depth exceeds verified native capacity");
+        // An explicit PrimaryBinding may occur AFTER one or more inner
+        // lexical resources have been consumed, with only the outer owner
+        // still live at its bound source. verifyPrimary independently checks
+        // that exact one-owner source, failed cleanup Plan, preserved primary,
+        // target transports, source LocId and canonical class-5 root. Never
+        // infer primary propagation from the enclosing Function's max depth.
+        // Unbound live failure carriers at any other File.close still refuse.
+        fileHandle=profile.handle.index; fileAcquire=profile.acquire.index;
+        fileConsume=profile.consume.index; fileDepth=proof.maximumDepth;
+        try require(fileHandle != failureType,"File and failure carriers must differ");
+        // An owning checked-handler block may receive and immediately
+        // discard an error when it explicitly RECOVERS before the next File
+        // operation. Presence of a failure parameter does not imply active
+        // propagation. The full source SSA liveness check at EVERY File
+        // invoke below still refuses any unbound live failure carrier.
+        // Actual primary propagation must use emitFileCheckedPrimary.
+    }
     let managedReturn be false;
     let managedReturnSecond be false;
     let selected be [];
-    let textCarrier be 0; let listCarrier be 0;
+    let textCarrier be 0; let listCarrier be 0; let textListCarrier be 0; let nestedI64Carrier be 0; let nestedTextCarrier be 0;
+    let boxedLists be []; let boxedElements be []; let failurePayloads be [];
     let typeRead be try budget.verificationPhase(registry.owner);
     let marker be 0;
     while marker < carriers.count {
@@ -493,8 +755,41 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
         let descriptor managed.TypeId be descriptors[marker];
         let desc be try managed.descriptor(registry,typeRead,descriptor);
         if desc.kind == 1 { textCarrier=carrier.index; }
+        if desc.kind == 4 { failurePayloads.add(carrier.index); }
         if desc.kind == 2 and desc.elementDomain == 0 and desc.element == 2 {
             listCarrier=carrier.index;
+        }
+        if desc.kind == 2 and desc.elementDomain == 1 and desc.element == 1 {
+            textListCarrier=carrier.index;
+            let childIndex be 0;
+            while childIndex < descriptors.count {
+                let child managed.TypeId be descriptors[childIndex];
+                if child.index == 1 {
+                    let childCarrier aggregate.TypeId be carriers[childIndex];
+                    boxedLists.add(carrier.index); boxedElements.add(childCarrier.index);
+                }
+                childIndex=childIndex+1;
+            }
+        }
+        if desc.kind == 2 and desc.elementDomain == 1 and desc.element != 1 {
+            let innerIndex be 0;
+            while innerIndex < descriptors.count {
+                let innerDescriptor managed.TypeId be descriptors[innerIndex];
+                if innerDescriptor.index == desc.element {
+                    let inner be try managed.descriptor(registry,typeRead,innerDescriptor);
+                    if inner.kind == 1 or inner.kind == 2 or inner.kind == 4 {
+                        let childCarrier aggregate.TypeId be carriers[innerIndex];
+                        boxedLists.add(carrier.index); boxedElements.add(childCarrier.index);
+                    }
+                    if inner.kind == 2 and inner.elementDomain == 0 and inner.element == 2 {
+                        nestedI64Carrier=carrier.index;
+                    }
+                    if inner.kind == 2 and inner.elementDomain == 1 and inner.element == 1 {
+                        nestedTextCarrier=carrier.index;
+                    }
+                }
+                innerIndex=innerIndex+1;
+            }
         }
         marker=marker+1;
     }
@@ -555,8 +850,8 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
     while i < routine.cases.length {
         cases.add(try words.get(routine.cases,phase,i)); i=i+1;
     }
-    // Only typed ingress and phi values may have a managed representation.
-    // Producers/boxed aggregates still require their own validated lowering.
+    // Typed ingress/phi values and independently admitted call or value
+    // aggregate producers may have a managed representation.
     i=0;
     while i < values.count/4 {
         let ty be values[i*4];
@@ -572,9 +867,10 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
                 if values[i*4+1] != 1 or producer < 1 or
                     producer > instructions.count/10 { admissible=false; }
                 else {
-                    // Only typed, independently admitted runtime call
-                    // instructions can construct managed values here.
-                    if instructions[(producer-1)*10] != 34 {
+                    // The instruction pass separately checks the exact call
+                    // or ordinary value aggregate representation.
+                    let producerOp be instructions[(producer-1)*10];
+                    if producerOp != 34 and (producerOp < 43 or producerOp > 45) {
                         admissible=false;
                     }
                 }
@@ -589,6 +885,11 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
         if ty != assigned { admissible=false; }
         i=i+1;
     }
+    let aggregateOperands be [];
+    i=0;
+    while valueRuntimeTypes.count > 0 and i < operands.count {
+        aggregateOperands.add(values[(operands[i]-1)*4]); i=i+1;
+    }
     let importKinds be []; let importOperations be [];
     i=0;
     while i < instructions.count/10 {
@@ -598,6 +899,69 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
         if op == 46 {
             if not checked { admissible=false; }
             else {
+                if fileDepth != 0 {
+                    let invoked be instructions[row+7];
+                    if invoked == fileAcquire or invoked == fileConsume {
+                        let resolved be nativeImports.inspectFile(routine.metadata,graph,phase,
+                            invoked,fileAcquire,fileConsume,textCarrier,fileHandle,failureType)
+                            else error budget.LimitError { fail error; }
+                            else error nativeImports.Unsupported { fail Unsupported { message=error.message; }; };
+                        // A live failure is never silently overwritten by
+                        // a checked File outcome or a recursive checked call.
+                        let v be 0;
+                        while v < selected.count {
+                            let value be selected[v];
+                            if values[(value-1)*4] == failureType {
+                                let live be try ssa.liveBefore(plan,routine,phase,
+                                    build.InstId { owner=routine.key; index=i+1; },
+                                    build.ValueId { owner=routine.key; index=value; });
+                                try require(not live or (primaryCount != 0 and
+                                    (resolved.operation == 1 or (value == primaryValues[i]))),
+                                    "unbound live primary across File operation");
+                            }
+                            v=v+1;
+                        }
+                        importKind=4; importOperation=resolved.operation;
+                    } else {
+                        // Defined calls never transfer a lexical File owner:
+                        // the independent owner proof checks every operand,
+                        // while our class-1 File roots survive the callee call.
+                        // A closed group resolves exact original FunctionIds to
+                        // previously pre-admitted body labels; self recursion
+                        // remains the single-member case.
+                        if groupTargets.count == 0 {
+                            try require(invoked == selfTarget,
+                                "File-owning checked call requires a bound self target");
+                        } else {
+                            let member be 0; let found be false;
+                            while member < groupTargets.count {
+                                try budget.work(phase,1);
+                                if invoked == groupTargets[member] {
+                                    importOperation=groupLabels[member];
+                                    found=true;
+                                }
+                                member=member+1;
+                            }
+                            try require(found and importOperation != 0,
+                                "File-owning checked target is outside admitted group");
+                        }
+                        let v be 0;
+                        while v < selected.count {
+                            let value be selected[v];
+                            if values[(value-1)*4] == failureType {
+                                let live be try ssa.liveBefore(plan,routine,phase,
+                                    build.InstId { owner=routine.key; index=i+1; },
+                                    build.ValueId { owner=routine.key; index=value; });
+                                try require(not live,
+                                    "File-owning recursion cannot overwrite a live primary");
+                            }
+                            v=v+1;
+                        }
+                        // Preserve the group label selected above. Zero
+                        // retains the exact self-recursive fallback.
+                        importKind=0;
+                    }
+                } else {
                 if groupTargets.count == 0 {
                     if instructions[row+7] != selfTarget { admissible=false; }
                 } else {
@@ -611,26 +975,58 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
                     }
                     if importOperation == 0 { admissible=false; }
                 }
+                }
             }
         }
         if op == 34 {
             if selfTarget != 0 and instructions[row+7] == selfTarget {
                 importKind=3;
             } else {
-                let resolved be nativeImports.inspect(routine.metadata,graph,phase,
-                    instructions[row+7],textCarrier,listCarrier)
-                    else error budget.LimitError { fail error; }
-                    else error nativeImports.Unsupported {
-                        fail Unsupported { message=error.message; };
-                    };
-                importKind=resolved.kind; importOperation=resolved.operation;
+                // Existing profiles without typed aggregate payloads retain
+                // their original import path, without an extra Target value.
+                if checked and failurePayloads.count > 0 {
+                    let failure be nativeImports.inspectFailure(routine.metadata,graph,phase,
+                        instructions[row+7],textCarrier,failureType,failurePayloads)
+                        else error budget.LimitError { fail error; }
+                        else error nativeImports.Unsupported { fail Unsupported { message=error.message; }; };
+                    importKind=failure.kind; importOperation=failure.operation;
+                }
+                if importKind == 0 {
+                    let resolved be nativeImports.inspect(routine.metadata,graph,phase,
+                        instructions[row+7],textCarrier,listCarrier,textListCarrier,nestedI64Carrier,nestedTextCarrier,boxedLists,boxedElements)
+                        else error budget.LimitError { fail error; }
+                        else error nativeImports.Unsupported { fail Unsupported { message=error.message; }; };
+                    importKind=resolved.kind; importOperation=resolved.operation;
+                }
             }
+        }
+        if op >= 43 and op <= 45 {
+            let carrierType be values[(instructions[row+4]-1)*4];
+            if op != 43 { carrierType=values[(operands[instructions[row+2]]-1)*4]; }
+            let match be false; let c be 0;
+            while c < carriers.count {
+                let carrier aggregate.TypeId be carriers[c];
+                if carrier.index == carrierType {
+                    let descriptor managed.TypeId be descriptors[c];
+                    let read be try budget.verificationPhase(registry.owner);
+                    let desc be try managed.descriptor(registry,read,descriptor);
+                    try budget.finishPhase(read);
+                    if desc.kind == 4 and valueRuntimeTypes.count == carriers.count {
+                        importKind=valueRuntimeTypes[c]; match=importKind >= 6 and importKind <= 255;
+                    }
+                }
+                c=c+1;
+            }
+            if not match { admissible=false; }
+            importOperation=values[(instructions[row+4]-1)*4];
+            if op == 45 { importOperation=values[(operands[instructions[row+2]+1]-1)*4]; }
         }
         importKinds.add(importKind); importOperations.add(importOperation);
         if op != 1 and op != 2 and op != 4 and
             op != 6 and op != 7 and op != 8 and
             op != 13 and op != 14 and
             (op < 15 or op > 18) and op != 35 and op != 34 and
+            (op < 43 or op > 45) and
             not (checked and (op == 46 or op == 47)) {
             admissible=false;
         }
@@ -651,6 +1047,52 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
         if edges[i*3+2] > 32 { admissible=false; }
         i=i+1;
     }
+    let valueFields be []; let valueLayouts be []; let valueCounts be [];
+    let layoutRead be try budget.verificationPhase(registry.owner);
+    let c be 0;
+    while c < carriers.count {
+        let carrier aggregate.TypeId be carriers[c];
+        let descriptor managed.TypeId be descriptors[c];
+        let desc be try managed.descriptor(registry,layoutRead,descriptor);
+        if desc.kind == 4 {
+            if valueRuntimeTypes.count != carriers.count { admissible=false; }
+            else {
+                let nativeType be valueRuntimeTypes[c];
+                if nativeType < 6 or nativeType > 255 { admissible=false; }
+                let j be 0;
+                while j < valueLayouts.count {
+                    if valueLayouts[j] == nativeType { admissible=false; }
+                    j=j+1;
+                }
+                valueLayouts.add(nativeType);
+                let count be try aggregate.fieldCount(graph,layoutRead,carrier);
+                valueCounts.add(count);
+                j=0;
+                while j < count {
+                    let field be try aggregate.field(graph,layoutRead,carrier,j);
+                    let nativeField be -1;
+                    if field.index == 1 { nativeField=0; }
+                    if field.index == 2 { nativeField=1; }
+                    let k be 0;
+                    while k < carriers.count {
+                        let child aggregate.TypeId be carriers[k];
+                        if child == field {
+                            let childType managed.TypeId be descriptors[k];
+                            let d be try managed.descriptor(registry,layoutRead,childType);
+                            if d.kind == 1 { nativeField=4; }
+                            if d.kind == 2 { nativeField=7; }
+                            if d.kind == 4 { nativeField=valueRuntimeTypes[k]; }
+                        }
+                        k=k+1;
+                    }
+                    if nativeField < 0 { admissible=false; }
+                    valueFields.add(nativeField); j=j+1;
+                }
+            }
+        }
+        c=c+1;
+    }
+    try budget.finishPhase(layoutRead);
     try require(admissible,
         "unsupported whole-Function managed producer, opcode or budget");
     // Group preflight has freshly verified the entire canonical body/SSA,
@@ -763,6 +1205,9 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
     // without ever reaching native emission.
     let remainingWork be instructions.count+values.count+edges.count+
         blocks.count+selected.count*32+128;
+    if valueLayouts.count > 0 {
+        remainingWork=remainingWork+aggregateOperands.count*16+valueFields.count*8;
+    }
     while remainingWork > 0 {
         let charge be remainingWork;
         if charge > 1024 { charge=1024; }
@@ -775,6 +1220,8 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
     let tempOffset be rootOffset+selected.count*8;
     let temporaryRoots be 2;
     if checked { temporaryRoots=3; }
+    let fileOffset be tempOffset+temporaryRoots*8;
+    temporaryRoots=temporaryRoots+fileDepth;
     let scopeOffset be tempOffset+temporaryRoots*8;
     let returnOffset be scopeOffset+8;
     let callerRootOffset be returnOffset+16;
@@ -783,6 +1230,13 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
     if checked { bytes=bytes+8; }
     let frameBytes be ((bytes+15)/16)*16;
     let base be "erist_u2_rooted_function_"+format.integer(label);
+    if fileProfile != none {
+        fileRoots.emit(routine,graph,fileProfile,table,phase,label)
+            else error budget.LimitError { fail error; }
+            else error canonical.InvalidIR { fail error; }
+            else error owners.InvalidOwnership { fail Unsupported { message=error.message; }; }
+            else error fileRoots.Unsupported { fail Unsupported { message=error.message; }; };
+    }
     output(".section .rodata");
     output(".p2align 3");
     output(base+"_classes:");
@@ -795,6 +1249,8 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
     }
     output("    .byte 1"); output("    .byte 1");
     if checked { output("    .byte 5"); }
+    i=0;
+    while i < fileDepth { output("    .byte 1"); i=i+1; }
     i=0;
     while i < selected.count {
         output(".set "+base+"_root_"+format.integer(selected[i])+", "+
@@ -822,6 +1278,28 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
         // A second native managed result needs at least two caller root words.
         line("cmpq $2,%rdx");
         line("jb erist_rt_value_fault_internal");
+    }
+    let fieldOffset be 0;
+    i=0;
+    while i < valueLayouts.count {
+        line("leaq ev_types+"+format.integer(valueLayouts[i]*32)+"(%rip),%rax");
+        line("leaq ev_types_end(%rip),%rcx");
+        line("leaq 32(%rax),%rdx");
+        line("cmpq %rcx,%rdx"); line("ja erist_rt_value_fault_internal");
+        line("cmpl $6,(%rax)"); line("jne erist_rt_value_fault_internal");
+        line("cmpq $"+format.integer(valueCounts[i])+",16(%rax)");
+        line("jne erist_rt_value_fault_internal");
+        line("movq 24(%rax),%rcx");
+        if valueCounts[i] > 0 {
+            line("testq %rcx,%rcx"); line("je erist_rt_value_fault_internal");
+        }
+        let j be 0;
+        while j < valueCounts[i] {
+            line("cmpl $"+format.integer(valueFields[fieldOffset])+","+format.integer(j*4)+"(%rcx)");
+            line("jne erist_rt_value_fault_internal");
+            fieldOffset=fieldOffset+1; j=j+1;
+        }
+        i=i+1;
     }
     // Clear full SSA and registered root-vector storage first.
     i=0;
@@ -867,6 +1345,11 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
         // Phi/edge sources are all staged, transferred and published before
         // this block's first allocating/collecting safepoint.
         publish(selected,entryBits,(block-1)*selected.count,rootOffset);
+        if fileDepth != 0 {
+            line("movq %rsp,%rdi");
+            line("leaq "+format.integer(fileOffset)+"(%rsp),%rsi");
+            line("call erist_u2_file_"+format.integer(label)+"_publish_"+format.integer(block));
+        }
         // Checked edge results have now moved into their canonical destination
         // slots and exact roots. Only now retire the caller handoff words.
         if checked {
@@ -878,26 +1361,34 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
         let current be blocks[(block-1)*5+2];
         while current != 0 {
             publish(selected,beforeBits,(current-1)*selected.count,rootOffset);
+            let currentPrimary be 0;
+            if primaryCount > 0 { currentPrimary=primaryValues[current-1]; }
             emitInstruction(base,current,frameBytes,
-                instructions,operands,switches,cases,importKinds,importOperations,
+                instructions,operands,switches,cases,importKinds,importOperations,aggregateOperands,
                 tempOffset,selected.count+temporaryRoots,rootOffset,scopeOffset,returnOffset,
                 managedReturn,managedReturnSecond,callerRootOffset,
-                callerFailureOffset,checked);
+                callerFailureOffset,checked,fileOffset,fileRuntimeType,label,currentPrimary);
             publish(selected,afterBits,(current-1)*selected.count,rootOffset);
             // Publish the canonical result before retiring intermediary roots.
-            if instructions[(current-1)*10] == 34 {
+            if instructions[(current-1)*10] == 34 or
+                (instructions[(current-1)*10] >= 43 and instructions[(current-1)*10] <= 45) {
                 line("movq $0,"+format.integer(tempOffset)+"(%rsp)");
                 line("movq $0,"+format.integer(tempOffset+8)+"(%rsp)");
+                if instructions[(current-1)*10] == 34 and importKinds[current-1] == 9 {
+                    line("movq $0,"+format.integer(tempOffset+16)+"(%rsp)");
+                }
             }
             current=instructions[(current-1)*10+9];
         }
         let term be blocks[(block-1)*5+4];
         publish(selected,beforeBits,(term-1)*selected.count,rootOffset);
+        let terminalPrimary be 0;
+        if primaryCount > 0 { terminalPrimary=primaryValues[term-1]; }
         emitInstruction(base,term,frameBytes,
-            instructions,operands,switches,cases,importKinds,importOperations,
+            instructions,operands,switches,cases,importKinds,importOperations,aggregateOperands,
             tempOffset,selected.count+temporaryRoots,rootOffset,scopeOffset,returnOffset,
             managedReturn,managedReturnSecond,callerRootOffset,
-            callerFailureOffset,checked);
+            callerFailureOffset,checked,fileOffset,fileRuntimeType,label,terminalPrimary);
         block=block+1;
     }
     i=1;
@@ -911,7 +1402,8 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
     i=1;
     while i <= instructions.count/10 {
         let row be (i-1)*10;
-        if importKinds[i-1] == 2 and
+        if instructions[row] == 34 and
+            (importKinds[i-1] == 2 or (importKinds[i-1] >= 5 and importKinds[i-1] <= 8)) and
             (importOperations[i-1] == 4 or importOperations[i-1] == 6) {
             try listNative.fault(routine,phase,i,instructions[row+6],base);
         }
@@ -929,7 +1421,25 @@ public function emit(routine identity build.Function,
     let plan be try roots.create(routine,graph,table,phase,registry,
         carriers,descriptors);
     compile(plan,routine,graph,table,phase,registry,carriers,descriptors,
-        forceGC,label,0,false,[],[],true)
+        forceGC,label,0,false,[],[],true,none,0,none,emptyValueLayouts())
+        else error budget.LimitError { try ssa.close(plan); fail error; }
+        else error canonical.InvalidIR { try ssa.close(plan); fail error; }
+        else error ssa.InvalidLiveness { try ssa.close(plan); fail error; }
+        else error Unsupported { try ssa.close(plan); fail error; };
+    try ssa.close(plan);
+}
+
+public function emitValues(routine identity build.Function,
+    graph identity aggregate.Registry,table identity contracts.Registry,
+    phase identity budget.Phase,registry identity managed.Registry,
+    carriers,descriptors,valueRuntimeTypes,forceGC Bool,label Int)
+    fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,
+        roots.InvalidManagedRoots,managed.InvalidManagedTypes,
+        graphVerify.InvalidGraph,Unsupported {
+    let plan be try roots.create(routine,graph,table,phase,registry,
+        carriers,descriptors);
+    compile(plan,routine,graph,table,phase,registry,carriers,descriptors,
+        forceGC,label,0,false,[],[],true,none,0,none,valueRuntimeTypes)
         else error budget.LimitError { try ssa.close(plan); fail error; }
         else error canonical.InvalidIR { try ssa.close(plan); fail error; }
         else error ssa.InvalidLiveness { try ssa.close(plan); fail error; }
@@ -952,7 +1462,7 @@ public function emitRecursive(routine identity build.Function,
     let plan be try roots.create(routine,graph,table,phase,registry,
         carriers,descriptors);
     compile(plan,routine,graph,table,phase,registry,carriers,descriptors,
-        forceGC,label,target.index,false,[],[],true)
+        forceGC,label,target.index,false,[],[],true,none,0,none,emptyValueLayouts())
         else error budget.LimitError { try ssa.close(plan); fail error; }
         else error canonical.InvalidIR { try ssa.close(plan); fail error; }
         else error ssa.InvalidLiveness { try ssa.close(plan); fail error; }
@@ -970,7 +1480,27 @@ public function emitChecked(routine identity build.Function,
     let plan be try roots.create(routine,graph,table,phase,registry,
         carriers,descriptors);
     compile(plan,routine,graph,table,phase,registry,carriers,descriptors,
-        forceGC,label,routine.definedTarget,true,[],[],true)
+        forceGC,label,routine.definedTarget,true,[],[],true,none,0,none,emptyValueLayouts())
+        else error budget.LimitError { try ssa.close(plan); fail error; }
+        else error canonical.InvalidIR { try ssa.close(plan); fail error; }
+        else error ssa.InvalidLiveness { try ssa.close(plan); fail error; }
+        else error Unsupported { try ssa.close(plan); fail error; };
+    try ssa.close(plan);
+}
+
+// Checked self calls use the same aggregate bindings and original class-5
+// failure handoff. The complete body and SSA publications still verify.
+public function emitValuesChecked(routine identity build.Function,
+    graph identity aggregate.Registry,table identity contracts.Registry,
+    phase identity budget.Phase,registry identity managed.Registry,
+    carriers,descriptors,valueRuntimeTypes,forceGC Bool,label Int)
+    fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,
+        roots.InvalidManagedRoots,managed.InvalidManagedTypes,
+        graphVerify.InvalidGraph,Unsupported {
+    let plan be try roots.create(routine,graph,table,phase,registry,
+        carriers,descriptors);
+    compile(plan,routine,graph,table,phase,registry,carriers,descriptors,
+        forceGC,label,routine.definedTarget,true,[],[],true,none,0,none,valueRuntimeTypes)
         else error budget.LimitError { try ssa.close(plan); fail error; }
         else error canonical.InvalidIR { try ssa.close(plan); fail error; }
         else error ssa.InvalidLiveness { try ssa.close(plan); fail error; }
@@ -994,21 +1524,21 @@ function closeGroup(plans,phases) fails budget.LimitError {
 function compileGroupMember(plans,phases,routines,member Int,
     graph identity aggregate.Registry,table identity contracts.Registry,
     registry identity managed.Registry,carriers,descriptors,forceGC Bool,
-    targets,labels,emitOutput Bool)
+    targets,labels,emitOutput Bool,valueRuntimeTypes)
     fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,Unsupported {
     let routine identity build.Function be routines[member];
     compile(plans[member],routine,graph,table,phases[member],registry,
         carriers,descriptors,forceGC,labels[member],routine.definedTarget,true,
-        targets,labels,emitOutput)
+        targets,labels,emitOutput,none,0,none,valueRuntimeTypes)
         else error budget.LimitError { try closeGroup(plans,phases); fail error; }
         else error canonical.InvalidIR { try closeGroup(plans,phases); fail error; }
         else error ssa.InvalidLiveness { try closeGroup(plans,phases); fail error; }
         else error Unsupported { try closeGroup(plans,phases); fail error; };
 }
 
-public function emitCheckedGroup(routines,labels,
+function emitCheckedGroupCore(routines,labels,
     graph identity aggregate.Registry,table identity contracts.Registry,
-    registry identity managed.Registry,carriers,descriptors,forceGC Bool)
+    registry identity managed.Registry,carriers,descriptors,forceGC Bool,valueRuntimeTypes)
     fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,
         roots.InvalidManagedRoots,managed.InvalidManagedTypes,
         graphVerify.InvalidGraph,Unsupported {
@@ -1059,14 +1589,489 @@ public function emitCheckedGroup(routines,labels,
             else error graphVerify.InvalidGraph { try closeGroup(plans,phases); fail error; };
         plans.add(plan);
         try compileGroupMember(plans,phases,routines,member,graph,table,registry,
-            carriers,descriptors,forceGC,targets,labels,false);
+            carriers,descriptors,forceGC,targets,labels,false,valueRuntimeTypes);
         member=member+1;
     }
     member=0;
     while member < routines.count {
         try compileGroupMember(plans,phases,routines,member,graph,table,registry,
-            carriers,descriptors,forceGC,targets,labels,true);
+            carriers,descriptors,forceGC,targets,labels,true,valueRuntimeTypes);
         member=member+1;
     }
     try closeGroup(plans,phases);
+}
+
+public function emitCheckedGroup(routines,labels,
+    graph identity aggregate.Registry,table identity contracts.Registry,
+    registry identity managed.Registry,carriers,descriptors,forceGC Bool)
+    fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,
+        roots.InvalidManagedRoots,managed.InvalidManagedTypes,
+        graphVerify.InvalidGraph,Unsupported {
+    try emitCheckedGroupCore(routines,labels,graph,table,registry,
+        carriers,descriptors,forceGC,emptyValueLayouts());
+}
+
+public function emitValuesCheckedGroup(routines,labels,
+    graph identity aggregate.Registry,table identity contracts.Registry,
+    registry identity managed.Registry,carriers,descriptors,forceGC Bool,valueRuntimeTypes)
+    fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,
+        roots.InvalidManagedRoots,managed.InvalidManagedTypes,
+        graphVerify.InvalidGraph,Unsupported {
+    try emitCheckedGroupCore(routines,labels,graph,table,registry,
+        carriers,descriptors,forceGC,valueRuntimeTypes);
+}
+
+// Closed, exact File-owning group: all bodies/profiles/plans are pre-admitted
+// before ANY assembly. Each body keeps its own class-1 lexical File roots and
+// class-5 failure context; the caller never hands an open File to the callee.
+// The original saved-primary composition remains a separate explicit entry.
+function compileFileGroupMember(plans,phases,routines,profiles,member Int,
+    graph identity aggregate.Registry,table identity contracts.Registry,
+    registry identity managed.Registry,carriers,descriptors,forceGC Bool,
+    targets,labels,fileRuntimeType Int,emitOutput Bool,valueRuntimeTypes)
+    fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,Unsupported {
+    let routine identity build.Function be routines[member];
+    let profile identity owners.Profile be profiles[member];
+    compile(plans[member],routine,graph,table,phases[member],registry,
+        carriers,descriptors,forceGC,labels[member],routine.definedTarget,true,
+        targets,labels,emitOutput,profile,fileRuntimeType,none,valueRuntimeTypes)
+        else error budget.LimitError { try closeGroup(plans,phases); fail error; }
+        else error canonical.InvalidIR { try closeGroup(plans,phases); fail error; }
+        else error ssa.InvalidLiveness { try closeGroup(plans,phases); fail error; }
+        else error Unsupported { try closeGroup(plans,phases); fail error; };
+}
+function emitFileCheckedGroupCore(routines,labels,profiles,
+    graph identity aggregate.Registry,table identity contracts.Registry,
+    registry identity managed.Registry,carriers,descriptors,forceGC Bool,
+    fileRuntimeType Int,valueRuntimeTypes)
+    fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,
+        roots.InvalidManagedRoots,managed.InvalidManagedTypes,
+        graphVerify.InvalidGraph,Unsupported {
+    try require(routines.count >= 1 and routines.count <= 16 and
+        labels.count == routines.count and profiles.count == routines.count and
+        fileRuntimeType >= 6 and fileRuntimeType <= 2147483647,
+        "invalid bounded File-owning checked group");
+    let targets be []; let valueCount be 0; let instructionCount be 0;
+    let member be 0;
+    while member < routines.count {
+        let routine identity build.Function be routines[member];
+        let profile identity owners.Profile be profiles[member];
+        try require(routine.metadata.key == table.metadataKey and
+            routine.definedTarget >= 1 and profile.functionKey == routine.key and
+            labels[member] >= 1 and labels[member] <= 2147483647 and
+            routine.values.length >= 0 and routine.values.length <= 1024 and
+            routine.instructions.length >= 0 and routine.instructions.length <= 5120,
+            "invalid File group member, exact owner or bounded counts");
+        let earlier be 0;
+        while earlier < member {
+            try require(targets[earlier] != routine.definedTarget and
+                labels[earlier] != labels[member],
+                "duplicate File group FunctionId or output label");
+            earlier=earlier+1;
+        }
+        targets.add(routine.definedTarget);
+        valueCount=valueCount+routine.values.length/4;
+        instructionCount=instructionCount+routine.instructions.length/10;
+        try require(valueCount <= 1024 and instructionCount <= 2048,
+            "File-owning checked group exceeds aggregate budget");
+        member=member+1;
+    }
+    let plans be []; let phases be [];
+    member=0;
+    while member < routines.count {
+        let routine identity build.Function be routines[member];
+        let profile identity owners.Profile be profiles[member];
+        let phase be budget.verificationPhase(routine.owner)
+            else error budget.LimitError { try closeGroup(plans,phases); fail error; };
+        phases.add(phase);
+        let types be roots.selectTypes(routine,graph,table,phase,registry,carriers,descriptors)
+            else error budget.LimitError { try closeGroup(plans,phases); fail error; }
+            else error canonical.InvalidIR { try closeGroup(plans,phases); fail error; }
+            else error ssa.InvalidLiveness { try closeGroup(plans,phases); fail error; }
+            else error roots.InvalidManagedRoots { try closeGroup(plans,phases); fail error; }
+            else error managed.InvalidManagedTypes { try closeGroup(plans,phases); fail error; }
+            else error graphVerify.InvalidGraph { try closeGroup(plans,phases); fail error; };
+        let i be 0;
+        while i < types.count {
+            let selected aggregate.TypeId be types[i];
+            if selected.index == profile.handle.index {
+                try closeGroup(plans,phases);
+                fail Unsupported { message="File group carrier overlaps managed or failure root"; };
+            }
+            i=i+1;
+        }
+        types.add(profile.handle);
+        let plan be ssa.create(routine,graph,table,phase,types)
+            else error budget.LimitError { try closeGroup(plans,phases); fail error; }
+            else error canonical.InvalidIR { try closeGroup(plans,phases); fail error; }
+            else error ssa.InvalidLiveness { try closeGroup(plans,phases); fail error; };
+        plans.add(plan);
+        try compileFileGroupMember(plans,phases,routines,profiles,member,graph,
+            table,registry,carriers,descriptors,forceGC,targets,labels,
+            fileRuntimeType,false,valueRuntimeTypes);
+        member=member+1;
+    }
+    member=0;
+    while member < routines.count {
+        try compileFileGroupMember(plans,phases,routines,profiles,member,graph,
+            table,registry,carriers,descriptors,forceGC,targets,labels,
+            fileRuntimeType,true,valueRuntimeTypes);
+        member=member+1;
+    }
+    try closeGroup(plans,phases);
+}
+
+// Native File-owning entry points share the exact canonical checked signatures.
+// emitFileCheckedGroup closes different target bodies; single-body entries
+// remain for independently verified non-group and primary-composition cases.
+function emitFileCheckedCore(routine identity build.Function,
+    graph identity aggregate.Registry,table identity contracts.Registry,
+    phase identity budget.Phase,registry identity managed.Registry,
+    carriers,descriptors,forceGC Bool,label Int,
+    profile identity owners.Profile,fileRuntimeType Int,valueRuntimeTypes)
+    fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,
+        roots.InvalidManagedRoots,managed.InvalidManagedTypes,
+        graphVerify.InvalidGraph,Unsupported {
+    // Validate carrier descriptors once, then construct exactly one File-
+    // extended SSA Plan. Full publication verification remains mandatory.
+    let types be try roots.selectTypes(routine,graph,table,phase,registry,carriers,descriptors);
+    let i be 0;
+    while i < types.count {
+        let selected aggregate.TypeId be types[i];
+        try require(selected.index != profile.handle.index,
+            "File carrier overlaps a managed or failure carrier");
+        i=i+1;
+    }
+    types.add(profile.handle);
+    let plan be try ssa.create(routine,graph,table,phase,types);
+    compile(plan,routine,graph,table,phase,registry,carriers,descriptors,
+        forceGC,label,routine.definedTarget,true,[],[],true,profile,fileRuntimeType,none,valueRuntimeTypes)
+        else error budget.LimitError { try ssa.close(plan); fail error; }
+        else error canonical.InvalidIR { try ssa.close(plan); fail error; }
+        else error ssa.InvalidLiveness { try ssa.close(plan); fail error; }
+        else error Unsupported { try ssa.close(plan); fail error; };
+    try ssa.close(plan);
+}
+
+public function emitFileChecked(routine identity build.Function,
+    graph identity aggregate.Registry,table identity contracts.Registry,
+    phase identity budget.Phase,registry identity managed.Registry,
+    carriers,descriptors,forceGC Bool,label Int,
+    profile identity owners.Profile,fileRuntimeType Int)
+    fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,
+        roots.InvalidManagedRoots,managed.InvalidManagedTypes,graphVerify.InvalidGraph,Unsupported {
+    try emitFileCheckedCore(routine,graph,table,phase,registry,carriers,descriptors,
+        forceGC,label,profile,fileRuntimeType,emptyValueLayouts());
+}
+public function emitFileValuesChecked(routine identity build.Function,
+    graph identity aggregate.Registry,table identity contracts.Registry,
+    phase identity budget.Phase,registry identity managed.Registry,
+    carriers,descriptors,forceGC Bool,label Int,
+    profile identity owners.Profile,fileRuntimeType Int,valueRuntimeTypes)
+    fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,
+        roots.InvalidManagedRoots,managed.InvalidManagedTypes,graphVerify.InvalidGraph,Unsupported {
+    try emitFileCheckedCore(routine,graph,table,phase,registry,carriers,descriptors,
+        forceGC,label,profile,fileRuntimeType,valueRuntimeTypes);
+}
+public function emitFileCheckedGroup(routines,labels,profiles,
+    graph identity aggregate.Registry,table identity contracts.Registry,
+    registry identity managed.Registry,carriers,descriptors,forceGC Bool,fileRuntimeType Int)
+    fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,
+        roots.InvalidManagedRoots,managed.InvalidManagedTypes,graphVerify.InvalidGraph,Unsupported {
+    try emitFileCheckedGroupCore(routines,labels,profiles,graph,table,registry,
+        carriers,descriptors,forceGC,fileRuntimeType,emptyValueLayouts());
+}
+public function emitFileValuesCheckedGroup(routines,labels,profiles,
+    graph identity aggregate.Registry,table identity contracts.Registry,
+    registry identity managed.Registry,carriers,descriptors,forceGC Bool,fileRuntimeType Int,valueRuntimeTypes)
+    fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,
+        roots.InvalidManagedRoots,managed.InvalidManagedTypes,graphVerify.InvalidGraph,Unsupported {
+    try emitFileCheckedGroupCore(routines,labels,profiles,graph,table,registry,
+        carriers,descriptors,forceGC,fileRuntimeType,valueRuntimeTypes);
+}
+// Mixed closed checked group of File-owning and resource-free bodies.
+// All functions and File profiles are independently admitted before output.
+// The original no-File emitCheckedGroup remains unchanged.
+function compileMixedFileGroupMember(plans,phases,routines,profiles,profileIndexes,runtimeTypes,member Int,
+    graph identity aggregate.Registry,table identity contracts.Registry,
+    registry identity managed.Registry,carriers,descriptors,forceGC Bool,
+    targets,labels,emitOutput Bool,assignments maybe identity AssignmentSet)
+    fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,Unsupported {
+    let routine identity build.Function be routines[member];
+    let profile maybe identity owners.Profile be none;
+    if profileIndexes[member] > 0 {
+        profile=profiles[profileIndexes[member]-1];
+    }
+    compile(plans[member],routine,graph,table,phases[member],registry,
+        carriers,descriptors,forceGC,labels[member],routine.definedTarget,true,
+        targets,labels,emitOutput,profile,runtimeTypes[member],try primaryGroupSet(assignments,member+1),emptyValueLayouts())
+        else error budget.LimitError { try closeGroup(plans,phases); fail error; }
+        else error canonical.InvalidIR { try closeGroup(plans,phases); fail error; }
+        else error ssa.InvalidLiveness { try closeGroup(plans,phases); fail error; }
+        else error Unsupported { try closeGroup(plans,phases); fail error; };
+}
+function emitMixedFilePrimaryGroupCore(routines,labels,profiles,profileIndexes,runtimeTypes,
+    graph identity aggregate.Registry,table identity contracts.Registry,
+    registry identity managed.Registry,carriers,descriptors,forceGC Bool,assignments maybe identity AssignmentSet)
+    fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,
+        roots.InvalidManagedRoots,managed.InvalidManagedTypes,
+        graphVerify.InvalidGraph,Unsupported {
+    try require(routines.count >= 2 and routines.count <= 16 and
+        labels.count == routines.count and profiles.count >= 1 and
+        profiles.count <= 16 and profileIndexes.count == routines.count and
+        runtimeTypes.count == routines.count,
+        "invalid checked File Function group size and profile shape");
+    let assignmentIndex be 0; let assignmentCursor be assignments;
+    while assignmentCursor != none {
+        try require(assignmentIndex < 128,"cyclic or oversized group bindings");
+        let assignment be assignmentCursor.assignment;
+        try require(assignment.member >= 1 and assignment.member <= routines.count,
+            "primary binding member index is outside group");
+        let assigned identity build.Function be routines[assignment.member-1];
+        try require(profileIndexes[assignment.member-1] > 0 and
+            assignment.binding.instruction.owner == assigned.key,
+            "primary binding requires exact owning group member");
+        assignmentIndex=assignmentIndex+1; assignmentCursor=assignmentCursor.next;
+    }
+    let targets be []; let valueCount be 0; let instructionCount be 0;
+    let member be 0; let fileMembers be 0;
+    while member < routines.count {
+        let routine identity build.Function be routines[member];
+        try require(routine.metadata.key == table.metadataKey and
+            routine.definedTarget >= 1 and
+            labels[member] >= 1 and labels[member] <= 2147483647,
+            "foreign or unbound File Function group member/label");
+        let earlier be 0;
+        while earlier < member {
+            try require(targets[earlier] != routine.definedTarget and
+                labels[earlier] != labels[member],
+                "duplicate File Function group target or label");
+            earlier=earlier+1;
+        }
+        try require(routine.values.length >= 0 and routine.values.length <= 1024 and
+            routine.instructions.length >= 0 and routine.instructions.length <= 5120,
+            "invalid File Function group member counts");
+        valueCount=valueCount+routine.values.length/4;
+        instructionCount=instructionCount+routine.instructions.length/10;
+        try require(valueCount <= 1024 and instructionCount <= 2048,
+            "File Function group exceeds bounded admission");
+        let profileIndex be profileIndexes[member];
+        try require(profileIndex >= 0 and profileIndex <= profiles.count,
+            "invalid checked group resource-profile index");
+        if profileIndex > 0 {
+            let expectedProfile identity owners.Profile be profiles[profileIndex-1];
+            try require(expectedProfile.functionKey == routine.key and
+                expectedProfile.owner == routine.owner and
+                expectedProfile.state == 1 and
+                expectedProfile.revision == routine.revision and
+                runtimeTypes[member] >= 6 and
+                runtimeTypes[member] <= 2147483647,
+                "File Function group missing exact owner/runtime binding");
+            fileMembers=fileMembers+1;
+        } else {
+            try require(runtimeTypes[member] == 0,
+                "non-owning Function has a spurious File runtime binding");
+        }
+        targets.add(routine.definedTarget); member=member+1;
+    }
+    try require(fileMembers >= 1 and fileMembers == profiles.count,
+        "File Function group requires exactly its bound owner profiles");
+    // One-to-one profile matching: an orphaned, duplicated or foreign owner
+    // must never disappear from the closed group transaction.
+    let profileOrdinal be 1;
+    while profileOrdinal <= profiles.count {
+        let matches be 0;
+        member=0;
+        while member < profileIndexes.count {
+            if profileIndexes[member] == profileOrdinal { matches=matches+1; }
+            member=member+1;
+        }
+        try require(matches == 1,
+            "File Function group owner profile is missing or duplicated");
+        profileOrdinal=profileOrdinal+1;
+    }
+    let plans be []; let phases be [];
+    member=0;
+    while member < routines.count {
+        let routine identity build.Function be routines[member];
+        let phase be budget.verificationPhase(routine.owner)
+            else error budget.LimitError { try closeGroup(plans,phases); fail error; };
+        phases.add(phase);
+        let types be roots.selectTypes(routine,graph,table,phase,registry,carriers,descriptors)
+            else error budget.LimitError { try closeGroup(plans,phases); fail error; }
+            else error canonical.InvalidIR { try closeGroup(plans,phases); fail error; }
+            else error ssa.InvalidLiveness { try closeGroup(plans,phases); fail error; }
+            else error roots.InvalidManagedRoots { try closeGroup(plans,phases); fail error; }
+            else error managed.InvalidManagedTypes { try closeGroup(plans,phases); fail error; }
+            else error graphVerify.InvalidGraph { try closeGroup(plans,phases); fail error; };
+        if profileIndexes[member] > 0 {
+            let admissionProfile identity owners.Profile be profiles[profileIndexes[member]-1];
+            let i be 0;
+            while i < types.count {
+                let carrier aggregate.TypeId be types[i];
+                try require(carrier.index != admissionProfile.handle.index,
+                    "File carrier overlaps tracked managed/failure group type");
+                i=i+1;
+            }
+            types.add(admissionProfile.handle);
+        }
+        let plan be ssa.create(routine,graph,table,phase,types)
+            else error budget.LimitError { try closeGroup(plans,phases); fail error; }
+            else error canonical.InvalidIR { try closeGroup(plans,phases); fail error; }
+            else error ssa.InvalidLiveness { try closeGroup(plans,phases); fail error; };
+        plans.add(plan);
+        try compileMixedFileGroupMember(plans,phases,routines,profiles,profileIndexes,runtimeTypes,
+            member,graph,table,registry,carriers,descriptors,forceGC,
+            targets,labels,false,assignments);
+        member=member+1;
+    }
+    member=0;
+    while member < routines.count {
+        try compileMixedFileGroupMember(plans,phases,routines,profiles,profileIndexes,runtimeTypes,
+            member,graph,table,registry,carriers,descriptors,forceGC,
+            targets,labels,true,assignments);
+        member=member+1;
+    }
+    try closeGroup(plans,phases);
+}
+
+function emitFilePrimaryCore(routine identity build.Function,
+    graph identity aggregate.Registry,table identity contracts.Registry,
+    phase identity budget.Phase,registry identity managed.Registry,
+    carriers,descriptors,forceGC Bool,label Int,
+    profile identity owners.Profile,fileRuntimeType Int,primaries,valueRuntimeTypes)
+    fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,
+        roots.InvalidManagedRoots,managed.InvalidManagedTypes,
+        graphVerify.InvalidGraph,Unsupported {
+    // Validate carrier descriptors once, then construct exactly one File-
+    // extended SSA Plan. Full publication verification remains mandatory.
+    let types be try roots.selectTypes(routine,graph,table,phase,registry,carriers,descriptors);
+    let i be 0;
+    while i < types.count {
+        let selected aggregate.TypeId be types[i];
+        try require(selected.index != profile.handle.index,
+            "File carrier overlaps a managed or failure carrier");
+        i=i+1;
+    }
+    types.add(profile.handle);
+    let plan be try ssa.create(routine,graph,table,phase,types);
+    compile(plan,routine,graph,table,phase,registry,carriers,descriptors,
+        forceGC,label,routine.definedTarget,true,[],[],true,profile,fileRuntimeType,try primarySet(primaries),valueRuntimeTypes)
+        else error budget.LimitError { try ssa.close(plan); fail error; }
+        else error canonical.InvalidIR { try ssa.close(plan); fail error; }
+        else error ssa.InvalidLiveness { try ssa.close(plan); fail error; }
+        else error Unsupported { try ssa.close(plan); fail error; };
+    try ssa.close(plan);
+}
+
+public function emitFileCheckedPrimary(routine identity build.Function,
+    graph identity aggregate.Registry,table identity contracts.Registry,
+    phase identity budget.Phase,registry identity managed.Registry,
+    carriers,descriptors,forceGC Bool,label Int,
+    profile identity owners.Profile,fileRuntimeType Int,primary PrimaryBinding)
+    fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,
+        roots.InvalidManagedRoots,managed.InvalidManagedTypes,
+        graphVerify.InvalidGraph,Unsupported {
+    try emitFilePrimaryCore(routine,graph,table,phase,registry,carriers,descriptors,
+        forceGC,label,profile,fileRuntimeType,[primary],emptyValueLayouts());
+}
+
+public function emitFileValuesCheckedPrimary(routine identity build.Function,
+    graph identity aggregate.Registry,table identity contracts.Registry,
+    phase identity budget.Phase,registry identity managed.Registry,
+    carriers,descriptors,forceGC Bool,label Int,
+    profile identity owners.Profile,fileRuntimeType Int,primary PrimaryBinding,valueRuntimeTypes)
+    fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,
+        roots.InvalidManagedRoots,managed.InvalidManagedTypes,
+        graphVerify.InvalidGraph,Unsupported {
+    try emitFilePrimaryCore(routine,graph,table,phase,registry,carriers,descriptors,
+        forceGC,label,profile,fileRuntimeType,[primary],valueRuntimeTypes);
+}
+
+public function emitFileCheckedPrimaryChain(routine identity build.Function,
+    graph identity aggregate.Registry,table identity contracts.Registry,
+    phase identity budget.Phase,registry identity managed.Registry,
+    carriers,descriptors,forceGC Bool,label Int,
+    profile identity owners.Profile,fileRuntimeType Int,primaries)
+    fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,
+        roots.InvalidManagedRoots,managed.InvalidManagedTypes,
+        graphVerify.InvalidGraph,Unsupported {
+    try emitFilePrimaryCore(routine,graph,table,phase,registry,carriers,descriptors,
+        forceGC,label,profile,fileRuntimeType,primaries,emptyValueLayouts());
+}
+
+public function emitFileValuesCheckedPrimaryChain(routine identity build.Function,
+    graph identity aggregate.Registry,table identity contracts.Registry,
+    phase identity budget.Phase,registry identity managed.Registry,
+    carriers,descriptors,forceGC Bool,label Int,
+    profile identity owners.Profile,fileRuntimeType Int,primaries,valueRuntimeTypes)
+    fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,
+        roots.InvalidManagedRoots,managed.InvalidManagedTypes,
+        graphVerify.InvalidGraph,Unsupported {
+    try emitFilePrimaryCore(routine,graph,table,phase,registry,carriers,descriptors,
+        forceGC,label,profile,fileRuntimeType,primaries,valueRuntimeTypes);
+}
+
+public function emitMixedFileCheckedGroup(routines,labels,profiles,profileIndexes,runtimeTypes,
+    graph identity aggregate.Registry,table identity contracts.Registry,
+    registry identity managed.Registry,carriers,descriptors,forceGC Bool)
+    fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,
+        roots.InvalidManagedRoots,managed.InvalidManagedTypes,
+        graphVerify.InvalidGraph,Unsupported {
+    try emitMixedFilePrimaryGroupCore(routines,labels,profiles,profileIndexes,runtimeTypes,
+        graph,table,registry,carriers,descriptors,forceGC,none);
+}
+
+public function emitMixedFilePrimaryGroup(routines,labels,profiles,profileIndexes,runtimeTypes,
+    graph identity aggregate.Registry,table identity contracts.Registry,
+    registry identity managed.Registry,carriers,descriptors,forceGC Bool,assignments)
+    fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,
+        roots.InvalidManagedRoots,managed.InvalidManagedTypes,
+        graphVerify.InvalidGraph,Unsupported {
+    try emitMixedFilePrimaryGroupCore(routines,labels,profiles,profileIndexes,runtimeTypes,
+        graph,table,registry,carriers,descriptors,forceGC,try assignmentSet(assignments));
+}
+
+// Concrete bootstrap-only shape anchor; never executed by emission. The
+// current C bootstrap requires this group specialization even in clients
+// that only call single-Function entries from the imported module.
+function bootstrapPrimaryGroupShape(routine identity build.Function,
+    profile identity owners.Profile,graph identity aggregate.Registry,
+    table identity contracts.Registry,registry identity managed.Registry,
+    carrier aggregate.TypeId,descriptor managed.TypeId,binding PrimaryBinding)
+    fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,
+        roots.InvalidManagedRoots,managed.InvalidManagedTypes,
+        graphVerify.InvalidGraph,Unsupported {
+    let routines be []; routines.add(routine); routines.add(routine);
+    let profiles be []; profiles.add(profile);
+    try emitMixedFilePrimaryGroup(routines,[1,2],profiles,[1,0],[9,0],
+        graph,table,registry,[carrier],[descriptor],false,
+        [PrimaryAssignment { member=1; binding=binding; }]);
+    let phase be try budget.verificationPhase(routine.owner);
+    try emitFilePrimaryCore(routine,graph,table,phase,registry,[carrier],[descriptor],
+        false,1,profile,9,[binding],[15]);
+    try budget.finishPhase(phase);
+}
+
+// Concrete bootstrap specialization only; never executed and never a verifier
+// capability. Single-body clients also lower the public group wrappers.
+function bootstrapValueGroupShape(routine identity build.Function,
+    graph identity aggregate.Registry,table identity contracts.Registry,
+    registry identity managed.Registry,carrier aggregate.TypeId,descriptor managed.TypeId)
+    fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,
+        roots.InvalidManagedRoots,managed.InvalidManagedTypes,
+        graphVerify.InvalidGraph,Unsupported {
+    try emitCheckedGroupCore([routine,routine],[1,2],graph,table,registry,
+        [carrier],[descriptor],false,[15]);
+}
+
+// Nonexecuted bootstrap shape seed; no runtime or verification authority.
+function bootstrapFileValueShape(routine identity build.Function,
+    profile identity owners.Profile,graph identity aggregate.Registry,
+    table identity contracts.Registry,phase identity budget.Phase,
+    registry identity managed.Registry,carrier aggregate.TypeId,descriptor managed.TypeId)
+    fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,
+        roots.InvalidManagedRoots,managed.InvalidManagedTypes,graphVerify.InvalidGraph,Unsupported {
+    try emitFileCheckedCore(routine,graph,table,phase,registry,[carrier],[descriptor],false,1,profile,9,[15]);
+    try emitFileCheckedGroupCore([routine],[1],[profile],graph,table,registry,[carrier],[descriptor],false,9,[15]);
 }

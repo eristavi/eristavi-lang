@@ -1,0 +1,8 @@
+test_parent_private_aggregate_survives_checked_recursion_and_failure (test_u2_function_aggregate_list.U2FunctionAggregateListTests.test_parent_private_aggregate_survives_checked_recursion_and_failure) ... ok
+test_parent_private_list_of_aggregates_survives_checked_recursion (test_u2_function_aggregate_list.U2FunctionAggregateListTests.test_parent_private_list_of_aggregates_survives_checked_recursion) ... ok
+test_checked_list_failure_handler_recovers_through_parent_frames (test_u2_function_aggregate_list.U2FunctionAggregateListTests.test_checked_list_failure_handler_recovers_through_parent_frames) ... ok
+
+----------------------------------------------------------------------
+Ran 3 tests in 16.896s
+
+OK

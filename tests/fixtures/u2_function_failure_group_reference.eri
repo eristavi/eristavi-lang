@@ -1,0 +1,37 @@
+error Problem { code Int; message Text; }
+function walkA(depth Int,failBase Bool) returns Int fails Problem {
+    let original be Problem { code=42+depth; message="β"; };
+    let changed be original;
+    changed.code=99;
+    changed.message="λ";
+    if depth > 0 {
+        let child be walkB(depth-1,failBase)
+            else error Problem { fail error; };
+        fail original;
+    }
+    if failBase { fail original; }
+    return 7;
+}
+function walkB(depth Int,failBase Bool) returns Int fails Problem {
+    let original be Problem { code=52+depth; message="β"; };
+    let changed be original;
+    changed.code=99;
+    changed.message="λ";
+    if depth > 0 {
+        let child be walkA(depth-1,failBase)
+            else error Problem { fail error; };
+        fail original;
+    }
+    if failBase { fail original; }
+    return 7;
+}
+function probe(depth Int,failBase Bool) {
+    let result be walkA(depth,failBase)
+        else error Problem { output(error.code); output(error.message); return; };
+    output(result);
+}
+probe(0,false); probe(0,true);
+probe(1,false); probe(1,true);
+probe(5,false); probe(5,true);
+probe(16,false); probe(16,true);
+probe(64,false); probe(64,true);

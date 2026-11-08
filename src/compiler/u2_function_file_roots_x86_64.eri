@@ -1,0 +1,152 @@
+// Opt-in whole-canonical-Function File owner root publication (x86-64).
+// This machine adapter emits no File.open/close or checked CFG semantics.
+// It pins exact lexical resource owners across every original Function block,
+// including dead blocks, independently of ordinary SSA value-use liveness.
+// Caller must bind the resulting class-1 vector before collecting, publish at
+// each block entry, and poison consumed handles on BOTH checked outcomes.
+// Runtime File operations and complete exits require a separate integration.
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+import compiler.u1_builder as build;
+import compiler.u1_aggregate as aggregate;
+import compiler.u1_verify as canonical;
+import compiler.u2_scoped_owners as owners;
+import compiler.u2_invoke_contract as fallible;
+import compiler.format as format;
+
+public error Unsupported { message Text; }
+function require(ok Bool,message Text) fails Unsupported {
+    if not ok { fail Unsupported { message=message; }; }
+}
+function line(value Text) { output("    "+value); }
+
+// Private ABI: bind(RDI=scope,RSI=File root vector),
+// publish_block(RDI=canonical SSA word frame,RSI=bound File root vector),
+// poison_close(RDI=SSA frame,RSI=File root vector).
+// No helper calls an allocating runtime function between an unrooted File
+// ingress and its publication. The caller still owns the resource lifetime.
+public function emit(routine identity build.Function,
+    graph identity aggregate.Registry,profile identity owners.Profile,
+    contracts identity fallible.Registry,phase identity budget.Phase,
+    label Int)
+    fails budget.LimitError,canonical.InvalidIR,owners.InvalidOwnership,Unsupported {
+    // The independent owner verifier checks the entire canonical Function,
+    // exact acquisition/consumption edges, lexical roots and dead code.
+    let verified be try owners.verify(profile,routine,graph,contracts);
+    try require(label >= 1 and label <= 2147483647 and
+        phase.owner == routine.owner and phase.state == 0 and
+        verified.blocks >= 1 and verified.blocks <= 64 and
+        verified.maximumDepth >= 1 and verified.maximumDepth <= 8 and
+        routine.values.length/4 >= 1 and routine.values.length/4 <= 256,
+        "unsupported whole-Function File root emission profile");
+    // Snapshot ALL immutable owner inputs and identify each consume before
+    // writing any assembler byte. No fallible metadata read after output.
+    let depths be []; let ownerIds be [];
+    let closeIds be []; let closeValues be []; let closeLevels be [];
+    let block be 1;
+    while block <= verified.blocks {
+        let row be (block-1)*2;
+        let first be try words.get(profile.blocks,phase,row);
+        let depth be try words.get(profile.blocks,phase,row+1);
+        try require(depth >= 0 and depth <= verified.maximumDepth and
+            first >= 0 and first+depth <= profile.entries.length/2,
+            "invalid original owner root source range");
+        depths.add(depth);
+        let i be 0;
+        while i < verified.maximumDepth {
+            let value be 0;
+            if i < depth {
+                value=try words.get(profile.entries,phase,(first+i)*2+1);
+                try require(value >= 1 and value <= routine.values.length/4 and
+                    (try words.get(routine.values,phase,(value-1)*4)) ==
+                        profile.handle.index,
+                    "invalid live native File source value");
+            }
+            ownerIds.add(value);
+            i=i+1;
+        }
+        // The original canonical instruction stream's checked terminator is
+        // the only legal File.close at the end of an owner's lexical scope.
+        let terminal be try words.get(routine.blocks,phase,(block-1)*5+4);
+        let op be try words.get(routine.instructions,phase,(terminal-1)*10);
+        let target be try words.get(routine.instructions,phase,(terminal-1)*10+7);
+        if op == 46 and target == profile.consume.index {
+            try require(depth >= 1,"File.close has no lexical owner root");
+            let firstOperand be try words.get(routine.instructions,phase,(terminal-1)*10+2);
+            let source be try words.get(routine.operands,phase,firstOperand);
+            try require(source == ownerIds[(block-1)*verified.maximumDepth+depth-1],
+                "File.close is not the innermost native owner");
+            closeIds.add(terminal); closeValues.add(source); closeLevels.add(depth-1);
+        }
+        block=block+1;
+    }
+    try require(closeIds.count >= 1 and closeIds.count <= routine.instructions.length/10,
+        "whole Function has no independently verified File.consume");
+    // Work is precharged, so emitting code does not mutate a checked metadata
+    // object or cross an allocator/failure boundary after the first byte.
+    let charge be verified.blocks*(verified.maximumDepth+2)+closeIds.count*4+96;
+    while charge > 0 {
+        let unit be charge; if unit > 1024 { unit=1024; }
+        try budget.work(phase,unit); charge=charge-unit;
+    }
+    let suffix be format.integer(label);
+    let prefix be "erist_u2_file_"+suffix;
+    output(".section .rodata");
+    output(".p2align 3");
+    output(prefix+"_classes:");
+    let i be 0;
+    while i < verified.maximumDepth { output("    .byte 1"); i=i+1; }
+    output(".text");
+    output(".globl "+prefix+"_bind");
+    output(".type "+prefix+"_bind,@function");
+    output(prefix+"_bind:");
+    i=0;
+    while i < verified.maximumDepth {
+        line("movq $0,"+format.integer(i*8)+"(%rsi)"); i=i+1;
+    }
+    line("leaq "+prefix+"_classes(%rip),%rdx");
+    line("movl $"+format.integer(verified.maximumDepth)+",%ecx");
+    line("jmp evn_bind_roots");
+    output(".size "+prefix+"_bind,.-"+prefix+"_bind");
+    block=1;
+    while block <= verified.blocks {
+        let symbol be prefix+"_publish_"+format.integer(block);
+        output(".globl "+symbol);
+        output(".type "+symbol+",@function");
+        output(symbol+":");
+        line("testq %rdi,%rdi"); line("je erist_rt_value_fault_internal");
+        line("testq %rsi,%rsi"); line("je erist_rt_value_fault_internal");
+        i=0;
+        while i < verified.maximumDepth {
+            let value be ownerIds[(block-1)*verified.maximumDepth+i];
+            if i < depths[block-1] {
+                line("movq "+format.integer((value-1)*8)+"(%rdi),%rax");
+                line("testq %rax,%rax"); line("je erist_rt_value_fault_internal");
+                line("movq %rax,"+format.integer(i*8)+"(%rsi)");
+            } else { line("movq $0,"+format.integer(i*8)+"(%rsi)"); }
+            i=i+1;
+        }
+        line("ret");
+        output(".size "+symbol+",.-"+symbol);
+        block=block+1;
+    }
+    i=0;
+    while i < closeIds.count {
+        let symbol be prefix+"_poison_"+format.integer(closeIds[i]);
+        output(".globl "+symbol);
+        output(".type "+symbol+",@function");
+        output(symbol+":");
+        line("testq %rdi,%rdi"); line("je erist_rt_value_fault_internal");
+        line("testq %rsi,%rsi"); line("je erist_rt_value_fault_internal");
+        line("movq "+format.integer((closeValues[i]-1)*8)+"(%rdi),%rax");
+        line("testq %rax,%rax"); line("je erist_rt_value_fault_internal");
+        line("cmpq %rax,"+format.integer(closeLevels[i]*8)+"(%rsi)");
+        line("jne erist_rt_value_fault_internal");
+        line("movq $0,"+format.integer((closeValues[i]-1)*8)+"(%rdi)");
+        line("movq $0,"+format.integer(closeLevels[i]*8)+"(%rsi)");
+        line("ret");
+        output(".size "+symbol+",.-"+symbol);
+        i=i+1;
+    }
+    output(".section .note.GNU-stack,\"\",@progbits");
+}

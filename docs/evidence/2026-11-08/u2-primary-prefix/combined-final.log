@@ -1,0 +1,7 @@
+test_generated_primary_preservation_and_secondary_append (test_u2_function_file_primary.U2FunctionFilePrimaryTests.test_generated_primary_preservation_and_secondary_append) ... ok
+test_primary_chain_keeps_outer_owner_and_ordered_context (test_u2_function_file_primary.U2FunctionFilePrimaryTests.test_primary_chain_keeps_outer_owner_and_ordered_context) ... ok
+
+----------------------------------------------------------------------
+Ran 2 tests in 11.262s
+
+OK

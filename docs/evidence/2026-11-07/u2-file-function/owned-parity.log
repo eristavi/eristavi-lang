@@ -1,0 +1,25 @@
+test_owned_and_c_generators_emit_identical_file_cfg (test_u2_function_file_checked.U2FunctionFileCheckedTests.test_owned_and_c_generators_emit_identical_file_cfg) ... ERROR
+
+======================================================================
+ERROR: test_owned_and_c_generators_emit_identical_file_cfg (test_u2_function_file_checked.U2FunctionFileCheckedTests.test_owned_and_c_generators_emit_identical_file_cfg)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/bc9859552d81/eristavi-lang/tests/test_u2_function_file_checked.py", line 215, in test_owned_and_c_generators_emit_identical_file_cfg
+    owned = subprocess.run([str(binary)],env={'PATH':'/unavailable'},
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/subprocess.py", line 550, in run
+    stdout, stderr = process.communicate(input, timeout=timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/subprocess.py", line 1209, in communicate
+    stdout, stderr = self._communicate(input, endtime, timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/subprocess.py", line 2116, in _communicate
+    self._check_timeout(endtime, orig_timeout, stdout, stderr)
+  File "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/subprocess.py", line 1253, in _check_timeout
+    raise TimeoutExpired(
+subprocess.TimeoutExpired: Command '['/tmp/tmpn2pgvlvq/file-owned-generator/owned']' timed out after 120 seconds
+
+----------------------------------------------------------------------
+Ran 1 test in 149.521s
+
+FAILED (errors=1)

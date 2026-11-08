@@ -1,0 +1,179 @@
+// Machine-neutral admission of an exact two-stage canonical checked cleanup.
+// First File.close has normal and checked-failure successors. The normal
+// successor executes its own checked File.close. The failed successor also
+// executes File.close in already-failing mode while retaining the ORIGINAL
+// checked failure as primary and carrying its context over both new edges.
+// All three real canonical opcode-46 instructions, SSA edges, lexical owner
+// profiles and the two original cleanup modes are independently checked.
+// This is not a shadow interpreter, a backend, or general whole-Function
+// machine lowering. It admits the finite, explicitly documented path only.
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+import compiler.u1_meta as meta;
+import compiler.u1_builder as build;
+import compiler.u1_aggregate as aggregate;
+import compiler.u1_verify as canonical;
+import compiler.u2_scoped_owners as owners;
+import compiler.u2_invoke_contract as fallible;
+import compiler.u2_root_map as roots;
+import compiler.u2_continuation_bind as continuation;
+import compiler.u2_cleanup_plan as cleanup;
+import compiler.u2_cleanup_verify as planVerify;
+
+public error InvalidChain { message Text; }
+function require(ok Bool,message Text) fails InvalidChain {
+    if not ok { fail InvalidChain { message=message; }; }
+}
+function read(table identity words.Words,phase identity budget.Phase,index Int)
+    returns Int fails budget.LimitError {
+    return try words.get(table,phase,index);
+}
+
+// Explicit source-bound propagation binding for one already-failing close.
+// Reports are facts for immediate emission, never reusable proof capabilities.
+public type PrimaryReport {
+    instruction Int; revision Int; incomingPrimary Int; ownerValue Int;
+    recoveredPrimary Int; newFailure Int; originalPrimary Int; rootIndex Int;
+}
+public function verifyPrimary(routine identity build.Function,
+    graph identity aggregate.Registry,profile identity owners.Profile,
+    contracts identity fallible.Registry,phase identity budget.Phase,
+    map identity roots.Map,failed continuation.Pair,failedCall build.InstId,
+    failedPlan identity cleanup.Plan,failedOwners,outerExit meta.LocId)
+    returns PrimaryReport
+    fails budget.LimitError,canonical.InvalidIR,owners.InvalidOwnership,
+        roots.InvalidRoots,continuation.InvalidBinding,
+        planVerify.InvalidPlan,InvalidChain {
+    let ownerProof be try owners.verify(profile,routine,graph,contracts);
+    let rootProof be try roots.verify(map,routine,graph,phase);
+    let binding be try continuation.verify(routine,graph,phase,failed);
+    try require(failedOwners.count >= 1 and failedOwners.count <= 8,"invalid primary owner count");
+    let planProof be try planVerify.verify(routine.metadata,phase,
+        failedPlan,failedOwners,failedOwners.count-1,outerExit,true);
+    try require(failed.version == 2 and failedOwners.count >= 1 and failedOwners.count <= 8 and
+        failedPlan.depth == 1 and failedPlan.entry == 2 and
+        failed.location == outerExit and failedCall.owner == routine.key and
+        failedCall.index >= 1 and failedCall.index <= routine.instructions.length/10,
+        "invalid explicit primary cleanup binding");
+    let depth be failedOwners.count;
+    let failedOwner cleanup.Scope be failedOwners[depth-1];
+    let sourceRow be (failed.source.index-1)*5;
+    let sourceFirst be try read(routine.blocks,phase,sourceRow);
+    try require((try read(routine.blocks,phase,sourceRow+1)) == depth+2 and
+        (try read(routine.blocks,phase,sourceRow+4)) == failedCall.index and
+        sourceFirst >= 1 and sourceFirst+depth+1 <= routine.values.length/4 and
+        failedOwner.value == sourceFirst+depth and
+        failedOwner.contract == profile.consume.index and
+        failedOwner.close == outerExit and
+        failedOwner.scope >= 1 and failedOwner.scope <= profile.scopes.length/2 and
+        (try read(profile.scopes,phase,(failedOwner.scope-1)*2+1)) == outerExit.index and
+        (try read(routine.values,phase,(sourceFirst-1)*4)) > 6 and
+        (try read(routine.values,phase,(sourceFirst+depth-1)*4)) == profile.handle.index and
+        (try read(routine.values,phase,(sourceFirst+depth)*4)) == meta.i64().index,
+        "primary binding requires exact primary, owner and pending source parameters");
+    let ownerRow be (failed.source.index-1)*2;
+    let ownerFirst be try read(profile.blocks,phase,ownerRow);
+    try require((try read(profile.blocks,phase,ownerRow+1)) == depth and
+        ownerFirst >= 0 and ownerFirst+depth <= profile.entries.length/2,
+        "primary source has wrong lexical prefix depth");
+    let ownerIndex be 0;
+    while ownerIndex < depth {
+        let selected cleanup.Scope be failedOwners[ownerIndex];
+        try require(selected.value == sourceFirst+1+ownerIndex and
+            selected.contract == profile.consume.index and
+            selected.scope >= 1 and selected.scope <= profile.scopes.length/2 and
+            (try read(profile.entries,phase,(ownerFirst+ownerIndex)*2)) == selected.scope and
+            (try read(profile.entries,phase,(ownerFirst+ownerIndex)*2+1)) == selected.value and
+            (try read(profile.scopes,phase,(selected.scope-1)*2+1)) == selected.close.index,
+            "primary source changes original lexical owner prefix");
+        ownerIndex=ownerIndex+1;
+    }
+    let base be (failedCall.index-1)*10;
+    let operand be try read(routine.instructions,phase,base+2);
+    let edges be try read(routine.instructions,phase,base+8);
+    try require(failedCall.owner == routine.key and
+        failedCall.index >= 1 and
+        failedCall.index <= routine.instructions.length/10 and
+        (try read(routine.instructions,phase,base)) == 46 and
+        (try read(routine.instructions,phase,base+1)) == failed.source.index and
+        operand >= 0 and operand < routine.operands.length and
+        (try read(routine.instructions,phase,base+3)) == 1 and
+        (try read(routine.instructions,phase,base+4)) == 0 and
+        (try read(routine.instructions,phase,base+5)) == 0 and
+        (try read(routine.instructions,phase,base+6)) == outerExit.index and
+        (try read(routine.instructions,phase,base+7)) == failedOwner.contract and
+        (try read(routine.operands,phase,operand)) == failedOwner.value and
+        edges >= 1 and edges < routine.edges.length/3,
+        "failed-close instruction is not the matching canonical File.close");
+    let nrow be (edges-1)*3; let frow be edges*3;
+    let nbase be try read(routine.edges,phase,nrow+1);
+    let fbase be try read(routine.edges,phase,frow+1);
+    try require((try read(routine.edges,phase,nrow)) == failed.normal.index and
+        (try read(routine.edges,phase,frow)) == failed.failure.index and
+        (try read(routine.edges,phase,nrow+2)) == depth+1 and
+        (try read(routine.edges,phase,frow+2)) == depth+2 and
+        nbase >= 0 and nbase+depth < routine.arguments.length and
+        fbase >= 0 and fbase+depth+1 < routine.arguments.length and
+        (try read(routine.arguments,phase,nbase)) == sourceFirst and
+        (try read(routine.arguments,phase,nbase+depth)) == sourceFirst+depth+1 and
+        (try read(routine.arguments,phase,fbase)) == -1 and
+        (try read(routine.arguments,phase,fbase+1)) == sourceFirst and
+        (try read(routine.arguments,phase,fbase+depth+1)) == sourceFirst+depth+1,
+        "already-failing close must carry primary and i64 without success forgery");
+    let resolvedPrimary be try read(routine.blocks,phase,(failed.normal.index-1)*5);
+    let newFailure be try read(routine.blocks,phase,(failed.failure.index-1)*5);
+    try require((try read(routine.blocks,phase,(failed.normal.index-1)*5+1)) == depth+1 and
+        (try read(routine.blocks,phase,(failed.failure.index-1)*5+1)) == depth+2 and
+        resolvedPrimary >= 1 and resolvedPrimary+depth <= routine.values.length/4 and
+        newFailure >= 1 and newFailure+depth+1 <= routine.values.length/4 and
+        (try read(routine.values,phase,(resolvedPrimary-1)*4)) ==
+            (try read(routine.values,phase,(sourceFirst-1)*4)) and
+        (try read(routine.values,phase,(newFailure-1)*4)) > 6 and
+        (try read(routine.values,phase,(newFailure)*4)) ==
+            (try read(routine.values,phase,(sourceFirst-1)*4)) and
+        (try read(routine.values,phase,(resolvedPrimary+depth-1)*4)) ==
+            meta.i64().index and
+        (try read(routine.values,phase,(newFailure+depth)*4)) ==
+            meta.i64().index,
+        "already-failing close has wrong typed propagation destination");
+    ownerIndex=0;
+    while ownerIndex < depth-1 {
+        let selected cleanup.Scope be failedOwners[ownerIndex];
+        try require((try read(routine.arguments,phase,nbase+1+ownerIndex)) == selected.value and
+            (try read(routine.arguments,phase,fbase+2+ownerIndex)) == selected.value,
+            "primary close loses or substitutes surviving owner");
+        ownerIndex=ownerIndex+1;
+    }
+    let rootIndex be -1; let i be 0;
+    while i < rootProof.roots {
+        try budget.work(phase,1);
+        let row be i*6;
+        if (try read(map.records,phase,row)) == failedCall.index {
+            try require(rootIndex == -1 and
+                (try read(map.records,phase,row+1)) == failed.failure.index and
+                (try read(map.records,phase,row+2)) == newFailure and
+                (try read(map.records,phase,row+3)) ==
+                    (try read(routine.values,phase,(newFailure-1)*4)) and
+                (try read(map.records,phase,row+4)) == outerExit.index and
+                (try read(map.records,phase,row+5)) == 5,
+                "new close failure root is not the canonical typed successor");
+            rootIndex=i;
+        }
+        i=i+1;
+    }
+    try require(rootIndex >= 0,"primary cleanup missing new-failure root");
+    return PrimaryReport { instruction=failedCall.index; revision=routine.revision;
+        incomingPrimary=sourceFirst; ownerValue=failedOwner.value;
+        recoveredPrimary=resolvedPrimary; newFailure=newFailure;
+        originalPrimary=newFailure+1; rootIndex=rootIndex; };
+}
+
+// Concrete bootstrap specialization anchor. This function is not executed
+// by verification/emission; it fixes the existing inferred Scope-list shape
+// for imported generic Plan constructors even in callers with no resources.
+function bootstrapScopeShape(data identity meta.Metadata,owner identity budget.Owner,
+    phase identity budget.Phase,scope cleanup.Scope,exit meta.LocId)
+    fails budget.LimitError,planVerify.InvalidPlan {
+    let plan be try planVerify.prepare(data,owner,phase,[scope],0,exit,true);
+    try cleanup.close(plan);
+}

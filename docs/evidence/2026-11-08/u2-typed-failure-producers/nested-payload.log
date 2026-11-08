@@ -1,0 +1,6 @@
+test_saved_typed_payload_keeps_nested_list_and_text_alive (test_u2_function_failure_producer.U2FunctionFailureProducerTests.test_saved_typed_payload_keeps_nested_list_and_text_alive) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 7.655s
+
+OK

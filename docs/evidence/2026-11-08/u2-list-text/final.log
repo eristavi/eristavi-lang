@@ -1,0 +1,11 @@
+test_independent_source_value_semantics (test_u2_function_list_text.U2FunctionListTextTests.test_independent_source_value_semantics) ... ok
+test_text_element_get_bounds_keep_terminal_source_fault (test_u2_function_list_text.U2FunctionListTextTests.test_text_element_get_bounds_keep_terminal_source_fault) ... ok
+test_text_elements_snapshot_copy_replace_and_forced_gc (test_u2_function_list_text.U2FunctionListTextTests.test_text_elements_snapshot_copy_replace_and_forced_gc) ... ok
+test_wrong_element_descriptor_and_import_type_refuse (test_u2_function_list_text.U2FunctionListTextTests.test_wrong_element_descriptor_and_import_type_refuse) ... ok
+test_existing_list_snapshot_append_count_gc_in_whole_function (test_u2_function_import_integration.U2FunctionImportIntegrationTests.test_existing_list_snapshot_append_count_gc_in_whole_function) ... ok
+test_mixed_text_list_calls_share_exact_whole_function_root_map (test_u2_function_import_integration.U2FunctionImportIntegrationTests.test_mixed_text_list_calls_share_exact_whole_function_root_map) ... ok
+
+----------------------------------------------------------------------
+Ran 6 tests in 31.631s
+
+OK

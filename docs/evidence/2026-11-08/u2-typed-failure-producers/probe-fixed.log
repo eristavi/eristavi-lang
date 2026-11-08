@@ -1,0 +1,6 @@
+test_constructs_typed_primary_without_failure_ingress (test_u2_function_failure_producer.U2FunctionFailureProducerTests.test_constructs_typed_primary_without_failure_ingress) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 7.900s
+
+OK

@@ -1,0 +1,13 @@
+let snapshot be [946];
+let current be snapshot;
+while current.count < 3 { current.add(946); }
+let changed be current;
+changed[0] = 955;
+let outer be [current,current];
+let copied be outer;
+copied[0] = changed;
+let detached be copied[0];
+detached.add(955);
+if outer[0][0] == 946 and copied[0][0] == 955 {
+    output(snapshot.count + current.count + outer.count + copied[0].count + detached.count);
+} else { output(-1); }

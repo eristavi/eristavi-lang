@@ -20,15 +20,14 @@ function require(ok Bool,message Text) fails InvalidManagedRoots {
 
 // Closed bounded selection: canonical opaque empty aggregate for Text;
 // version-one List/identity descriptor of exact structural carrier for
-// List/identity. Nested managed element descriptors remain unsupported,
-// not silently treated as another root class or shared identity.
+// List/identity. Value aggregates retain their exact canonical field types;
+// selected managed children must have an admitted representation.
 // The resulting Plan independently verifies the ENTIRE Function, including
 // dead CFG and checked-call arguments, at the current source revision.
-public function create(routine identity build.Function,
+public function selectTypes(routine identity build.Function,
     graph identity aggregate.Registry,table identity contracts.Registry,
     phase identity budget.Phase,registry identity managed.Registry,
     carriers,descriptors)
-    returns identity ssa.Plan
     fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,
         managed.InvalidManagedTypes,graphVerify.InvalidGraph,
         InvalidManagedRoots {
@@ -97,12 +96,54 @@ public function create(routine identity build.Function,
                             }
                         }
                     }
-                    if shape.elementDomain != 0 or not listCarrier or
+                    let managedList be false;
+                    if shape.elementDomain == 1 and
+                        (try aggregate.fieldCount(graph,read,carrier)) == 1 {
+                        let element be try aggregate.field(graph,read,carrier,0);
+                        let k be 0;
+                        while k < carriers.count {
+                            let elementCarrier aggregate.TypeId be carriers[k];
+                            let elementDescriptor managed.TypeId be descriptors[k];
+                            if elementCarrier == element and elementDescriptor.index == shape.element {
+                                let elementShape be try managed.descriptor(registry,read,elementDescriptor);
+                                if elementShape.copyPolicy == 1 and
+                                    (elementShape.kind == 1 or elementShape.kind == 2 or elementShape.kind == 4) {
+                                    managedList=true;
+                                }
+                            }
+                            k=k+1;
+                        }
+                    }
+                    if not ((shape.elementDomain == 0 and listCarrier) or managedList) or
                         shape.copyPolicy != 1 { acceptable=false; }
                 } else {
-                    if shape.kind != 3 or shape.elementDomain != 0 or
-                        shape.element != carrier.index or
-                        shape.copyPolicy != 2 { acceptable=false; }
+                    if shape.kind == 4 {
+                        if shape.elementDomain != 0 or shape.element != carrier.index or
+                            shape.copyPolicy != 1 { acceptable=false; }
+                        let fields be try aggregate.fieldCount(graph,read,carrier);
+                        if fields > 32 { acceptable=false; }
+                        let f be 0;
+                        while f < fields {
+                            let field be try aggregate.field(graph,read,carrier,f);
+                            let known be field.index == 1 or field.index == 2;
+                            let k be 0;
+                            while k < carriers.count {
+                                let candidate aggregate.TypeId be carriers[k];
+                                if candidate == field {
+                                    let child managed.TypeId be descriptors[k];
+                                    let desc be try managed.descriptor(registry,read,child);
+                                    if desc.kind == 1 or desc.kind == 2 or desc.kind == 4 { known=true; }
+                                }
+                                k=k+1;
+                            }
+                            if not known { acceptable=false; }
+                            f=f+1;
+                        }
+                    } else {
+                        if shape.kind != 3 or shape.elementDomain != 0 or
+                            shape.element != carrier.index or
+                            shape.copyPolicy != 2 { acceptable=false; }
+                    }
                 }
             }
         }
@@ -135,5 +176,17 @@ public function create(routine identity build.Function,
     try budget.finishPhase(read);
     try require(acceptable,
         "ambiguous, unsupported or noncanonical managed root descriptors");
+    return selected;
+}
+
+public function create(routine identity build.Function,
+    graph identity aggregate.Registry,table identity contracts.Registry,
+    phase identity budget.Phase,registry identity managed.Registry,
+    carriers,descriptors)
+    returns identity ssa.Plan
+    fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,
+        managed.InvalidManagedTypes,graphVerify.InvalidGraph,
+        InvalidManagedRoots {
+    let selected be try selectTypes(routine,graph,table,phase,registry,carriers,descriptors);
     return try ssa.create(routine,graph,table,phase,selected);
 }

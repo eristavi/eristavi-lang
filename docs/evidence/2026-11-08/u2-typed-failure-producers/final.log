@@ -1,0 +1,15 @@
+test_constructs_typed_primary_without_failure_ingress (test_u2_function_failure_producer.U2FunctionFailureProducerTests.test_constructs_typed_primary_without_failure_ingress) ... ok
+test_context_allocation_refusal_remains_terminal (test_u2_function_failure_producer.U2FunctionFailureProducerTests.test_context_allocation_refusal_remains_terminal) ... ok
+test_message_carrier_effects_version_and_kind_refuse_before_output (test_u2_function_failure_producer.U2FunctionFailureProducerTests.test_message_carrier_effects_version_and_kind_refuse_before_output) ... ok
+test_message_field_zero_and_later_field_keep_exact_typed_payload (test_u2_function_failure_producer.U2FunctionFailureProducerTests.test_message_field_zero_and_later_field_keep_exact_typed_payload) ... ok
+test_unchecked_entry_cannot_produce_unbound_class_five_values (test_u2_function_failure_producer.U2FunctionFailureProducerTests.test_unchecked_entry_cannot_produce_unbound_class_five_values) ... ok
+test_wrong_descriptor_signature_layout_and_source_origin_refuse (test_u2_function_failure_producer.U2FunctionFailureProducerTests.test_wrong_descriptor_signature_layout_and_source_origin_refuse) ... ok
+test_parent_private_list_of_aggregates_survives_checked_recursion (test_u2_function_aggregate_list.U2FunctionAggregateListTests.test_parent_private_list_of_aggregates_survives_checked_recursion) ... ok
+test_checked_recursive_normal_failure_edges_roots_and_reclamation (test_u2_function_checked_native.U2FunctionCheckedNativeTests.test_checked_recursive_normal_failure_edges_roots_and_reclamation) ... ok
+test_mutual_frames_preserve_primary_and_ordered_secondary_context (test_u2_function_checked_group.U2FunctionCheckedGroupTests.test_mutual_frames_preserve_primary_and_ordered_secondary_context) ... ok
+test_primary_and_ordered_typed_context (test_u2_typed_failure_context.U2TypedFailureContextTests.test_primary_and_ordered_typed_context) ... ok
+
+----------------------------------------------------------------------
+Ran 10 tests in 89.189s
+
+OK

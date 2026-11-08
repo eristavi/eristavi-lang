@@ -1,0 +1,176 @@
+// Recursive checked calls keep their own scoped File roots per native Function frame.
+import std.process;
+import compiler.u1_budget as budget;
+import compiler.u1_meta as meta;
+import compiler.u1_builder as build;
+import compiler.u1_aggregate as aggregate;
+import compiler.u1_aggregate_signature as sig;
+import compiler.u1_aggregate_build as ab;
+import compiler.u1_verify as canonical;
+import compiler.u1_aggregate_verify as graphVerify;
+import compiler.u2_invoke_contract as contracts;
+import compiler.u2_managed_types as managed;
+import compiler.u2_managed_root_gate as roots;
+import compiler.u2_function_managed_x86_64 as native;
+import compiler.u2_ssa_liveness as ssa;
+import compiler.u2_function_contract as body;
+import compiler.u2_continuation_bind as continuation;
+import compiler.u2_invoke_build as invoke;
+import compiler.u2_invoke_transfer as transfer;
+import compiler.u1_words as words;
+import compiler.u2_scoped_owners as owners;
+import compiler.u2_cleanup_plan as cleanup;
+import compiler.u2_cleanup_verify as cleanupVerify;
+function run() fails budget.LimitError,canonical.InvalidIR,graphVerify.InvalidGraph,
+    managed.InvalidManagedTypes,roots.InvalidManagedRoots,ssa.InvalidLiveness,
+    native.Unsupported,body.InvalidBody,continuation.InvalidBinding,owners.InvalidOwnership,cleanupVerify.InvalidPlan {
+    let root be try budget.developmentRequest();
+    let shared be try budget.metadataOwner(root); let mp be try budget.constructionPhase(shared);
+    let data be try meta.create(shared,mp); let graph be try aggregate.create(shared,mp);
+    let i64 be try aggregate.primitive(graph,meta.i64());
+    let text be try aggregate.aggregate(graph,mp,[]);
+    let file be try aggregate.aggregate(graph,mp,[i64,i64]);
+    let failure be try aggregate.aggregate(graph,mp,[text,text]);
+    let scalarSpecialization be try meta.signature(data,mp,[meta.i64()],[meta.i64()]);
+    let signature be try sig.signature(data,graph,mp,[text,i64],[i64]);
+    let opened be try sig.signature(data,graph,mp,[text],[file]);
+    let closed be try sig.signature(data,graph,mp,[file],[]);
+    let fileOutcome be try sig.signature(data,graph,mp,[],[file]);
+    let failureSig be try sig.signature(data,graph,mp,[],[failure]);
+    let pendingSig be try sig.signature(data,graph,mp,[],[i64]);
+    let pendingFailedSig be try sig.signature(data,graph,mp,[],[failure,i64]);
+    let recursiveNormal be try sig.signature(data,graph,mp,[],[i64,file]);
+    let recursiveFailed be try sig.signature(data,graph,mp,[],[failure,file]);
+    let primaryNormal be try sig.signature(data,graph,mp,[],[failure,i64]);
+    let primaryFailed be try sig.signature(data,graph,mp,[],[failure,failure,i64]);
+    let target be try meta.declaration(data,mp,signature,"u2.file.recursive",1,63,0);
+    let acquisition be try meta.declaration(data,mp,opened,"u2.file.openRead.v1",2,63,1);
+    let consumption be try meta.declaration(data,mp,closed,"u2.file.close.v1",2,63,1);
+    let source be try meta.source(data,mp,"file-recursive.eri",
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",64);
+    let loc be try meta.location(data,mp,source,0,8,0,1,1);
+    try aggregate.freeze(graph); let registry be try managed.create(graph,mp);
+    try managed.freeze(registry); try meta.freeze(data);
+    let table be try contracts.create(data,graph,mp);
+    let contract be contracts.Contract { version=1; target=target; failure=failureSig; };
+    let acquire be contracts.Contract { version=1; target=acquisition; failure=failureSig; };
+    let consume be contracts.Contract { version=1; target=consumption; failure=failureSig; };
+    try contracts.register(table,data,graph,mp,contract);
+    try contracts.register(table,data,graph,mp,acquire);
+    try contracts.register(table,data,graph,mp,consume);
+    try contracts.freeze(table); try budget.finishPhase(mp);
+    let owner be try budget.functionOwner(root,false); let cp be try budget.constructionPhase(owner);
+    let fn be try build.create(data,signature,owner,cp); try body.bind(fn,graph,table,target);
+    let entry be try ab.block(fn,graph,[text,i64]);
+    let owned be try ab.block(fn,graph,[file]);
+    let recurse be try ab.block(fn,graph,[file]);
+    let closeBlock be try ab.block(fn,graph,[i64,file]);
+    let failedChild be try ab.block(fn,graph,[failure,file]);
+    let done be try build.block(fn,[meta.i64()]);
+    let failed be try ab.block(fn,graph,[failure]);
+    let closeFailed be try ab.block(fn,graph,[failure,i64]);
+    let primaryCloseBlock be try ab.block(fn,graph,[failure,file,i64]);
+    let primaryDone be try ab.block(fn,graph,[failure,i64]);
+    let primaryCloseFailed be try ab.block(fn,graph,[failure,failure,i64]);
+    let primary be try build.parameter(fn,primaryCloseBlock,0);
+    let primaryOwner be try build.parameter(fn,primaryCloseBlock,1);
+    let primaryPending be try build.parameter(fn,primaryCloseBlock,2);
+    let path be try build.parameter(fn,entry,0);
+    let depth be try build.parameter(fn,entry,1);
+    let handle be try build.parameter(fn,owned,0);
+    let recurseHandle be try build.parameter(fn,recurse,0);
+    let pending be try build.parameter(fn,closeBlock,0);
+    let closeHandle be try build.parameter(fn,closeBlock,1);
+    let failedOwner be try build.parameter(fn,failedChild,1);
+    let profile be try owners.create(fn,graph,cp,file,acquisition,consumption);
+    let scope be try owners.scope(profile,fn,cp,0,loc);
+    try owners.block(profile,fn,cp,entry,[]);
+    try owners.block(profile,fn,cp,owned,[owners.Entry { scope=scope; value=handle; }]);
+    try owners.block(profile,fn,cp,recurse,[owners.Entry { scope=scope; value=recurseHandle; }]);
+    try owners.block(profile,fn,cp,closeBlock,[owners.Entry { scope=scope; value=closeHandle; }]);
+    try owners.block(profile,fn,cp,failedChild,[owners.Entry { scope=scope; value=failedOwner; }]);
+    try owners.block(profile,fn,cp,done,[]);
+    try owners.block(profile,fn,cp,failed,[]);
+    try owners.block(profile,fn,cp,closeFailed,[]);
+    try owners.block(profile,fn,cp,primaryCloseBlock,[owners.Entry { scope=scope; value=primaryOwner; }]);
+    try owners.block(profile,fn,cp,primaryDone,[]); try owners.block(profile,fn,cp,primaryCloseFailed,[]);
+    let pair be try continuation.bind(fn,graph,cp,entry,owned,failed,
+        fileOutcome,failureSig,loc);
+    let opening be try invoke.emit(fn,graph,acquire,pair,[path]);
+    let zero be try build.integer(fn,owned,0,loc);
+    let more be try build.compareInteger(fn,owned,depth,zero,5,loc);
+    let baseValue be try build.integer(fn,owned,42,loc);
+    try ab.branch(fn,graph,owned,more,recurse,[handle],
+        closeBlock,[baseValue,handle],loc);
+    let one be try build.integer(fn,recurse,1,loc);
+    let next be try build.wrapSubtract(fn,recurse,depth,one,loc);
+    pair=try continuation.bindCarrying(fn,graph,cp,recurse,closeBlock,failedChild,
+        recursiveNormal,recursiveFailed,loc);
+    let recursive be try transfer.emit(fn,graph,contract,pair,[path,next],[recurseHandle]);
+    let failedPrimary be try build.parameter(fn,failedChild,0);
+    let unavailablePending be try build.integer(fn,failedChild,0,loc);
+    try ab.jump(fn,graph,failedChild,primaryCloseBlock,[failedPrimary,failedOwner,unavailablePending],loc);
+    let primaryPair be try continuation.bindCarrying(fn,graph,cp,primaryCloseBlock,primaryDone,primaryCloseFailed,
+        primaryNormal,primaryFailed,loc);
+    let primaryClose be try transfer.emit(fn,graph,consume,primaryPair,[primaryOwner],[primary,primaryPending]);
+    let normalPropagation be try body.returnFailure(fn,graph,table,primaryDone,try build.parameter(fn,primaryDone,0),loc);
+    let failedPropagation be try body.returnFailure(fn,graph,table,primaryCloseFailed,try build.parameter(fn,primaryCloseFailed,1),loc);
+    pair=try continuation.bindCarrying(fn,graph,cp,closeBlock,done,closeFailed,
+        pendingSig,pendingFailedSig,loc);
+    let closing be try transfer.emit(fn,graph,consume,pair,[closeHandle],[pending]);
+    try ab.returnValues(fn,graph,done,[try build.parameter(fn,done,0)],loc);
+    let closeError be try build.parameter(fn,closeFailed,0);
+    let propagatedClose be try body.returnFailure(fn,graph,table,closeFailed,closeError,loc);
+    let openError be try build.parameter(fn,failed,0);
+    let propagatedOpen be try body.returnFailure(fn,graph,table,failed,openError,loc);
+    // Establish bootstrap scalar edge specialization, independent dead block.
+    let dead be try build.block(fn,[]); let deadTarget be try build.block(fn,[meta.i64()]);
+    try owners.block(profile,fn,cp,dead,[]); try owners.block(profile,fn,cp,deadTarget,[]);
+    let deadZero be try build.integer(fn,dead,0,loc); try build.jump(fn,dead,deadTarget,[deadZero],loc);
+    try build.returnValues(fn,deadTarget,[try build.parameter(fn,deadTarget,0)],loc);
+    try ab.complete(fn,graph); try owners.complete(profile,fn,cp); try budget.finishPhase(cp);
+    let phase be try budget.constructionPhase(owner);
+    // Bootstrap requires a concrete specialization for the legacy generic
+    // entry even when this fixture only executes File-selected construction.
+    if false {
+        let legacy be try roots.create(fn,graph,table,phase,registry,[text],[managed.text(registry)]);
+        try ssa.close(legacy);
+    }
+    let active be [cleanup.Scope { scope=scope; contract=consumption.index; value=primaryOwner.index; close=loc; }];
+    let cleanupPlan be try cleanupVerify.prepare(data,owner,phase,active,0,loc,true);
+    primaryPair=try continuation.bindCarrying(fn,graph,phase,primaryCloseBlock,primaryDone,primaryCloseFailed,primaryNormal,primaryFailed,loc);
+    let binding be native.PrimaryBinding { pair=primaryPair; instruction=primaryClose;
+        plan=cleanupPlan; owner=active[0]; exit=loc; };
+    let retained be owner.live; let reserved be owner.pending;
+    native.emitFileCheckedPrimary(fn,graph,table,phase,registry,[text],
+        [managed.text(registry)],true,720,profile,9,binding)
+        else error native.Unsupported {
+            if owner.live != retained or owner.pending != reserved {
+                fail native.Unsupported { message="File admission leaked a retained Plan"; };
+            }
+            fail error;
+        }
+        else error budget.LimitError { fail error; }
+        else error canonical.InvalidIR { fail error; }
+        else error graphVerify.InvalidGraph { fail error; }
+        else error managed.InvalidManagedTypes { fail error; }
+        else error roots.InvalidManagedRoots { fail error; }
+        else error ssa.InvalidLiveness { fail error; };
+    if owner.live != retained or owner.pending != reserved {
+        fail native.Unsupported { message="File emission leaked a retained Plan"; };
+    }
+    try cleanup.close(cleanupPlan); try budget.finishPhase(phase); try owners.close(profile); try build.close(fn);
+    try contracts.close(table); try managed.close(registry); try aggregate.close(graph);
+    try meta.close(data); try budget.close(owner); try budget.close(shared); try budget.close(root);
+}
+run() else error budget.LimitError { output("limit:"+error.message); process.setExitCode(1); }
+else error canonical.InvalidIR { output("ir:"+error.message); process.setExitCode(1); }
+else error graphVerify.InvalidGraph { output("graph:"+error.message); process.setExitCode(1); }
+else error managed.InvalidManagedTypes { output("managed:"+error.message); process.setExitCode(1); }
+else error roots.InvalidManagedRoots { output("roots:"+error.message); process.setExitCode(1); }
+else error ssa.InvalidLiveness { output("ssa:"+error.message); process.setExitCode(1); }
+else error native.Unsupported { output("unsupported:"+error.message); process.setExitCode(1); }
+else error body.InvalidBody { output("body:"+error.message); process.setExitCode(1); }
+else error continuation.InvalidBinding { output("continuation:"+error.message); process.setExitCode(1); }
+else error cleanupVerify.InvalidPlan { output("plan:"+error.message); process.setExitCode(1); }
+else error owners.InvalidOwnership { output("owners:"+error.message); process.setExitCode(1); };

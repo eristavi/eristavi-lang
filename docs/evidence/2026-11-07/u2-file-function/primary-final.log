@@ -1,0 +1,11 @@
+test_bad_primary_binding_refuses_before_output (test_u2_function_file_primary.U2FunctionFilePrimaryTests.test_bad_primary_binding_refuses_before_output) ... ok
+test_generated_primary_preservation_and_secondary_append (test_u2_function_file_primary.U2FunctionFilePrimaryTests.test_generated_primary_preservation_and_secondary_append) ... ok
+test_canonical_outer_file_owner_moves_on_both_checked_edges (test_u2_checked_ssa_prefix.U2CheckedSSAPrefixTests.test_canonical_outer_file_owner_moves_on_both_checked_edges) ... ok
+test_verified_two_stage_native_dispatch_consumes_both_files (test_u2_checked_ssa_prefix.U2CheckedSSAPrefixTests.test_verified_two_stage_native_dispatch_consumes_both_files) ... ok
+test_generated_acquire_close_failure_handler_and_reclamation (test_u2_function_file_checked.U2FunctionFileCheckedTests.test_generated_acquire_close_failure_handler_and_reclamation) ... ok
+test_checked_recursive_normal_failure_edges_roots_and_reclamation (test_u2_function_checked_native.U2FunctionCheckedNativeTests.test_checked_recursive_normal_failure_edges_roots_and_reclamation) ... ok
+
+----------------------------------------------------------------------
+Ran 6 tests in 43.420s
+
+OK

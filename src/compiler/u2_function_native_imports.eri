@@ -4,6 +4,7 @@
 // names and native helpers remain owned by u2_text_native/u2_list_i64.
 // Every used call is checked by original canonical declaration/signature,
 // version, effects, exact arity and opaque carrier BEFORE native emission.
+import compiler.format as format;
 import compiler.u1_budget as budget;
 import compiler.u1_words as words;
 import compiler.u1_meta as meta;
@@ -30,19 +31,55 @@ function same(data identity meta.Metadata,phase identity budget.Phase,
     }
     return true;
 }
+public function textListName(op Int) returns Text {
+    if op == 1 { return "u2.list.text.empty"; }
+    if op == 2 { return "u2.list.text.copy"; }
+    if op == 3 { return "u2.list.text.append"; }
+    if op == 4 { return "u2.list.text.replace"; }
+    if op == 5 { return "u2.list.text.count"; }
+    if op == 6 { return "u2.list.text.get"; }
+    return "u2.list.text.collect";
+}
+public function nestedListName(textElements Bool,op Int) returns Text {
+    let prefix be "u2.list.list_i64.";
+    if textElements { prefix="u2.list.list_text."; }
+    if op == 1 { return prefix+"empty"; }
+    if op == 2 { return prefix+"copy"; }
+    if op == 3 { return prefix+"append"; }
+    if op == 4 { return prefix+"replace"; }
+    if op == 5 { return prefix+"count"; }
+    if op == 6 { return prefix+"get"; }
+    return prefix+"collect";
+}
+// Carrier suffix keeps canonical declaration symbols unique when a Function
+// uses multiple boxed List shapes. It grants no type/root authority: the
+// selected descriptor relationship and full canonical signature still verify.
+public function boxedListName(carrier Int,op Int) returns Text {
+    let prefix be "u2.list.boxed."+format.integer(carrier)+".";
+    if op == 1 { return prefix+"empty"; }
+    if op == 2 { return prefix+"copy"; }
+    if op == 3 { return prefix+"append"; }
+    if op == 4 { return prefix+"replace"; }
+    if op == 5 { return prefix+"count"; }
+    if op == 6 { return prefix+"get"; }
+    return prefix+"collect";
+}
 // An exact source FunctionId is used: target ordinals are not assumed to
 // equal local op indices or each other when Text and List coexist.
 public function inspect(data identity meta.Metadata,
     graph identity aggregate.Registry,phase identity budget.Phase,
-    target Int,textCarrier Int,listCarrier Int)
+    target Int,textCarrier Int,listCarrier Int,textListCarrier Int,nestedI64Carrier Int,nestedTextCarrier Int,boxedLists,boxedElements)
     returns Target fails budget.LimitError,Unsupported {
     try require(data.frozen and not data.closed and graph.state == 1 and
         target >= 1 and target <= data.declarations.length/6 and
         phase.state == 0 and phase.owner.kind == 2 and
         phase.owner.parent == data.owner.parent,
         "foreign or unverified native managed import target");
+    try require(boxedLists.count == boxedElements.count and boxedLists.count <= 8,
+        "invalid boxed List relationship vector");
     let row be (target-1)*6;
     let kind be 0; let operation be 0;
+    let selectedBoxedList be 0; let selectedBoxedElement be 0;
     let i be 1;
     while i <= 12 {
         if textCarrier >= 7 and try same(data,phase,row,textNative.name(i)) {
@@ -54,6 +91,29 @@ public function inspect(data identity meta.Metadata,
     while i <= 7 {
         if listCarrier >= 7 and try same(data,phase,row,listNative.name(i)) {
             kind=2; operation=i;
+        }
+        if textListCarrier >= 7 and try same(data,phase,row,textListName(i)) {
+            kind=5; operation=i;
+        }
+        if nestedI64Carrier >= 7 and try same(data,phase,row,nestedListName(false,i)) {
+            kind=6; operation=i;
+        }
+        if nestedTextCarrier >= 7 and try same(data,phase,row,nestedListName(true,i)) {
+            kind=7; operation=i;
+        }
+        i=i+1;
+    }
+    // Preserve the old fast path: only unknown legacy names pay for boxed
+    // carrier suffix formatting. Stop after the exact unique match.
+    i=1;
+    while kind == 0 and i <= 7 {
+        let j be 0;
+        while kind == 0 and j < boxedLists.count {
+            if try same(data,phase,row,boxedListName(boxedLists[j],i)) {
+                kind=8; operation=i;
+                selectedBoxedList=boxedLists[j]; selectedBoxedElement=boxedElements[j];
+            }
+            j=j+1;
         }
         i=i+1;
     }
@@ -77,6 +137,10 @@ public function inspect(data identity meta.Metadata,
     try require((try meta.parameterCount(data,phase,signature)) == arguments and
         (try meta.resultCount(data,phase,signature)) == resultCount,
         "native managed call has wrong canonical signature arity");
+    let boxedList be textListCarrier; let boxedElement be textCarrier;
+    if kind == 6 { boxedList=nestedI64Carrier; boxedElement=listCarrier; }
+    if kind == 7 { boxedList=nestedTextCarrier; boxedElement=textListCarrier; }
+    if kind == 8 { boxedList=selectedBoxedList; boxedElement=selectedBoxedElement; }
     i=0;
     while i < arguments {
         let expected be textCarrier;
@@ -85,7 +149,10 @@ public function inspect(data identity meta.Metadata,
                 (operation >= 9 and operation <= 11 and i == 1) { expected=2; }
         } else {
             expected=listCarrier;
+            if kind >= 5 { expected=boxedList; }
             if i >= 1 { expected=2; }
+            if kind >= 5 and ((operation == 3 and i == 1) or
+                (operation == 4 and i == 2)) { expected=boxedElement; }
         }
         try require((try signatures.parameterType(data,graph,phase,signature,i)).index ==
             expected,"native managed call has wrong canonical argument type");
@@ -99,7 +166,9 @@ public function inspect(data identity meta.Metadata,
                 operation == 9 { expected=2; }
         } else {
             expected=listCarrier;
+            if kind >= 5 { expected=boxedList; }
             if operation == 5 or operation == 6 { expected=2; }
+            if kind >= 5 and operation == 6 { expected=boxedElement; }
         }
         try require((try signatures.resultType(data,graph,phase,signature,0)).index ==
             expected,"native managed call has wrong canonical result type");
@@ -107,4 +176,95 @@ public function inspect(data identity meta.Metadata,
     // List indexed calls use the original u2_list_i64 source-origin formatter.
     // Their bounds guards run before snapshots or boxed-value allocation.
     return Target { kind=kind; operation=operation; };
+}
+
+// Construct a saved typed context from an exact selected ordinary aggregate.
+// The field ordinal names the statically known Text message, not a runtime
+// selector or source-language type argument. Existing capture helpers own
+// failure allocation/snapshot semantics.
+public function failureName(payload Int,messageField Int) returns Text {
+    return "u2.failure.capture."+format.integer(payload)+"."+
+        format.integer(messageField)+".v1";
+}
+public function inspectFailure(data identity meta.Metadata,
+    graph identity aggregate.Registry,phase identity budget.Phase,
+    target Int,textCarrier Int,failureCarrier Int,payloadCarriers)
+    returns Target fails budget.LimitError,Unsupported {
+    let unknown be Target { kind=0; operation=0; };
+    if failureCarrier == 0 or payloadCarriers.count == 0 { return unknown; }
+    try require(data.frozen and not data.closed and graph.state == 1 and
+        graph.owner == data.owner and phase.state == 0 and phase.owner.kind == 2 and
+        phase.owner.parent == data.owner.parent and
+        target >= 1 and target <= data.declarations.length/6 and
+        failureCarrier >= 7 and payloadCarriers.count <= 8,
+        "invalid typed failure import target");
+    let id be meta.FunctionId { owner=data.key; index=target; };
+    let signature be try meta.functionSignature(data,phase,id);
+    if (try meta.parameterCount(data,phase,signature)) != 1 or
+        (try meta.resultCount(data,phase,signature)) != 1 { return unknown; }
+    let payload be try signatures.parameterType(data,graph,phase,signature,0);
+    if (try signatures.resultType(data,graph,phase,signature,0)).index != failureCarrier {
+        return unknown;
+    }
+    let selected be false; let i be 0;
+    while i < payloadCarriers.count {
+        if payloadCarriers[i] == payload.index { selected=true; }
+        i=i+1;
+    }
+    if not selected { return unknown; }
+    let fields be try aggregate.fieldCount(graph,phase,payload);
+    try require(fields <= 32,"typed failure payload exceeds field profile");
+    let row be (target-1)*6; i=0;
+    while i < fields {
+        if try same(data,phase,row,failureName(payload.index,i)) {
+            try require(textCarrier >= 7 and
+                (try aggregate.field(graph,phase,payload,i)).index == textCarrier,
+                "typed failure message must be the exact selected Text field");
+            try require((try words.get(data.declarations,phase,row+3)) == 2 and
+                (try words.get(data.declarations,phase,row+4)) == 63 and
+                (try words.get(data.declarations,phase,row+5)) == 1,
+                "typed failure capture has incompatible kind/version/effects");
+            return Target { kind=9; operation=i; };
+        }
+        i=i+1;
+    }
+    return unknown;
+}
+
+// Explicit private runtime bindings; an arbitrary fallible declaration is
+// never reinterpreted as File.open merely because its signature matches.
+public function inspectFile(data identity meta.Metadata,
+    graph identity aggregate.Registry,phase identity budget.Phase,
+    target Int,acquire Int,consume Int,textCarrier Int,fileCarrier Int,failureCarrier Int)
+    returns Target fails budget.LimitError,Unsupported {
+    try require(target >= 1 and target <= data.declarations.length/6 and
+        (target == acquire or target == consume),"unknown File target");
+    let failure be aggregate.TypeId { owner=graph.key; index=failureCarrier; };
+    try require((try aggregate.fieldCount(graph,phase,failure)) == 2,
+        "FileError carrier must contain message and path Text");
+    try require((try aggregate.field(graph,phase,failure,0)).index == textCarrier and
+        (try aggregate.field(graph,phase,failure,1)).index == textCarrier,
+        "FileError carrier fields must be exact Text carriers");
+    let operation be 1; let symbol be "u2.file.openRead.v1";
+    let parameter be textCarrier;
+    if target == consume { operation=2; symbol="u2.file.close.v1"; parameter=fileCarrier; }
+    let row be (target-1)*6;
+    try require(textCarrier >= 7 and fileCarrier >= 7 and textCarrier != fileCarrier and
+        (try words.get(data.declarations,phase,row+3)) == 2 and
+        (try words.get(data.declarations,phase,row+4)) == 63 and
+        (try words.get(data.declarations,phase,row+5)) == 1 and
+        (try same(data,phase,row,symbol)),"invalid File import symbol/version/effects");
+    let id be meta.FunctionId { owner=data.key; index=target; };
+    let signature be try meta.functionSignature(data,phase,id);
+    try require((try meta.parameterCount(data,phase,signature)) == 1 and
+        (try signatures.parameterType(data,graph,phase,signature,0)).index == parameter,
+        "invalid File import argument");
+    let results be 0; if operation == 1 { results=1; }
+    try require((try meta.resultCount(data,phase,signature)) == results,
+        "invalid File import result count");
+    if operation == 1 {
+        try require((try signatures.resultType(data,graph,phase,signature,0)).index == fileCarrier,
+            "invalid File acquisition result");
+    }
+    return Target { kind=4; operation=operation; };
 }

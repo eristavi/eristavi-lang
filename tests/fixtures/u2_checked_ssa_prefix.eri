@@ -23,6 +23,7 @@ import compiler.u2_native_root_x86_64 as nativeRoots;
 import compiler.u2_cleanup_native_x86_64 as nativeCleanup;
 import compiler.u2_checked_ssa_bind as ssa;
 import compiler.u2_checked_chain_verify as chain;
+import compiler.u2_primary_cleanup_bind as primary;
 import compiler.u2_checked_ssa_x86_64 as native;
 import compiler.u2_checked_chain_x86_64 as chainNative;
 
@@ -38,7 +39,7 @@ function handledReturn(fn identity build.Function,from build.BlockId,
 function run() fails budget.LimitError,canonical.InvalidIR,
     owners.InvalidOwnership,continuation.InvalidBinding,planVerify.InvalidPlan,
     roots.InvalidRoots,slots.InvalidSlots,nativeRoots.Unsupported,
-    nativeCleanup.Unsupported,ssa.InvalidSSA,chain.InvalidChain,
+    nativeCleanup.Unsupported,ssa.InvalidSSA,chain.InvalidChain,primary.InvalidChain,
     native.Unsupported,chainNative.Unsupported,ProbeError {
     let root be try budget.developmentRequest();
     let shared be try budget.metadataOwner(root);
@@ -260,6 +261,25 @@ function run() fails budget.LimitError,canonical.InvalidIR,
         checkedPair,innerClose,plan,original,innerLoc,
         normalPair,exitClose,outerNormalPlan,outerNormalOwners,loc,
         failedPair,innerFailureClose,outerFailedPlan,outerFailedOwners);
+    let primaryDenied be false;
+    primary.verifyPrimary(fn,graph,profile,registry,checkedPhase,map,
+        failedPair,innerFailureClose,outerNormalPlan,outerFailedOwners,loc)
+        else error planVerify.InvalidPlan { primaryDenied=true; }
+        else error primary.InvalidChain { primaryDenied=true; }
+        else error canonical.InvalidIR { fail error; }
+        else error owners.InvalidOwnership { fail error; }
+        else error budget.LimitError { fail error; }
+        else error roots.InvalidRoots { fail error; }
+        else error continuation.InvalidBinding { fail error; };
+    try check(primaryDenied,"normal cleanup Plan admitted as active primary");
+    let primaryBinding be try primary.verifyPrimary(fn,graph,profile,registry,checkedPhase,map,
+        failedPair,innerFailureClose,outerFailedPlan,outerFailedOwners,loc);
+    try check(primaryBinding.incomingPrimary == innerError.index and
+        primaryBinding.originalPrimary == doubleOriginalPrimary.index and
+        primaryBinding.newFailure == doubleNewFailure.index and
+        primaryBinding.revision == fn.revision and
+        primaryBinding.instruction == innerFailureClose.index,
+        "standalone primary binding differs from full chain");
     try check(route.firstClose == innerClose.index and
         route.normalClose == exitClose.index and
         route.failingClose == innerFailureClose.index and
@@ -345,6 +365,7 @@ else error slots.InvalidSlots { output("slots:"+error.message); process.setExitC
 else error nativeRoots.Unsupported { output("nativeRoot:"+error.message); process.setExitCode(1); }
 else error nativeCleanup.Unsupported { output("cleanup:"+error.message); process.setExitCode(1); }
 else error ssa.InvalidSSA { output("ssa:"+error.message); process.setExitCode(1); }
+else error primary.InvalidChain { output("primary:"+error.message); process.setExitCode(1); }
 else error chain.InvalidChain { output("chain:"+error.message); process.setExitCode(1); }
 else error native.Unsupported { output("native:"+error.message); process.setExitCode(1); }
 else error chainNative.Unsupported { output("chainNative:"+error.message); process.setExitCode(1); }

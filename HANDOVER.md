@@ -1,11 +1,728 @@
 # Eristavi compiler — current handover
 
-Updated 7 November 2026 (Asia/Nicosia). Checked Function group batch focused/smoke green;
-U2 functionality and final qualification still open.
-Branch: `compiler/u2-cleanup-foundation-20261102`; [PR #111](https://github.com/eristavi/eristavi-lang/pull/111) remains DRAFT; #74 remains OPEN.
-Implementation: `5dcc85f69ac458f83730957a9defd4b2fa3d0d7e`.
-Corrected exact test checkpoint: `43d56f2f526fd57db5d790413217de439858b7a5`.
-No final four-platform qualification or merge. Optimization #51 remains PAUSED.
+Latest verified source/test commit: `375c983fd6da7170463d2d726912bb27f59cbe22`.
+This documentation/evidence successor changes no implementation/test inputs.
+
+## Active checkpoint — 8 November 2026: File primary aggregate bindings
+
+Branch `compiler/u2-whole-function-file-roots-20261107`; base
+`a9e3d9009e6bc890403aed09bae73c61dcdb46db`. New
+emitFileValuesCheckedPrimary / emitFileValuesCheckedPrimaryChain pass existing
+aggregate runtime bindings through a shared original primary/chain core.
+Legacy APIs keep empty bindings; the duplicated single-primary admission body
+is removed. Each entry still prepares one Plan; no measured speedup claimed.
+Original owner/SSA/primary/layout proofs and live-primary refusal remain.
+No syntax, ABI, runtime adapter, timeout or ownership semantics changes.
+
+**5/5 final focused PASS**, 40.952 s; zero failures/skips. Actual native
+single-primary and two-owner chain retain aggregate values across clean/failed
+closes; exact one/two close counts, reverse order, original primary identity,
+ordered prior/new secondary failures, GC and final reclamation pass. Bad layout,
+duplicate binding and wrong owner prefix refuse without output or Plan leaks.
+Legacy single/chain and live-primary refusal regression tests pass. Initial
+2/2 focused PASS in 26.109 s preceded added exact-close assertions. No unresolved
+focused failures. Existing C qualifier warnings remain unsuppressed.
+[Exact command, logs and hashes](docs/evidence/2026-11-08/u2-file-primary-values/README.md).
+
+**Next:** thread aggregate bindings through emitMixedFilePrimaryGroupCore and
+its member compiler, preserving all-member preflight and assignment proofs.
+Then execute an owning caller plus sibling producing a fresh typed context,
+checking primary/secondary ordering and reclamation. Do not redo primary/chain
+bindings, File operations, aggregate construction or dispatch. The already-live
+primary guard stays until independently justified preservation is implemented.
+
+Other remaining gates are in the fixed
+[checklist](docs/architecture/UIR_U2_REMAINING_CHECKLIST.md): managed field and
+identity composition, carrier overlap, broader fault/physical/sanitizer/reference/
+trace evidence, current owned/C/hosted repeatability, branch reconciliation and
+exact-final four-platform/full qualification. No new full source oracle claimed.
+#74 remains OPEN; #121/#111 DRAFT. No merge/promotion or #51 restart.
+Broad unchanged suites, owned full-compiler self-build and final qualification
+were deliberately deferred to conserve the user-reported 17% remaining allowance.
+Exact quota cannot be inspected. Predecessor hosted CI was still in progress:
+https://github.com/eristavi/eristavi-lang/actions/runs/42472248786
+No new-head hosted success claimed. Stop at this verified pushed recovery point.
+Earlier current/next statements below are historical and superseded here.
+
+Latest verified source/test commit: `19ad90ab80b048789ed0273fb6db0d36f342cfae`.
+This documentation/evidence successor changes no implementation/test inputs.
+
+## Active checkpoint — 8 November 2026: File aggregate bindings
+
+Branch `compiler/u2-whole-function-file-roots-20261107`; base ddf98947c88abde97942072d3a378dd223102ebe.
+New emitFileValuesChecked / emitFileValuesCheckedGroup pass existing aggregate
+bindings through shared original single/homogeneous File cores. Legacy APIs keep
+empty bindings; no owner/SSA/primary proof, limits, source syntax, ABI or runtime
+adapter changed. Existing bootstrap shape pattern seeds concrete generic types
+without executing or conferring verifier authority.
+
+**5/5 focused PASS**, 39.502 s, zero failures/skips; **1/1 new producer case
+PASS**, 7.869 s, implementation unchanged. Single and one-member group execute
+normal/open-failure/close-failure, retained record access and exact close counts,
+pending-return cancellation and final reclamation. Invalid layout vector refuses
+without retaining a Plan. A fresh typed context is generated after consumption,
+with one close before class-5 failure return and full reclamation. Existing File
+behavior, primary append ordering and live-primary refusal regressions pass.
+No unresolved focused failures. Known C qualifier warnings remain unsuppressed.
+No new full source oracle for record/File composition is claimed.
+[Evidence](docs/evidence/2026-11-08/u2-file-values/README.md),
+[contract](docs/architecture/UIR_U2_FILE_VALUE_BINDINGS.md).
+
+Use the fixed [remaining checklist](docs/architecture/UIR_U2_REMAINING_CHECKLIST.md)
+to avoid restarting completed components. **Next:** thread bindings through
+primary/chain and mixed owning/non-owning cores, then exercise an owning caller
+and a sibling producing a fresh context with exact cleanup ordering. Keep the
+already-live-primary guard unless independently justified preservation is added.
+Do not repeat existing File acquisition, dispatch, constructors or List helpers.
+
+Remaining: primary/mixed File bindings and sibling composition, live-primary
+restriction, other field families/identity-containing aggregates, kind-4 operation
+and deep-fixability composition, carrier-overlap profiles, broad fault/physical/
+sanitizer/independent/typed-trace proof, current owned/C and hosted timing,
+reconciliation and exact-final four-platform/full qualification. #74 OPEN;
+#121/#111 DRAFT; no merge/promotion. #51 paused. No broad unchanged suites or
+owned full-compiler self-build manually initiated. Final qualification deferred.
+Predecessor CI was in progress: https://github.com/eristavi/eristavi-lang/actions/runs/42470224168
+No new-head hosted result claimed. User reports 28% remaining; exact quota cannot
+be inspected. Stop at this verified pushed checkpoint. Older current/next text
+below is historical and superseded here.
+
+Latest verified source/test commit: `2af590bfaefc3efbac08a4cac0041c63ac10cb94`.
+This documentation/evidence successor leaves source/test inputs unchanged.
+
+## Active checkpoint — 8 November 2026: closed checked value groups
+
+Branch `compiler/u2-whole-function-file-roots-20261107`; base
+`11702f30cdf440234cce448a74a91ffe856fa906`. Added emitValuesCheckedGroup by
+threading the existing carrier-aligned aggregate runtime bindings through one
+shared original group preflight/emission core. Ordinary emitCheckedGroup keeps
+empty bindings. Original closure/label/target/count caps, fresh independent
+body/SSA/root verification, all-member preflight before output and publication
+proofs remain; no new runtime adapter, source syntax, ABI or ownership rules.
+
+**5/5 focused methods PASS**, 51.725 s, zero failures/skips (two new methods,
+three compatibility methods). Actual sibling dispatch is observable via distinct
+42/52 leaf and 43/53 retained-parent error codes at depths 0/1/5/16/64, both
+outcomes, GC, typed matching and final reclamation. Interpreter/current C mutual
+source results agree. Invalid later-member source origin, layout, duplicate
+label, missing member and wrong binding refuse before all assembly. Existing
+work/capacity refusal releases plans; two-result handoff and single producer
+compatibility pass. Initial fixture callB typo and a single-client bootstrap
+specialization failure were corrected. A nonexecuted concrete shape anchor
+follows the existing bootstrap pattern, grants no verification authority and
+allocates no runtime plans. Known C identity-list qualifier warnings remain;
+no suppression, assertion or timeout changes. Logs retain initial failures with
+trailing whitespace normalized for patch checks.
+[Evidence](docs/evidence/2026-11-08/u2-value-groups/README.md),
+[contract](docs/architecture/UIR_U2_VALUE_GROUP_NATIVE.md).
+
+**Exact next step:** extend the same aggregate binding vector to File-owning
+single/group entry preflight/emission. Start with an owning caller and sibling
+that creates a fresh typed context, then verify normal/failure cleanup ordering
+and complete reclamation. Retain original owner/SSA/primary-binding proofs;
+do not remove the already-live-primary guard without a justified preservation
+proof. Do not redo completed File acquisition, group dispatch, constructor or
+List/aggregate implementations.
+
+Remaining: File-owned aggregate/producer combinations; carrier overlap cases;
+other field families and identity-containing aggregates; kind-4 operation and
+deep-fixability composition; existing live-primary restriction. Broad hostile
+root/allocator/sanitizer/physical/independent and typed trace/location evidence,
+current owned/C/hosted timing repeatability, reconciliation and exact-final
+four-platform/full qualification remain open. #74 OPEN, #121/#111 DRAFT; no
+merge or production promotion. #51 paused; no full compiler owned self-build
+or broad unchanged suites manually initiated.
+
+Predecessor CI still in progress when checked:
+https://github.com/eristavi/eristavi-lang/actions/runs/42468744031
+No new-head hosted success claimed. Final matrix/qualification and current
+owned generator repeatability deliberately deferred to preserve usage. User
+reported 44% remaining; actual quota cannot be inspected. Stop at this verified
+pushed checkpoint. Earlier current/next statements below are historical and
+superseded here.
+
+Latest verified source/test commit: `12835510a6260f241c6bac7279571f4b8c1d824d`.
+This documentation successor leaves implementation/test inputs unchanged.
+
+## Active checkpoint — 8 November 2026: native typed failure producers
+
+Branch `compiler/u2-whole-function-file-roots-20261107`; batch base
+`a72a24e5f2d4a6dd734a3aed2dcf1ed396ed2cda`. Added the missing compiler bridge
+from an exact selected ordinary aggregate payload and static Text message field
+to the defined Function's saved FailureContext. Exact reserved import
+kind/effects/version/signature/carrier/field/source checks remain independent.
+The existing frame/catch/fail/pop/saved runtime helpers own capture; no duplicate
+resource adapter, source syntax, ABI/frame/root layout or ownership semantics.
+The returned context is immediately stored in the existing third class-5
+word and original SSA slot before global failure clear; live-after publication
+precedes temporary retirement. List bounds emission excludes this import kind.
+Old profiles without payload bindings retain their original import path.
+
+**10/10 focused methods PASS**, 89.189 s, zero failures/skips; **1/1 additional
+nested-payload method PASS**, 7.655 s, implementation unchanged. Six initial new
+producer methods plus four immediate dependencies, then one new List/Text
+payload case. Actual generated payload/context construction has no incoming
+FailureContext. Primary snapshots survive another capture and GC; discarded
+contexts are reclaimed. Checked depths 0/1/5/16/64 cover normal completion,
+fresh leaf failures and retained parent failure after successful child return.
+Codes 42/43, unchanged beta versus discarded lambda, typed matching, exact
+returned live context count and final graph/Text/failure/handler/allocator
+reclamation pass. Independent interpreter/current C-native outcomes agree.
+Message ordinals 0/1/4, terminal context-allocation refusal and malformed
+source/import/representation/unchecked-entry refusal pass. A nested List/Text
+payload survives through the class-5 context alone. Existing recursive aggregate,
+checked returns, mutual failure ordering and typed reference checks pass.
+No unresolved focused failures. Initial test-driver scope-leave ABI misuse was
+fixed with the existing (scope, void-value) ABI, preserving all reclamation
+assertions; its failed raw log is retained.
+[Evidence](docs/evidence/2026-11-08/u2-typed-failure-producers/README.md),
+[producer contract/limits](docs/architecture/UIR_U2_TYPED_FAILURE_PRODUCER_NATIVE.md).
+
+**Exact next implementation step:** thread the existing aggregate runtime binding
+vector through closed checked-group preflight/emission, retaining both original
+independent group/body/SSA proofs. Add one sibling callee that constructs and
+returns a fresh typed context, plus caller normal/failure and wrong-binding
+refusal execution. Reuse emitValuesChecked and existing group/producer machinery;
+do not redo recursion, saved-context adapters, File acquisition or List work.
+Then extend the same binding integration to File-owning combinations with exact
+primary cleanup bindings; do not remove the already-live-primary refusal without
+an independently justified preservation proof.
+
+Remaining functionality: aggregate/producer bindings across mutual/closed groups
+and File-owned paths; additional field families and identity-containing aggregates;
+kind-4 operation/deep-fixability composition; carrier-overlap cases; already-live
+primary across File-owning defined calls. The new producer uses existing saved
+runtime context layout (no new native trace/location fields); existing broader
+typed trace/location evidence remains part of the acceptance audit. Source
+nominal fails-family routing belongs to frontend integration and is not introduced.
+General allocator/hostile-root/sanitizer/physical/independent proof, current
+owned/C/hosted timeout repeatability, branch reconciliation and exact final
+four-platform/full qualification remain OPEN. #74 OPEN; #121/#111 DRAFT; no merge
+or production promotion.
+
+Hosted attempt on documentation head aa619a36f743925c5365ce81a43a137106855a24
+failed only patch classification: a trailing space in preserved initial.log's
+first test-status line. Scope job 128693690432 failed; smoke/matrix skipped.
+https://github.com/eristavi/eristavi-lang/actions/runs/42468562936
+This evidence-only correction normalizes that line, retaining failed output
+and all assertions. Implementation/test inputs remain pinned above. Corrected
+head hosted run pending; no hosted success claimed for this new implementation.
+
+Predecessor exact-head smoke CI SUCCESS:
+https://github.com/eristavi/eristavi-lang/actions/runs/42463546118
+No new-head hosted or owned-generator parity result claimed. Broad unchanged
+suites, full owned compiler self-build, generator repeatability and final
+qualification deliberately not manually repeated to preserve usage. #51 paused.
+User reported 55% remaining; actual quota is not inspectable. Stop at this
+verified pushed checkpoint. Older current/next statements below are historical
+and superseded by this checkpoint.
+
+Latest verified source/test commit: `352b68b16b46c018b34ff0c31e6e7c7512a36e3f`.
+This documentation/evidence successor leaves compiler/test inputs unchanged.
+
+## Active checkpoint — 8 November 2026: aggregate Lists and checked self calls
+
+Branch `compiler/u2-whole-function-file-roots-20261107`; batch base
+`47388598471fccf6c93bbbfaa7059f0d1484e3bf`. Completed two missing integrations:
+Lists containing ordinary aggregates (including multiple shapes, loops and
+nested Lists), and parent-private aggregates/aggregate Lists across canonical
+single-Function checked self-recursion. Existing List/aggregate helpers,
+Function/SSA, continuations, class-1/class-5 roots and failure adapters reused.
+No completed File/Text/List/checked-call implementation was recreated; no new
+source syntax, public ABI, ownership semantics or production routing.
+
+New boxed import names use the canonical carrier suffix for declaration-name
+uniqueness only. Exact descriptor child, signature, kind/effects/version still
+verify. Legacy import matches avoid suffix formatting. emitValuesChecked binds
+native layouts to the existing checked/self entry; the caller failure pointer
+is saved before layout guards use RCX/RDX. Original publication and layout
+checks remain. Existing caps and terminal-versus-checked distinction remain.
+
+Independent source comparison discovered a C bootstrap code-generation bug:
+lexical typedef order declared an outer nested record List before its inner
+List typedef. Extra List typedefs now emit by nesting depth, then lexical order.
+No copy helpers/semantics or assertions changed. This compiler change still
+requires full final qualification before any merge/promotion.
+
+**17/17 focused methods PASS**, 121.449 s, zero failures/skips (11 new + 6
+immediate dependencies). **2/2 additional affected methods PASS**, 12.562 s,
+after strengthening only the recursive source oracle with parent-private
+List/record state and checked propagation; implementation unchanged. Native
+loops/copy/update/retrieved snapshots, multiple/nested shapes, Text contents,
+GC and final reclamation; descriptor/import/layout/identity/primitive refusal;
+source-located bounds; checked depths 0/1/5/32/64 on success/failure and handler
+recovery at depths 1/32 pass. Independent interpreter/current C-native results
+agree. No focused failures remain. The initial reference C failure (4 pass,
+1 fail) and its successful fix are retained in raw evidence. Repository log
+ignore rules required explicit inclusion of these and preceding aggregate logs.
+[Evidence](docs/evidence/2026-11-08/u2-boxed-lists/README.md),
+[contract and boundaries](docs/architecture/UIR_U2_BOXED_LIST_NATIVE.md).
+
+**Exact next implementation step:** audit the existing typed FailureContext
+foundation/runtime adapters and bridge compiler-generated typed failure
+construction into canonical whole-Function lowering, including immediate
+class-5 publication. Begin with one actual native positive fixture and an
+independent outcome/reference plus wrong-type/descriptor refusal. Do not
+reimplement saved-failure adapters, returned-child propagation or List work.
+
+Remaining functionality: typed failure producers; additional field families and
+identity-containing aggregates; kind-4 operation/deep-fixability composition;
+aggregate mutual/closed checked groups and File-owned combinations; already-live
+primary across File-owning defined calls. General allocator/hostile-root/
+sanitizer/physical/independent evidence, current owned/C/hosted timeout
+repeatability, branch reconciliation and final four-platform/full qualification
+remain open. #74 OPEN, #121/#111 DRAFT; no merge or production promotion.
+
+Predecessor automatic CI remained in progress when checked:
+https://github.com/eristavi/eristavi-lang/actions/runs/42461868793
+No new-head hosted or owned-generator parity success claimed. The preceding
+local owned/C pass was 117.920 s against 120 s on parent source 03b12c9, not
+these new inputs. Full unchanged groups/smoke, owned repeatability, full-compiler
+owned self-build and final qualification were deliberately not manually rerun
+to preserve usage. #51 stays paused. User reported 80% remaining; actual quota
+is not inspectable. Stop at this verified pushed checkpoint. Older next/current
+statements below are historical and superseded by this checkpoint.
+
+Latest verified source/test commit: `03b12c95082c0b755e63e4b87c63bcec52ec82ea`.
+This documentation successor leaves compiler/test inputs unchanged.
+
+## Active checkpoint — 8 November 2026: ordinary value aggregates
+
+Branch `compiler/u2-whole-function-file-roots-20261107`; batch base
+`be626b9ba48d2cee93701df94537b09132292d11`. The completed File/Text/List/
+checked-call implementations were not rewritten. Added the missing ordinary
+aggregate representation and native bridge for canonical make/get/set, including
+nested aggregates with predicate/i64/Text/List fields and immutable snapshots.
+
+Minimal architecture extension: private descriptor kind 4, structural domain 0,
+exact aggregate TypeId, ordinary copy policy 1, retaining four-word metadata and
+existing caps. No source syntax or new ownership semantics. Independent root
+admission checks selected children; emitValues explicitly binds native layouts.
+Existing ev_types_end, runtime graph helpers, SSA verification/publication and
+two class-1 temporary roots are reused. Missing/invalid bindings refuse before
+assembly; stale linked layout/kind/count/fields and out-of-table bindings are
+terminal defects. The native descriptor table remains trusted linked metadata.
+No new adapter, executable IR, public ABI, frame layout or production routing.
+
+**Final 20/20 tests PASS**, 312.618 s, zero failures/skips: six aggregate methods,
+three descriptor/opaque/mixed-root dependencies and eleven checked-group
+compatibility methods. Native nested snapshots, scalar/Text/List fields,
+forced GC/reclamation, independent Stage-0/current-native record reference,
+policy/domain/primitive/child/binding negatives and linked layout faults pass.
+Existing mutual frames, returned failures, class-5 roots, two-result handoffs,
+stack bounds, work/capacity refusal and owned/C direct-group output parity pass.
+Owned generator: **117.920 s** against unchanged **120 s** limit. One local pass
+with little margin is not hosted repeatability or closure of all timeout gates.
+No focused failures remain. Initial dependency visibility, local result-index
+and concrete empty-layout specialization problems were fixed before final run.
+[Evidence](docs/evidence/2026-11-08/u2-value-aggregates/README.md),
+[contract and limits](docs/architecture/UIR_U2_VALUE_AGGREGATE_NATIVE.md).
+
+**Exact next implementation step:** admit existing native List producers whose
+managed element is a selected ordinary value aggregate. Start with one generated
+append/get/snapshot fixture plus independent reference and wrong-child refusal;
+reuse current graph/List helpers and the new exact aggregate layout binding.
+Do not redo canonical aggregate builders, File work or existing List operations.
+Then implement typed FailureContext producers and remaining combined paths.
+
+Still unsupported here: Lists containing aggregate elements; identity-containing
+aggregates and other field families; aggregate checked/recursive/File combinations;
+kind-4 managed operation/deep-fixability composition. Typed failure producers and
+already-live primary across defined calls also remain. General physical/
+allocator/hostile-root/sanitizer/independent evidence, current hosted parity/
+timeout gates, branch reconciliation, final four-platform/full qualification
+remain OPEN. #74 stays OPEN; #121/#111 DRAFT; no merge or production promotion.
+
+Predecessor exact-head smoke CI succeeded:
+https://github.com/eristavi/eristavi-lang/actions/runs/42432076793
+New-head hosted CI is pending publication; no result claimed. Broad/full matrix,
+full-compiler owned self-build and release qualification deliberately deferred
+to conserve usage. #51 remains paused. Exact remaining ChatGPT allowance is not
+inspectable; this batch stops at a verified, pushed recovery checkpoint.
+Older current/next statements below are historical and superseded here.
+
+Latest verified source/test commit: `5a6ea63b7447c2aeeb2bac5afbe31f4ad9802ba6`.
+This documentation successor changes no compiler/test inputs.
+
+## Active checkpoint — 8 November 2026: nested List native constructors
+
+Branch `compiler/u2-whole-function-file-roots-20261107`; batch base
+`68c92c1e187978b806455c24ecf95746db3d94d9`. Added native whole-Function
+List<List<i64>> and List<List<Text>> empty/copy/append/replace/count/get/collect.
+Exact nested carrier/descriptor relationships and import signatures/effects/
+version are checked. Boxed inner Lists reuse existing List runtime helpers,
+canonical SSA and root publication. No new runtime adapters, executable IR,
+ABI or ownership semantics. Descriptor reads now occur only for the matching
+carrier/descriptor relationship; no measured performance gain is claimed.
+
+**4/4 final nested methods PASS**, 35.408 s; zero failures/skips. Generated
+native loops/snapshots/outer copy/replace/retrieved-inner append, counts and
+Unicode contents survive forced GC and final reclamation. Stage-0 and current
+native source references agree on 13. Nested get/replace retain source-located
+terminal faults. Wrong descriptor/marker/missing inner/effects/argument type
+refuse before assembly. **7/7 immediate regressions PASS**, 38.559 s; zero
+failures/skips. That run overlapped the final descriptor-read optimization;
+final nested tests independently passed after that edit. No unresolved focused
+failures. Logs, exact inputs and limits:
+[nested evidence](docs/evidence/2026-11-08/u2-nested-lists/README.md),
+[contract](docs/architecture/UIR_U2_NESTED_LIST_NATIVE.md).
+
+**Precise recovery point / first next task:** bridge existing managed value
+aggregate constructors/copies into canonical whole-Function native lowering,
+starting with one generated positive fixture and independent value-copy
+reference, plus wrong-descriptor refusal. Audit existing descriptor/runtime
+coverage first; do not reimplement it or repeat completed File/call/List work.
+
+Remaining: deeper/general managed construction, typed FailureContext producers,
+remaining combined checked/recursive/File paths (including an already-live
+primary across defined calls), comprehensive hostile-root/allocator/independent/
+sanitizer/physical proof, current owned/C generator parity and hosted timeout
+gates, main reconciliation and final four-platform/completed-batch qualification.
+Nested List evidence here does not qualify those combined paths or budgets.
+#74 OPEN, #121/#111 DRAFT; no merge or production promotion.
+
+Predecessor hosted CI was in progress when checked:
+https://github.com/eristavi/eristavi-lang/actions/runs/42431255401
+No new-head hosted/owned parity success claimed. Broad/full/self-build CI and
+final four-platform qualification deliberately deferred to preserve usage;
+#51 remains paused. User reported about 45% allowance at batch start; exact
+remaining quota is not inspectable. Work stops at this verified checkpoint.
+Older next-step lists below are historical and superseded by this checkpoint.
+
+Latest verified source/test commit: `2d01be312587f6e1d114d9bcb8955604ea7f30f8`.
+This documentation successor changes no compiler/test inputs.
+
+
+## Active checkpoint — 8 November 2026: List<Text> constructors and value copies
+
+Branch `compiler/u2-whole-function-file-roots-20261107`; base
+`443ac14c60780b2be2e0dadfc0936f9fc8fbf78a`. Added exact native whole-Function
+List<Text> empty/copy/append/replace/count/get/collect admission, reusing the
+existing graph runtime, canonical Function/SSA roots and source-located bounds
+faults. The distinct marker carrier must map to `listOfManaged(text)` and the
+canonical Text carrier. Text slots are directly rooted, not boxed as i64 or
+unboxed to lengths. No new runtime adapter, public ABI or frame layout.
+
+**6/6 focused tests PASS**, 31.631 s, zero failures/skips. Includes generated
+Text-list loop/snapshot/copy/replace/content checks, forced GC and reclamation;
+independent Stage-0/current-native source results; terminal source-located
+bounds failure; wrong descriptor/effects/type refusal; existing List<i64> and
+mixed Text/List roots regressions. Raw logs and hashes:
+[Text-list evidence](docs/evidence/2026-11-08/u2-list-text/README.md).
+[Contract](docs/architecture/UIR_U2_LIST_TEXT_NATIVE.md).
+
+**Next:** nested Lists and managed aggregate constructors/copies, typed
+FailureContext producers, remaining call combinations and broader hostile-root/
+allocator/independent/sanitizer/physical evidence, current owned/C parity and
+hosted timeout gates, main reconciliation and final four-platform/full release
+qualification. #74 stays OPEN, #121/#111 DRAFT. Earlier green generator timings
+do not qualify this new head. No broad/full/self-build CI or #51 work manually
+initiated. Older next-step statements below are superseded by this checkpoint.
+
+
+Latest verified implementation/test commit: `34faa47b07b52de061e1a94546748369cbdc693f`.
+This documentation successor leaves source/test inputs unchanged.
+
+
+## Active checkpoint — 8 November 2026: returned child failures through owned callers
+
+Branch `compiler/u2-whole-function-file-roots-20261107`; batch base
+`46758d671d6f3d763067a737971fb5417b648612`. Issue #74 remains OPEN; #121/#111
+DRAFT. General managed constructors, independent/physical/fault proof and final
+qualification remain incomplete.
+
+Implemented child-failure propagation through File-owning recursive callers:
+the child's original saved failure now reaches a proof-bound parent cleanup
+instead of being required to recover first. Clean parent close keeps that same
+primary; failed parent close appends its new cleanup context. Per-call
+liveBefore still refuses an already-live unrelated primary across a defined
+call. Removing the coarse Function-wide refusal does not remove this guard.
+
+New `emitMixedFilePrimaryGroup` binds explicit PrimaryAssignments to exact
+1-based owning members, pre-admits the closed group and freshly verifies each
+member's primary cleanup before emission. Missing/out-of-group/foreign and
+duplicate assignments refuse before output. Caps: 16 members, 128 assignments,
+eight primary sites per owning member. Ordinary group entry passes no binding
+metadata and allocates no assignment nodes; new metadata is private, bounded
+and not a verifier cache or executable IR. Existing SSA/root/owner proofs and
+public ABI remain. Bootstrap generic specialization needs a nonexecuted concrete
+shape anchor; known identity-list qualifier warnings remain in actual group
+fixture logs. No runtime/compiler-wide performance speedup is claimed.
+
+Validation: **6/6 focused methods PASS**, 39.671 s; additional live-primary
+call refusal **1/1 PASS**, 7.064 s. Generated recursive depths 0/1/4/16 and a
+distinct File-owning member cover clean, first-close-failure and all-close-
+failure paths. Tests assert first failure pointer identity, expected secondary
+count, exact close count, forced GC and complete reclamation. Invalid group
+assignments check both owner accounts; existing primary-prefix and legacy
+recursive/mixed-group paths remain passing. See
+[raw evidence](docs/evidence/2026-11-08/u2-primary-calls/README.md).
+
+**Next:** implement remaining non-i64/nested managed List/aggregate constructors
+and typed FailureContext producers. Separately needed: explicit semantics/proof
+for calls made while a primary is already active, broader mutual/mixed failure
+combinations, current owned/C generator parity and timeout gates, hostile root/
+allocator/physical/sanitizer and independent origin evidence; reconcile main,
+then final four-platform/full completed-batch qualification. No merge/promotion,
+full owned self-build, broad CI or #51 restart was manually selected this batch.
+All older next-step statements below are historical relative to this checkpoint.
+
+
+Verified implementation/test checkpoint: `c25498fc715b6d954747644f36447dc414e08d44`.
+This documentation successor leaves compiler/test inputs unchanged.
+
+
+## Active batch — 8 November 2026: multi-owner primary cleanup prefixes
+
+Branch `compiler/u2-whole-function-file-roots-20261107`; base
+`97630a1227dec9846f258716d35e023cd8cb6b7a`. **Issue #74 audited and remains
+OPEN:** managed/failure producers, deep independent/physical/fault evidence,
+latest owned/C parity and final four-platform/completed-batch gates remain.
+No merge or production promotion is justified by focused functionality alone.
+
+Implemented `emitFileCheckedPrimaryChain`: up to eight explicit bound closes
+can preserve a primary while several lexical File owners are live. Each close
+consumes only the innermost owner, carries the surviving prefix/primary/pending
+i64 through both original edges, and appends a close failure after prior
+secondary context. The original owner/root/continuation/failed-mode Plan and
+publication proofs are retained and generalized, not replaced.
+
+Code-efficiency constraint: bind-to-primary emission uses an O(1) dense table,
+allocated only for Functions with bindings; ordinary callers have no new table
+or linked binding nodes. Binding requests have at most eight temporary nodes;
+no runtime frame or public ABI change. No benchmark speedup claim.
+
+Evidence and exact focused recovery are recorded in
+[8 November primary-prefix evidence](docs/evidence/2026-11-08/u2-primary-prefix/README.md).
+The first combined run had nine passes and one test directory collision; that
+fixture-name issue is corrected and its affected combination rerun. No tests,
+assertions or timeouts were removed/weakened. Existing C-bootstrap pointer-
+qualifier warnings remain visible in group logs and need separate review.
+
+**Next:** finish combined primary propagation through File-owning checked
+recursive/groups; remaining managed List/aggregate/typed FailureContext
+construction; hostile-root/allocator/physical/sanitizer and independent outcome
+evidence; reconcile main and qualify exact finished revision on four platforms.
+Latest owned-generator gates remain unresolved on recent hosted smoke; earlier
+105.651 s evidence does not qualify this new code. Broad/full/self-build CI and
+#51 were not manually started in this batch, to preserve the usage budget.
+All older next-step statements below are superseded by this recovery section.
+
+
+## New verified nested primary across File-owner prefixes — 7 November 2026
+
+**Exact implemented/tested code** [`1f1b44b`](https://github.com/eristavi/eristavi-lang/commit/1f1b44b3f74d11d5e95e0d85f0c0ac9277ef9e8b).
+[Focused CI #42412553696](https://github.com/eristavi/eristavi-lang/actions/runs/42412553696)
+**4/4 PASS, zero errors/skips, 51.138 seconds** on hosted Linux x86-64 Clang.
+The previous three-method functional run [#42412420675](https://github.com/eristavi/eristavi-lang/actions/runs/42412420675)
+also passed at `c20efa9`, before two negative binding cases were added.
+
+The original whole-Function emitter can now preserve the exact *inner*
+File.close FailureContext as primary across the checked *outer* File.close
+after the inner owner was consumed and only its surviving outer prefix
+remains. On failed outer close, the new cleanup failure is appended as a
+secondary in native execution; success leaves the original primary
+unchanged. Roots survive forced GC and the 0/1/2 live File cleanup paths
+are checked. The existing independent `verifyPrimary` still demands a
+fully bound original checked source, one exact surviving owner,
+failure-mode cleanup Plan, canonical successors, typed class-5 root and
+source origin. We no longer incorrectly reject this safe case merely
+because the enclosing Function earlier had depth two. This is NOT a
+new generalized verifier, alternate IR, public ABI, or runtime error
+semantics. Stale continuation and wrong-mode Plan are refused before
+assembly; previous one-owner primary and ordinary nested File tests
+remain green. See [new evidence](docs/evidence/2026-11-07/u2-nested-primary/README.md).
+
+**Still unaccepted for U2 #74:** arbitrary sequences of active-primary
+closes with two or more owners still live, complete managed List/Text/
+aggregate/failure constructors, hostile/foreign/retired root and
+allocator/sanitizer/RSS evidence, broader Stage-0/C/native origin parity,
+latest owned/C generator output parity, main reconciliation and
+exact-head four-platform/full completed-batch qualification.
+The functional change is an isolated tested feature, not U2 completion.
+Keep #121/#111 draft, #74 open and #51 optimization paused. Do not reuse
+a prior-head CI result as latest-source qualification.
+
+
+## Latest verified File-owning closed/mixed-group checkpoint — 7 November 2026
+
+**Exact tested source-and-test head:** `58008fd395c740daa4d038191e0e029cad32559a`.
+[GitHub Actions focused native CI #42405486672](https://github.com/eristavi/eristavi-lang/actions/runs/42405486672)
+**5/5 tests PASS, zero failures/skips, 59.822 s**, Linux x86-64 Clang
+at the above head. The established single-owner File CFG, nested
+surviving-prefix/checked recovery and File-owning self-recursive execution
+remain green. New tests cover checked calls to an independently bound
+**different File-owning Function body** and a **resource-free helper** while
+the caller keeps its own original canonical lexical File owner. Both use
+per-Function roots/checked failure signatures, real native opens/closes,
+forced GC and post-frame reclamation.
+
+There are two separate bounded, optional entry points:
+`emitFileCheckedGroup` for closed all-owning groups and
+`emitMixedFileCheckedGroup` for mixed owning/nonowning checked groups.
+Each group's member Plans are pre-admitted, then freshly reverified at output;
+no arbitrary File object is transferred to another body. Mixed groups use
+**explicit 1-based exact owner-profile indices (zero for no File)** rather
+than an unsupported bootstrap List of optional identity records.
+The native tests passed with **C-bootstrap incompatible-pointer qualifier
+warnings** from the function-array emission path; these are not test failures
+but need review before final compiler qualification.
+
+An earlier [hosted U2 smoke #42400012947](https://github.com/eristavi/eristavi-lang/actions/runs/42400012947)
+failed three owned-generator 120-s watchdogs; it remains a separate U2
+qualification blocker. Latest focused success does **not** qualify owned/C
+generator output equivalence for this group, broad Linux smoke, four-platform
+CI, comprehensive primary-failure composition across nested prefixes, all
+managed constructors, physical/fault evidence or the complete eight-gate U2
+definition of done. Do **not** mark issue #74 done, merge #121/#111, promote
+production or resume general optimization #51 on this evidence.
+
+**Next functional/acceptance work:** safely compose explicit primary failure
+contexts through nested File cleanup, extend remaining managed List/aggregate
+construction/copy and typed FailureContext producers, test combined class-1/
+class-5 roots and hostile/foreign/stale owner conditions, then gather fresh
+independent Stage-0/C/new-native evidence, physical/sanitizer evidence and
+exact final-tree four-platform/completed-batch qualification. Keep the older
+checkpoint narratives below as historical, not today's remaining-work list.
+
+
+## Latest implementation checkpoint — 7 November 2026 (nested owners and File-owning recursion)
+
+**Verified exact implementation/test tree:** `8e5c8bd8de09d46586934b28dad2f7ac6f1729c1`.
+[Focused native CI #42404765081](https://github.com/eristavi/eristavi-lang/actions/runs/42404765081)
+**3/3 PASS, 0 failed, 0 skipped, 51.554 seconds**, Linux x86-64 Clang,
+against the unmodified prior single-owner integration tests.
+
+The original whole-Function x86-64 checked emitter now admits independently
+verified **nested lexical File owners (maximum supported depth eight)**, retains
+the precise outer-prefix roots after inner close, and accepts recovering checked
+handler branches where an incoming error is dead before another File operation.
+The canonical owner, liveness and original CFG proofs remain mandatory.
+Generated nested code is executed with forced GC, inner acquisition recovery,
+injected close failures, missing outer root rejection and exact 0/1/2 live
+resource counts on the tested paths.
+
+**File-owning checked self-recursion now has native execution evidence:** each
+recursive Function frame separately opens and closes its File; depths
+0/1/4/16, forced GC and injected close failures are covered. A fallible
+recursive call cannot use/pass a File handle as an ordinary argument or
+silently overwrite an unbound live FailureContext. The failed-child path
+tested here RECOVERS before closing this frame's own resource. Cross-member
+File-owning groups and arbitrary active-primary composition across multiple
+nested owners are NOT admitted or qualified.
+
+New test files: `tests/fixtures/u2_function_file_nested.eri`,
+`tests/fixtures/u2_function_file_recursive.eri`. Focused smoke workflow:
+`.github/workflows/u2-file-nested-focused.yml`.
+The existing one-owner primary composition remains a separate focused-tested
+slice; latest owned/C generator parity and full exact-head CI/four-platform
+qualification remain pending. Older development summaries below are historical
+and their former “next implementation step” statements are superseded by this
+current section. **Keep #121 and #111 draft, issue #74 OPEN, #51 paused.**
+
+**Known unrelated U2 CI gate:** [run #42400012947](https://github.com/eristavi/eristavi-lang/actions/runs/42400012947)
+finished with failure after 178 tests because three owned-generator executions
+exceeded the unchanged 120-second watchdog on hosted Linux Clang. No semantic
+assertion failure was reported in that run. This result is not green evidence;
+do not lengthen the watchdog or restart broad optimization as a substitute
+for completing U2. The new targeted functional CI does not qualify full U2.
+
+
+Updated 7 November 2026 (Asia/Nicosia). Active branch:
+`compiler/u2-whole-function-file-roots-20261107`, draft PR #121 targeting
+`compiler/u2-cleanup-foundation-20261102` (draft #111). Issue #74 remains OPEN.
+Tested implementation commit: `2f5065cb32755e8560da4340852c25dc3610224f`.
+This documentation successor changes no implementation or test input.
+Baseline head: `0263208d7168b9a2a2365f7f105749df6a980ea7`.
+**Latest implementation: whole-Function primary/secondary File composition.**
+`emitFileCheckedPrimary` now consumes the freshly verified explicit binding.
+A failed close retains its separate original typed outcome and appends the
+complete new failure to the rooted original primary with the existing runtime
+`erist_rt_failure_append`. A successful close preserves the primary unchanged.
+Both paths consume the File SSA/root and carry the original primary through
+canonical edges. Existing secondary context remains before the new close
+failure. The source primary must use the Function's exact class-5 carrier.
+Binding verification lives in `u2_primary_cleanup_bind`; the existing chain
+verifier delegates to the same proof. A nonexecuted concrete bootstrap helper
+seeds Scope-list generic construction for resource-free importing callers.
+
+**Final focused tests: 6/6 PASS, 0 failed/skipped, 43.420 s.** Four generated
+primary scenarios cover clean/failing close with/without an existing secondary,
+forced GC, retained primary identity, ordered append and final reclamation.
+Stale binding and normal-mode Plan refuse before output. Existing nested helper,
+File handler and depth-64 checked-recursion regressions pass. Early bootstrap
+specialization failures are retained in `primary-native.log`; corrected exact
+run is `primary-final.log`. No timeouts or assertions were weakened.
+
+This finishes the bounded single-owner primary-composition implementation,
+not full U2. Next: nested ownership/surviving prefixes in general Function
+emission, then File-owning recursive/group frames. New-primary owned-generator
+parity, broad smoke, deep physical/sanitizer and final qualification remain
+pending; prior 105.651 s parity applies to the earlier single-owner revision.
+Base: `5312f5042c9aa8276d33287f29a72ba8afb8ea44`. Keep drafts and #74 open.
+
+**Current checkpoint: owned File generator timeout RESOLVED locally.**
+The initial managed Plan was discarded before constructing the File-extended
+Plan. Diagnostic trace measured **17.711 s** in that redundant first Plan;
+mandatory publication verification took **36.109 s** and remains intact.
+Descriptor admission now returns selected types separately; File emission
+constructs one SSA Plan. Legacy create still performs the same admission and
+Plan creation. Full independent publication and lexical owner proofs remain.
+
+Uninstrumented owned generator: **105.651 s**, unchanged 120-second watchdog;
+byte-identical owned/C assembly, static-link audits and generated File success/
+close-failure execution PASS. Full File class **5/5 PASS**, 164.210 s; shared
+managed/checked-recursive regressions **2/2 PASS**, 14.333 s.
+Baseline traced run timed out at 120 s. These are targeted measurements,
+not five paired timings, RSS/GC-pause or whole-compiler performance evidence.
+See `owned-baseline-trace.log`, `owned-fixed.log` and `plan-regressions.log`
+in the batch evidence folder. No timeout or assertion was weakened.
+
+Next resume explicit checked-chain primary binding and failure composition,
+then nested surviving prefixes; full File integration remains incomplete.
+Implementation base is `71436a23c0dd315d765ee8d5e4837b4d97d5d8c5`;
+this successor contains the measured fix. Prior evidence below is historical.
+**Final focused validation: 8/8 PASS, 0 failed, 0 skipped, 69.823 seconds.**
+The command, source hashes and raw log are recorded in
+[the batch evidence](docs/evidence/2026-11-07/u2-file-function/README.md).
+No merge, production promotion, final four-platform qualification, #51 work,
+or experimental owned full-compiler self-build is authorized by this checkpoint.
+
+## Current File implementation and recovery
+
+The general whole-Function emitter now has an opt-in `emitFileChecked` entry.
+Actual original opcode-46 File.openRead/close calls select original typed edges;
+acquisition is immediately rooted, checked close consumes the original SSA and
+lexical root on both outcomes, and pending scalar success is cancelled on close
+failure. Handler recovery, class-1/class-5 forced-GC roots and final reclamation
+are exercised by compiler-generated execution. Existing independent owners,
+SSA publication, native resource adapters and the 32-byte public ABI are reused.
+
+**Bounded, not full integration:** one lexical owner only. Nested owners,
+surviving prefixes, active-primary/ordered-secondary composition and File-owning
+recursive/group calls remain refused. General all-exit acceptance, deeper
+foreign/stale root and physical/sanitizer evidence, main reconciliation and final
+four-platform/completed-batch qualification remain open. Do not repeat completed
+checked-group work or the single-owner open/close slice.
+
+**Exact next implementation step:** extend File close emission to consume the
+original active FailureContext through the existing verified suffix-cleanup
+infrastructure, proving primary preservation and ordered secondary failures;
+then admit nested owners/surviving prefixes. Retain current refusal gates until
+each combination has native positive/negative evidence.
+
+Previous smoke [#42360813812](https://github.com/eristavi/eristavi-lang/actions/runs/42360813812)
+on `8104d8e8b1819765addab4fde3854fd37ccd81b2` is now confirmed SUCCESS:
+**171 run / 168 passed / 0 failed / 3 intentional skips**, 1611.120 seconds.
+Scope/patch passed; the four-platform matrix was skipped. No newer branch run
+was present at initial inspection. This verifies the prior foundation, not the
+new integration. Earlier failed attempts and exact focused fix evidence remain
+in [the historical checkpoint](docs/history/2026-11-07/file-roots-before-function-integration.md).
+
+The current batch's broader Linux smoke, owned/C generator parity and final
+qualification are deliberately not initiated locally to protect the usage
+budget. Any automatically triggered hosted smoke must be reported separately
+and must not be assumed successful. All standing instructions below continue.
 
 ## Latest verified development checkpoint — 7 November 2026
 
@@ -80,7 +797,7 @@ run experimental full owned-compiler self-builds; separate #51 remains paused.
 | Checked return contract | `u2_function_contract.eri` binds exact frozen FunctionId/signatures; optional opcode 47 `return.failure`. Fresh verifier checks binding/type/arity/attributes/origin, including dead blocks; legacy profiles refuse it. Scoped owners must be empty on both return kinds. Zero, one and two normal results supported; no fake Void SSA. |
 | Text / Unicode17 | Established 12 imports: scalar construction, immutable concat/copy/equality, views/counts/indexes, NFC and collection; mixed Text/List loops. Unicode17 remains frozen. |
 | List<i64> | Empty/copy/append/count/get/replace/collect with rooted snapshots/boxes and original source/LocId bounds faults, including negative/end bounds. Nested/non-i64 producers remain open. |
-| File cleanup / failures | Checked typed edges, owner prefixes, reverse exactly-once closes, primary/ordered-secondary failure roots; bounded two-stage native chain and recursive runtime probes. File paths remain separate adapters. Whole-Function checked recursion propagates existing saved contexts; general context construction and complete handler/resource integration remain open. |
+| File cleanup / failures | Checked typed edges, owner prefixes, reverse exactly-once closes, primary/ordered-secondary failure roots; bounded two-stage native chain and recursive runtime probes. Single-owner File.openRead/close now runs in whole-Function CFG through emitFileChecked; nested composition and owned recursive/group integration remain open. Whole-Function checked recursion propagates existing saved contexts. |
 | Private physical schema | Function gained `definedTarget` (default zero): **18** owned graph cells, previously 17. Physical observer and independent pin updated; capacity/traffic budgets unchanged. |
 | Publication proof | `ssa.verifyPublications` freshly verifies the full plan and all ordered IDs/entry/before/after bits, including dead code, before each body's output. Checked groups reuse private immutable Plans within one bounded transaction, never a verified flag. Derived plans close on comparison-work refusal; all group Plans/phases close on any failure. |
 
@@ -261,3 +978,13 @@ restarting paused benchmarks, rejected pilots or the capped compiler workload.
 Keep this file current-only: replace superseded status rather than appending
 contradictory recovery checkpoints. Move dated history to `docs/history/`,
 retain raw evidence and link it. Preserve all standing instructions above.
+
+## Publication patch-check correction
+
+Automatic [CI #42397322506](https://github.com/eristavi/eristavi-lang/actions/runs/42397322506)
+on documentation head `5329f323952e0ed62cff8af2d5f3482eb104a800` failed the
+scope/patch job on an extra blank line at EOF in the newly archived historical
+handover. Smoke and matrix were skipped, not failed compiler tests. The archive
+newline is corrected in this documentation-only successor; source/test hashes
+and the 8/8 local result are unchanged. The full staged patch is checked against
+the parent PR branch, including added files. Hosted rerun remains unqualified.
