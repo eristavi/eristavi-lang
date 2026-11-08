@@ -1,5 +1,42 @@
 # Eristavi compiler — current handover
 
+## Active batch — 8 November 2026: multi-owner primary cleanup prefixes
+
+Branch `compiler/u2-whole-function-file-roots-20261107`; base
+`97630a1227dec9846f258716d35e023cd8cb6b7a`. **Issue #74 audited and remains
+OPEN:** managed/failure producers, deep independent/physical/fault evidence,
+latest owned/C parity and final four-platform/completed-batch gates remain.
+No merge or production promotion is justified by focused functionality alone.
+
+Implemented `emitFileCheckedPrimaryChain`: up to eight explicit bound closes
+can preserve a primary while several lexical File owners are live. Each close
+consumes only the innermost owner, carries the surviving prefix/primary/pending
+i64 through both original edges, and appends a close failure after prior
+secondary context. The original owner/root/continuation/failed-mode Plan and
+publication proofs are retained and generalized, not replaced.
+
+Code-efficiency constraint: bind-to-primary emission uses an O(1) dense table,
+allocated only for Functions with bindings; ordinary callers have no new table
+or linked binding nodes. Binding requests have at most eight temporary nodes;
+no runtime frame or public ABI change. No benchmark speedup claim.
+
+Evidence and exact focused recovery are recorded in
+[8 November primary-prefix evidence](docs/evidence/2026-11-08/u2-primary-prefix/README.md).
+The first combined run had nine passes and one test directory collision; that
+fixture-name issue is corrected and its affected combination rerun. No tests,
+assertions or timeouts were removed/weakened. Existing C-bootstrap pointer-
+qualifier warnings remain visible in group logs and need separate review.
+
+**Next:** finish combined primary propagation through File-owning checked
+recursive/groups; remaining managed List/aggregate/typed FailureContext
+construction; hostile-root/allocator/physical/sanitizer and independent outcome
+evidence; reconcile main and qualify exact finished revision on four platforms.
+Latest owned-generator gates remain unresolved on recent hosted smoke; earlier
+105.651 s evidence does not qualify this new code. Broad/full/self-build CI and
+#51 were not manually started in this batch, to preserve the usage budget.
+All older next-step statements below are superseded by this recovery section.
+
+
 ## New verified nested primary across File-owner prefixes — 7 November 2026
 
 **Exact implemented/tested code** [`1f1b44b`](https://github.com/eristavi/eristavi-lang/commit/1f1b44b3f74d11d5e95e0d85f0c0ac9277ef9e8b).

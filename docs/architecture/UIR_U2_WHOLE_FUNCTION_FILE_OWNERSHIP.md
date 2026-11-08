@@ -200,3 +200,33 @@ bounded composition only. It does not admit multiple simultaneous
 active owners with a propagating primary, a chain of multiple bound
 already-failing closes, or the remaining U2 managed construction,
 physical and four-platform requirements.
+
+## Primary chains with surviving owner prefixes — 8 November 2026
+
+`emitFileCheckedPrimaryChain` admits up to eight explicit PrimaryBindings in
+one canonical Function. Legacy single-binding and resource-free entries remain.
+Each binding reconstructs the authoritative active lexical prefix from the
+original frozen owner profile, checks its innermost obligation against the
+caller binding, and freshly invokes the independent primary verifier.
+That verifier accepts `[primary, owners in acquisition order, pending i64]`;
+it verifies a failed-entry Plan consuming exactly the innermost owner with
+`survive = depth - 1`, and checks unchanged primary, pending scalar and every
+surviving owner on both original outcomes. No resource can be dropped, restored
+or substituted. The new close failure remains distinct from the carried primary.
+
+Bindings are private bounded request metadata, represented internally by at
+most eight temporary linked nodes to avoid the bootstrap's unsupported generic
+empty-list specialization. They are not an executable IR or a trusted proof
+cache. A dense instruction-to-primary table (at most 512 integers) is built
+only when bindings exist; emission lookup is O(1). Ordinary entries allocate
+neither nodes nor this table. Original full owner/root/SSA publication proofs
+remain; each binding independently reverifies its Plan. No runtime frame or
+public ABI change, timeout relaxation or claimed compiler-wide speedup.
+
+Native tests exercise two simultaneously live owners with a propagating
+primary, two bound cleanup sites, reverse physical record order and retained
+secondary append order, including an existing secondary. Binding duplicates,
+missing sites and wrong surviving-prefix Plans refuse before output. Maximum
+caps are admission limits, not evidence for every depth/CFG combination.
+Primary-bound recursive/group-call combinations, general managed constructors
+and final U2 qualification remain separate acceptance requirements.

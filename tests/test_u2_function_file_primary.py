@@ -14,9 +14,8 @@ class U2FunctionFilePrimaryTests(unittest.TestCase):
     run_probe=fileTests.U2FunctionFileCheckedTests.run_probe
     caller=fileTests.U2FunctionFileCheckedTests.caller
     nested_caller=fileTests.U2FunctionFileCheckedTests.nested_caller
-    def test_generated_primary_preservation_and_secondary_append(self):
-        source=(ROOT/'tests/fixtures/u2_function_file_primary.eri').read_text()
-        generated=self.generator('primary-function',source)
+    def exercise_primary(self,source,depth=1):
+        generated=self.generator('primary-function-'+str(depth),source)
         self.assertEqual((generated.returncode,generated.stderr),(0,''),generated.stdout[-2000:])
         self.assertIn('call erist_rt_failure_append',generated.stdout)
         path=self.directory/'primary-owned.txt';path.write_text('native')
@@ -59,12 +58,49 @@ class U2FunctionFilePrimaryTests(unittest.TestCase):
                 check+='''    cmpq $0,NEXT(%rax)
     jne .Lresource_test_fail
 '''.replace('NEXT','88' if prior else '80')
+            if failed and depth == 2:
+                check=check.replace('    cmpq $0,88(%rax)',
+                    '    movq 88(%rax),%rax\n    testq %rax,%rax\n'
+                    '    je .Lresource_test_fail\n    cmpq $0,88(%rax)')
             caller=caller.replace('    cmpq $0,80(%rax)\n    jne .Lresource_test_fail',check)
             caller=caller.replace('    movq $0,.Lroots(%rip)','    movq $0,.Lroots+8(%rip)\n    movq $0,.Lroots(%rip)')
             caller+='\n.section .rodata\n.Lprimary_message: .asciz "original primary"\n.Lprior_message: .asciz "prior cleanup"\n'
             runtime=resource.close_failures(self.runtime) if failed else self.runtime
+            if depth == 2:
+                runtime=runtime.replace('.Lr_open_retry:\n',
+                    '.Lr_open_retry:\n    movq .Lopen_count(%rip),%rcx\n'
+                    '    leaq .Lopen_records(%rip),%rdx\n'
+                    '    movq %rbx,(%rdx,%rcx,8)\n    incq .Lopen_count(%rip)\n',1)
+                runtime=runtime.replace('.Lr_close:\n',
+                    '.Lr_close:\n    movq .Lclose_count(%rip),%rcx\n'
+                    '    movq $1,%rdx\n    subq %rcx,%rdx\n'
+                    '    leaq .Lopen_records(%rip),%rcx\n'
+                    '    movq (%rcx,%rdx,8),%rcx\n'
+                    '    cmpq 8(%rdi),%rcx\n    jne .Lresource_test_fail\n'
+                    '    incq .Lclose_count(%rip)\n',1)
+                caller=caller.replace('    call .Lresource_finish',
+                    '    cmpq $2,.Lclose_count(%rip)\n    jne .Lresource_test_fail\n'
+                    '    call .Lresource_finish')
+                caller+='\n.bss\n.Lopen_count: .quad 0\n.Lclose_count: .quad 0\n.Lopen_records: .zero 16\n'
             run=self.run_probe('primary-'+str(failed)+'-'+str(prior),generated.stdout+caller,runtime=runtime)
             self.assertEqual((run.returncode,run.stdout,run.stderr),(0,b'',b''))
+
+    def test_generated_primary_preservation_and_secondary_append(self):
+        self.exercise_primary((ROOT/'tests/fixtures/u2_function_file_primary.eri').read_text())
+
+    def test_primary_chain_keeps_outer_owner_and_ordered_context(self):
+        self.exercise_primary((ROOT/'tests/fixtures/u2_function_file_primary_chain.eri').read_text(),2)
+
+    def test_primary_chain_refuses_duplicate_missing_and_wrong_prefix(self):
+        source=(ROOT/'tests/fixtures/u2_function_file_primary_chain.eri').read_text()
+        for name, altered in (
+            ('duplicate',source.replace('[innerBinding,binding])','[innerBinding,innerBinding,binding])')),
+            ('missing',source.replace('[innerBinding,binding])','[binding])')),
+            ('prefix',source.replace('innerActive,1,loc,true','innerActive,0,loc,true'))):
+            result=self.generator('bad-chain-'+name,altered)
+            self.assertEqual(result.returncode,1,result.stdout[-1600:])
+            self.assertNotIn('.globl',result.stdout)
+            self.assertIn('unsupported:',result.stdout)
 
     def test_nested_close_failure_becomes_primary_through_outer_cleanup(self):
         source=(ROOT/'tests/fixtures/u2_function_file_nested_primary.eri').read_text()
