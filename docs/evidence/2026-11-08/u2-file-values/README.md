@@ -2,7 +2,8 @@
 
 Branch compiler/u2-whole-function-file-roots-20261107.
 Base ddf98947c88abde97942072d3a378dd223102ebe.
-Verified source/test SHA is pinned by the documentation successor.
+Verified source/test SHA: 19ad90ab80b048789ed0273fb6db0d36f342cfae.
+Documentation/evidence successor leaves implementation/tests unchanged.
 
 final.log: **5/5 PASS**, 39.502 s, zero failures/skips (two new methods plus
 three immediate File/primary/guard regressions). producer.log: **1/1 PASS**,

@@ -1,5 +1,48 @@
 # Eristavi compiler — current handover
 
+Latest verified source/test commit: `19ad90ab80b048789ed0273fb6db0d36f342cfae`.
+This documentation/evidence successor changes no implementation/test inputs.
+
+## Active checkpoint — 8 November 2026: File aggregate bindings
+
+Branch `compiler/u2-whole-function-file-roots-20261107`; base ddf98947c88abde97942072d3a378dd223102ebe.
+New emitFileValuesChecked / emitFileValuesCheckedGroup pass existing aggregate
+bindings through shared original single/homogeneous File cores. Legacy APIs keep
+empty bindings; no owner/SSA/primary proof, limits, source syntax, ABI or runtime
+adapter changed. Existing bootstrap shape pattern seeds concrete generic types
+without executing or conferring verifier authority.
+
+**5/5 focused PASS**, 39.502 s, zero failures/skips; **1/1 new producer case
+PASS**, 7.869 s, implementation unchanged. Single and one-member group execute
+normal/open-failure/close-failure, retained record access and exact close counts,
+pending-return cancellation and final reclamation. Invalid layout vector refuses
+without retaining a Plan. A fresh typed context is generated after consumption,
+with one close before class-5 failure return and full reclamation. Existing File
+behavior, primary append ordering and live-primary refusal regressions pass.
+No unresolved focused failures. Known C qualifier warnings remain unsuppressed.
+No new full source oracle for record/File composition is claimed.
+[Evidence](docs/evidence/2026-11-08/u2-file-values/README.md),
+[contract](docs/architecture/UIR_U2_FILE_VALUE_BINDINGS.md).
+
+Use the fixed [remaining checklist](docs/architecture/UIR_U2_REMAINING_CHECKLIST.md)
+to avoid restarting completed components. **Next:** thread bindings through
+primary/chain and mixed owning/non-owning cores, then exercise an owning caller
+and a sibling producing a fresh context with exact cleanup ordering. Keep the
+already-live-primary guard unless independently justified preservation is added.
+Do not repeat existing File acquisition, dispatch, constructors or List helpers.
+
+Remaining: primary/mixed File bindings and sibling composition, live-primary
+restriction, other field families/identity-containing aggregates, kind-4 operation
+and deep-fixability composition, carrier-overlap profiles, broad fault/physical/
+sanitizer/independent/typed-trace proof, current owned/C and hosted timing,
+reconciliation and exact-final four-platform/full qualification. #74 OPEN;
+#121/#111 DRAFT; no merge/promotion. #51 paused. No broad unchanged suites or
+owned full-compiler self-build manually initiated. Final qualification deferred.
+Predecessor CI was in progress: https://github.com/eristavi/eristavi-lang/actions/runs/42470224168
+No new-head hosted result claimed. User reports 28% remaining; exact quota cannot
+be inspected. Stop at this verified pushed checkpoint. Older current/next text
+below is historical and superseded here.
+
 Latest verified source/test commit: `2af590bfaefc3efbac08a4cac0041c63ac10cb94`.
 This documentation/evidence successor leaves source/test inputs unchanged.
 
