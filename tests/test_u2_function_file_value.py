@@ -61,3 +61,68 @@ class U2FunctionFileValueTests(unittest.TestCase):
         run=self.run_probe('file-values-context-after-close',generated.stdout+caller+
             '\n.bss\n.Lclose_calls: .quad 0\n'+descriptors(),runtime=runtime,types=False)
         self.assertEqual((run.returncode,run.stdout,run.stderr),(0,b'',b''))
+
+    def primary_source(self,chain=False):
+        fixture='u2_function_file_primary_chain.eri' if chain else 'u2_function_file_primary.eri'
+        source=(ROOT/'tests/fixtures'/fixture).read_text()
+        source=source.replace('    let file be',
+            '    let record be try aggregate.aggregate(graph,mp,[i64,text]);\n    let file be',1)
+        source=source.replace('    try managed.freeze(registry);',
+            '    let recordType be try managed.valueOfBase(registry,mp,record);\n    try managed.freeze(registry);',1)
+        marker='    let secondPair be' if chain else '    try ab.jump(fn,graph,bridge,owned,'
+        source=source.replace(marker,
+            '    let snapshot be try ab.make(fn,graph,bridge,record,[bridgePending,path],loc);\n'+marker,1)
+        # A damaged retained integer takes an ordinary return; the external
+        # caller requires the original primary, so this cannot silently pass.
+        for block,param,name in [('done',0,'returned'),('closeFailed',1,'cancelled')]:
+            original=f'    let {name} be try body.returnFailure(fn,graph,table,{block},try build.parameter(fn,{block},{param}),loc);'
+            replacement=f'''    let {name}Good be try ab.block(fn,graph,[failure]);
+    let {name}Bad be try ab.block(fn,graph,[]);
+    try owners.block(profile,fn,cp,{name}Good,[]);
+    try owners.block(profile,fn,cp,{name}Bad,[]);
+    let {name}Value be try ab.get(fn,graph,{block},snapshot,0,loc);
+    let {name}Expected be try build.integer(fn,{block},42,loc);
+    let {name}Equal be try build.compareInteger(fn,{block},{name}Value,{name}Expected,1,loc);
+    try ab.branch(fn,graph,{block},{name}Equal,{name}Good,[try build.parameter(fn,{block},{param})],{name}Bad,[],loc);
+    try ab.returnValues(fn,graph,{name}Bad,[{name}Value],loc);
+    let {name} be try body.returnFailure(fn,graph,table,{name}Good,try build.parameter(fn,{name}Good,0),loc);'''
+            self.assertIn(original,source)
+            source=source.replace(original,replacement)
+        source=source.replace('native.emitFileCheckedPrimary','native.emitFileValuesCheckedPrimary')
+        source=source.replace('phase,registry,[text],\n        [managed.text(registry)],true,718',
+            'phase,registry,[text,record],\n        [managed.text(registry),recordType],true,718')
+        return source.replace('9,[innerBinding,binding])','9,[innerBinding,binding],[4,10])').replace('9,binding)','9,binding,[4,10])')
+
+    def test_primary_values_and_nested_chain_preserve_context_and_aggregate(self):
+        import test_u2_function_file_primary as primary
+        # Reuse original primary identity/ordered secondary/GC/reclamation
+        # assertions, extending only the runtime's concrete descriptor table.
+        original=self.run_probe
+        def probe(name,assembly,runtime=None,types=True):
+            runtime=runtime.replace('.Lr_close:\n',
+                '.Lr_close:\n    incq .Lvalue_closes(%rip)\n',1)
+            assembly=assembly.replace('    call .Lresource_finish',
+                '    cmpq $'+str(2 if chain else 1)+',.Lvalue_closes(%rip)\n'
+                '    jne .Lresource_test_fail\n    call .Lresource_finish',1)
+            return original(name,assembly+descriptors()+'\n.bss\n.Lvalue_closes: .quad 0\n',
+                runtime=runtime,types=False)
+        self.run_probe=probe
+        try:
+            for chain in (False,True):
+                with self.subTest(chain=chain):
+                    primary.U2FunctionFilePrimaryTests.exercise_primary(self,self.primary_source(chain),2 if chain else 1)
+        finally:
+            self.run_probe=original
+
+    def test_primary_values_refuse_bad_layout_and_cleanup_binding_without_leaks(self):
+        source=self.primary_source(True)
+        for name,bad in (
+            ('layout',source.replace('[4,10])','[4])')),
+            ('duplicate',source.replace('[innerBinding,binding],[4,10])','[innerBinding,innerBinding,binding],[4,10])')),
+            ('prefix',source.replace('innerActive,1,loc,true','innerActive,0,loc,true'))):
+            with self.subTest(case=name):
+                result=self.generator('file-primary-values-bad-'+name,bad)
+                self.assertEqual(result.returncode,1,result.stdout[-2000:])
+                self.assertIn('unsupported:',result.stdout)
+                self.assertNotIn('.globl',result.stdout)
+                self.assertNotIn('leaked',result.stdout)
