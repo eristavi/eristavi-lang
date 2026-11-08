@@ -1,0 +1,27 @@
+test_independent_source_value_copy (test_u2_function_value_aggregate.U2FunctionValueAggregateTests.test_independent_source_value_copy) ... ok
+test_linked_layout_mismatch_and_out_of_table_are_terminal (test_u2_function_value_aggregate.U2FunctionValueAggregateTests.test_linked_layout_mismatch_and_out_of_table_are_terminal) ... ok
+test_missing_duplicate_and_wrong_descriptor_layouts_refuse (test_u2_function_value_aggregate.U2FunctionValueAggregateTests.test_missing_duplicate_and_wrong_descriptor_layouts_refuse) ... ok
+test_nested_aggregate_snapshot_text_list_and_forced_gc (test_u2_function_value_aggregate.U2FunctionValueAggregateTests.test_nested_aggregate_snapshot_text_list_and_forced_gc) ... ok
+test_new_descriptor_policy_domain_and_primitive_shape_refuse (test_u2_function_value_aggregate.U2FunctionValueAggregateTests.test_new_descriptor_policy_domain_and_primitive_shape_refuse) ... ok
+test_predicate_fields_are_boxed_and_unboxed_as_predicates (test_u2_function_value_aggregate.U2FunctionValueAggregateTests.test_predicate_fields_are_boxed_and_unboxed_as_predicates) ... ok
+test_versioned_text_list_identity_descriptors_and_corruption (test_u2_managed_types.U2ManagedTypesTests.test_versioned_text_list_identity_descriptors_and_corruption) ... ok
+test_reject_managed_producer_in_dead_block_before_emission (test_u2_function_managed_native.U2FunctionManagedNativeTests.test_reject_managed_producer_in_dead_block_before_emission) ... ok
+test_mixed_text_list_calls_share_exact_whole_function_root_map (test_u2_function_import_integration.U2FunctionImportIntegrationTests.test_mixed_text_list_calls_share_exact_whole_function_root_map) ... ok
+test_closed_group_refusals_precede_all_assembly (test_u2_function_checked_group.U2FunctionCheckedGroupTests.test_closed_group_refusals_precede_all_assembly) ... ok
+test_different_member_recovers_failure_into_normal_parent_result (test_u2_function_checked_group.U2FunctionCheckedGroupTests.test_different_member_recovers_failure_into_normal_parent_result) ... ok
+test_distinct_normal_signatures_and_result_positions (test_u2_function_checked_group.U2FunctionCheckedGroupTests.test_distinct_normal_signatures_and_result_positions) ... ok
+test_list_value_crosses_mutual_frames_and_preserves_snapshot (test_u2_function_checked_group.U2FunctionCheckedGroupTests.test_list_value_crosses_mutual_frames_and_preserves_snapshot) ... ok
+test_missing_sibling_handoff_roots_are_terminal_defects (test_u2_function_checked_group.U2FunctionCheckedGroupTests.test_missing_sibling_handoff_roots_are_terminal_defects) ... ok
+test_mutual_checked_frames_gc_and_independent_source_outcomes (test_u2_function_checked_group.U2FunctionCheckedGroupTests.test_mutual_checked_frames_gc_and_independent_source_outcomes) ... ok
+test_mutual_frames_preserve_primary_and_ordered_secondary_context (test_u2_function_checked_group.U2FunctionCheckedGroupTests.test_mutual_frames_preserve_primary_and_ordered_secondary_context) ... ok
+test_mutual_native_frame_stack_bound_and_reclamation (test_u2_function_checked_group.U2FunctionCheckedGroupTests.test_mutual_native_frame_stack_bound_and_reclamation) ... U2_MUTUAL_STACK=[{"depth": 0, "function_stack_bytes": 592}, {"depth": 1, "function_stack_bytes": 1184}, {"depth": 5, "function_stack_bytes": 3552}, {"depth": 32, "function_stack_bytes": 19536}, {"depth": 64, "function_stack_bytes": 38480}]
+ok
+test_owned_and_c_generators_agree_on_direct_group (test_u2_function_checked_group.U2FunctionCheckedGroupTests.test_owned_and_c_generators_agree_on_direct_group) ... U2_DIRECT_GROUP_OWNED_GENERATOR_SECONDS=117.920
+ok
+test_preflight_work_and_capacity_refusal_release_owned_plans (test_u2_function_checked_group.U2FunctionCheckedGroupTests.test_preflight_work_and_capacity_refusal_release_owned_plans) ... ok
+test_two_managed_results_cross_member_handoff (test_u2_function_checked_group.U2FunctionCheckedGroupTests.test_two_managed_results_cross_member_handoff) ... ok
+
+----------------------------------------------------------------------
+Ran 20 tests in 312.618s
+
+OK

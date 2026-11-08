@@ -1,0 +1,7 @@
+test_independent_source_list_record_and_nested_value_semantics (test_u2_function_aggregate_list.U2FunctionAggregateListTests.test_independent_source_list_record_and_nested_value_semantics) ... ok
+test_independent_source_snapshots (test_u2_function_nested_list.U2FunctionNestedListTests.test_independent_source_snapshots) ... ok
+
+----------------------------------------------------------------------
+Ran 2 tests in 8.336s
+
+OK

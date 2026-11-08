@@ -1,5 +1,71 @@
 # Eristavi compiler — current handover
 
+Latest verified source/test commit: `352b68b16b46c018b34ff0c31e6e7c7512a36e3f`.
+This documentation/evidence successor leaves compiler/test inputs unchanged.
+
+## Active checkpoint — 8 November 2026: aggregate Lists and checked self calls
+
+Branch `compiler/u2-whole-function-file-roots-20261107`; batch base
+`47388598471fccf6c93bbbfaa7059f0d1484e3bf`. Completed two missing integrations:
+Lists containing ordinary aggregates (including multiple shapes, loops and
+nested Lists), and parent-private aggregates/aggregate Lists across canonical
+single-Function checked self-recursion. Existing List/aggregate helpers,
+Function/SSA, continuations, class-1/class-5 roots and failure adapters reused.
+No completed File/Text/List/checked-call implementation was recreated; no new
+source syntax, public ABI, ownership semantics or production routing.
+
+New boxed import names use the canonical carrier suffix for declaration-name
+uniqueness only. Exact descriptor child, signature, kind/effects/version still
+verify. Legacy import matches avoid suffix formatting. emitValuesChecked binds
+native layouts to the existing checked/self entry; the caller failure pointer
+is saved before layout guards use RCX/RDX. Original publication and layout
+checks remain. Existing caps and terminal-versus-checked distinction remain.
+
+Independent source comparison discovered a C bootstrap code-generation bug:
+lexical typedef order declared an outer nested record List before its inner
+List typedef. Extra List typedefs now emit by nesting depth, then lexical order.
+No copy helpers/semantics or assertions changed. This compiler change still
+requires full final qualification before any merge/promotion.
+
+**17/17 focused methods PASS**, 121.449 s, zero failures/skips (11 new + 6
+immediate dependencies). **2/2 additional affected methods PASS**, 12.562 s,
+after strengthening only the recursive source oracle with parent-private
+List/record state and checked propagation; implementation unchanged. Native
+loops/copy/update/retrieved snapshots, multiple/nested shapes, Text contents,
+GC and final reclamation; descriptor/import/layout/identity/primitive refusal;
+source-located bounds; checked depths 0/1/5/32/64 on success/failure and handler
+recovery at depths 1/32 pass. Independent interpreter/current C-native results
+agree. No focused failures remain. The initial reference C failure (4 pass,
+1 fail) and its successful fix are retained in raw evidence. Repository log
+ignore rules required explicit inclusion of these and preceding aggregate logs.
+[Evidence](docs/evidence/2026-11-08/u2-boxed-lists/README.md),
+[contract and boundaries](docs/architecture/UIR_U2_BOXED_LIST_NATIVE.md).
+
+**Exact next implementation step:** audit the existing typed FailureContext
+foundation/runtime adapters and bridge compiler-generated typed failure
+construction into canonical whole-Function lowering, including immediate
+class-5 publication. Begin with one actual native positive fixture and an
+independent outcome/reference plus wrong-type/descriptor refusal. Do not
+reimplement saved-failure adapters, returned-child propagation or List work.
+
+Remaining functionality: typed failure producers; additional field families and
+identity-containing aggregates; kind-4 operation/deep-fixability composition;
+aggregate mutual/closed checked groups and File-owned combinations; already-live
+primary across File-owning defined calls. General allocator/hostile-root/
+sanitizer/physical/independent evidence, current owned/C/hosted timeout
+repeatability, branch reconciliation and final four-platform/full qualification
+remain open. #74 OPEN, #121/#111 DRAFT; no merge or production promotion.
+
+Predecessor automatic CI remained in progress when checked:
+https://github.com/eristavi/eristavi-lang/actions/runs/42461868793
+No new-head hosted or owned-generator parity success claimed. The preceding
+local owned/C pass was 117.920 s against 120 s on parent source 03b12c9, not
+these new inputs. Full unchanged groups/smoke, owned repeatability, full-compiler
+owned self-build and final qualification were deliberately not manually rerun
+to preserve usage. #51 stays paused. User reported 80% remaining; actual quota
+is not inspectable. Stop at this verified pushed checkpoint. Older next/current
+statements below are historical and superseded by this checkpoint.
+
 Latest verified source/test commit: `03b12c95082c0b755e63e4b87c63bcec52ec82ea`.
 This documentation successor leaves compiler/test inputs unchanged.
 

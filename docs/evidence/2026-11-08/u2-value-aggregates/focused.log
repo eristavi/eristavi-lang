@@ -1,0 +1,9 @@
+test_independent_source_value_copy (test_u2_function_value_aggregate.U2FunctionValueAggregateTests.test_independent_source_value_copy) ... ok
+test_linked_layout_mismatch_and_out_of_table_are_terminal (test_u2_function_value_aggregate.U2FunctionValueAggregateTests.test_linked_layout_mismatch_and_out_of_table_are_terminal) ... ok
+test_missing_duplicate_and_wrong_descriptor_layouts_refuse (test_u2_function_value_aggregate.U2FunctionValueAggregateTests.test_missing_duplicate_and_wrong_descriptor_layouts_refuse) ... ok
+test_nested_aggregate_snapshot_text_list_and_forced_gc (test_u2_function_value_aggregate.U2FunctionValueAggregateTests.test_nested_aggregate_snapshot_text_list_and_forced_gc) ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 47.488s
+
+OK

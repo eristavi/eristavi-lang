@@ -1,0 +1,6 @@
+test_parent_private_aggregate_survives_checked_recursion_and_failure (test_u2_function_aggregate_list.U2FunctionAggregateListTests.test_parent_private_aggregate_survives_checked_recursion_and_failure) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 8.413s
+
+OK

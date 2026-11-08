@@ -1,0 +1,6 @@
+test_nested_aggregate_snapshot_text_list_and_forced_gc (test_u2_function_value_aggregate.U2FunctionValueAggregateTests.test_nested_aggregate_snapshot_text_list_and_forced_gc) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 8.395s
+
+OK

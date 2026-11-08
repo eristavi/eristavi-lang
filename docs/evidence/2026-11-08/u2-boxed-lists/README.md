@@ -2,7 +2,10 @@
 
 Branch: compiler/u2-whole-function-file-roots-20261107.
 Base: 47388598471fccf6c93bbbfaa7059f0d1484e3bf.
-Exact source/test commit is pinned by the documentation successor.
+Verified source/test commit: 352b68b16b46c018b34ff0c31e6e7c7512a36e3f.
+This documentation/evidence successor leaves implementation/tests unchanged.
+Raw .log files are explicitly included despite the repository ignore rule;
+the saved preceding value-aggregate logs are also retained in this successor.
 
 Implemented two missing integrations, reusing completed work:
 
