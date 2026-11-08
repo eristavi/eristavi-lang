@@ -1,5 +1,9 @@
 # Eristavi compiler — current handover
 
+Latest verified source/test commit: `2d01be312587f6e1d114d9bcb8955604ea7f30f8`.
+This documentation successor changes no compiler/test inputs.
+
+
 ## Active checkpoint — 8 November 2026: List<Text> constructors and value copies
 
 Branch `compiler/u2-whole-function-file-roots-20261107`; base

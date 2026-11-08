@@ -1,5 +1,9 @@
 # Canonical whole-Function List<Text> constructors
 
+Latest verified source/test commit: `2d01be312587f6e1d114d9bcb8955604ea7f30f8`.
+This documentation successor changes no compiler/test inputs.
+
+
 8 November 2026. Base `443ac14c60780b2be2e0dadfc0936f9fc8fbf78a`.
 Draft #121, #111 draft, U2 #74 open. This is bounded development evidence.
 
