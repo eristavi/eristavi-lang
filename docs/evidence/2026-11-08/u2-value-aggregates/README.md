@@ -2,7 +2,8 @@
 
 Branch: compiler/u2-whole-function-file-roots-20261107.
 Base: be626b9ba48d2cee93701df94537b09132292d11.
-The documentation successor pins the exact verified source/test commit.
+Verified source/test commit: 03b12c95082c0b755e63e4b87c63bcec52ec82ea.
+This documentation successor changes no compiler/test inputs.
 
 New functionality: private ordinary aggregate descriptor and root admission;
 canonical make/get/set native lowering through existing graph helpers; nested

@@ -1,5 +1,63 @@
 # Eristavi compiler — current handover
 
+Latest verified source/test commit: `03b12c95082c0b755e63e4b87c63bcec52ec82ea`.
+This documentation successor leaves compiler/test inputs unchanged.
+
+## Active checkpoint — 8 November 2026: ordinary value aggregates
+
+Branch `compiler/u2-whole-function-file-roots-20261107`; batch base
+`be626b9ba48d2cee93701df94537b09132292d11`. The completed File/Text/List/
+checked-call implementations were not rewritten. Added the missing ordinary
+aggregate representation and native bridge for canonical make/get/set, including
+nested aggregates with predicate/i64/Text/List fields and immutable snapshots.
+
+Minimal architecture extension: private descriptor kind 4, structural domain 0,
+exact aggregate TypeId, ordinary copy policy 1, retaining four-word metadata and
+existing caps. No source syntax or new ownership semantics. Independent root
+admission checks selected children; emitValues explicitly binds native layouts.
+Existing ev_types_end, runtime graph helpers, SSA verification/publication and
+two class-1 temporary roots are reused. Missing/invalid bindings refuse before
+assembly; stale linked layout/kind/count/fields and out-of-table bindings are
+terminal defects. The native descriptor table remains trusted linked metadata.
+No new adapter, executable IR, public ABI, frame layout or production routing.
+
+**Final 20/20 tests PASS**, 312.618 s, zero failures/skips: six aggregate methods,
+three descriptor/opaque/mixed-root dependencies and eleven checked-group
+compatibility methods. Native nested snapshots, scalar/Text/List fields,
+forced GC/reclamation, independent Stage-0/current-native record reference,
+policy/domain/primitive/child/binding negatives and linked layout faults pass.
+Existing mutual frames, returned failures, class-5 roots, two-result handoffs,
+stack bounds, work/capacity refusal and owned/C direct-group output parity pass.
+Owned generator: **117.920 s** against unchanged **120 s** limit. One local pass
+with little margin is not hosted repeatability or closure of all timeout gates.
+No focused failures remain. Initial dependency visibility, local result-index
+and concrete empty-layout specialization problems were fixed before final run.
+[Evidence](docs/evidence/2026-11-08/u2-value-aggregates/README.md),
+[contract and limits](docs/architecture/UIR_U2_VALUE_AGGREGATE_NATIVE.md).
+
+**Exact next implementation step:** admit existing native List producers whose
+managed element is a selected ordinary value aggregate. Start with one generated
+append/get/snapshot fixture plus independent reference and wrong-child refusal;
+reuse current graph/List helpers and the new exact aggregate layout binding.
+Do not redo canonical aggregate builders, File work or existing List operations.
+Then implement typed FailureContext producers and remaining combined paths.
+
+Still unsupported here: Lists containing aggregate elements; identity-containing
+aggregates and other field families; aggregate checked/recursive/File combinations;
+kind-4 managed operation/deep-fixability composition. Typed failure producers and
+already-live primary across defined calls also remain. General physical/
+allocator/hostile-root/sanitizer/independent evidence, current hosted parity/
+timeout gates, branch reconciliation, final four-platform/full qualification
+remain OPEN. #74 stays OPEN; #121/#111 DRAFT; no merge or production promotion.
+
+Predecessor exact-head smoke CI succeeded:
+https://github.com/eristavi/eristavi-lang/actions/runs/42432076793
+New-head hosted CI is pending publication; no result claimed. Broad/full matrix,
+full-compiler owned self-build and release qualification deliberately deferred
+to conserve usage. #51 remains paused. Exact remaining ChatGPT allowance is not
+inspectable; this batch stops at a verified, pushed recovery checkpoint.
+Older current/next statements below are historical and superseded here.
+
 Latest verified source/test commit: `5a6ea63b7447c2aeeb2bac5afbe31f4ad9802ba6`.
 This documentation successor changes no compiler/test inputs.
 
