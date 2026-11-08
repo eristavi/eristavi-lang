@@ -157,7 +157,7 @@ function emitNativeImport(result Int,first Int,operands,
             line("call erist_rt_text_collect");
         } else { line("movq %rax,"+slot(result)); }
     }
-    if kind == 2 or kind == 5 or kind == 6 or kind == 7 {
+    if kind == 2 or kind == 5 or kind == 6 or kind == 7 or kind == 8 {
         if operation == 4 or operation == 6 {
             // The existing standalone List adapter validates the index
             // against the live object length before any mutation or copy.
@@ -723,6 +723,7 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
     let managedReturnSecond be false;
     let selected be [];
     let textCarrier be 0; let listCarrier be 0; let textListCarrier be 0; let nestedI64Carrier be 0; let nestedTextCarrier be 0;
+    let boxedLists be []; let boxedElements be [];
     let typeRead be try budget.verificationPhase(registry.owner);
     let marker be 0;
     while marker < carriers.count {
@@ -735,6 +736,15 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
         }
         if desc.kind == 2 and desc.elementDomain == 1 and desc.element == 1 {
             textListCarrier=carrier.index;
+            let childIndex be 0;
+            while childIndex < descriptors.count {
+                let child managed.TypeId be descriptors[childIndex];
+                if child.index == 1 {
+                    let childCarrier aggregate.TypeId be carriers[childIndex];
+                    boxedLists.add(carrier.index); boxedElements.add(childCarrier.index);
+                }
+                childIndex=childIndex+1;
+            }
         }
         if desc.kind == 2 and desc.elementDomain == 1 and desc.element != 1 {
             let innerIndex be 0;
@@ -742,6 +752,10 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
                 let innerDescriptor managed.TypeId be descriptors[innerIndex];
                 if innerDescriptor.index == desc.element {
                     let inner be try managed.descriptor(registry,typeRead,innerDescriptor);
+                    if inner.kind == 1 or inner.kind == 2 or inner.kind == 4 {
+                        let childCarrier aggregate.TypeId be carriers[innerIndex];
+                        boxedLists.add(carrier.index); boxedElements.add(childCarrier.index);
+                    }
                     if inner.kind == 2 and inner.elementDomain == 0 and inner.element == 2 {
                         nestedI64Carrier=carrier.index;
                     }
@@ -944,7 +958,7 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
                 importKind=3;
             } else {
                 let resolved be nativeImports.inspect(routine.metadata,graph,phase,
-                    instructions[row+7],textCarrier,listCarrier,textListCarrier,nestedI64Carrier,nestedTextCarrier)
+                    instructions[row+7],textCarrier,listCarrier,textListCarrier,nestedI64Carrier,nestedTextCarrier,boxedLists,boxedElements)
                     else error budget.LimitError { fail error; }
                     else error nativeImports.Unsupported {
                         fail Unsupported { message=error.message; };
@@ -1213,6 +1227,24 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
     output(".globl "+base);
     output(".type "+base+",@function");
     output(base+":");
+    line("pushq %rbx");
+    line("subq $"+format.integer(frameBytes)+",%rsp");
+    line("movq %rdi,%rbx");
+    line("movq %rsi,"+format.integer(callerRootOffset)+"(%rsp)");
+    if checked {
+        line("testq %rcx,%rcx");
+        line("je erist_rt_value_fault_internal");
+        line("movq %rcx,"+format.integer(callerFailureOffset)+"(%rsp)");
+    }
+    if managedReturn or managedReturnSecond {
+        line("testq %rsi,%rsi");
+        line("je erist_rt_value_fault_internal");
+    }
+    if managedReturnSecond {
+        // A second native managed result needs at least two caller root words.
+        line("cmpq $2,%rdx");
+        line("jb erist_rt_value_fault_internal");
+    }
     let fieldOffset be 0;
     i=0;
     while i < valueLayouts.count {
@@ -1234,24 +1266,6 @@ function compile(plan identity ssa.Plan,routine identity build.Function,
             fieldOffset=fieldOffset+1; j=j+1;
         }
         i=i+1;
-    }
-    line("pushq %rbx");
-    line("subq $"+format.integer(frameBytes)+",%rsp");
-    line("movq %rdi,%rbx");
-    line("movq %rsi,"+format.integer(callerRootOffset)+"(%rsp)");
-    if checked {
-        line("testq %rcx,%rcx");
-        line("je erist_rt_value_fault_internal");
-        line("movq %rcx,"+format.integer(callerFailureOffset)+"(%rsp)");
-    }
-    if managedReturn or managedReturnSecond {
-        line("testq %rsi,%rsi");
-        line("je erist_rt_value_fault_internal");
-    }
-    if managedReturnSecond {
-        // A second native managed result needs at least two caller root words.
-        line("cmpq $2,%rdx");
-        line("jb erist_rt_value_fault_internal");
     }
     // Clear full SSA and registered root-vector storage first.
     i=0;
@@ -1430,6 +1444,26 @@ public function emitChecked(routine identity build.Function,
         carriers,descriptors);
     compile(plan,routine,graph,table,phase,registry,carriers,descriptors,
         forceGC,label,routine.definedTarget,true,[],[],true,none,0,none,emptyValueLayouts())
+        else error budget.LimitError { try ssa.close(plan); fail error; }
+        else error canonical.InvalidIR { try ssa.close(plan); fail error; }
+        else error ssa.InvalidLiveness { try ssa.close(plan); fail error; }
+        else error Unsupported { try ssa.close(plan); fail error; };
+    try ssa.close(plan);
+}
+
+// Checked self calls use the same aggregate bindings and original class-5
+// failure handoff. The complete body and SSA publications still verify.
+public function emitValuesChecked(routine identity build.Function,
+    graph identity aggregate.Registry,table identity contracts.Registry,
+    phase identity budget.Phase,registry identity managed.Registry,
+    carriers,descriptors,valueRuntimeTypes,forceGC Bool,label Int)
+    fails budget.LimitError,canonical.InvalidIR,ssa.InvalidLiveness,
+        roots.InvalidManagedRoots,managed.InvalidManagedTypes,
+        graphVerify.InvalidGraph,Unsupported {
+    let plan be try roots.create(routine,graph,table,phase,registry,
+        carriers,descriptors);
+    compile(plan,routine,graph,table,phase,registry,carriers,descriptors,
+        forceGC,label,routine.definedTarget,true,[],[],true,none,0,none,valueRuntimeTypes)
         else error budget.LimitError { try ssa.close(plan); fail error; }
         else error canonical.InvalidIR { try ssa.close(plan); fail error; }
         else error ssa.InvalidLiveness { try ssa.close(plan); fail error; }

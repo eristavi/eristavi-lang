@@ -107,7 +107,7 @@ public function selectTypes(routine identity build.Function,
                             if elementCarrier == element and elementDescriptor.index == shape.element {
                                 let elementShape be try managed.descriptor(registry,read,elementDescriptor);
                                 if elementShape.copyPolicy == 1 and
-                                    (elementShape.kind == 1 or elementShape.kind == 2) {
+                                    (elementShape.kind == 1 or elementShape.kind == 2 or elementShape.kind == 4) {
                                     managedList=true;
                                 }
                             }

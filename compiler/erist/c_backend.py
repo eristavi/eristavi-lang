@@ -11,10 +11,13 @@ class CBackend:
         self.maybe_types=self._collect_prefixed_types(p,'maybe ')
         all_lists=self._collect_prefixed_types(p,'List of ')
         self.extra_list_types={t for t in all_lists if list_element(t) not in ('Int','Float','Bool','Text')}
+        # Nested List typedefs contain pointers to their inner List typedef;
+        # lexical order can place an outer List before that name exists.
+        ordered_lists=sorted(self.extra_list_types,key=lambda t:(t.count('List of '),t))
         ordered=self._order_structs(p.structs)
         parts=[RUNTIME]
         if ordered: parts.append('\n'.join(f'typedef struct {struct_tag(s.name)} {ctype(s.name)};' for s in ordered))
-        if self.extra_list_types: parts.append('\n'.join(self._list_typedef(t) for t in sorted(self.extra_list_types)))
+        if self.extra_list_types: parts.append('\n'.join(self._list_typedef(t) for t in ordered_lists))
         for t in sorted(self.maybe_types):
             if self._maybe_ready(t,set()): parts.append(self._maybe_typedef(t)); self.maybe_defined.add(t)
         defined_structs=set()

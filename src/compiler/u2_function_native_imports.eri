@@ -4,6 +4,7 @@
 // names and native helpers remain owned by u2_text_native/u2_list_i64.
 // Every used call is checked by original canonical declaration/signature,
 // version, effects, exact arity and opaque carrier BEFORE native emission.
+import compiler.format as format;
 import compiler.u1_budget as budget;
 import compiler.u1_words as words;
 import compiler.u1_meta as meta;
@@ -50,19 +51,35 @@ public function nestedListName(textElements Bool,op Int) returns Text {
     if op == 6 { return prefix+"get"; }
     return prefix+"collect";
 }
+// Carrier suffix keeps canonical declaration symbols unique when a Function
+// uses multiple boxed List shapes. It grants no type/root authority: the
+// selected descriptor relationship and full canonical signature still verify.
+public function boxedListName(carrier Int,op Int) returns Text {
+    let prefix be "u2.list.boxed."+format.integer(carrier)+".";
+    if op == 1 { return prefix+"empty"; }
+    if op == 2 { return prefix+"copy"; }
+    if op == 3 { return prefix+"append"; }
+    if op == 4 { return prefix+"replace"; }
+    if op == 5 { return prefix+"count"; }
+    if op == 6 { return prefix+"get"; }
+    return prefix+"collect";
+}
 // An exact source FunctionId is used: target ordinals are not assumed to
 // equal local op indices or each other when Text and List coexist.
 public function inspect(data identity meta.Metadata,
     graph identity aggregate.Registry,phase identity budget.Phase,
-    target Int,textCarrier Int,listCarrier Int,textListCarrier Int,nestedI64Carrier Int,nestedTextCarrier Int)
+    target Int,textCarrier Int,listCarrier Int,textListCarrier Int,nestedI64Carrier Int,nestedTextCarrier Int,boxedLists,boxedElements)
     returns Target fails budget.LimitError,Unsupported {
     try require(data.frozen and not data.closed and graph.state == 1 and
         target >= 1 and target <= data.declarations.length/6 and
         phase.state == 0 and phase.owner.kind == 2 and
         phase.owner.parent == data.owner.parent,
         "foreign or unverified native managed import target");
+    try require(boxedLists.count == boxedElements.count and boxedLists.count <= 8,
+        "invalid boxed List relationship vector");
     let row be (target-1)*6;
     let kind be 0; let operation be 0;
+    let selectedBoxedList be 0; let selectedBoxedElement be 0;
     let i be 1;
     while i <= 12 {
         if textCarrier >= 7 and try same(data,phase,row,textNative.name(i)) {
@@ -83,6 +100,20 @@ public function inspect(data identity meta.Metadata,
         }
         if nestedTextCarrier >= 7 and try same(data,phase,row,nestedListName(true,i)) {
             kind=7; operation=i;
+        }
+        i=i+1;
+    }
+    // Preserve the old fast path: only unknown legacy names pay for boxed
+    // carrier suffix formatting. Stop after the exact unique match.
+    i=1;
+    while kind == 0 and i <= 7 {
+        let j be 0;
+        while kind == 0 and j < boxedLists.count {
+            if try same(data,phase,row,boxedListName(boxedLists[j],i)) {
+                kind=8; operation=i;
+                selectedBoxedList=boxedLists[j]; selectedBoxedElement=boxedElements[j];
+            }
+            j=j+1;
         }
         i=i+1;
     }
@@ -109,6 +140,7 @@ public function inspect(data identity meta.Metadata,
     let boxedList be textListCarrier; let boxedElement be textCarrier;
     if kind == 6 { boxedList=nestedI64Carrier; boxedElement=listCarrier; }
     if kind == 7 { boxedList=nestedTextCarrier; boxedElement=textListCarrier; }
+    if kind == 8 { boxedList=selectedBoxedList; boxedElement=selectedBoxedElement; }
     i=0;
     while i < arguments {
         let expected be textCarrier;
