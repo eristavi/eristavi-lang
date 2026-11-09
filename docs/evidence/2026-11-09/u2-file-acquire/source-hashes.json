@@ -1,0 +1,6 @@
+{
+  "src/compiler/u2_file_acquire_x86_64.eri": "c6c93622e7980ed1459e725022e0f2f7b68852aa7a28427b5601c48095c6b813",
+  "tests/fixtures/u2_file_acquire_native.eri": "d6ba61dd6bea9b186c10f79907407cfdff1076eddbd31a83608edfddb1aa6075",
+  "tests/test_u2_file_acquire_native.py": "9581dadc1453be8ad05d3652bce7359712969465c0716ae89a39280737291cef",
+  "tools/run_ci_tests.py": "13cc3829f06ffbc32600550f2b673f4798ec115b052f7926ecd2d4efe4f27f53"
+}

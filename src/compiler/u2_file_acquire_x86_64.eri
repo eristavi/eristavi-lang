@@ -1,0 +1,123 @@
+// Private checked File acquisition bridge. This is not whole-Function lowering.
+// Original canonical ownership and failure-root proofs precede any output.
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+import compiler.u1_builder as build;
+import compiler.u1_meta as meta;
+import compiler.u1_aggregate as aggregate;
+import compiler.u1_aggregate_signature as signatures;
+import compiler.u1_verify as canonical;
+import compiler.u2_scoped_owners as owners;
+import compiler.u2_invoke_contract as contracts;
+import compiler.u2_root_map as roots;
+import compiler.format as format;
+
+public error Unsupported { message Text; }
+function require(ok Bool,message Text) fails Unsupported {
+    if not ok { fail Unsupported { message=message; }; }
+}
+function line(value Text) { output("    "+value); }
+// Explicit private embedding ABI:
+// RDI=boxed Text path (caller-rooted), RSI=registered class-1 result word,
+// RDX=registered class-5 failure word, RCX=owned runtime File type number.
+// Both output words must be empty. RAX=boxed File / saved failure;
+// R10=0 / 1. No successful File result exists on a failed acquisition.
+// Runtime descriptor numbering is deliberately independent of canonical types.
+// Binding a complete Function's SSA arguments/edges remains the caller's duty.
+public function emit(routine identity build.Function,
+    graph identity aggregate.Registry,profile identity owners.Profile,
+    table identity contracts.Registry,phase identity budget.Phase,
+    map identity roots.Map,instruction build.InstId,
+    textType aggregate.TypeId,label Int)
+    fails budget.LimitError,canonical.InvalidIR,owners.InvalidOwnership,
+        roots.InvalidRoots,Unsupported {
+    let ownerProof be try owners.verify(profile,routine,graph,table);
+    let rootProof be try roots.verify(map,routine,graph,phase);
+    try require(instruction.owner == routine.key and instruction.index >= 1 and
+        instruction.index <= routine.instructions.length/10 and
+        textType.owner == graph.key and textType.index >= 7 and
+        textType.index != profile.handle.index and
+        textType.index <= 6+graph.records.length/4 and
+        label >= 1 and label <= 2147483647,
+        "invalid canonical File acquisition bridge");
+    let acquireSignature be try meta.functionSignature(routine.metadata,phase,profile.acquire);
+    try require((try meta.parameterCount(routine.metadata,phase,acquireSignature)) == 1,
+        "File acquisition requires one path argument");
+    let declaration be (profile.acquire.index-1)*6;
+    let symbol be "u2.file.openRead.v1";
+    try require((try words.get(routine.metadata.declarations,phase,declaration+2)) == symbol.bytes.count and
+        (try words.get(routine.metadata.declarations,phase,declaration+3)) == 2 and
+        (try words.get(routine.metadata.declarations,phase,declaration+4)) == 8 and
+        (try words.get(routine.metadata.declarations,phase,declaration+5)) == 1,
+        "incompatible File openRead native import");
+    let symbolStart be try words.get(routine.metadata.declarations,phase,declaration+1);
+    let byte be 0;
+    while byte < symbol.bytes.count {
+        try require((try words.get(routine.metadata.symbolBytes,phase,symbolStart+byte)) == symbol.bytes[byte],
+            "unknown File acquisition native import");
+        byte=byte+1;
+    }
+    let signature be try signatures.parameterType(routine.metadata,graph,phase,acquireSignature,0);
+    try require(signature.index == textType.index and
+        (try aggregate.fieldCount(graph,phase,textType)) == 0,
+        "File acquisition requires an exact opaque Text path carrier");
+    let row be (instruction.index-1)*10;
+    let first be try words.get(routine.instructions,phase,row+2);
+    let edge be try words.get(routine.instructions,phase,row+8);
+    try require((try words.get(routine.instructions,phase,row)) == 46 and
+        (try words.get(routine.instructions,phase,row+7)) == profile.acquire.index and
+        (try words.get(routine.instructions,phase,row+3)) == 1 and
+        first >= 0 and first < routine.operands.length and
+        edge >= 1 and edge < routine.edges.length/3,
+        "selected instruction is not canonical checked File acquisition");
+    let value be try words.get(routine.operands,phase,first);
+    try require(value >= 1 and value <= routine.values.length/4 and
+        (try words.get(routine.values,phase,(value-1)*4)) == textType.index,
+        "File acquisition path operand differs from its exact carrier");
+    // A class-5 root must exist for this original failure successor.
+    let found be 0; let i be 0;
+    while i < rootProof.roots {
+        if (try words.get(map.records,phase,i*6)) == instruction.index {
+            try require((try words.get(map.records,phase,i*6+3)) != textType.index,
+                "Text path and saved failure require distinct canonical carriers");
+            found=found+1;
+        }
+        i=i+1;
+    }
+    try require(found == 1,"missing exact File acquisition failure root");
+    try budget.work(phase,128);
+    let base be "erist_u2_acquire_"+format.integer(label);
+    output(".text\n.globl "+base+"\n.type "+base+",@function\n"+base+":");
+    // Five callee-saved pushes align calls and survive the runtime setjmp.
+    line("pushq %rbx"); line("pushq %r12"); line("pushq %r13");
+    line("pushq %r14"); line("pushq %r15");
+    line("movq %rdi,%r12"); line("movq %rsi,%r13");
+    line("movq %rdx,%r14"); line("movq %rcx,%r15");
+    line("testq %r12,%r12"); line("je erist_rt_value_fault_internal");
+    line("testq %r13,%r13"); line("je erist_rt_value_fault_internal");
+    line("testq %r14,%r14"); line("je erist_rt_value_fault_internal");
+    line("cmpq %r13,%r14"); line("je erist_rt_value_fault_internal");
+    line("cmpq $0,(%r13)"); line("jne erist_rt_value_fault_internal");
+    line("cmpq $0,(%r14)"); line("jne erist_rt_value_fault_internal");
+    line("call evn_frame"); line("movq %rax,%rbx");
+    line("movq %rax,%rdi"); line("call setjmp");
+    line("testq %rax,%rax"); line("jne "+base+"_failed");
+    line("movq %r15,%rdi"); line("movq %r12,%rsi");
+    line("xorl %edx,%edx"); line("call erist_rt_file_open");
+    // Publish BEFORE popping the runtime handler or any later safe point.
+    line("movq %rax,(%r13)");
+    line("movq %rbx,%rdi"); line("call evn_pop");
+    line("movq (%r13),%rax"); line("xorl %r10d,%r10d");
+    line("jmp "+base+"_leave");
+    output(base+"_failed:");
+    // Restore abandoned slots/scopes before allocating the saved context.
+    line("movq %rbx,%rdi"); line("call evn_pop");
+    line("call evn_saved"); line("movq %rax,(%r14)");
+    line("call erist_rt_failure_clear");
+    line("movq (%r14),%rax"); line("movl $1,%r10d");
+    output(base+"_leave:");
+    line("xorl %edx,%edx");
+    line("popq %r15"); line("popq %r14"); line("popq %r13");
+    line("popq %r12"); line("popq %rbx"); line("ret");
+    output(".size "+base+",.-"+base+"\n.section .note.GNU-stack,\"\",@progbits");
+}

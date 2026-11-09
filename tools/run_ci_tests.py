@@ -89,6 +89,7 @@ SMOKE_TESTS=(
     'test_freestanding_graph_values.FreestandingGraphValueTests.test_u2_primary_and_secondary_survive_forced_gc_in_order',
     'test_u2_native_root_publish.U2NativeRootPublishTests.test_generated_scoped_bind_publish_release_survives_forced_gc',
     'test_u2_native_cleanup.U2NativeCleanupTests',
+    'test_u2_file_acquire_native.U2FileAcquireNativeTests',
     'test_u2_checked_rooted.U2CheckedRootedTests',
     'test_u2_checked_ssa.U2CheckedSSATests',
     'test_u2_checked_ssa_prefix.U2CheckedSSAPrefixTests',

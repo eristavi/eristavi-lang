@@ -1,11 +1,40 @@
 # Eristavi compiler — current handover
 
-Updated 7 November 2026 (Asia/Nicosia). Checked Function group batch focused/smoke green;
-U2 functionality and final qualification still open.
+Updated 9 November 2026 (Asia/Nicosia). Private File acquisition bridge added;
+whole-Function File ownership/cleanup and final U2 qualification remain open.
 Branch: `compiler/u2-cleanup-foundation-20261102`; [PR #111](https://github.com/eristavi/eristavi-lang/pull/111) remains DRAFT; #74 remains OPEN.
 Implementation: `5dcc85f69ac458f83730957a9defd4b2fa3d0d7e`.
 Corrected exact test checkpoint: `43d56f2f526fd57db5d790413217de439858b7a5`.
 No final four-platform qualification or merge. Optimization #51 remains PAUSED.
+
+## Current File batch — 9 November 2026 (partial, not complete)
+
+The requested whole-Function File ownership/cleanup batch is **NOT complete**.
+Exact acquisition implementation/test inputs: see the retained source hashes and local test logs.
+New `u2_file_acquire_x86_64.eri` is a bounded canonical-admitted read-only
+acquisition bridge, reusing the existing owned File runtime and handler adapter.
+It validates the exact private import, original whole-Function ownership,
+canonical acquisition and failure-root metadata before emitting output. It
+publishes mutually exclusive File/class-5 results into caller-registered roots.
+No production change, runtime rewrite, source syntax or public ABI change.
+
+Focused native success/missing-path, forced-GC/reclamation and unknown-symbol
+refusal tests pass; related ownership/cleanup tests passed separately. Exact
+commands, source hashes and scope are in
+[the evidence record](docs/evidence/2026-11-09/u2-file-acquire/README.md).
+No new full smoke/four-platform qualification is claimed from these local tests.
+The 7 November checked-group evidence below remains historical evidence for
+unchanged components, not qualification of this new code.
+
+**Continue with whole-Function integration, not another acquisition helper:**
+connect original SSA operands/outcomes and owner moves to the acquisition bridge
+and existing close implementation. Cleanup must bind the actual pending failure
+context; always creating an empty context would erase a body primary failure.
+Complete every normal/checked/handler exit and pending return/root handoff.
+The managed Function backend still does not admit File calls. Keep #111 DRAFT,
+#74 OPEN and #51 paused; do not mark this requested batch complete.
+
+[Private bridge contract](docs/architecture/UIR_U2_FILE_ACQUIRE_BRIDGE.md).
 
 ## Latest verified development checkpoint — 7 November 2026
 
