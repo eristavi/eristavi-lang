@@ -1,5 +1,52 @@
 # Eristavi compiler — current handover
 
+## Active reconciliation checkpoint — 11 November 2026 (focused verification pending)
+
+Reconciliation branch: `compiler/u2-reconcile-111-121-20261111`.
+Foundation: draft PR #121 head `91feef0981c88032e14fbbf60afb0cb25dc99f44`;
+independent acquisition source: draft PR #111 head
+`02e4c52ef00c1cbfda1ade6b2dd555bc62494aae`. Both original
+branches remain unchanged and unmerged. U2 #74 remains OPEN; #51 PAUSED.
+
+Preserved the existing native whole-Function File acquisition/close CFG,
+owner-root publication, primary/ordered-secondary cleanup and aggregate
+binding implementation from #121 without modifying
+`u2_function_managed_x86_64.eri`,
+`u2_function_file_roots_x86_64.eri`,
+`u2_primary_cleanup_bind.eri`, or the runtime. Imported #111's separate
+opt-in acquisition emitter, now delegating exact versioned-import admission
+to the existing `u2_function_native_imports.inspectFile` and recovering
+the original failure carrier from a freshly verified checked-root map.
+The unified File signature uses imported kind 2, effects 63, version 1,
+Text -> File with a two-Text-field FileError; the older effects-8
+fixture is retained as historical evidence only. The standalone bridge is
+not wired into the already-working Function emitter: that would duplicate
+an execution path without demonstrating a correctness benefit.
+
+New focused negative tests check effects, failure-carrier shape and stale or
+foreign roots before assembler output; the old success/missing-path/GC/
+reclamation/unknown-symbol probes are preserved. The smoke roster retains
+both branches' selections. The new branch-only focused workflow is limited to
+named acquisition, primary/aggregate, owner-call and refusal tests.
+**Results are pending**; do not infer green from either old branch.
+
+Original evidence: #111 exact-hosted Linux smoke 172 run / 169 passed /
+3 skipped; #121 exact-hosted Linux smoke 230 run / 227 passed /
+3 skipped. Those are separate pre-reconciliation source trees, not
+new combined-branch qualification. #121's latest scoped primary-value
+local test checkpoint: 5/5 PASS on its documented input hashes.
+
+No full smoke, four-platform CI, full owned-compiler self-build,
+production promotion, PR merge/retarget, or U2 acceptance is authorized.
+Remaining mixed group binding, live-primary-across-call, managed-field,
+carrier-overlap and deep physical/independent acceptance gates remain open.
+
+Previous #121 handover below is retained as historical state and superseded
+where it conflicts with this current checkpoint.
+
+---
+
+
 Latest verified source/test commit: `375c983fd6da7170463d2d726912bb27f59cbe22`.
 This documentation/evidence successor changes no implementation/test inputs.
 

@@ -1,0 +1,21 @@
+test_checked_acquire_success_failure_gc_and_reclamation (test_u2_file_acquire_native.U2FileAcquireNativeTests.test_checked_acquire_success_failure_gc_and_reclamation) ... ok
+test_unknown_acquire_symbol_refuses_before_output (test_u2_file_acquire_native.U2FileAcquireNativeTests.test_unknown_acquire_symbol_refuses_before_output) ... ok
+test_inner_checked_close_failure_still_consumes_outer_owner (test_u2_scoped_owners.U2ScopedOwnerTests.test_inner_checked_close_failure_still_consumes_outer_owner) ... ok
+test_live_owner_loop_signature_and_dead_block_rejection (test_u2_scoped_owners.U2ScopedOwnerTests.test_live_owner_loop_signature_and_dead_block_rejection) ... ok
+test_nested_acquire_failure_close_consumption_and_origin (test_u2_scoped_owners.U2ScopedOwnerTests.test_nested_acquire_failure_close_consumption_and_origin) ... ok
+test_ordinary_resource_construction_is_rejected (test_u2_scoped_owners.U2ScopedOwnerTests.test_ordinary_resource_construction_is_rejected) ... ok
+test_owned_runtime_scoped_owner_proof_and_refusals (test_u2_scoped_owners.U2ScopedOwnerTests.test_owned_runtime_scoped_owner_proof_and_refusals) ... skipped 'opt-in Linux x86-64 owned scoped-owner proof'
+test_resource_cannot_escape_through_an_ordinary_call (test_u2_scoped_owners.U2ScopedOwnerTests.test_resource_cannot_escape_through_an_ordinary_call) ... ok
+test_return_cannot_bypass_cleanup (test_u2_scoped_owners.U2ScopedOwnerTests.test_return_cannot_bypass_cleanup) ... ok
+test_two_stage_canonical_cleanup_uses_original_verified_plan (test_u2_scoped_owners.U2ScopedOwnerTests.test_two_stage_canonical_cleanup_uses_original_verified_plan) ... ok
+test_verified_cleanup_plan_emits_canonical_close_on_both_exit_modes (test_u2_scoped_owners.U2ScopedOwnerTests.test_verified_cleanup_plan_emits_canonical_close_on_both_exit_modes) ... ok
+test_canonical_single_owner_checked_edge_gate (test_u2_native_cleanup.U2NativeCleanupTests.test_canonical_single_owner_checked_edge_gate)
+Verified UIR checked edge/root/owner must precede File adapter emission. ... ok
+test_surviving_prefix_and_pending_scalar_return (test_u2_native_cleanup.U2NativeCleanupTests.test_surviving_prefix_and_pending_scalar_return)
+Inner exits do not close outer File; pending i64 cancels on failure. ... ok
+test_verified_plan_drives_real_reverse_file_cleanup_and_failure_roots (test_u2_native_cleanup.U2NativeCleanupTests.test_verified_plan_drives_real_reverse_file_cleanup_and_failure_roots) ... ok
+
+----------------------------------------------------------------------
+Ran 14 tests in 58.973s
+
+OK (skipped=1)

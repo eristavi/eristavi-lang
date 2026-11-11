@@ -1,0 +1,125 @@
+import std.process;
+import compiler.u1_budget as budget;
+import compiler.u1_words as words;
+import compiler.u1_meta as meta;
+import compiler.u1_builder as build;
+import compiler.u1_aggregate as aggregate;
+import compiler.u1_aggregate_signature as sig;
+import compiler.u1_aggregate_build as ab;
+import compiler.u1_verify as canonical;
+import compiler.u2_invoke_contract as contracts;
+import compiler.u2_invoke_build as invoke;
+import compiler.u2_invoke_transfer as transfer;
+import compiler.u2_continuation_bind as continuation;
+import compiler.u2_scoped_owners as owners;
+import compiler.u2_root_map as roots;
+import compiler.u2_file_acquire_x86_64 as native;
+error ProbeError { message Text; }
+function check(okay Bool,message Text) fails ProbeError {
+    if not okay { fail ProbeError { message=message; }; }
+}
+function rejects(profile identity owners.Profile,fn identity build.Function,graph identity aggregate.Registry,
+    table identity contracts.Registry) returns Bool fails budget.LimitError,canonical.InvalidIR,ProbeError {
+    let live be fn.owner.live; let pending be fn.owner.pending;
+    let report be owners.verify(profile,fn,graph,table)
+        else error owners.InvalidOwnership {
+            try check(fn.owner.live == live and fn.owner.pending == pending,"ownership rejection leaked scratch"); return true;
+        } else error budget.LimitError { fail error; } else error canonical.InvalidIR { fail error; };
+    return false;
+}
+function finish(fn identity build.Function,graph identity aggregate.Registry,block build.BlockId,loc meta.LocId)
+    fails budget.LimitError {
+    let zero be try build.integer(fn,block,0,loc); try ab.returnValues(fn,graph,block,[zero],loc);
+}
+function exhausted(profile identity owners.Profile,fn identity build.Function,graph identity aggregate.Registry,
+    table identity contracts.Registry) returns Bool fails canonical.InvalidIR,owners.InvalidOwnership {
+    let report be owners.verify(profile,fn,graph,table)
+        else error budget.LimitError { return error.category == "resource-limit"; }
+        else error canonical.InvalidIR { fail error; } else error owners.InvalidOwnership { fail error; };
+    return false;
+}
+function run() fails budget.LimitError,canonical.InvalidIR,continuation.InvalidBinding,owners.InvalidOwnership,roots.InvalidRoots,native.Unsupported,ProbeError {
+    let root be try budget.developmentRequest(); let shared be try budget.metadataOwner(root);
+    let mp be try budget.constructionPhase(shared); let data be try meta.create(shared,mp);
+    let graph be try aggregate.create(shared,mp); let i64 be try aggregate.primitive(graph,meta.i64());
+    let textPath be try aggregate.aggregate(graph,mp,[]);
+    let handle be try aggregate.aggregate(graph,mp,[i64,i64]); let failure be try aggregate.aggregate(graph,mp,[textPath,textPath]);
+    let acquireSig be try sig.signature(data,graph,mp,[textPath],[handle]);
+    let acquiredSig be try sig.signature(data,graph,mp,[],[handle]);
+    let closeSig be try sig.signature(data,graph,mp,[handle],[]);
+    let failedSig be try sig.signature(data,graph,mp,[],[failure]);
+    let bothSig be try sig.signature(data,graph,mp,[],[handle,handle]);
+    let pendingSig be try sig.signature(data,graph,mp,[],[failure,handle]);
+    let doubleSig be try sig.signature(data,graph,mp,[],[failure,failure]);
+    let emptySig be try meta.signature(data,mp,[],[]);
+    // Keep the bootstrap concrete metadata signature specialization explicit.
+    let scalarSeed be try meta.signature(data,mp,[meta.i64()],[meta.i64()]);
+    let caller be try sig.signature(data,graph,mp,[textPath],[i64]);
+    let acquisition be try meta.declaration(data,mp,acquireSig,"u2.file.openRead.v1",2,63,1);
+    let consumption be try meta.declaration(data,mp,closeSig,"u2.file.close.v1",2,63,1);
+    let source be try meta.source(data,mp,"owners.eri","0000000000000000000000000000000000000000000000000000000000000000",64);
+    let loc be try meta.location(data,mp,source,0,8,0,1,1);
+    let innerLoc be try meta.location(data,mp,source,8,16,8,2,1);
+    try aggregate.freeze(graph); try meta.freeze(data);
+    let table be try contracts.create(data,graph,mp);
+    let acquire be contracts.Contract { version=1; target=acquisition; failure=failedSig; };
+    let consume be contracts.Contract { version=1; target=consumption; failure=failedSig; };
+    try contracts.register(table,data,graph,mp,acquire); try contracts.register(table,data,graph,mp,consume);
+    try contracts.freeze(table); try budget.finishPhase(mp);
+    let owner be try budget.functionOwner(root,true); let phase be try budget.constructionPhase(owner);
+    let fn be try build.create(data,caller,owner,phase);
+    let entry be try ab.block(fn,graph,[textPath]);
+    let pathValue be try build.parameter(fn,entry,0); let outer be try ab.block(fn,graph,[handle]);
+    let nested be try ab.block(fn,graph,[handle,handle]); let failed be try ab.block(fn,graph,[failure]);
+    let afterInner be try ab.block(fn,graph,[handle]); let pending be try ab.block(fn,graph,[failure,handle]);
+    let done be try build.block(fn,[]); let pendingDone be try ab.block(fn,graph,[failure]);
+    let doubleFailure be try ab.block(fn,graph,[failure,failure]);
+    let dead be try build.block(fn,[]); let deadTarget be try build.block(fn,[meta.i64()]);
+    let outerValue be try build.parameter(fn,outer,0); let innerValue be try build.parameter(fn,nested,0);
+    let retainedOuter be try build.parameter(fn,nested,1); let afterValue be try build.parameter(fn,afterInner,0);
+    let pendingError be try build.parameter(fn,pending,0); let pendingOwner be try build.parameter(fn,pending,1);
+    let profile be try owners.create(fn,graph,phase,handle,acquisition,consumption);
+    let outerScope be try owners.scope(profile,fn,phase,0,loc);
+    let innerScope be try owners.scope(profile,fn,phase,outerScope,innerLoc);
+    try owners.block(profile,fn,phase,entry,[]);
+    try owners.block(profile,fn,phase,outer,[owners.Entry { scope=outerScope; value=outerValue; }]);
+    try owners.block(profile,fn,phase,nested,[owners.Entry { scope=outerScope; value=retainedOuter; },owners.Entry { scope=innerScope; value=innerValue; }]);
+    try owners.block(profile,fn,phase,failed,[]);
+    try owners.block(profile,fn,phase,afterInner,[owners.Entry { scope=outerScope; value=afterValue; }]);
+    try owners.block(profile,fn,phase,pending,[owners.Entry { scope=outerScope; value=pendingOwner; }]);
+    try owners.block(profile,fn,phase,done,[]); try owners.block(profile,fn,phase,pendingDone,[]);
+    try owners.block(profile,fn,phase,doubleFailure,[]); try owners.block(profile,fn,phase,dead,[]);
+    try owners.block(profile,fn,phase,deadTarget,[]);
+    let pair be try continuation.bind(fn,graph,phase,entry,outer,failed,acquiredSig,failedSig,loc);
+    let firstCall be try invoke.emit(fn,graph,acquire,pair,[pathValue]);
+    pair=try continuation.bindCarrying(fn,graph,phase,outer,nested,pending,bothSig,pendingSig,loc);
+    let secondCall be try transfer.emit(fn,graph,acquire,pair,[pathValue],[outerValue]);
+    pair=try continuation.bindCarrying(fn,graph,phase,nested,afterInner,pending,acquiredSig,pendingSig,innerLoc);
+    let innerClose be try transfer.emit(fn,graph,consume,pair,[innerValue],[retainedOuter]);
+    pair=try continuation.bind(fn,graph,phase,afterInner,done,failed,emptySig,failedSig,loc);
+    let outerClose be try invoke.emit(fn,graph,consume,pair,[afterValue]);
+    pair=try continuation.bindCarrying(fn,graph,phase,pending,pendingDone,doubleFailure,failedSig,doubleSig,loc);
+    let pendingClose be try transfer.emit(fn,graph,consume,pair,[pendingOwner],[pendingError]);
+    try finish(fn,graph,failed,loc); try finish(fn,graph,done,loc);
+    try finish(fn,graph,pendingDone,loc); try finish(fn,graph,doubleFailure,loc);
+    let zero be try build.integer(fn,dead,0,loc); try build.jump(fn,dead,deadTarget,[zero],loc);
+    try build.returnValues(fn,deadTarget,[try build.parameter(fn,deadTarget,0)],loc);
+    try ab.complete(fn,graph); try owners.complete(profile,fn,phase); try budget.finishPhase(phase);
+    let report be try owners.verify(profile,fn,graph,table);
+    try check(report.blocks == 11 and report.scopes == 2 and report.maximumDepth == 2,"wrong owner proof counters");
+    let verifyPhase be try budget.verificationPhase(owner);
+    let map be try roots.create(fn,graph,verifyPhase);
+    try native.emit(fn,graph,profile,table,verifyPhase,map,firstCall,textPath,91);
+    try roots.close(map); try budget.finishPhase(verifyPhase);
+    try owners.close(profile); try build.close(fn); try budget.close(owner);
+    try contracts.close(table); try aggregate.close(graph); try meta.close(data); try budget.close(shared);
+    try check(root.live == 0 and root.pending == 0,"owner proof lifecycle leaked"); try budget.close(root);
+
+}
+run() else error budget.LimitError { output("limit:"+error.message); process.setExitCode(1); }
+else error canonical.InvalidIR { output("ir:"+error.message); process.setExitCode(1); }
+else error continuation.InvalidBinding { output("binding:"+error.message); process.setExitCode(1); }
+else error owners.InvalidOwnership { output("owner:"+error.message); process.setExitCode(1); }
+else error roots.InvalidRoots { output("roots:"+error.message); process.setExitCode(1); }
+else error native.Unsupported { output("native:"+error.message); process.setExitCode(1); }
+else error ProbeError { output("probe:"+error.message); process.setExitCode(1); };
