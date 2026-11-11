@@ -33,9 +33,32 @@ The two original draft branches are intentionally unchanged.
 
 ## Reconciled exact-head evidence
 
-Pending the branch-only focused job. Record the run ID, exact tested commit,
-pass/fail/skip counts and any remaining refusals after completion; do not
-promote historical results to new-source acceptance.
+**PASS, 13/13 focused tests, 0 failures, 0 skips (141.098 seconds).**
+Verified branch source/test commit:
+`0d572e0d885ddbf17afc958025c93358f6e08c48`
+on Linux x86-64, with Clang C native backend and pinned Python dependencies.
+
+- Workflow: https://github.com/eristavi/eristavi-lang/actions/runs/43022380412
+- Focused job: https://github.com/eristavi/eristavi-lang/actions/runs/43022380412/job/130528483303
+- Native test log artifact:
+  https://github.com/eristavi/eristavi-lang/actions/runs/43022380412/artifacts/13855667515
+- Exact runner summary: `Ran 13 tests in 141.098s` / `OK`.
+  The workflow job and run both concluded **success**.
+
+The original bridge acquisition success and absent-path failure retain
+registered roots, forced GC, cleanup, and reclamation. Its original unknown
+symbol test and new wrong-import-effects, wrong FailureContext field,
+stale-revision and foreign root-map negative cases all passed. Whole-Function
+focused acquisition and terminal-refusal tests passed, together with existing
+File aggregate/primary, nested ordered failures and invalid-binding refusal
+tests. The live-primary-across-owning-call *refusal* passed: this does **not**
+mean that missing composition case has been implemented.
+
+Generated C produced existing nested-pointer-qualifier Clang warnings in
+some Function regressions; these remain unsuppressed and were not counted as
+new failure evidence. The full 230-test smoke, four-platform qualification,
+self-build and independent physical/sanitizer qualification were not run.
+This is **only bounded focused reconciliation verification**.
 
 ## Still open
 

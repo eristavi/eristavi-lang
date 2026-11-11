@@ -1,6 +1,6 @@
 # Eristavi compiler — current handover
 
-## Active reconciliation checkpoint — 11 November 2026 (focused verification pending)
+## Active reconciliation checkpoint — 11 November 2026 (bounded focused PASS)
 
 Reconciliation branch: `compiler/u2-reconcile-111-121-20261111`.
 Foundation: draft PR #121 head `91feef0981c88032e14fbbf60afb0cb25dc99f44`;
@@ -28,7 +28,14 @@ foreign roots before assembler output; the old success/missing-path/GC/
 reclamation/unknown-symbol probes are preserved. The smoke roster retains
 both branches' selections. The new branch-only focused workflow is limited to
 named acquisition, primary/aggregate, owner-call and refusal tests.
-**Results are pending**; do not infer green from either old branch.
+**13/13 focused native regressions PASS**, 0 failures/skips,
+141.098 seconds, on the exact source/test commit
+`0d572e0d885ddbf17afc958025c93358f6e08c48`.
+[Hosted focused workflow and logs](https://github.com/eristavi/eristavi-lang/actions/runs/43022380412)
+and [reconciliation evidence](docs/evidence/2026-11-11/u2-reconciliation/README.md).
+Existing Clang C qualifier warnings persist. This verifies only the
+bounded reconciliation; it is not U2 acceptance, broad CI, physical
+qualification, or evidence of newly implemented live-primary-across-call.
 
 Original evidence: #111 exact-hosted Linux smoke 172 run / 169 passed /
 3 skipped; #121 exact-hosted Linux smoke 230 run / 227 passed /
